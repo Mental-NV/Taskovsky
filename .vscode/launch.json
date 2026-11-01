@@ -5,20 +5,20 @@
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:Taskovsky}",
-            "name": "Debug Taskvovsky",
-            "target": "Taskvovsky",
+            "name": "Debug Taskovsky",
+            "target": "Taskovsky",
             "configuration": "debug",
-            "preLaunchTask": "swift: Build Debug Taskvovsky"
+            "preLaunchTask": "swift: Build Debug Taskovsky"
         },
         {
             "type": "swift",
             "request": "launch",
             "args": [],
             "cwd": "${workspaceFolder:Taskovsky}",
-            "name": "Release Taskvovsky",
-            "target": "Taskvovsky",
+            "name": "Release Taskovsky",
+            "target": "Taskovsky",
             "configuration": "release",
-            "preLaunchTask": "swift: Build Release Taskvovsky"
+            "preLaunchTask": "swift: Build Release Taskovsky"
         }
     ]
 }

@@ -50,7 +50,11 @@ public final class TaskStore: ObservableObject {
     public static var defaultFileURL: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
-        return base.appendingPathComponent("Taskvovsky", isDirectory: true).appendingPathComponent("workspace.json")
+        do { return try AppMigration.workspaceURL(in: base) }
+        catch {
+            // Keep using the original data if moving it fails; never start an empty workspace.
+            return base.appendingPathComponent(AppMigration.legacyName, isDirectory: true).appendingPathComponent("workspace.json")
+        }
     }
 
     public func save() {

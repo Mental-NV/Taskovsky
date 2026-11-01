@@ -1,4 +1,4 @@
-# Taskvovsky
+# Taskovsky
 
 A local macOS task and notes app inspired by TickTick’s three-pane task workspace. Built with SwiftUI and Foundation, with no third-party dependencies. Requires macOS 14 or later and Swift 6 / Xcode command-line tools to build.
 
@@ -6,12 +6,12 @@ A local macOS task and notes app inspired by TickTick’s three-pane task worksp
 
 ```sh
 ./scripts/build-app.sh
-open build/Taskvovsky.app
+open build/Taskovsky.app
 ```
 
-You can move `build/Taskvovsky.app` into Applications. The build is signed locally; it is not a notarized distribution build.
+You can move `build/Taskovsky.app` into Applications. The build is signed locally; it is not a notarized distribution build.
 
-For development, `swift run --disable-sandbox Taskvovsky`. Run the model tests with `swift test --disable-sandbox`.
+For development, `swift run --disable-sandbox Taskovsky`. Run the model tests with `swift test --disable-sandbox`.
 
 ## Features
 
@@ -27,7 +27,7 @@ For development, `swift run --disable-sandbox Taskvovsky`. Run the model tests w
 - A five-second completion/abandonment Undo message and a completion chime. Undoing completion safely handles the next recurring occurrence.
 - Resizable task/detail panes, a collapsible list sidebar, and saved panel sizes.
 - In-app reminders with snooze and dismiss. No OS notifications or background service; check Reminders while the app is open.
-- Every edit saves locally and atomically to `~/Library/Application Support/Taskvovsky/workspace.json`; preferences save beside it in `settings.json`. An unreadable file is preserved, and save failures remain visible. Existing workspaces migrate without losing tasks.
+- Every edit saves locally and atomically to `~/Library/Application Support/Taskovsky/workspace.json`; preferences save beside it in `settings.json`. An unreadable file is preserved, and save failures remain visible. Existing workspaces migrate without losing tasks. The app automatically migrates data and preferences from the previous misspelled app name on first launch.
 
 Use **⌘N** to add a task, **⇧⌘N** to add a note, and **⇧⌘L** to create a list. Press Return in the quick-add field or a checklist field to add an item. Right-click task rows, lists, or tags for actions. Click an item to edit it in the detail pane. Date changes apply with Save; Cancel leaves the schedule unchanged.
 
@@ -37,10 +37,10 @@ Calendar tab, Eisenhower Matrix, Pomodoro, habits, countdowns, accounts, statist
 
 ## Layout reference
 
-The installed TickTick app was inspected through Computer Use. Taskvovsky follows its list/tag sidebar, date-grouped rows, quick-add bar, and separate detail pane with scheduling and priority controls. This is an independent implementation of the requested subset, not a pixel-perfect clone.
+The installed TickTick app was inspected through Computer Use. Taskovsky follows its list/tag sidebar, date-grouped rows, quick-add bar, and separate detail pane with scheduling and priority controls. This is an independent implementation of the requested subset, not a pixel-perfect clone.
 
 ## Verification
 
-The release app builds successfully and passes local code-signature verification. Ten automated tests cover JSON persistence, legacy migration, settings/templates/filters, recognition and defaults, list/tag cleanup, trash/restore, recurrence across weekends, short months and daylight-saving changes, recurring reminders, duplicate prevention, completion undo, normalized tag names, and unreadable-file protection/recovery.
+The release app builds successfully and passes local code-signature verification. Twelve automated tests cover app-name data and preference migration, JSON persistence, legacy migration, settings/templates/filters, recognition and defaults, list/tag cleanup, trash/restore, recurrence across weekends, short months and daylight-saving changes, recurring reminders, duplicate prevention, completion undo, normalized tag names, and unreadable-file protection/recovery.
 
 Computer Use checks cover launch and reload, quick creation, descriptions and checklists, priorities, list editing, tags, date/time/repeat/reminder saving, notes, task moves, Trash/restore, smart-list visibility, date-picker options, recognition/default effects, completion Undo, Won't Do/reopen, search and saved filters. A few sample items created during these checks remain in the local workspace.

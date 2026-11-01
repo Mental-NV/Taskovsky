@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "Taskvovsky",
+    name: "Taskovsky",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "Taskvovsky", targets: ["Taskvovsky"])],
+    products: [.executable(name: "Taskovsky", targets: ["Taskovsky"])],
     targets: [
-        .target(name: "TaskvovskyCore"),
-        .executableTarget(name: "Taskvovsky", dependencies: ["TaskvovskyCore"]),
-        .testTarget(name: "TaskvovskyCoreTests", dependencies: ["TaskvovskyCore"])
+        .target(name: "TaskovskyCore"),
+        .executableTarget(name: "Taskovsky", dependencies: ["TaskovskyCore"]),
+        .testTarget(name: "TaskovskyCoreTests", dependencies: ["TaskovskyCore"])
     ],
     swiftLanguageModes: [.v5]
 )

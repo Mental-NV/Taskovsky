@@ -1,7 +1,56 @@
 import XCTest
-@testable import TaskvovskyCore
+@testable import TaskovskyCore
 
 final class TaskStoreTests: XCTestCase {
+    @MainActor func testAppRenameMovesWorkspaceAndSettingsWithoutChangingData() throws {
+        let base = temporaryURL().deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: base) }
+        let legacy = base.appendingPathComponent(AppMigration.legacyName)
+        let store = TaskStore(fileURL: legacy.appendingPathComponent("workspace.json"), seed: false)
+        let id = store.createTask(title: "Keep my task")
+        store.settings.defaultPriority = .high
+        let workspace = try Data(contentsOf: store.fileURL)
+        let settings = try Data(contentsOf: store.settingsURL)
+        let backup = legacy.appendingPathComponent("recovery.bak")
+        try workspace.write(to: backup)
+        let migrated = try AppMigration.workspaceURL(in: base)
+        XCTAssertEqual(migrated.deletingLastPathComponent().lastPathComponent, "Taskovsky")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: legacy.path))
+        XCTAssertEqual(try Data(contentsOf: migrated), workspace)
+        XCTAssertEqual(try Data(contentsOf: migrated.deletingLastPathComponent().appendingPathComponent("settings.json")), settings)
+        XCTAssertEqual(try Data(contentsOf: migrated.deletingLastPathComponent().appendingPathComponent("recovery.bak")), workspace)
+        let loaded = TaskStore(fileURL: migrated, seed: false)
+        XCTAssertEqual(loaded.data.tasks.first?.id, id)
+        XCTAssertEqual(loaded.settings.defaultPriority, .high)
+        // A second launch and a leftover old directory cannot replace the renamed data.
+        try FileManager.default.createDirectory(at: legacy, withIntermediateDirectories: true)
+        try Data("old data".utf8).write(to: legacy.appendingPathComponent("workspace.json"))
+        XCTAssertEqual(try AppMigration.workspaceURL(in: base), migrated)
+        XCTAssertEqual(try Data(contentsOf: migrated), workspace)
+    }
+
+    func testAppRenamePreservesPreferencesAndDoesNotRestoreClearedHistory() throws {
+        let suite = "TaskovskyTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let legacy = suite + ".legacy"
+        defer { defaults.removePersistentDomain(forName: suite); defaults.removePersistentDomain(forName: legacy) }
+        defaults.setPersistentDomain([
+            "\(AppMigration.legacyName).sidebarWidth": 240.0,
+            "\(AppMigration.legacyName).sidebarCollapsed": true,
+            "\(AppMigration.legacyName).taskPaneFraction": 0.6,
+            "\(AppMigration.legacyName).recentSearches": ["Keep history"]
+        ], forName: legacy)
+        defaults.setPersistentDomain(["Taskovsky.sidebarWidth": 260.0], forName: suite)
+        AppMigration.migratePreferences(defaults: defaults, destinationDomain: suite, legacyDomain: legacy)
+        XCTAssertEqual(defaults.double(forKey: "Taskovsky.sidebarWidth"), 260)
+        XCTAssertTrue(defaults.bool(forKey: "Taskovsky.sidebarCollapsed"))
+        XCTAssertEqual(defaults.double(forKey: "Taskovsky.taskPaneFraction"), 0.6)
+        XCTAssertEqual(defaults.stringArray(forKey: "Taskovsky.recentSearches"), ["Keep history"])
+        defaults.removeObject(forKey: "Taskovsky.recentSearches")
+        AppMigration.migratePreferences(defaults: defaults, destinationDomain: suite, legacyDomain: legacy)
+        XCTAssertNil(defaults.object(forKey: "Taskovsky.recentSearches"))
+    }
+
     private func temporaryURL() -> URL {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("workspace.json")
     }

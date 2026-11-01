@@ -1,5 +1,5 @@
 import SwiftUI
-import TaskvovskyCore
+import TaskovskyCore
 
 struct SettingsView: View {
     @ObservedObject var store: TaskStore

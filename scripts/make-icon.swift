@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 let output = CommandLine.arguments[1]
-let iconset = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Taskvovsky-\(UUID().uuidString).iconset")
+let iconset = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("Taskovsky-\(UUID().uuidString).iconset")
 try FileManager.default.createDirectory(at: iconset, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: iconset) }
 for size in [16, 32, 128, 256, 512] {

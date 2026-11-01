@@ -1,5 +1,5 @@
 import SwiftUI
-import TaskvovskyCore
+import TaskovskyCore
 
 struct SearchPane: View {
     @ObservedObject var store: TaskStore
@@ -71,7 +71,7 @@ struct SearchDialog: View {
     let onSelectFilter: (UUID) -> Void
     let onSelectTag: (UUID) -> Void
     @State private var query = ""
-    @State private var recent: [String] = UserDefaults.standard.stringArray(forKey: "Taskvovsky.recentSearches") ?? []
+    @State private var recent: [String] = UserDefaults.standard.stringArray(forKey: "Taskovsky.recentSearches") ?? []
     @FocusState private var focused: Bool
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var tasks: [TaskItem] { store.data.tasks.filter { $0.deletedAt == nil && TaskSearch.matches($0, query: trimmed) } }
@@ -85,7 +85,7 @@ struct SearchDialog: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if trimmed.isEmpty {
-                        HStack { Text("Recent Searches").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !recent.isEmpty { Button("Clear") { recent = []; UserDefaults.standard.removeObject(forKey: "Taskvovsky.recentSearches") }.buttonStyle(.plain).foregroundStyle(accent) } }
+                        HStack { Text("Recent Searches").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !recent.isEmpty { Button("Clear") { recent = []; UserDefaults.standard.removeObject(forKey: "Taskovsky.recentSearches") }.buttonStyle(.plain).foregroundStyle(accent) } }
                         ForEach(recent, id: \.self) { term in Button { query = term } label: { Label(term, systemImage: "clock.arrow.circlepath").frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.plain) }
                     } else {
                         if !tasks.isEmpty { group("Tasks") { ForEach(tasks.prefix(8)) { task in result(task.title, symbol: "circle") { remember(); onSelectTask(task.id) } } } }
@@ -101,5 +101,5 @@ struct SearchDialog: View {
     }
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View { VStack(alignment: .leading, spacing: 4) { Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary); content() } }
     private func result(_ title: String, symbol: String, action: @escaping () -> Void) -> some View { Button(action: action) { Label(title, systemImage: symbol).font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5).contentShape(Rectangle()) }.buttonStyle(.plain) }
-    private func remember() { guard !trimmed.isEmpty else { return }; recent.removeAll { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }; recent.insert(trimmed, at: 0); recent = Array(recent.prefix(10)); UserDefaults.standard.set(recent, forKey: "Taskvovsky.recentSearches") }
+    private func remember() { guard !trimmed.isEmpty else { return }; recent.removeAll { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }; recent.insert(trimmed, at: 0); recent = Array(recent.prefix(10)); UserDefaults.standard.set(recent, forKey: "Taskovsky.recentSearches") }
 }

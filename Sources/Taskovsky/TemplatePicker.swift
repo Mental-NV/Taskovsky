@@ -1,5 +1,5 @@
 import SwiftUI
-import TaskvovskyCore
+import TaskovskyCore
 
 struct TemplatePicker: View {
     @ObservedObject var store: TaskStore

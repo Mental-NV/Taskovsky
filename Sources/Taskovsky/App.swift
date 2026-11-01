@@ -1,13 +1,14 @@
 import SwiftUI
 import AppKit
-import TaskvovskyCore
+import TaskovskyCore
 
 @main
-struct TaskvovskyApp: App {
+struct TaskovskyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = TaskStore()
+    init() { AppMigration.migratePreferences() }
     var body: some Scene {
-        WindowGroup("Taskvovsky") { WorkspaceView(store: store).frame(minWidth: 780, minHeight: 500) }
+        WindowGroup("Taskovsky") { WorkspaceView(store: store).frame(minWidth: 780, minHeight: 500) }
             .defaultSize(width: 1280, height: 740)
             .windowStyle(.hiddenTitleBar)
             .commands {
@@ -35,11 +36,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension Notification.Name {
-    static let newTask = Notification.Name("Taskvovsky.newTask")
-    static let newNote = Notification.Name("Taskvovsky.newNote")
-    static let newList = Notification.Name("Taskvovsky.newList")
-    static let openSearch = Notification.Name("Taskvovsky.openSearch")
-    static let toggleSidebar = Notification.Name("Taskvovsky.toggleSidebar")
+    static let newTask = Notification.Name("Taskovsky.newTask")
+    static let newNote = Notification.Name("Taskovsky.newNote")
+    static let newList = Notification.Name("Taskovsky.newList")
+    static let openSearch = Notification.Name("Taskovsky.openSearch")
+    static let toggleSidebar = Notification.Name("Taskovsky.toggleSidebar")
 }
 
 let accent = Color(red: 0.30, green: 0.42, blue: 0.96)
@@ -130,13 +131,14 @@ struct WorkspaceView: View {
     @State private var creatingFilter = false
     @State private var templatePicker = false
     @State private var feedback: TaskFeedback?
-    @AppStorage("Taskvovsky.sidebarWidth") private var sidebarWidth = 215.0
-    @AppStorage("Taskvovsky.sidebarCollapsed") private var sidebarCollapsed = false
-    @AppStorage("Taskvovsky.taskPaneFraction") private var taskPaneFraction = 0.45
+    @AppStorage("Taskovsky.sidebarWidth") private var sidebarWidth = 215.0
+    @AppStorage("Taskovsky.sidebarCollapsed") private var sidebarCollapsed = false
+    @AppStorage("Taskovsky.taskPaneFraction") private var taskPaneFraction = 0.45
     @State private var sidebarDragStart: Double?
     @State private var paneDragStart: Double?
     @State private var nextCreationKind: TaskKind?
     @FocusState private var quickFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var selectedTask: TaskItem? { store.data.tasks.first { $0.id == selection } }
     var activeList: TaskList? {
@@ -146,20 +148,29 @@ struct WorkspaceView: View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             GeometryReader { geometry in
                 let showSidebar = !sidebarCollapsed && destination != .search && geometry.size.width >= 860
-                let navWidth = showSidebar ? min(320, max(160, sidebarWidth)) : 0
+                let expandedNavWidth = min(320, max(160, sidebarWidth))
+                let navWidth = showSidebar ? expandedNavWidth : 0
                 let available = geometry.size.width - 62 - navWidth - (showSidebar ? 1 : 0)
                 let listWidth = min(available - 280, max(300, available * taskPaneFraction))
                 HStack(spacing: 0) {
                     rail
-                    if showSidebar {
-                        sidebar(now: timeline.date).frame(width: navWidth)
+                    // Keep the contents at their expanded size while the panel slides
+                    // behind the rail. Reflowing the sidebar at every frame makes its
+                    // labels wrap and jump during the transition.
+                    HStack(spacing: 0) {
+                        sidebar(now: timeline.date).frame(width: expandedNavWidth)
                         PanelDivider { delta, ended in
                             if sidebarDragStart == nil { sidebarDragStart = sidebarWidth }
                             let proposed = sidebarDragStart! + delta
                             sidebarWidth = min(320, max(160, proposed))
                             if ended { if proposed < 135 { sidebarWidth = sidebarDragStart!; sidebarCollapsed = true }; sidebarDragStart = nil }
-                        }.onTapGesture(count: 2) { sidebarCollapsed.toggle() }
+                        }.onTapGesture(count: 2, perform: toggleSidebar)
                     }
+                    .offset(x: showSidebar ? 0 : -(expandedNavWidth + 1))
+                    .frame(width: showSidebar ? expandedNavWidth + 1 : 0, alignment: .leading)
+                    .clipped()
+                    .allowsHitTesting(showSidebar)
+                    .accessibilityHidden(!showSidebar)
                     Group {
                         if destination == .search {
                             SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onClose: { destination = .inbox }).id(searchQuery)
@@ -176,6 +187,7 @@ struct WorkspaceView: View {
                         } else { DetailPlaceholder() }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .animation(reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: sidebarCollapsed)
             }
             .background(Color(nsColor: .textBackgroundColor))
             .tint(accent)
@@ -230,7 +242,7 @@ struct WorkspaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
         .onReceive(NotificationCenter.default.publisher(for: .openSearch)) { _ in searchDialog = true }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in sidebarCollapsed.toggle() }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in toggleSidebar() }
         .onChange(of: destination) { _, _ in
             if let task = selectedTask, !destination.includes(task) { selection = nil }
             quickKind = nextCreationKind ?? (activeList?.kind == .note ? .note : .task); nextCreationKind = nil
@@ -240,10 +252,12 @@ struct WorkspaceView: View {
         }
     }
 
+    private func toggleSidebar() { sidebarCollapsed.toggle() }
+
     private var rail: some View {
         VStack(spacing: 26) {
             Spacer().frame(height: 12)
-            ZStack { RoundedRectangle(cornerRadius: 10).fill(accent); Image(systemName: "checkmark").font(.system(size: 20, weight: .bold)).foregroundStyle(.white) }.frame(width: 34, height: 34).help("Taskvovsky")
+            ZStack { RoundedRectangle(cornerRadius: 10).fill(accent); Image(systemName: "checkmark").font(.system(size: 20, weight: .bold)).foregroundStyle(.white) }.frame(width: 34, height: 34).help("Taskovsky")
             railButton("checkmark.square.fill", title: "Tasks", active: destination != .search) { destination = .today }
             railButton("magnifyingglass", title: "Search", active: destination == .search) { searchDialog = true }
             Spacer()
@@ -324,7 +338,7 @@ struct WorkspaceView: View {
         let groups = grouped(tasks, now: now)
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Button { sidebarCollapsed.toggle() } label: { Image(systemName: "sidebar.left").font(.system(size: 16)) }.buttonStyle(.plain).help("Toggle sidebar").accessibilityLabel("Toggle sidebar")
+                Button(action: toggleSidebar) { Image(systemName: "sidebar.left").font(.system(size: 16)) }.buttonStyle(.plain).help("Toggle sidebar").accessibilityLabel("Toggle sidebar")
                 Text(destination.title(store.data)).font(.system(size: 20, weight: .bold)).lineLimit(1)
                 Spacer()
                 Menu {
@@ -483,17 +497,17 @@ struct TaskRow: View {
         HStack(alignment: .center, spacing: 11) {
             if task.kind == .note { Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 18, height: 20) }
             else { Button(action: toggle) { Image(systemName: task.wontDoAt != nil ? "xmark.square.fill" : task.completedAt == nil ? "square" : "checkmark.square.fill").font(.system(size: 16, weight: .light)).foregroundStyle(task.completedAt == nil && task.wontDoAt == nil ? task.priority.color : .secondary) }.buttonStyle(.plain).disabled(task.deletedAt != nil).help(task.completedAt == nil && task.wontDoAt == nil ? "Complete task" : "Mark incomplete").accessibilityLabel(task.completedAt == nil && task.wontDoAt == nil ? "Complete \(task.title)" : "Reopen \(task.title)") }
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(task.title.isEmpty ? "Untitled" : task.title).font(.system(size: 16)).foregroundStyle(task.completedAt == nil && task.wontDoAt == nil ? .primary : .secondary).lineLimit(1).layoutPriority(1)
+                HStack(alignment: .center, spacing: 6) {
+                    Text(task.title.isEmpty ? "Untitled" : task.title).font(.system(size: 16)).foregroundStyle(task.completedAt == nil && task.wontDoAt == nil ? .primary : .secondary).lineLimit(1).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
                     Spacer(minLength: 4)
                     if !task.body.isEmpty { Image(systemName: "doc.plaintext").font(.system(size: 10)).foregroundStyle(.tertiary) }
-                    if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary) }
+                    if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary).fixedSize() }
                     if let tag = tags.first { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).lineLimit(1) }
                     if task.recurrence != .none { Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(.tertiary) }
                     if task.reminderDate != nil { Image(systemName: "bell").font(.system(size: 10)).foregroundStyle(task.reminderDate! <= now ? .orange : .secondary) }
                     if let due = task.dueDate { Text(dueText(due)).font(.system(size: 12)).foregroundStyle(due < task.scheduleCalendar.startOfDay(for: now) ? .red : accent).fixedSize() }
                     else if let listName { Text(listName).font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1) }
-                }
+                }.lineLimit(1)
         }.padding(.horizontal, 12).frame(height: 40).background(selected ? Color.primary.opacity(0.045) : .clear, in: RoundedRectangle(cornerRadius: 8))
         .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 41).padding(.trailing, 12) }
     }
