@@ -98,6 +98,44 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertNil(store.data.tasks.first { $0.id == id }?.wontDoAt)
     }
 
+    func testLegacyTaskDecodesWithoutRecurrenceEnd() throws {
+        let task = TaskItem(title: "Legacy", recurrence: .daily)
+        let encoded = try JSONEncoder().encode(task)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        object.removeValue(forKey: "recurrenceEndDate")
+        let decoded = try JSONDecoder().decode(TaskItem.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertNil(decoded.recurrenceEndDate)
+        XCTAssertEqual(decoded.recurrence, .daily)
+    }
+
+    @MainActor func testRecurrenceEndIsInclusiveInTaskTimeZoneAndUndoSafe() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = TaskStore(fileURL: url, seed: false)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let due = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 23)))
+        let end = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 8)))
+        let id = store.createTask(title: "Daily", dueDate: due)
+        var task = try XCTUnwrap(store.data.tasks.first { $0.id == id })
+        task.hasDueTime = true; task.timeZoneID = calendar.timeZone.identifier
+        task.recurrence = .daily; task.recurrenceEndDate = end; store.updateTask(task)
+        store.toggleComplete(id: id)
+        let successor = try XCTUnwrap(store.data.tasks.first { $0.recurrenceSourceID == id })
+        XCTAssertEqual(calendar.component(.day, from: try XCTUnwrap(successor.dueDate)), 8)
+        XCTAssertEqual(calendar.component(.hour, from: try XCTUnwrap(successor.dueDate)), 23)
+        store.undoCompletion(id: id)
+        XCTAssertFalse(store.data.tasks.contains { $0.id == successor.id })
+        store.toggleComplete(id: id)
+        let final = try XCTUnwrap(store.data.tasks.first { $0.recurrenceSourceID == id })
+        store.toggleComplete(id: final.id)
+        XCTAssertFalse(store.data.tasks.contains { $0.recurrenceSourceID == final.id })
+        store.undoCompletion(id: final.id)
+        XCTAssertNil(store.data.tasks.first { $0.id == final.id }?.completedAt)
+        let loaded = TaskStore(fileURL: url, seed: false)
+        XCTAssertEqual(loaded.data.tasks.first { $0.id == final.id }?.recurrenceEndDate, end)
+    }
+
     @MainActor func testRecognitionAndSettings() throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

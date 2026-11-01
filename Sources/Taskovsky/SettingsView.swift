@@ -9,14 +9,14 @@ struct SettingsView: View {
     private enum Section: String, CaseIterable {
         case smartLists = "Smart Lists", dateTime = "Date & Time", more = "More", about = "About"
         var symbol: String {
-            switch self { case .smartLists: "list.bullet.rectangle"; case .dateTime: "calendar"; case .more: "slider.horizontal.3"; case .about: "info.circle" }
+            switch self { case .smartLists: "line.3.horizontal.decrease"; case .dateTime: "clock"; case .more: "switch.2"; case .about: "info.circle" }
         }
     }
 
     var body: some View {
         HStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Settings").font(.system(size: 20, weight: .bold)).padding(.horizontal, 16).padding(.bottom, 24)
+                Text("Settings").font(.system(size: 16, weight: .bold)).padding(.horizontal, 16).padding(.bottom, 24)
                 ForEach(Section.allCases, id: \.self) { item in
                     Button { section = item } label: {
                         HStack(spacing: 12) {
@@ -24,8 +24,8 @@ struct SettingsView: View {
                             Text(item.rawValue)
                             Spacer()
                         }.font(.system(size: 14)).padding(.horizontal, 12).padding(.vertical, 10)
-                            .foregroundStyle(section == item ? accent : .primary)
-                            .background(section == item ? accent.opacity(0.10) : .clear, in: RoundedRectangle(cornerRadius: 7))
+                            .foregroundStyle(.primary)
+                            .background(section == item ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 7))
                     }.buttonStyle(.plain)
                 }
                 Spacer()
@@ -34,7 +34,9 @@ struct SettingsView: View {
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
-                    Text(section.rawValue).font(.system(size: 20, weight: .bold))
+                    if section != .more {
+                        Text(section == .smartLists ? "Smart List" : section.rawValue).font(.system(size: 16, weight: .bold))
+                    }
                     switch section {
                     case .smartLists: smartLists
                     case .dateTime: dateTime
@@ -45,6 +47,7 @@ struct SettingsView: View {
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .background(Color(nsColor: .textBackgroundColor))
         }.frame(minWidth: 800, minHeight: 680).tint(accent)
+            .background(WindowChrome()).ignoresSafeArea(.container, edges: .top)
             .sheet(item: $editingTemplate) { draft in TemplateEditor(draft: draft) { store.updateTemplate($0) } }
     }
 
@@ -62,28 +65,25 @@ struct SettingsView: View {
         HStack {
             Image(systemName: smartListSymbol(key)).frame(width: 20).foregroundStyle(.secondary)
             Text(title); Spacer(minLength: 16)
-            Picker(title, selection: Binding(get: { store.settings.smartListVisibility[key] ?? .show }, set: { store.settings.smartListVisibility[key] = $0 })) {
-                Text("Hidden").tag(SmartListVisibility.hidden); Text("Show").tag(SmartListVisibility.show); Text("Show if not empty").tag(SmartListVisibility.showIfNotEmpty)
-            }.labelsHidden().frame(width: 160)
+            valueMenu(selection: Binding(get: { store.settings.smartListVisibility[key] ?? .show }, set: { store.settings.smartListVisibility[key] = $0 }), options: key == .summary ? [("Hidden", .hidden), ("Show", .show)] : [
+                ("Hidden", .hidden), ("Show", .show), ("Show if not empty", .showIfNotEmpty)
+            ], title: title)
         }.font(.system(size: 14)).frame(minHeight: 40).padding(.horizontal, 18)
     }
     private func smartListSymbol(_ key: SmartListKey) -> String {
-        switch key { case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"; case .inbox: "tray"; case .summary: "chart.bar"; case .tags: "number"; case .filters: "line.3.horizontal.decrease.circle"; case .completed: "checkmark.circle"; case .wontDo: "minus.circle"; case .trash: "trash" }
+        switch key { case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"; case .inbox: "tray"; case .summary: "doc.text"; case .tags: "tag"; case .filters: "line.3.horizontal.decrease.circle"; case .completed: "checkmark.square"; case .wontDo: "xmark.square"; case .trash: "trash" }
     }
     private var dateTime: some View {
         VStack(alignment: .leading, spacing: 20) {
             group {
-                row("Start Week On") {
-                    Picker("Start Week On", selection: $store.settings.startWeekOn) {
-                        ForEach(1...7, id: \.self) { day in Text(Calendar.current.weekdaySymbols[day - 1]).tag(day) }
-                    }.labelsHidden().frame(width: 160)
+                row("Start Week on") {
+                    valueMenu(selection: $store.settings.startWeekOn, options: (1...7).map { (Calendar.current.weekdaySymbols[$0 - 1], $0) })
                 }
-                toggleRow("Show Week Numbers", $store.settings.showWeekNumbers)
             }
+            group { toggleRow("Show Week Numbers(W)", $store.settings.showWeekNumbers) }
             group {
                 toggleRow("Time Zone", $store.settings.enableTimeZone)
-                Text("Set a time zone for tasks and keep their scheduled time when you travel.")
-                    .font(.system(size: 12)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 15)
+                explanation("If enabled, you can select the time zone when setting time for tasks.")
             }
         }
     }
@@ -92,26 +92,41 @@ struct SettingsView: View {
             titled("Smart Recognition") {
                 group {
                     toggleRow("Date Recognition", $store.settings.dateRecognition)
-                    Text("Automatically recognize dates in task names.").font(.system(size: 12)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 8)
-                    checkboxRow("Remove recognized date text from task title", $store.settings.removeDateText)
+                    explanation("When adding tasks, recognize date and time information and automatically set reminders.")
+                    checkboxRow("Remove text in tasks", $store.settings.removeDateText)
                         .disabled(!store.settings.dateRecognition)
+                    row("Tag Recognition") { EmptyView() }
+                    explanation("You can select to keep or remove tags from task name.")
+                    checkboxRow("Remove tags from task name", $store.settings.removeTagText)
+                    toggleRow("URL Parsing", $store.settings.urlParsing)
+                    explanation("When the task name is a URL, it will be parsed as the URL title.")
                 }
             }
-            titled("Tag Recognition") { group { checkboxRow("Remove recognized tag text from task title", $store.settings.removeTagText) } }
-            titled("URL Parsing") { group { toggleRow("URL Parsing", $store.settings.urlParsing); Text("When the task name is a URL, it will be parsed as the URL title.").font(.system(size: 12)).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 14) } }
             titled("Task Default") {
-                group {
-                    row("Default Date") { Picker("Default Date", selection: $store.settings.defaultDate) { Text("None").tag(DefaultDate.none); Text("Today").tag(DefaultDate.today); Text("Tomorrow").tag(DefaultDate.tomorrow); Text("Day after tomorrow").tag(DefaultDate.dayAfterTomorrow); Text("Next week").tag(DefaultDate.nextWeek) }.labelsHidden().frame(width: 160) }
-                    row("Default Reminders (Due time task)") { Picker("Reminder for Timed Tasks", selection: $store.settings.defaultReminder) {
-                        Text("None").tag(DueReminder.none); Text("On time").tag(DueReminder.onTime); Text("5 minutes before").tag(DueReminder.fiveMinutesBefore); Text("15 minutes before").tag(DueReminder.fifteenMinutesBefore); Text("30 minutes before").tag(DueReminder.thirtyMinutesBefore); Text("1 hour before").tag(DueReminder.oneHourBefore); Text("1 day before").tag(DueReminder.oneDayBefore)
-                    }.labelsHidden().frame(width: 160) }
-                    row("Default Reminders (All day task)") { Picker("Reminder for All-day Tasks", selection: $store.settings.allDayReminder) { Text("None").tag(AllDayReminder.none); Text("On day at 9:00 AM").tag(AllDayReminder.onDay9); Text("Day before at 9:00 AM").tag(AllDayReminder.dayBefore9) }.labelsHidden().frame(width: 160) }
-                    row("Default Priority") { Picker("Default Priority", selection: $store.settings.defaultPriority) { ForEach(TaskPriority.allCases, id: \.self) { Text($0.label).tag($0) } }.labelsHidden().frame(width: 160) }
-                    row("Default Tag") { Picker("Default Tag", selection: $store.settings.defaultTagID) { Text("None").tag(nil as UUID?); ForEach(store.data.tags) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden().frame(width: 160) }
-                    row("Default List") { Picker("Default List", selection: $store.settings.defaultListID) { Text("Inbox").tag(nil as UUID?); ForEach(store.data.lists) { Text($0.name).tag(Optional($0.id)) } }.labelsHidden().frame(width: 160) }
-                    positionRow("Default Add to", $store.settings.defaultAddTo)
-                    positionRow("Overdue Section shows at", $store.settings.overduePosition)
-                    HStack { Spacer(); Button("Reset Default", action: resetDefaults) }.padding(14)
+                VStack(spacing: 12) {
+                    group {
+                        row("Default Date") { valueMenu(selection: $store.settings.defaultDate, options: [("None", .none), ("Today", .today), ("Tomorrow", .tomorrow), ("Day after tomorrow", .dayAfterTomorrow), ("Next week", .nextWeek)]) }
+                        row("Default Reminders (Due time task)") {
+                            ReferenceReminderMenu(selection: Binding(get: { store.settings.effectiveTimedReminderDefaults }, set: { values in
+                                store.settings.timedReminderDefaults = values; store.settings.defaultReminder = values.first ?? .none
+                            }), options: [("On time", .onTime), ("5 minutes early", .fiveMinutesBefore), ("15 minutes early", .fifteenMinutesBefore), ("30 minutes early", .thirtyMinutesBefore), ("1 hour early", .oneHourBefore), ("1 day early", .oneDayBefore)])
+                        }
+                        row("Default Reminders (All day task)") {
+                            ReferenceReminderMenu(selection: Binding(get: { store.settings.effectiveAllDayReminderDefaults }, set: { values in
+                                store.settings.allDayReminderDefaults = values; store.settings.allDayReminder = values.first ?? .none
+                            }), options: [("On the day (09:00)", .onDay9), ("1 day early (09:00)", .dayBefore9), ("2 days early (09:00)", .twoDaysBefore9), ("3 days early (09:00)", .threeDaysBefore9), ("1 week early (09:00)", .weekBefore9)])
+                        }
+                    }
+                    group {
+                        row("Default Priority") { valueMenu(selection: $store.settings.defaultPriority, options: TaskPriority.allCases.map { ($0.label, $0) }) }
+                        row("Default Tag") { valueMenu(selection: $store.settings.defaultTagID, options: [("None", nil)] + store.data.tags.map { ($0.name, Optional($0.id)) }) }
+                        row("Default List") { valueMenu(selection: $store.settings.defaultListID, options: [("Inbox", nil)] + store.data.lists.map { ($0.name, Optional($0.id)) }) }
+                    }
+                    group {
+                        positionRow("Default Add to", $store.settings.defaultAddTo)
+                        positionRow("Overdue Section shows at", $store.settings.overduePosition)
+                    }
+                    HStack { Button("Reset Default", action: resetDefaults).buttonStyle(.plain).foregroundStyle(accent); Spacer() }
                 }
             }
             titled("Task Template") {
@@ -123,7 +138,7 @@ struct SettingsView: View {
                                     VStack(alignment: .leading, spacing: 7) {
                                         Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2).padding(.trailing, 20)
                                         if !template.checklist.isEmpty {
-                                            ForEach(Array(template.checklist.prefix(4))) { item in
+                                            ForEach(Array(template.checklist.prefix(5))) { item in
                                                 HStack(alignment: .top, spacing: 5) { Image(systemName: "square"); Text(item.title).lineLimit(1) }.font(.system(size: 12)).foregroundStyle(.secondary)
                                             }
                                         } else if !template.body.isEmpty {
@@ -161,7 +176,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 10) { Text(title).font(.system(size: 15, weight: .semibold)); content() }
     }
     private func row<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack { Text(title); Spacer(minLength: 16); content() }.font(.system(size: 14)).frame(minHeight: 40).padding(.horizontal, 18)
+        HStack { Text(title).fixedSize(horizontal: false, vertical: true); Spacer(minLength: 16); content() }.font(.system(size: 14)).frame(minHeight: 40).padding(.horizontal, 18)
     }
     private func toggleRow(_ title: String, _ binding: Binding<Bool>) -> some View {
         row(title) { Toggle(title, isOn: binding).labelsHidden().toggleStyle(.switch).controlSize(.small) }
@@ -169,15 +184,70 @@ struct SettingsView: View {
     private func checkboxRow(_ title: String, _ binding: Binding<Bool>) -> some View {
         HStack { Toggle(title, isOn: binding).toggleStyle(.checkbox); Spacer() }.font(.system(size: 13)).frame(minHeight: 44).padding(.horizontal, 18)
     }
+    private func explanation(_ text: String) -> some View {
+        Text(text).font(.system(size: 12)).foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 10)
+    }
+    private func valueMenu<Value: Equatable>(selection: Binding<Value>, options: [(String, Value)], title: String = "") -> some View {
+        ReferenceValueMenu(selection: selection, options: options, title: title)
+    }
+
     private func positionRow(_ title: String, _ binding: Binding<TaskPosition>) -> some View {
-        row(title) { Picker(title, selection: binding) { Text("Top of List").tag(TaskPosition.top); Text("Bottom of List").tag(TaskPosition.bottom) }.labelsHidden().frame(width: 160) }
+        row(title) { valueMenu(selection: binding, options: [("Top of List", .top), ("Bottom of List", .bottom)]) }
     }
     private func resetDefaults() {
         let defaults = AppSettings()
         store.settings.defaultDate = defaults.defaultDate; store.settings.defaultReminder = defaults.defaultReminder
-        store.settings.allDayReminder = defaults.allDayReminder; store.settings.defaultPriority = defaults.defaultPriority
+        store.settings.allDayReminder = defaults.allDayReminder; store.settings.timedReminderDefaults = nil; store.settings.allDayReminderDefaults = nil
+        store.settings.defaultPriority = defaults.defaultPriority
         store.settings.defaultTagID = defaults.defaultTagID; store.settings.defaultListID = defaults.defaultListID
         store.settings.defaultAddTo = defaults.defaultAddTo; store.settings.overduePosition = defaults.overduePosition
+    }
+}
+
+private struct ReferenceReminderMenu<Value: Equatable>: View {
+    @Binding var selection: [Value]
+    let options: [(String, Value)]
+    @State private var draft: [Value] = []
+    @State private var open = false
+    private var label: String {
+        if selection.isEmpty { return "None" }
+        if selection.count == 1 { return options.first { $0.1 == selection[0] }?.0 ?? "1 reminder" }
+        return "\(selection.count) reminders"
+    }
+    var body: some View {
+        Button { draft = selection; open = true } label: {
+            HStack(spacing: 6) {
+                Text(label).lineLimit(1)
+                Image(systemName: "chevron.up.chevron.down").font(.system(size: 8))
+            }.foregroundStyle(.secondary).frame(maxWidth: 190, alignment: .trailing).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .popover(isPresented: $open, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                        Button {
+                            if draft.contains(option.1) { draft.removeAll { $0 == option.1 } }
+                            else { draft.append(option.1) }
+                        } label: {
+                            HStack(spacing: 20) {
+                                Text(option.0); Spacer(minLength: 0)
+                                Image(systemName: "checkmark").opacity(draft.contains(option.1) ? 1 : 0)
+                            }.foregroundStyle(draft.contains(option.1) ? accent : .primary)
+                                .padding(.horizontal, 12).padding(.vertical, 8).contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                    }
+                    Divider().padding(.vertical, 5)
+                    HStack {
+                        Spacer()
+                        Button("Cancel") { open = false }
+                        Button("OK") {
+                            selection = options.compactMap { option in draft.contains(option.1) ? option.1 : nil }
+                            open = false
+                        }.keyboardShortcut(.defaultAction)
+                    }.padding(.horizontal, 8).padding(.bottom, 6)
+                }.font(.system(size: 14)).padding(5).fixedSize(horizontal: true, vertical: true)
+                    .onExitCommand { open = false }
+            }
     }
 }
 

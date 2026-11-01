@@ -1,6 +1,82 @@
 import SwiftUI
 import TaskovskyCore
 
+private func highlightedMatch(_ text: String, query: String) -> Text {
+    guard !query.isEmpty else { return Text(text) }
+    var result = AttributedString()
+    var remaining = text[...]
+    while let range = remaining.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) {
+        result.append(AttributedString(String(remaining[..<range.lowerBound])))
+        var match = AttributedString(String(remaining[range]))
+        match.backgroundColor = .yellow.opacity(0.35)
+        match.foregroundColor = .primary
+        result.append(match)
+        remaining = remaining[range.upperBound...]
+    }
+    result.append(AttributedString(String(remaining)))
+    return Text(result)
+}
+
+private func searchSnippet(_ task: TaskItem, query: String) -> String? {
+    guard !query.isEmpty else { return nil }
+    let candidates = [task.body] + task.checklist.map(\.title)
+    guard let text = candidates.first(where: { $0.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil }),
+          let match = text.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) else { return nil }
+    let start = text.index(match.lowerBound, offsetBy: -45, limitedBy: text.startIndex) ?? text.startIndex
+    let end = text.index(match.upperBound, offsetBy: 70, limitedBy: text.endIndex) ?? text.endIndex
+    return (start == text.startIndex ? "" : "…") + text[start..<end].replacingOccurrences(of: "\n", with: " ") + (end == text.endIndex ? "" : "…")
+}
+
+private struct SearchTaskResult: View {
+    let task: TaskItem
+    let query: String
+    let listName: String
+    let listSymbol: String?
+    var showDate = false
+    let onOpen: () -> Void
+    let onComplete: () -> Void
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            if task.kind == .note {
+                Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 18, height: 22)
+            } else {
+                Button(action: onComplete) {
+                    Image(systemName: task.completedAt != nil ? "checkmark.square.fill" : task.wontDoAt != nil ? "xmark.square.fill" : "square")
+                        .foregroundStyle(task.completedAt != nil ? accent : task.wontDoAt != nil ? Color.secondary : task.priority.color)
+                        .frame(width: 18, height: 22)
+                }.buttonStyle(.plain).accessibilityLabel(task.completedAt != nil || task.wontDoAt != nil ? "Reopen task" : "Complete task")
+            }
+            Button(action: onOpen) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        highlightedMatch(task.title, query: query).font(.system(size: 14)).lineLimit(1)
+                        if let snippet = searchSnippet(task, query: query) {
+                            highlightedMatch(snippet, query: query).font(.system(size: 12)).foregroundColor(.secondary).lineLimit(2)
+                        }
+                    }.layoutPriority(1)
+                    Spacer(minLength: 8)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            if showDate, let due = task.dueDate { dueLabel(due) }
+                            listLabel
+                        }.fixedSize()
+                        if showDate, let due = task.dueDate { dueLabel(due).fixedSize() }
+                        EmptyView()
+                    }
+                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+        }.padding(.vertical, 6)
+    }
+    private var listLabel: some View {
+        HStack(spacing: 4) { ListSymbol(symbol: listSymbol, size: 12); Text(listName) }
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+    }
+    private func dueLabel(_ due: Date) -> some View {
+        Text(task.dayText(due) + (task.hasDueTime ? " " + task.timeText(due) : ""))
+            .font(.system(size: 12)).foregroundStyle(.secondary)
+    }
+}
+
 struct SearchPane: View {
     @ObservedObject var store: TaskStore
     let initialQuery: String
@@ -8,22 +84,23 @@ struct SearchPane: View {
     let onSelectList: (UUID) -> Void
     let onSelectFilter: (UUID) -> Void
     let onSelectTag: (UUID) -> Void
+    let onComplete: (UUID) -> Void
     let onClose: () -> Void
     @State private var query: String
     @State private var editing = false
     @State private var dateRule: FilterDateRule = .all
     @State private var status: FilterStatus = .all
-    @State private var listID: UUID?
-    @State private var tagID: UUID?
+    @State private var listIDs: Set<UUID> = []
+    @State private var tagIDs: Set<UUID> = []
     @State private var saveFilter = false
-    init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
-        self.onClose = onClose
+    init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onComplete: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
+        self.onClose = onClose; self.onComplete = onComplete
         self.store = store; self.initialQuery = initialQuery; self.onSelectTask = onSelectTask; self.onSelectList = onSelectList; self.onSelectFilter = onSelectFilter; self.onSelectTag = onSelectTag
         _query = State(initialValue: initialQuery)
     }
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var tasks: [TaskItem] {
-        let criteria = TaskFilter(name: "", listIDs: listID.map { [$0] } ?? [], tagIDs: tagID.map { [$0] } ?? [], dateRule: dateRule, status: status)
+        let criteria = TaskFilter(name: "", listIDs: Array(listIDs), tagIDs: Array(tagIDs), dateRule: dateRule, status: status)
         return store.data.tasks.filter { criteria.matches($0, calendar: store.settings.calendar) && TaskSearch.matches($0, query: trimmed) }
     }
     var body: some View {
@@ -36,29 +113,38 @@ struct SearchPane: View {
                 Button("Save as Filter") { saveFilter = true }.disabled(trimmed.isEmpty)
             }.padding(.bottom, 20)
             ScrollView(.horizontal, showsIndicators: false) {
-              HStack(spacing: 12) {
-                Picker("Date", selection: $dateRule) { Text("All Dates").tag(FilterDateRule.all); Text("Today").tag(FilterDateRule.today); Text("Tomorrow").tag(FilterDateRule.tomorrow); Text("Next 7 Days").tag(FilterDateRule.next7); Text("Overdue").tag(FilterDateRule.overdue); Text("No Date").tag(FilterDateRule.noDate) }.frame(width: 140)
-                Picker("List", selection: $listID) { Text("All Lists").tag(nil as UUID?); ForEach(store.data.lists) { Text($0.name).tag(Optional($0.id)) } }.frame(width: 140)
-                Picker("Tag", selection: $tagID) { Text("All Tags").tag(nil as UUID?); ForEach(store.data.tags) { Text($0.name).tag(Optional($0.id)) } }.frame(width: 140)
-                Picker("Status", selection: $status) { Text("All Status").tag(FilterStatus.all); Text("Uncompleted").tag(FilterStatus.active); Text("Completed").tag(FilterStatus.completed); Text("Won't Do").tag(FilterStatus.wontDo) }.frame(width: 140)
-              }.labelsHidden()
+                HStack(spacing: 18) {
+                    valueMenu(dateLabel, options: [("All Dates", .all), ("Today", .today), ("Tomorrow", .tomorrow), ("Next 7 Days", .next7), ("Overdue", .overdue), ("No Date", .noDate)], selection: $dateRule)
+                    multiMenu(listIDs.isEmpty ? "All Lists" : "Lists (\(listIDs.count))", entries: [(TaskFilter.inboxListID, "Inbox")] + store.data.lists.map { ($0.id, $0.name) }, selection: $listIDs)
+                    multiMenu(tagIDs.isEmpty ? "All Tags" : "Tags (\(tagIDs.count))", entries: store.data.tags.map { ($0.id, $0.name) }, selection: $tagIDs)
+                    valueMenu(statusLabel, options: [("All Status", .all), ("Uncompleted", .active), ("Completed", .completed), ("Won't Do", .wontDo)], selection: $status)
+                }
             }.padding(.bottom, 16)
             Divider()
             ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
                     if tasks.isEmpty { Text("No results found").foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, 50) }
                     ForEach(tasks) { task in
-                        Button { onSelectTask(task.id) } label: {
-                            HStack(spacing: 10) { Image(systemName: task.completedAt != nil ? "checkmark.circle.fill" : task.wontDoAt != nil ? "minus.circle" : "circle").foregroundStyle(task.completedAt != nil ? accent : task.priority.color)
-                                VStack(alignment: .leading, spacing: 3) { Text(task.title).font(.system(size: 14)); if !task.body.isEmpty { Text(task.body).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1) } }
-                                Spacer(); if let list = store.data.lists.first(where: { $0.id == task.listID }) { Text(list.name).font(.system(size: 12)).foregroundStyle(.secondary) }
-                            }.padding(.vertical, 8).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
+                        SearchTaskResult(task: task, query: trimmed, listName: store.data.lists.first(where: { $0.id == task.listID })?.name ?? "Inbox", listSymbol: store.data.lists.first(where: { $0.id == task.listID })?.symbol, showDate: true, onOpen: { onSelectTask(task.id) }, onComplete: { onComplete(task.id) })
                     }
                 }.padding(.vertical, 20)
             }
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .sheet(isPresented: $saveFilter) { FilterEditorView(store: store, filter: nil, initialKeyword: trimmed, initialDateRule: dateRule, initialStatus: status, initialListID: listID, initialTagID: tagID) }
+            .sheet(isPresented: $saveFilter) { FilterEditorView(store: store, filter: nil, initialKeyword: trimmed, initialDateRule: dateRule, initialStatus: status, initialListIDs: Array(listIDs), initialTagIDs: Array(tagIDs)) }
+    }
+    private var dateLabel: String { switch dateRule { case .all: "All Dates"; case .today: "Today"; case .tomorrow: "Tomorrow"; case .next7: "Next 7 Days"; case .overdue: "Overdue"; case .noDate: "No Date" } }
+    private var statusLabel: String { switch status { case .all: "All Status"; case .active: "Uncompleted"; case .completed: "Completed"; case .wontDo: "Won't Do" } }
+    private func menuLabel(_ text: String) -> some View { HStack(spacing: 5) { Text(text); Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)) }.font(.system(size: 13)).foregroundStyle(.secondary) }
+    private func valueMenu<T: Equatable>(_ label: String, options: [(String, T)], selection: Binding<T>) -> some View {
+        Menu { ForEach(Array(options.enumerated()), id: \.offset) { _, option in Button { selection.wrappedValue = option.1 } label: { if selection.wrappedValue == option.1 { Label(option.0, systemImage: "checkmark") } else { Text(option.0) } } } } label: { menuLabel(label) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+    }
+    private func multiMenu(_ label: String, entries: [(UUID, String)], selection: Binding<Set<UUID>>) -> some View {
+        Menu {
+            Button("All") { selection.wrappedValue.removeAll() }
+            ForEach(entries, id: \.0) { id, name in
+                Button { if selection.wrappedValue.contains(id) { selection.wrappedValue.remove(id) } else { selection.wrappedValue.insert(id) } } label: { if selection.wrappedValue.contains(id) { Label(name, systemImage: "checkmark") } else { Text(name) } }
+            }
+        } label: { menuLabel(label) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
     }
 }
 
@@ -70,36 +156,75 @@ struct SearchDialog: View {
     let onSelectList: (UUID) -> Void
     let onSelectFilter: (UUID) -> Void
     let onSelectTag: (UUID) -> Void
+    let onComplete: (UUID) -> Void
     @State private var query = ""
     @State private var recent: [String] = UserDefaults.standard.stringArray(forKey: "Taskovsky.recentSearches") ?? []
+    @State private var selected: Int? = nil
     @FocusState private var focused: Bool
+    private enum ResultID: Hashable { case task(UUID), list(UUID), tag(UUID), filter(UUID) }
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var tasks: [TaskItem] { store.data.tasks.filter { $0.deletedAt == nil && TaskSearch.matches($0, query: trimmed) } }
     private var lists: [TaskList] { store.data.lists.filter { $0.name.localizedCaseInsensitiveContains(trimmed) } }
     private var tags: [TaskTag] { store.data.tags.filter { $0.name.localizedCaseInsensitiveContains(trimmed) } }
     private var filters: [TaskFilter] { store.data.filters.filter { $0.name.localizedCaseInsensitiveContains(trimmed) } }
+    private var results: [ResultID] { tasks.prefix(5).map { .task($0.id) } + lists.prefix(8).map { .list($0.id) } + tags.prefix(8).map { .tag($0.id) } + filters.prefix(8).map { .filter($0.id) } }
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) { Image(systemName: "magnifyingglass").foregroundStyle(.secondary); TextField("Search tasks, lists, tags, and filters", text: $query).textFieldStyle(.plain).font(.system(size: 16)).focused($focused).onSubmit { guard !trimmed.isEmpty else { return }; remember(); onSearch(trimmed) }; if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain) }; Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close Search").help("Close Search").keyboardShortcut(.cancelAction) }.padding(18)
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Search tasks, lists, tags, and filters", text: $query).textFieldStyle(.plain).font(.system(size: 16)).focused($focused).onSubmit { submit() }.onChange(of: query) { _, _ in selected = nil }.onKeyPress(.downArrow) { moveSelection(1); return .handled }.onKeyPress(.upArrow) { moveSelection(-1); return .handled }
+                if !query.isEmpty { Button { query = "" } label: { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }.buttonStyle(.plain) }
+                Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close Search").help("Close Search").keyboardShortcut(.cancelAction)
+            }.padding(18)
             Divider()
-            ScrollView {
+            ScrollViewReader { proxy in
+              ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if trimmed.isEmpty {
                         HStack { Text("Recent Searches").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !recent.isEmpty { Button("Clear") { recent = []; UserDefaults.standard.removeObject(forKey: "Taskovsky.recentSearches") }.buttonStyle(.plain).foregroundStyle(accent) } }
                         ForEach(recent, id: \.self) { term in Button { query = term } label: { Label(term, systemImage: "clock.arrow.circlepath").frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.plain) }
                     } else {
-                        if !tasks.isEmpty { group("Tasks") { ForEach(tasks.prefix(8)) { task in result(task.title, symbol: "circle") { remember(); onSelectTask(task.id) } } } }
-                        if !lists.isEmpty { group("Lists") { ForEach(lists.prefix(8)) { list in result(list.name, symbol: "list.bullet") { remember(); onSelectList(list.id) } } } }
-                        if !tags.isEmpty { group("Tags") { ForEach(tags.prefix(8)) { tag in result(tag.name, symbol: "number") { remember(); onSelectTag(tag.id) } } } }
-                        if !filters.isEmpty { group("Filters") { ForEach(filters.prefix(8)) { filter in result(filter.name, symbol: "line.3.horizontal.decrease.circle") { remember(); onSelectFilter(filter.id) } } } }
-                        if tasks.isEmpty && lists.isEmpty && tags.isEmpty && filters.isEmpty { Text("No results found").foregroundStyle(.secondary) }
+                        if !tasks.isEmpty { group("Tasks") {
+                            ForEach(tasks.prefix(5)) { task in
+                                SearchTaskResult(task: task, query: trimmed, listName: store.data.lists.first(where: { $0.id == task.listID })?.name ?? "Inbox", listSymbol: store.data.lists.first(where: { $0.id == task.listID })?.symbol, onOpen: { open(.task(task.id)) }, onComplete: { onComplete(task.id) })
+                                    .background(selectionColor(.task(task.id)), in: RoundedRectangle(cornerRadius: 5)).id(ResultID.task(task.id))
+                            }
+                            Button("View more") { remember(); onSearch(trimmed) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(accent).padding(.vertical, 5)
+                        } }
+                        if !lists.isEmpty { group("Lists") { ForEach(lists.prefix(8)) { list in result(list.name, symbol: "list.bullet", id: .list(list.id)) } } }
+                        if !tags.isEmpty { group("Tags") { ForEach(tags.prefix(8)) { tag in result(tag.name, symbol: "tag", id: .tag(tag.id)) } } }
+                        if !filters.isEmpty { group("Filters") { ForEach(filters.prefix(8)) { filter in result(filter.name, symbol: "line.3.horizontal.decrease.circle", id: .filter(filter.id)) } } }
+                        if results.isEmpty { Text("No results found").foregroundStyle(.secondary) }
                     }
                 }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+              }
+              .onChange(of: selected) { _, index in
+                  if let index, results.indices.contains(index) { proxy.scrollTo(results[index], anchor: .center) }
+              }
             }
             if !trimmed.isEmpty { Divider(); HStack { Text("Press Return to see all results").font(.system(size: 12)).foregroundStyle(.secondary); Spacer() }.padding(12) }
         }.frame(width: 550, height: 420).onAppear { focused = true }
+            .onMoveCommand { direction in
+                guard !trimmed.isEmpty, !results.isEmpty else { return }
+                if direction == .down { moveSelection(1) }
+                if direction == .up { moveSelection(-1) }
+            }
+    }
+    private func moveSelection(_ step: Int) {
+        guard !trimmed.isEmpty, !results.isEmpty else { return }
+        if step > 0 { selected = min((selected ?? -1) + 1, results.count - 1) }
+        else { selected = max((selected ?? results.count) - 1, 0) }
     }
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View { VStack(alignment: .leading, spacing: 4) { Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary); content() } }
-    private func result(_ title: String, symbol: String, action: @escaping () -> Void) -> some View { Button(action: action) { Label(title, systemImage: symbol).font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5).contentShape(Rectangle()) }.buttonStyle(.plain) }
+    private func selectionColor(_ id: ResultID) -> Color { selected.flatMap { results.indices.contains($0) ? results[$0] : nil } == id ? Color.primary.opacity(0.08) : .clear }
+    private func result(_ title: String, symbol: String, id: ResultID) -> some View {
+        Button { open(id) } label: { HStack(spacing: 10) {
+            if case .list(let listID) = id { ListSymbol(symbol: store.data.lists.first(where: { $0.id == listID })?.symbol, size: 16).frame(width: 18) }
+            else { Image(systemName: symbol).frame(width: 18) }
+            highlightedMatch(title, query: trimmed)
+        }.font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5).contentShape(Rectangle()) }.buttonStyle(.plain).background(selectionColor(id), in: RoundedRectangle(cornerRadius: 5)).id(id)
+    }
+    private func submit() { guard !trimmed.isEmpty else { return }; if let selected, results.indices.contains(selected) { open(results[selected]) } else { remember(); onSearch(trimmed) } }
+    private func open(_ id: ResultID) { remember(); switch id { case .task(let id): onSelectTask(id); case .list(let id): onSelectList(id); case .tag(let id): onSelectTag(id); case .filter(let id): onSelectFilter(id) } }
     private func remember() { guard !trimmed.isEmpty else { return }; recent.removeAll { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }; recent.insert(trimmed, at: 0); recent = Array(recent.prefix(10)); UserDefaults.standard.set(recent, forKey: "Taskovsky.recentSearches") }
 }

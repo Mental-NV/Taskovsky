@@ -4,12 +4,16 @@ struct CalendarGrid: View {
     @Binding var date: Date
     var calendar: Calendar
     var showWeekNumbers: Bool
+    var hasSelection: Bool
+    var isOccurrence: (Date) -> Bool
+    var onSelect: () -> Void
     @State private var displayedMonth: Date
 
-    init(date: Binding<Date>, calendar: Calendar, showWeekNumbers: Bool) {
+    init(date: Binding<Date>, calendar: Calendar, showWeekNumbers: Bool, hasSelection: Bool = true, isOccurrence: @escaping (Date) -> Bool = { _ in false }, onSelect: @escaping () -> Void = {}) {
         _date = date
         self.calendar = calendar
         self.showWeekNumbers = showWeekNumbers
+        self.hasSelection = hasSelection; self.isOccurrence = isOccurrence; self.onSelect = onSelect
         _displayedMonth = State(initialValue: calendar.date(from: calendar.dateComponents([.era, .year, .month], from: date.wrappedValue)) ?? date.wrappedValue)
     }
     private var monthStart: Date { calendar.date(from: calendar.dateComponents([.era, .year, .month], from: displayedMonth)) ?? displayedMonth }
@@ -46,17 +50,20 @@ struct CalendarGrid: View {
                 }
             }
         }.padding(10).frame(width: showWeekNumbers ? 260 : 234)
+            .onChange(of: date) { _, new in
+                displayedMonth = calendar.date(from: calendar.dateComponents([.era, .year, .month], from: new)) ?? new
+            }
     }
     private func day(at offset: Int) -> Date { calendar.date(byAdding: .day, value: offset, to: firstGridDay) ?? firstGridDay }
     private func dayButton(_ day: Date) -> some View {
-        let selected = calendar.isDate(day, inSameDayAs: date)
+        let selected = hasSelection && calendar.isDate(day, inSameDayAs: date)
         let today = calendar.isDateInToday(day)
         let currentMonth = calendar.isDate(day, equalTo: monthStart, toGranularity: .month)
         return Button { select(day) } label: {
             Text("\(calendar.component(.day, from: day))").font(.system(size: 12))
                 .foregroundStyle(selected ? Color.white : currentMonth ? Color.primary : Color.secondary)
                 .frame(width: 28, height: 26)
-                .background { if selected { Circle().fill(Color.accentColor).frame(width: 25, height: 25) } }
+                .background { if selected { Circle().fill(Color.accentColor).frame(width: 25, height: 25) } else if isOccurrence(day) { Circle().fill(Color.accentColor.opacity(0.15)).frame(width: 25, height: 25) } }
                 .overlay { if today && !selected { Circle().stroke(Color.accentColor, lineWidth: 1).frame(width: 25, height: 25) } }
                 .contentShape(Rectangle())
         }.buttonStyle(.plain)
@@ -73,5 +80,6 @@ struct CalendarGrid: View {
         let start = calendar.startOfDay(for: day)
         date = calendar.date(bySettingHour: components.hour ?? 0, minute: components.minute ?? 0, second: components.second ?? 0, of: start) ?? start
         displayedMonth = calendar.date(from: calendar.dateComponents([.era, .year, .month], from: day)) ?? day
+        onSelect()
     }
 }

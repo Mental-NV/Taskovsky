@@ -9,7 +9,7 @@ struct TemplatePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Task Templates").font(.system(size: 20, weight: .bold))
+                Text("Task Templates").font(.system(size: 16, weight: .bold))
                 Spacer()
                 Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
             }
@@ -23,7 +23,7 @@ struct TemplatePicker: View {
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2)
                                 if !template.checklist.isEmpty {
-                                    ForEach(Array(template.checklist.prefix(4))) { item in
+                                    ForEach(Array(template.checklist.prefix(5))) { item in
                                         HStack(alignment: .top, spacing: 5) { Image(systemName: "square"); Text(item.title).lineLimit(1) }
                                             .font(.system(size: 12)).foregroundStyle(.secondary)
                                     }

@@ -13,11 +13,11 @@ struct FilterEditorView: View {
     @State private var dateRule: FilterDateRule
     @State private var status: FilterStatus
 
-    init(store: TaskStore, filter: TaskFilter? = nil, initialKeyword: String = "", initialDateRule: FilterDateRule = .all, initialStatus: FilterStatus = .active, initialListID: UUID? = nil, initialTagID: UUID? = nil) {
+    init(store: TaskStore, filter: TaskFilter? = nil, initialKeyword: String = "", initialDateRule: FilterDateRule = .all, initialStatus: FilterStatus = .active, initialListID: UUID? = nil, initialTagID: UUID? = nil, initialListIDs: [UUID]? = nil, initialTagIDs: [UUID]? = nil) {
         self.store = store; self.filter = filter
         _name = State(initialValue: filter?.name ?? initialKeyword)
         _keyword = State(initialValue: filter?.keyword ?? initialKeyword)
-        _listIDs = State(initialValue: Set(filter?.listIDs ?? initialListID.map { [$0] } ?? [])); _tagIDs = State(initialValue: Set(filter?.tagIDs ?? initialTagID.map { [$0] } ?? []))
+        _listIDs = State(initialValue: Set(filter?.listIDs ?? initialListIDs ?? initialListID.map { [$0] } ?? [])); _tagIDs = State(initialValue: Set(filter?.tagIDs ?? initialTagIDs ?? initialTagID.map { [$0] } ?? []))
         _priority = State(initialValue: filter?.priority); _dateRule = State(initialValue: filter?.dateRule ?? initialDateRule)
         _status = State(initialValue: filter?.status ?? initialStatus)
     }
@@ -28,7 +28,7 @@ struct FilterEditorView: View {
             Form {
                 TextField("Keyword", text: $keyword)
                 Menu {
-                    if store.data.lists.isEmpty { Text("No lists") }
+                    Toggle("Inbox", isOn: membership(TaskFilter.inboxListID, in: $listIDs))
                     ForEach(store.data.lists) { list in Toggle(list.name, isOn: membership(list.id, in: $listIDs)) }
                 } label: { selectionLabel("Lists", count: listIDs.count) }
                 Menu {

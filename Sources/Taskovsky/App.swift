@@ -8,7 +8,7 @@ struct TaskovskyApp: App {
     @StateObject private var store = TaskStore()
     init() { AppMigration.migratePreferences() }
     var body: some Scene {
-        WindowGroup("Taskovsky") { WorkspaceView(store: store).frame(minWidth: 780, minHeight: 500) }
+        WindowGroup("Taskovsky") { WorkspaceView(store: store).frame(minWidth: 780, minHeight: 500).ignoresSafeArea(.container, edges: .top) }
             .defaultSize(width: 1280, height: 740)
             .windowStyle(.hiddenTitleBar)
             .commands {
@@ -21,11 +21,25 @@ struct TaskovskyApp: App {
                 CommandGroup(after: .newItem) {
                     Button("Search") { NotificationCenter.default.post(name: .openSearch, object: nil) }.keyboardShortcut("f")
                     Button("Toggle Sidebar") { NotificationCenter.default.post(name: .toggleSidebar, object: nil) }.keyboardShortcut("s", modifiers: [.command, .option])
+                    #if DEBUG
+                    Button("Toggle Minimum Window Size (Debug)") { DebugWindowSizing.toggle() }.keyboardShortcut("0", modifiers: [.command, .option])
+                    #endif
                 }
             }
         Settings { SettingsView(store: store) }.defaultSize(width: 800, height: 680).windowStyle(.hiddenTitleBar)
     }
 }
+
+#if DEBUG
+@MainActor private enum DebugWindowSizing {
+    static var originalFrame: NSRect?
+    static func toggle() {
+        guard let window = NSApp.mainWindow else { return }
+        if let originalFrame { window.setFrame(originalFrame, display: true); self.originalFrame = nil }
+        else { originalFrame = window.frame; window.setContentSize(NSSize(width: 780, height: 500)) }
+    }
+}
+#endif
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -72,8 +86,8 @@ enum Destination: Hashable {
     var symbol: String {
         switch self {
         case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"
-        case .inbox: "tray"; case .notes: "doc.text"; case .reminders: "bell"; case .completed: "checkmark.circle"
-        case .trash: "trash"; case .list: "line.3.horizontal"; case .tag: "number"; case .wontDo: "xmark.square"; case .summary: "doc.plaintext"; case .search: "magnifyingglass"; case .filter: "line.3.horizontal.decrease"
+        case .inbox: "tray"; case .notes: "doc.text"; case .reminders: "bell"; case .completed: "checkmark.square"
+        case .trash: "trash"; case .list: "list.bullet"; case .tag: "tag"; case .wontDo: "xmark.square"; case .summary: "doc.plaintext"; case .search: "magnifyingglass"; case .filter: "line.3.horizontal.decrease"
         }
     }
     func title(_ data: WorkspaceData) -> String {
@@ -96,10 +110,10 @@ enum Destination: Hashable {
         let cal = task.scheduleCalendar
         let day = cal.startOfDay(for: now)
         switch self {
-        case .all: return task.kind == .task
-        case .today: return task.kind == .task && task.dueDate.map { $0 < cal.date(byAdding: .day, value: 1, to: day)! } == true
-        case .tomorrow: return task.kind == .task && task.dueDate.map { cal.isDate($0, inSameDayAs: cal.date(byAdding: .day, value: 1, to: day)!) } == true
-        case .week: return task.kind == .task && task.dueDate.map { $0 < cal.date(byAdding: .day, value: 7, to: day)! } == true
+        case .all: return true
+        case .today: return task.dueDate.map { $0 < cal.date(byAdding: .day, value: 1, to: day)! } == true
+        case .tomorrow: return task.dueDate.map { cal.isDate($0, inSameDayAs: cal.date(byAdding: .day, value: 1, to: day)!) } == true
+        case .week: return task.dueDate.map { $0 < cal.date(byAdding: .day, value: 7, to: day)! } == true
         case .inbox: return task.listID == nil
         case .notes: return task.kind == .note
         case .reminders: return task.reminderDate != nil
@@ -131,13 +145,14 @@ struct WorkspaceView: View {
     @State private var creatingFilter = false
     @State private var templatePicker = false
     @State private var feedback: TaskFeedback?
+    @AppStorage("Taskovsky.collapsedSidebarSections") private var collapsedSidebarSections = ""
     @AppStorage("Taskovsky.sidebarWidth") private var sidebarWidth = 215.0
     @AppStorage("Taskovsky.sidebarCollapsed") private var sidebarCollapsed = false
     @AppStorage("Taskovsky.taskPaneFraction") private var taskPaneFraction = 0.45
     @State private var sidebarDragStart: Double?
     @State private var paneDragStart: Double?
     @State private var nextCreationKind: TaskKind?
-    @FocusState private var quickFocused: Bool
+    @State private var quickFocused = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var selectedTask: TaskItem? { store.data.tasks.first { $0.id == selection } }
@@ -171,9 +186,12 @@ struct WorkspaceView: View {
                     .clipped()
                     .allowsHitTesting(showSidebar)
                     .accessibilityHidden(!showSidebar)
+                    if destination == .summary {
+                        SummaryView(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
                     Group {
                         if destination == .search {
-                            SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onClose: { destination = .inbox }).id(searchQuery)
+                            SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
                         } else { taskPane(now: timeline.date) }
                     }.frame(width: listWidth)
                     PanelDivider { delta, ended in
@@ -186,6 +204,7 @@ struct WorkspaceView: View {
                             TaskDetail(store: store, id: task.id, onTrash: { trash(task.id) }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }).id(task.id)
                         } else { DetailPlaceholder() }
                     }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
                 .animation(reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: sidebarCollapsed)
             }
@@ -203,12 +222,12 @@ struct WorkspaceView: View {
                         .font(.callout).padding(12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10)).shadow(radius: 5).padding(20)
                 }
             }
-            .overlay(alignment: .bottomTrailing) {
+            .overlay(alignment: .bottom) {
                 if let feedback {
                     HStack(spacing: 14) {
                         Text(feedback.message).font(.system(size: 14, weight: .medium)).foregroundStyle(.white)
                         Button { undo(feedback) } label: { Image(systemName: "arrow.uturn.backward").font(.system(size: 16, weight: .semibold)).foregroundStyle(.orange) }.buttonStyle(.plain).help("Undo").accessibilityLabel("Undo \(feedback.message)")
-                    }.padding(.horizontal, 16).padding(.vertical, 12).background(Color(white: 0.15), in: RoundedRectangle(cornerRadius: 9)).shadow(color: .black.opacity(0.2), radius: 12, y: 4).padding(24)
+                    }.padding(.horizontal, 16).padding(.vertical, 12).background(Color(white: 0.15), in: RoundedRectangle(cornerRadius: 9)).shadow(color: .black.opacity(0.2), radius: 12, y: 4).padding(.bottom, 60).transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
@@ -217,18 +236,18 @@ struct WorkspaceView: View {
             Button("Back up and recover") { store.recoverUnreadableWorkspace() }
         } message: { Text("The unreadable file will be copied to a backup beside workspace.json. Your current in-memory items will then be saved as the new workspace.") }
         .sheet(item: $editor) { item in
-            EntitySheet(editor: item) { name, color, kind in
+            EntitySheet(editor: item) { name, color, kind, symbol in
                 if item.isTag {
                     if let id = item.entityID { store.updateTag(TaskTag(id: id, name: name, color: color)) }
                     else { _ = store.createTag(name: name, color: color) }
                 } else {
-                    if let id = item.entityID { store.updateList(TaskList(id: id, name: name, color: color, kind: kind)) }
-                    else { destination = .list(store.createList(name: name, color: color, kind: kind)) }
+                    if let id = item.entityID { store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol)) }
+                    else { destination = .list(store.createList(name: name, color: color, kind: kind, symbol: symbol)) }
                 }
             }
         }
         .sheet(isPresented: $searchDialog) {
-            SearchDialog(store: store, onSearch: { searchQuery = $0; destination = .search; selection = nil; searchDialog = false }, onSelectTask: { selectSearchTask($0); searchDialog = false }, onSelectList: { destination = .list($0); searchDialog = false }, onSelectFilter: { destination = .filter($0); searchDialog = false }, onSelectTag: { destination = .tag($0); searchDialog = false })
+            SearchDialog(store: store, onSearch: { searchQuery = $0; destination = .search; selection = nil; searchDialog = false }, onSelectTask: { selectSearchTask($0); searchDialog = false }, onSelectList: { destination = .list($0); searchDialog = false }, onSelectFilter: { destination = .filter($0); searchDialog = false }, onSelectTag: { destination = .tag($0); searchDialog = false }, onComplete: complete)
         }
         .sheet(item: $filterEditor) { FilterEditorView(store: store, filter: $0) }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(store: store) }
@@ -257,7 +276,6 @@ struct WorkspaceView: View {
     private var rail: some View {
         VStack(spacing: 26) {
             Spacer().frame(height: 12)
-            ZStack { RoundedRectangle(cornerRadius: 10).fill(accent); Image(systemName: "checkmark").font(.system(size: 20, weight: .bold)).foregroundStyle(.white) }.frame(width: 34, height: 34).help("Taskovsky")
             railButton("checkmark.square.fill", title: "Tasks", active: destination != .search) { destination = .today }
             railButton("magnifyingglass", title: "Search", active: destination == .search) { searchDialog = true }
             Spacer()
@@ -275,6 +293,7 @@ struct WorkspaceView: View {
                     ForEach([Destination.all, .today, .tomorrow, .week, .inbox, .summary].filter { visible($0, now: now) }, id: \.self) { dest in navRow(dest, now: now) }
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
                     sectionHeading("Lists") { editor = EntityEditor(isTag: false) }
+                    if sectionExpanded("Lists").wrappedValue {
                     ForEach(store.data.lists) { list in
                         navRow(.list(list.id), color: Color(hex: list.color), now: now)
                             .contextMenu {
@@ -283,15 +302,19 @@ struct WorkspaceView: View {
                                 Text("Tasks are moved to Inbox")
                             }
                     }
+                    }
                     if sectionVisible(.filters, count: store.data.filters.count) {
                         sectionHeading("Filters") { creatingFilter = true }.padding(.top, 20)
+                        if sectionExpanded("Filters").wrappedValue {
                         ForEach(store.data.filters) { filter in
                             navRow(.filter(filter.id), now: now).contextMenu { Button("Edit Filter…") { filterEditor = filter }; Button("Delete Filter", role: .destructive) { store.deleteFilter(id: filter.id); if destination == .filter(filter.id) { destination = .inbox } } }
                         }
                         if store.data.filters.isEmpty { Text("Display tasks filtered by list, date, priority, tag, and more").font(.system(size: 12)).foregroundStyle(.secondary).padding(10).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8)) }
                     }
+                    }
                     if sectionVisible(.tags, count: store.data.tags.count) {
                     sectionHeading("Tags") { editor = EntityEditor(isTag: true) }.padding(.top, 20)
+                    if sectionExpanded("Tags").wrappedValue {
                     ForEach(store.data.tags) { tag in
                         navRow(.tag(tag.id), color: Color(hex: tag.color), now: now)
                             .contextMenu {
@@ -300,15 +323,25 @@ struct WorkspaceView: View {
                             }
                     }
                     }
+                    }
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
                     ForEach([Destination.completed, .wontDo, .trash].filter { visible($0, now: now) }, id: \.self) { navRow($0, now: now) }
                 }.padding(.horizontal, 8).padding(.top, 12)
             }
         }.background(Color(nsColor: .textBackgroundColor))
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: collapsedSidebarSections)
     }
     private func sectionHeading(_ text: String, action: @escaping () -> Void) -> some View {
-        HStack { Text(text).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary); Spacer(); Button(action: action) { Image(systemName: "plus").font(.system(size: 12)) }.buttonStyle(.plain).help("Add \(text == "Tags" ? "tag" : text == "Filters" ? "filter" : "list")") }.padding(.horizontal, 10).padding(.bottom, 6)
+        SidebarHeading(title: text, expanded: sectionExpanded(text), onAdd: action)
     }
+    private func sectionExpanded(_ title: String) -> Binding<Bool> {
+        Binding(get: { !collapsedSidebarSections.split(separator: "|").contains(Substring(title)) }, set: { expanded in
+            var values = Set(collapsedSidebarSections.split(separator: "|").map(String.init))
+            if expanded { values.remove(title) } else { values.insert(title) }
+            collapsedSidebarSections = values.sorted().joined(separator: "|")
+        })
+    }
+
     private func navRow(_ dest: Destination, color: Color? = nil, now: Date) -> some View {
         let count = store.data.tasks.filter { task in
             if case .filter(let id) = dest { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
@@ -316,10 +349,15 @@ struct WorkspaceView: View {
         }.count
         return Button { destination = dest } label: {
             HStack(spacing: 11) {
-                Image(systemName: dest.symbol).font(.system(size: 16)).foregroundStyle(color ?? (destination == dest ? accent : .secondary)).frame(width: 20)
-                Text(dest.title(store.data)).font(.system(size: 16)).lineLimit(1)
+                Group {
+                    if case .list(let id) = dest { ListSymbol(symbol: store.data.lists.first { $0.id == id }?.symbol) }
+                    else if dest == .today { CalendarSymbol(text: String(Calendar.current.component(.day, from: now))) }
+                    else if dest == .week { CalendarSymbol(text: String(Calendar.current.shortWeekdaySymbols[Calendar.current.component(.weekday, from: now) - 1].prefix(2))) }
+                    else { Image(systemName: dest.symbol).font(.system(size: 16)).frame(width: 20) }
+                }.foregroundStyle(color ?? .secondary).frame(width: 20)
+                Text(dest.title(store.data)).font(.system(size: 14)).lineLimit(1)
                 Spacer(minLength: 2)
-                if count > 0 { Text("\(count)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit() }
+                if count > 0 && dest != .summary { Text("\(count)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit() }
             }.padding(.horizontal, 10).frame(height: 38).contentShape(Rectangle())
                 .background(destination == dest ? Color.primary.opacity(0.05) : .clear, in: RoundedRectangle(cornerRadius: 9))
         }.buttonStyle(.plain)
@@ -348,15 +386,9 @@ struct WorkspaceView: View {
             }.padding(.horizontal, 20).frame(height: 58)
             if destination == .summary { Text("Updated in the last 7 days").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 12) }
             if destination != .trash && destination != .completed && destination != .wontDo && destination != .summary {
-                HStack(spacing: 10) {
-                    Menu {
-                        Button("Task") { quickKind = .task }; Button("Note") { quickKind = .note }
-                        Divider()
-                        Button("Add from Template…") { templatePicker = true }
-                    } label: { Image(systemName: quickKind == .task ? "plus" : "doc.text").font(.system(size: 16)).foregroundStyle(.secondary) }.menuStyle(.borderlessButton).fixedSize().help("Choose task, note, or template")
-                    TextField(quickKind == .task ? "Add task" : "Add note", text: $quickTitle).textFieldStyle(.plain).font(.system(size: 16)).focused($quickFocused).onSubmit(addTask)
-                    if !quickTitle.isEmpty { Button(action: addTask) { Image(systemName: "arrow.up.circle.fill").foregroundStyle(accent) }.buttonStyle(.plain).help("Add") }
-                }.padding(.horizontal, 13).frame(height: 38).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10)).padding(.horizontal, 20).padding(.bottom, 16)
+                QuickEntry(store: store, title: $quickTitle, kind: $quickKind, focused: $quickFocused, onTemplate: { templatePicker = true }) { body, recognizeDates in
+                    addTask(body: body, recognizeDates: recognizeDates)
+                }.padding(.horizontal, 20).padding(.bottom, 16)
             }
             if destination == .reminders { Text("Check due and upcoming reminders here. New items are set for one hour from now.").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.bottom, 16) }
             if destination == .trash { Text("Deleted items stay here until you restore them.").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 24).padding(.bottom, 16) }
@@ -366,17 +398,18 @@ struct WorkspaceView: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(groups, id: \.0) { title, items in
-                            Button { if collapsed.contains(title) { collapsed.remove(title) } else { collapsed.insert(title) } } label: {
+                            Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { if collapsed.contains(title) { collapsed.remove(title) } else { collapsed.insert(title) } } } label: {
                                 HStack(spacing: 7) { Image(systemName: collapsed.contains(title) ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)); Text(title).font(.system(size: 12, weight: .semibold)); Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary); Spacer() }.foregroundStyle(title == "Overdue" || title == "Due reminders" ? .red : .secondary).padding(.vertical, 10)
                             }.buttonStyle(.plain)
                             if !collapsed.contains(title) { ForEach(items) { task in
-                                TaskRow(store: store, id: task.id, selected: selection == task.id, now: now, toggle: { complete(task.id) })
+                                TaskRow(store: store, id: task.id, selected: selection == task.id, now: now, toggle: { complete(task.id) }, onSelect: { selection = task.id })
                                     .contentShape(Rectangle()).onTapGesture { selection = task.id }
                                     .draggable(task.id.uuidString)
                                     .contextMenu { taskMenu(task) }
                             } }
                         }
                     }.padding(.horizontal, 18).padding(.bottom, 24)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: tasks.map { $0.id })
                 }
             }
         }
@@ -421,10 +454,10 @@ struct WorkspaceView: View {
             let title: String
             if destination == .trash { title = "Deleted" }
             else if task.completedAt != nil || task.wontDoAt != nil {
-                title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : "Completed & Won't Do"
+                title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : tasks.contains(where: { $0.wontDoAt != nil }) ? "Completed & Won't Do" : "Completed"
             }
             else if destination == .reminders { title = task.reminderDate! <= now ? "Due reminders" : "Upcoming reminders" }
-            else if task.kind == .note { title = "Notes" }
+            else if task.kind == .note && sort == "Date" { title = "Note" }
             else if sort == "Priority" { title = task.priority.label }
             else if let due = task.dueDate {
                 if due < task.scheduleCalendar.startOfDay(for: now) { title = "Overdue" }
@@ -434,15 +467,16 @@ struct WorkspaceView: View {
             } else { title = "No Date" }
             if values[title] == nil { keys.append(title) }; values[title, default: []].append(task)
         }
-        if store.settings.overduePosition == .bottom, let i = keys.firstIndex(of: "Overdue") { keys.remove(at: i); keys.insert("Overdue", at: keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
+        if let i = keys.firstIndex(of: "Note") { keys.remove(at: i); keys.insert("Note", at: keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
+        if store.settings.overduePosition == .bottom, let i = keys.firstIndex(of: "Overdue") { keys.remove(at: i); keys.insert("Overdue", at: keys.firstIndex(of: "Note") ?? keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
         return keys.map { ($0, values[$0]!) }
     }
-    private func addTask() {
+    private func addTask(body: String = "", recognizeDates: Bool = true) {
         let title = quickTitle.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
         let due = contextualDate
-        let id = store.createTask(title: title, listID: activeList?.id, kind: quickKind, dueDate: quickKind == .task ? due : nil, useDefaultList: destination != .inbox && activeList == nil, preferRecognizedDate: true)
+        let id = store.createTask(title: title, listID: activeList?.id, kind: quickKind, dueDate: quickKind == .task ? due : nil, useDefaultList: destination != .inbox && activeList == nil, preferRecognizedDate: true, recognizeDates: recognizeDates, body: body)
         if case .tag(let tagID) = destination, var task = store.data.tasks.first(where: { $0.id == id }), !task.tagIDs.contains(tagID) { task.tagIDs.append(tagID); store.updateTask(task) }
-        if destination == .reminders, var task = store.data.tasks.first(where: { $0.id == id }) { task.reminderDate = due; task.hasDueTime = quickKind == .task; store.updateTask(task) }
+        if destination == .reminders, var task = store.data.tasks.first(where: { $0.id == id }) { task.reminderDates = due.map { [$0] } ?? []; task.hasDueTime = quickKind == .task; store.updateTask(task) }
         if quickKind == .note && (destination == .today || destination == .tomorrow || destination == .week || destination == .all) { destination = .inbox }
         if let created = store.data.tasks.first(where: { $0.id == id }), !destination.includes(created), destination != .search {
             if case .filter = destination { } else if case .tag = destination { } else { destination = created.listID.map(Destination.list) ?? .inbox }
@@ -476,56 +510,25 @@ struct WorkspaceView: View {
             showFeedback(TaskFeedback(taskID: id, kind: .complete, message: "Task completed"))
         }
     }
-    private func abandon(_ id: UUID) { store.markWontDo(id: id); showFeedback(TaskFeedback(taskID: id, kind: .wontDo, message: "Task abandoned")) }
+    private func abandon(_ id: UUID) { store.markWontDo(id: id) }
     private func showFeedback(_ value: TaskFeedback) {
-        feedback = value
-        Task { try? await Task.sleep(for: .seconds(5)); if feedback?.id == value.id { feedback = nil } }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { feedback = value }
+        Task { try? await Task.sleep(for: .seconds(5)); if feedback?.id == value.id { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.15)) { feedback = nil } } }
     }
     private func undo(_ value: TaskFeedback) { if value.kind == .complete { store.undoCompletion(id: value.taskID) } else { store.reopenTask(id: value.taskID) }; feedback = nil }
 }
 
-struct TaskRow: View {
-    @ObservedObject var store: TaskStore
-    let id: UUID
-    private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
-    private var listName: String? { store.data.lists.first { $0.id == task.listID }?.name }
-    private var tags: [TaskTag] { store.data.tags.filter { task.tagIDs.contains($0.id) } }
-    let selected: Bool
-    let now: Date
-    let toggle: () -> Void
-    var body: some View {
-        HStack(alignment: .center, spacing: 11) {
-            if task.kind == .note { Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 18, height: 20) }
-            else { Button(action: toggle) { Image(systemName: task.wontDoAt != nil ? "xmark.square.fill" : task.completedAt == nil ? "square" : "checkmark.square.fill").font(.system(size: 16, weight: .light)).foregroundStyle(task.completedAt == nil && task.wontDoAt == nil ? task.priority.color : .secondary) }.buttonStyle(.plain).disabled(task.deletedAt != nil).help(task.completedAt == nil && task.wontDoAt == nil ? "Complete task" : "Mark incomplete").accessibilityLabel(task.completedAt == nil && task.wontDoAt == nil ? "Complete \(task.title)" : "Reopen \(task.title)") }
-                HStack(alignment: .center, spacing: 6) {
-                    Text(task.title.isEmpty ? "Untitled" : task.title).font(.system(size: 16)).foregroundStyle(task.completedAt == nil && task.wontDoAt == nil ? .primary : .secondary).lineLimit(1).fixedSize(horizontal: false, vertical: true).layoutPriority(1)
-                    Spacer(minLength: 4)
-                    if !task.body.isEmpty { Image(systemName: "doc.plaintext").font(.system(size: 10)).foregroundStyle(.tertiary) }
-                    if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary).fixedSize() }
-                    if let tag = tags.first { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).lineLimit(1) }
-                    if task.recurrence != .none { Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(.tertiary) }
-                    if task.reminderDate != nil { Image(systemName: "bell").font(.system(size: 10)).foregroundStyle(task.reminderDate! <= now ? .orange : .secondary) }
-                    if let due = task.dueDate { Text(dueText(due)).font(.system(size: 12)).foregroundStyle(due < task.scheduleCalendar.startOfDay(for: now) ? .red : accent).fixedSize() }
-                    else if let listName { Text(listName).font(.system(size: 11)).foregroundStyle(.tertiary).lineLimit(1) }
-                }.lineLimit(1)
-        }.padding(.horizontal, 12).frame(height: 40).background(selected ? Color.primary.opacity(0.045) : .clear, in: RoundedRectangle(cornerRadius: 8))
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 41).padding(.trailing, 12) }
-    }
-    private func dueText(_ due: Date) -> String {
-        let cal = task.scheduleCalendar
-        let text = cal.isDate(due, inSameDayAs: now) ? "Today" : cal.isDate(due, inSameDayAs: cal.date(byAdding: .day, value: 1, to: now)!) ? "Tomorrow" : task.dayText(due)
-        return text + (task.hasDueTime ? " " + task.timeText(due) : "")
-    }
-}
 
 struct DetailPlaceholder: View {
     var body: some View {
-        VStack(spacing: 16) {
-            Spacer()
-            ZStack { RoundedRectangle(cornerRadius: 20).stroke(accent.opacity(0.08), lineWidth: 1).frame(width: 124, height: 144).rotationEffect(.degrees(-9)); Image(systemName: "checklist").font(.system(size: 62, weight: .ultraLight)).foregroundStyle(accent.opacity(0.2)) }
-            Text("A little clarity, a little focus.").font(.system(size: 15, weight: .medium)).foregroundStyle(.secondary)
-            Text("Select a task or note to see its details.").font(.system(size: 12)).foregroundStyle(.tertiary)
-            Spacer(); Spacer()
-        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { geometry in
+            ZStack(alignment: .bottomTrailing) {
+                Color.clear
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.system(size: min(260, geometry.size.width * 0.6), weight: .ultraLight))
+                    .rotationEffect(.degrees(-16)).foregroundStyle(Color.primary.opacity(0.035))
+                    .offset(x: 20, y: 15).padding(24)
+            }.clipped().accessibilityLabel("Select a task or note to see its details")
+        }
     }
 }

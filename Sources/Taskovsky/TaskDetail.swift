@@ -11,6 +11,8 @@ struct TaskDetail: View {
     @State private var newStep = ""
     @State private var tagName = ""
     @State private var showTags = false
+    @State private var showTemplates = false
+    @FocusState private var bodyFocused: Bool
     @FocusState private var stepFocused: Bool
     @FocusState private var tagFocused: Bool
     private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
@@ -49,38 +51,50 @@ struct TaskDetail: View {
                     TextField("Title", text: field(\.title), axis: .vertical).font(.system(size: 20, weight: .semibold)).textFieldStyle(.plain).disabled(isDeleted).accessibilityLabel("Task title")
                     if task.completedAt != nil { Label("Completed " + task.completedAt!.formatted(date: .abbreviated, time: .shortened), systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary) }
                     if task.wontDoAt != nil { Label("Won't Do", systemImage: "xmark.square.fill").font(.caption).foregroundStyle(.secondary) }
-                    if let reminder = task.reminderDate {
+                    if let reminder = task.reminderDates.first {
                         HStack(spacing: 8) {
                             Image(systemName: "bell")
-                            Text((reminder <= Date() ? "Reminder due · " : "Remind me ") + task.dayText(reminder) + " at " + task.timeText(reminder))
+                            Text((reminder <= Date() ? "Reminder due · " : "Remind me ") + task.dayText(reminder) + " at " + task.timeText(reminder) + (task.reminderDates.count > 1 ? " · \(task.reminderDates.count) reminders" : ""))
                             Spacer()
                             if reminder <= Date() && !isDeleted { Menu { Button("In 10 minutes") { setReminder(Date().addingTimeInterval(600)) }; Button("In 1 hour") { setReminder(Date().addingTimeInterval(3600)) }; Button("Tomorrow") { setReminder(Calendar.current.date(byAdding: .day, value: 1, to: Date())!) } } label: { Image(systemName: "clock.arrow.circlepath") }.menuStyle(.borderlessButton).fixedSize().help("Snooze reminder") }
-                            if !isDeleted { Button { var updated = task; updated.reminderDate = nil; store.updateTask(updated) } label: { Image(systemName: "xmark").font(.system(size: 9)) }.buttonStyle(.plain).help("Dismiss reminder") }
+                            if !isDeleted { Button { var updated = task; updated.reminderDates = []; store.updateTask(updated) } label: { Image(systemName: "xmark").font(.system(size: 9)) }.buttonStyle(.plain).help("Dismiss all reminders") }
                         }.font(.system(size: 11)).foregroundStyle(reminder <= Date() ? .orange : .secondary).padding(10).background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
                     }
-                        ZStack(alignment: .topLeading) {
-                            if task.body.isEmpty { Text(task.kind == .note ? "Start writing…" : "Description").font(.system(size: 16)).foregroundStyle(.tertiary).padding(.top, 1).padding(.leading, 4).allowsHitTesting(false) }
-                            TextEditor(text: field(\.body)).font(.system(size: 16)).scrollContentBackground(.hidden).frame(minHeight: task.kind == .note ? 300 : 150).disabled(isDeleted).accessibilityLabel(task.kind == .note ? "Note content" : "Task description")
+                    ZStack(alignment: .topLeading) {
+                        // The hidden text gives the editor the height needed for wrapped plain text.
+                        Text(task.body.isEmpty ? " " : task.body + "\n")
+                            .font(.system(size: 16)).frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true).padding(.horizontal, 5).padding(.vertical, 4).hidden()
+                        TextEditor(text: field(\.body)).font(.system(size: 16)).scrollContentBackground(.hidden)
+                            .focused($bodyFocused).disabled(isDeleted).accessibilityLabel(task.kind == .note ? "Note content" : "Task description")
+                        if task.body.isEmpty && !bodyFocused && !isDeleted {
+                            HStack(spacing: 4) {
+                                Button("Write something") { bodyFocused = true }.foregroundStyle(.tertiary)
+                                Text("or").foregroundStyle(.tertiary)
+                                Button("use a template") { showTemplates = true }.foregroundStyle(accent)
+                            }.buttonStyle(.plain).font(.system(size: 16)).padding(.top, 4).padding(.leading, 5)
                         }
+                    }.frame(minHeight: task.kind == .note ? 120 : 60, alignment: .topLeading)
+                        .sheet(isPresented: $showTemplates) { TemplatePicker(store: store, onChoose: applyTemplate) }
                     HStack(spacing: 6) {
                         ForEach(store.data.tags.filter { task.tagIDs.contains($0.id) }) { tag in
                             Button { if !isDeleted { var updated = task; updated.tagIDs.removeAll { $0 == tag.id }; store.updateTask(updated) } } label: { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).padding(.horizontal, 8).padding(.vertical, 5).background(Color(hex: tag.color).opacity(0.08), in: Capsule()) }.buttonStyle(.plain).help("Remove tag \(tag.name)")
                         }
-                        if !isDeleted { Button { showTags.toggle() } label: { Image(systemName: "number").font(.system(size: 12)).foregroundStyle(.tertiary).padding(5) }.buttonStyle(.plain).help("Add tags").sheet(isPresented: $showTags) { tagPicker } }
+                        if !isDeleted { Button { showTags.toggle() } label: { Image(systemName: "number").font(.system(size: 12)).foregroundStyle(.tertiary).padding(5) }.buttonStyle(.plain).help("Add tags").popover(isPresented: $showTags, arrowEdge: .bottom) { tagPicker } }
                     }
                     if task.kind == .task {
                         Divider()
-                        HStack { Text("Checklist").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count) of \(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
+                        HStack { Text("Subtasks").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count) of \(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
                         VStack(spacing: 12) {
                             ForEach(task.checklist) { step in
                                 HStack(spacing: 10) {
-                                    Button { var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) } } label: { Image(systemName: step.isCompleted ? "checkmark.circle.fill" : "circle").foregroundStyle(step.isCompleted ? accent : .secondary) }.buttonStyle(.plain).help("Toggle checklist item")
-                                    TextField("Checklist item", text: Binding(get: { task.checklist.first { $0.id == step.id }?.title ?? "" }, set: { text in var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].title = text; store.updateTask(updated) } })).textFieldStyle(.plain).font(.system(size: 12)).strikethrough(step.isCompleted).foregroundStyle(step.isCompleted ? .secondary : .primary)
+                                    Button { var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) } } label: { Image(systemName: step.isCompleted ? "checkmark.square.fill" : "square").foregroundStyle(step.isCompleted ? accent : .secondary) }.buttonStyle(.plain).help("Toggle checklist item")
+                                    TextField("Subtask", text: Binding(get: { task.checklist.first { $0.id == step.id }?.title ?? "" }, set: { text in var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].title = text; store.updateTask(updated) } })).textFieldStyle(.plain).font(.system(size: 12)).strikethrough(step.isCompleted).foregroundStyle(step.isCompleted ? .secondary : .primary)
                                     Button { var updated = task; updated.checklist.removeAll { $0.id == step.id }; store.updateTask(updated) } label: { Image(systemName: "minus.circle").font(.system(size: 11)).foregroundStyle(.tertiary) }.buttonStyle(.plain).help("Remove checklist item")
                                 }.disabled(isDeleted)
                             }
                             if !isDeleted {
-                                HStack(spacing: 10) { Image(systemName: "plus").foregroundStyle(.tertiary); TextField("Add checklist item", text: $newStep).textFieldStyle(.plain).font(.system(size: 12)).focused($stepFocused).onSubmit(addStep); if !newStep.isEmpty { Button(action: addStep) { Image(systemName: "return") }.buttonStyle(.plain) } }
+                                HStack(spacing: 10) { Image(systemName: "plus").foregroundStyle(.tertiary); TextField("Add Subtask", text: $newStep).textFieldStyle(.plain).font(.system(size: 12)).focused($stepFocused).onSubmit(addStep); if !newStep.isEmpty { Button(action: addStep) { Image(systemName: "return") }.buttonStyle(.plain) } }
                             }
                         }
                     }
@@ -102,7 +116,7 @@ struct TaskDetail: View {
                         Button("Save as Template") { _ = store.saveTemplate(from: id) }
                         Menu("Apply Template") {
                             ForEach(store.data.templates) { template in
-                                Button(template.name) { var updated = task; updated.title = template.title; updated.body = template.body; updated.checklist = template.checklist.map { ChecklistItem(title: $0.title) }; updated.priority = template.priority; updated.tagIDs = template.tagIDs; updated.kind = template.kind; store.updateTask(updated) }
+                                Button(template.name) { applyTemplate(template) }
                             }
                         }
                         Button("Duplicate") { _ = store.duplicateTask(id: id) }
@@ -125,6 +139,13 @@ struct TaskDetail: View {
             Button("Create & add", action: addTag).disabled(tagName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }.padding(24).frame(width: 300).onAppear { tagFocused = true }
     }
+    private func applyTemplate(_ template: TaskTemplate) {
+        var updated = task
+        updated.title = template.title; updated.body = template.body
+        updated.checklist = template.checklist.map { ChecklistItem(title: $0.title) }
+        updated.priority = template.priority; updated.tagIDs = template.tagIDs.filter { id in store.data.tags.contains { $0.id == id } }; updated.kind = template.kind
+        store.updateTask(updated)
+    }
     private func addTag() {
         let name = tagName.trimmingCharacters(in: .whitespacesAndNewlines); guard !name.isEmpty else { return }
         let tagID = store.createTag(name: name, color: palette[0]); var updated = task
@@ -134,105 +155,7 @@ struct TaskDetail: View {
         let title = newStep.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
         var updated = task; updated.checklist.append(ChecklistItem(title: title)); store.updateTask(updated); newStep = ""; stepFocused = true
     }
-    private func setReminder(_ date: Date) { var updated = task; updated.reminderDate = date; store.updateTask(updated) }
-}
-
-struct ScheduleEditor: View {
-    @Environment(\.dismiss) private var dismiss
-    let task: TaskItem
-    let settings: AppSettings
-    let save: (TaskItem) -> Void
-    @State private var date: Date
-    @State private var hasDate: Bool
-    @State private var hasTime: Bool
-    @State private var repeatRule: RepeatRule
-    @State private var hasReminder: Bool
-    @State private var reminder: Date
-    @State private var zoneID: String
-    @State private var automaticReminder = true
-    private var calendar: Calendar { var cal = settings.calendar; cal.timeZone = TimeZone(identifier: zoneID) ?? .current; return cal }
-    init(task: TaskItem, settings: AppSettings, save: @escaping (TaskItem) -> Void) {
-        self.task = task; self.settings = settings; self.save = save
-        _zoneID = State(initialValue: task.timeZoneID ?? TimeZone.current.identifier)
-        _date = State(initialValue: task.dueDate ?? Calendar.current.startOfDay(for: Date()))
-        _hasDate = State(initialValue: task.dueDate != nil)
-        _hasTime = State(initialValue: task.hasDueTime)
-        _repeatRule = State(initialValue: task.recurrence)
-        _hasReminder = State(initialValue: task.reminderDate != nil)
-        _reminder = State(initialValue: task.reminderDate ?? Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: task.dueDate ?? Date())!)
-    }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("Schedule").font(.headline)
-            HStack(spacing: 8) {
-                quickDate("Today", symbol: "sun.max", days: 0)
-                quickDate("Tomorrow", symbol: "sun.horizon", days: 1)
-                quickDate("Next week", symbol: "calendar", days: 7)
-            }
-            Toggle("Due date", isOn: $hasDate).toggleStyle(.checkbox)
-            CalendarGrid(date: $date, calendar: calendar, showWeekNumbers: settings.showWeekNumbers).disabled(!hasDate)
-            HStack { Toggle("Time", isOn: $hasTime).toggleStyle(.checkbox); Spacer(); if hasTime { DatePicker("Time", selection: $date, displayedComponents: .hourAndMinute).labelsHidden().fixedSize() } }.disabled(!hasDate)
-            if settings.enableTimeZone && hasTime {
-                Picker("Time Zone", selection: $zoneID) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) } }.font(.system(size: 11))
-            }
-            Divider()
-            HStack { Label("Repeat", systemImage: "repeat").font(.system(size: 12)); Spacer(); Picker("Repeat", selection: $repeatRule) { ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) } }.labelsHidden().frame(width: 155) }.disabled(!hasDate)
-            Divider()
-            Toggle(isOn: $hasReminder) { Label("Reminder", systemImage: "bell").font(.system(size: 12)) }.toggleStyle(.checkbox)
-            if hasReminder {
-                DatePicker("Remind me", selection: Binding(get: { reminder }, set: { reminder = $0; automaticReminder = false }), displayedComponents: [.date, .hourAndMinute]).labelsHidden().datePickerStyle(.field)
-                HStack {
-                    Button("On due date, 9am") { reminder = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: date)!; automaticReminder = true }.disabled(!hasDate)
-                    Button("10 min before") { reminder = date.addingTimeInterval(-600); automaticReminder = true }.disabled(!hasDate || !hasTime)
-                }.font(.system(size: 10)).buttonStyle(.borderless)
-                Text("Shown in the app. No system notifications.").font(.system(size: 10)).foregroundStyle(.tertiary)
-            }
-            Divider()
-            HStack {
-                Button("Clear") { var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDate = nil; updated.recurrence = .none; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; save(updated); dismiss() }
-                Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Save") { apply() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-            }
-        }.padding(20).frame(width: 320)
-            .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
-            .onChange(of: hasTime) { _, _ in applyReminderDefault() }
-            .onChange(of: hasDate) { _, _ in applyReminderDefault() }
-            .onChange(of: date) { old, new in if hasReminder && automaticReminder { reminder = reminder.addingTimeInterval(new.timeIntervalSince(old)) } }
-            .onChange(of: zoneID) { old, new in
-                var previous = settings.calendar; previous.timeZone = TimeZone(identifier: old) ?? .current
-                let parts = previous.dateComponents([.year, .month, .day, .hour, .minute, .second], from: date)
-                var next = settings.calendar; next.timeZone = TimeZone(identifier: new) ?? .current
-                if let translated = next.date(from: parts) { date = translated }
-            }
-    }
-    private func quickDate(_ title: String, symbol: String, days: Int) -> some View {
-        Button {
-            let cal = calendar
-            let day = days == 7 ? cal.dateInterval(of: .weekOfYear, for: Date())!.end : cal.date(byAdding: .day, value: days, to: cal.startOfDay(for: Date()))!
-            date = hasTime ? cal.date(bySettingHour: cal.component(.hour, from: date), minute: cal.component(.minute, from: date), second: 0, of: day)! : day
-            hasDate = true
-        } label: { VStack(spacing: 5) { Image(systemName: symbol).font(.system(size: 16)); Text(title).font(.system(size: 9)) }.frame(maxWidth: .infinity).padding(.vertical, 8) }.buttonStyle(.borderless).foregroundStyle(accent).background(accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 6))
-    }
-    private func apply() {
-        var updated = task
-        updated.dueDate = hasDate ? (hasTime ? date : calendar.startOfDay(for: date)) : nil
-        updated.hasDueTime = hasDate && hasTime
-        updated.recurrence = hasDate ? repeatRule : .none
-        updated.reminderDate = hasReminder ? reminder : nil
-        updated.timeZoneID = hasDate && hasTime ? zoneID : nil
-        if task.dueDate != updated.dueDate || task.recurrence != updated.recurrence { updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil }
-        save(updated); dismiss()
-    }
-    private func applyReminderDefault() {
-        guard hasDate else { return }
-        automaticReminder = true
-        if hasTime, let offset = settings.defaultReminder.offset { reminder = date.addingTimeInterval(offset); hasReminder = true }
-        else if !hasTime && settings.allDayReminder != .none {
-            let day = settings.allDayReminder == .dayBefore9 ? calendar.date(byAdding: .day, value: -1, to: date)! : date
-            reminder = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day)!; hasReminder = true
-        } else if task.reminderDate == nil { hasReminder = false }
-    }
+    private func setReminder(_ date: Date) { var updated = task; var dates = task.reminderDates; if !dates.isEmpty { dates.removeFirst() }; dates.append(date); updated.reminderDates = dates; store.updateTask(updated) }
 }
 
 struct EntityEditor: Identifiable {
@@ -242,30 +165,44 @@ struct EntityEditor: Identifiable {
     var name = ""
     var color = palette[0]
     var kind: TaskKind = .task
+    var symbol = ""
     init(isTag: Bool) { self.isTag = isTag }
-    init(list: TaskList) { entityID = list.id; isTag = false; name = list.name; color = list.color; kind = list.kind }
+    init(list: TaskList) { entityID = list.id; isTag = false; name = list.name; color = list.color; kind = list.kind; symbol = list.symbol ?? "" }
     init(tag: TaskTag) { entityID = tag.id; isTag = true; name = tag.name; color = tag.color }
 }
 struct EntitySheet: View {
     @Environment(\.dismiss) private var dismiss
     let editor: EntityEditor
-    let save: (String, String, TaskKind) -> Void
+    let save: (String, String, TaskKind, String?) -> Void
     @State private var name: String
     @State private var color: String
     @State private var kind: TaskKind
+    @State private var symbol: String
+    private let symbols = ["list.bullet", "house", "briefcase", "book", "star", "cart", "heart", "folder"]
     @FocusState private var focused: Bool
-    init(editor: EntityEditor, save: @escaping (String, String, TaskKind) -> Void) {
-        self.editor = editor; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind)
+    init(editor: EntityEditor, save: @escaping (String, String, TaskKind, String?) -> Void) {
+        self.editor = editor; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind); _symbol = State(initialValue: editor.symbol)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text((editor.entityID == nil ? "New " : "Edit ") + (editor.isTag ? "Tag" : "List")).font(.system(size: 20, weight: .semibold))
             TextField(editor.isTag ? "Tag name" : "List name", text: $name).textFieldStyle(.roundedBorder).focused($focused).onSubmit(submit)
             HStack(spacing: 12) { ForEach(palette, id: \.self) { value in Button { color = value } label: { Circle().fill(Color(hex: value)).frame(width: 24, height: 24).overlay { if color == value { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) } } }.buttonStyle(.plain).accessibilityLabel("Color \(value)") } }
-            if !editor.isTag { Picker("List type", selection: $kind) { Text("Tasks").tag(TaskKind.task); Text("Notes").tag(TaskKind.note) }.pickerStyle(.segmented) }
+            if !editor.isTag {
+                HStack(spacing: 8) {
+                    ForEach(symbols, id: \.self) { value in
+                        Button { symbol = value } label: {
+                            Image(systemName: value).frame(width: 27, height: 27)
+                                .background((symbol == value || (symbol.isEmpty && value == "list.bullet")) ? accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                        }.buttonStyle(.plain).help(value)
+                    }
+                }
+                TextField("Custom emoji", text: Binding(get: { symbols.contains(symbol) ? "" : symbol }, set: { symbol = String($0.prefix(1)) })).textFieldStyle(.roundedBorder)
+                Picker("List type", selection: $kind) { Text("Tasks").tag(TaskKind.task); Text("Notes").tag(TaskKind.note) }.pickerStyle(.segmented)
+            }
             if editor.entityID != nil && !editor.isTag { Text("List type sets the default for new items.").font(.caption).foregroundStyle(.secondary) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(28).frame(width: 360).tint(accent).onAppear { focused = true }
     }
-    private func submit() { let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !cleaned.isEmpty else { return }; save(cleaned, color, kind); dismiss() }
+    private func submit() { let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !cleaned.isEmpty else { return }; let cleanedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines); save(cleaned, color, kind, cleanedSymbol.isEmpty ? nil : cleanedSymbol); dismiss() }
 }

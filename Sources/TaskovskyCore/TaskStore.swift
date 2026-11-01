@@ -101,18 +101,28 @@ public final class TaskStore: ObservableObject {
         if old.dueDate != task.dueDate || old.recurrence != task.recurrence {
             task.recurrenceAnchorDay = nil; task.recurrenceAnchorMonth = nil
         }
-        if applyDefaultReminders, task.hasDueTime, let due = task.dueDate, task.reminderDate == nil, (old.dueDate != task.dueDate || !old.hasDueTime), let offset = settings.defaultReminder.offset { task.reminderDate = due.addingTimeInterval(offset) }
+        if applyDefaultReminders, task.reminderDates != old.reminderDates, task.reminderFollowsSchedule == old.reminderFollowsSchedule {
+            task.reminderFollowsSchedule = false
+        }
+        if applyDefaultReminders, task.reminderDates == old.reminderDates,
+           (old.dueDate != task.dueDate || old.hasDueTime != task.hasDueTime || old.timeZoneID != task.timeZoneID),
+           Self.usesDefaultReminder(old, settings: settings), task.reminderFollowsSchedule != false {
+            var calendar = settings.calendar
+            if let id = task.timeZoneID, let zone = TimeZone(identifier: id) { calendar.timeZone = zone }
+            task.reminderDates = task.dueDate.map { Self.defaultReminderDates(due: $0, hasTime: task.hasDueTime, settings: settings, calendar: calendar) } ?? []
+            task.reminderFollowsSchedule = true
+        }
         task.updatedAt = Date()
         data.tasks[index] = task
         save()
     }
 
-    @discardableResult public func createTask(title: String, listID: UUID? = nil, kind: TaskKind = .task, dueDate: Date? = nil, useDefaultList: Bool = true, preferRecognizedDate: Bool = false) -> UUID {
+    @discardableResult public func createTask(title: String, listID: UUID? = nil, kind: TaskKind = .task, dueDate: Date? = nil, useDefaultList: Bool = true, preferRecognizedDate: Bool = false, recognizeDates: Bool = true, body: String = "") -> UUID {
         var text = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let calendar = settings.calendar
         var taskDue = dueDate
         var hasDueTime = false
-        if (taskDue == nil || preferRecognizedDate) && settings.dateRecognition, let recognized = Self.recognizeDate(in: text, calendar: calendar) {
+        if (taskDue == nil || preferRecognizedDate) && settings.dateRecognition && recognizeDates, let recognized = Self.recognizeDate(in: text, calendar: calendar) {
             taskDue = recognized.date; hasDueTime = recognized.hasTime
             if settings.removeDateText { text.removeSubrange(recognized.range) }
         }
@@ -121,11 +131,11 @@ public final class TaskStore: ObservableObject {
         }
         var tags: [UUID] = []
         if let id = settings.defaultTagID, data.tags.contains(where: { $0.id == id }) { tags.append(id) }
-        let regex = try? NSRegularExpression(pattern: "(?<!\\S)#[\\p{L}\\p{N}_-]+")
+        let regex = try? NSRegularExpression(pattern: "(?<!\\S)#(?:\"[^\"\\r\\n]+\"|[\\p{L}\\p{N}_-]+)")
         let matches = regex?.matches(in: text, range: NSRange(text.startIndex..., in: text)) ?? []
         for match in matches.reversed() {
             guard let range = Range(match.range, in: text) else { continue }
-            let name = String(text[range].dropFirst())
+            let name = String(text[range].dropFirst()).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
             let tagID: UUID
             if let tag = data.tags.first(where: { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) { tagID = tag.id }
             else { let tag = TaskTag(name: name, color: "#7C6CF2"); data.tags.append(tag); tagID = tag.id }
@@ -133,16 +143,13 @@ public final class TaskStore: ObservableObject {
             if settings.removeTagText { text.removeSubrange(range) }
         }
         let resolvedList = listID ?? (useDefaultList ? settings.defaultListID.flatMap { id in data.lists.contains(where: { $0.id == id }) ? id : nil } : nil)
-        var reminder: Date?
-        if let due = taskDue {
-            if hasDueTime { reminder = settings.defaultReminder.offset.map { due.addingTimeInterval($0) } }
-            else { switch settings.allDayReminder { case .none: break; case .onDay9: reminder = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: due); case .dayBefore9: reminder = calendar.date(byAdding: .day, value: -1, to: calendar.date(bySettingHour: 9, minute: 0, second: 0, of: due) ?? due) } }
-        }
-        let task = TaskItem(title: text.trimmingCharacters(in: .whitespacesAndNewlines), listID: resolvedList, tagIDs: tags, kind: kind, dueDate: taskDue, hasDueTime: hasDueTime, reminderDate: reminder, priority: settings.defaultPriority, timeZoneID: settings.enableTimeZone && taskDue != nil ? calendar.timeZone.identifier : nil)
+        let reminders = taskDue.map { Self.defaultReminderDates(due: $0, hasTime: hasDueTime, settings: settings, calendar: calendar) } ?? []
+        var task = TaskItem(title: text.trimmingCharacters(in: .whitespacesAndNewlines), body: body, listID: resolvedList, tagIDs: tags, kind: kind, dueDate: taskDue, hasDueTime: hasDueTime, priority: settings.defaultPriority, reminderFollowsSchedule: reminders.isEmpty ? nil : true, timeZoneID: settings.enableTimeZone && taskDue != nil ? calendar.timeZone.identifier : nil)
+        task.reminderDates = reminders
         if settings.defaultAddTo == .top { data.tasks.insert(task, at: 0) } else { data.tasks.append(task) }; save(); if settings.urlParsing { resolveURLTitle(for: task.id) }; return task.id
     }
 
-    private static func recognizeDate(in text: String, calendar: Calendar, now: Date = Date()) -> (date: Date, hasTime: Bool, range: Range<String.Index>)? {
+    public static func recognizeDate(in text: String, calendar: Calendar, now: Date = Date()) -> (date: Date, hasTime: Bool, range: Range<String.Index>)? {
         let pattern = "(?i)\\b(day after tomorrow|next week|today|tomorrow|in [0-9]+ days?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\\s+(?:at\\s+)?([0-9]{1,2})(?::([0-9]{2}))?(?:\\s*(am|pm))?)?\\b"
         if let regex = try? NSRegularExpression(pattern: pattern), let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), let range = Range(match.range, in: text), let phraseRange = Range(match.range(at: 1), in: text) {
             let phrase = text[phraseRange].lowercased(); let start = calendar.startOfDay(for: now)
@@ -201,10 +208,17 @@ public final class TaskStore: ObservableObject {
                let due = original.dueDate,
                let next = Self.nextDate(after: due, rule: original.recurrence,
                                         anchorDay: original.recurrenceAnchorDay,
-                                        anchorMonth: original.recurrenceAnchorMonth, calendar: recurrenceCalendar) {
+                                        anchorMonth: original.recurrenceAnchorMonth, calendar: recurrenceCalendar),
+               original.recurrenceEndDate.map({ recurrenceCalendar.startOfDay(for: next) <= recurrenceCalendar.startOfDay(for: $0) }) ?? true {
                 var copy = original
                 copy.id = UUID(); copy.dueDate = next; copy.completedAt = nil; copy.deletedAt = nil
-                copy.reminderDate = original.reminderDate.map { next.addingTimeInterval($0.timeIntervalSince(due)) }
+                copy.reminderDates = original.reminderDates.map { reminder in
+                    guard !original.hasDueTime else { return next.addingTimeInterval(reminder.timeIntervalSince(due)) }
+                    let dayOffset = recurrenceCalendar.dateComponents([.day], from: recurrenceCalendar.startOfDay(for: due), to: recurrenceCalendar.startOfDay(for: reminder)).day ?? 0
+                    let reminderDay = recurrenceCalendar.date(byAdding: .day, value: dayOffset, to: recurrenceCalendar.startOfDay(for: next)) ?? next
+                    let parts = recurrenceCalendar.dateComponents([.hour, .minute, .second], from: reminder)
+                    return recurrenceCalendar.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: parts.second ?? 0, of: reminderDay) ?? reminderDay
+                }
                 copy.createdAt = now; copy.updatedAt = now
                 copy.recurrenceSourceID = original.id
                 copy.recurrenceAnchorDay = original.recurrenceAnchorDay ?? recurrenceCalendar.component(.day, from: due)
@@ -257,8 +271,8 @@ public final class TaskStore: ObservableObject {
         copy.checklist = copy.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
         data.tasks.append(copy); save(); return copy.id
     }
-    @discardableResult public func createList(name: String, color: String, kind: TaskKind = .task) -> UUID {
-        let list = TaskList(name: name.trimmingCharacters(in: .whitespacesAndNewlines), color: color, kind: kind); data.lists.append(list); save(); return list.id
+    @discardableResult public func createList(name: String, color: String, kind: TaskKind = .task, symbol: String? = nil) -> UUID {
+        let list = TaskList(name: name.trimmingCharacters(in: .whitespacesAndNewlines), color: color, kind: kind, symbol: symbol); data.lists.append(list); save(); return list.id
     }
     public func updateList(_ list: TaskList) {
         guard let index = data.lists.firstIndex(where: { $0.id == list.id }) else { return }
@@ -291,6 +305,42 @@ public final class TaskStore: ObservableObject {
             data.tasks[i].tagIDs.removeAll { $0 == id }; data.tasks[i].updatedAt = Date()
         }
         save()
+    }
+
+    nonisolated public static func defaultReminderDates(due: Date, hasTime: Bool, settings: AppSettings, calendar: Calendar) -> [Date] {
+        let dates: [Date]
+        if hasTime {
+            dates = settings.effectiveTimedReminderDefaults.compactMap { $0.offset.map { due.addingTimeInterval($0) } }
+        } else {
+            dates = settings.effectiveAllDayReminderDefaults.compactMap { choice in
+                let days: Int
+                switch choice {
+                case .none: return nil
+                case .onDay9: days = 0
+                case .dayBefore9: days = -1
+                case .twoDaysBefore9: days = -2
+                case .threeDaysBefore9: days = -3
+                case .weekBefore9: days = -7
+                }
+                guard let day = calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: due)) else { return nil }
+                return calendar.date(bySettingHour: 9, minute: 0, second: 0, of: day)
+            }
+        }
+        return Array(Set(dates)).sorted()
+    }
+
+    nonisolated public static func defaultReminderDate(due: Date, hasTime: Bool, settings: AppSettings, calendar: Calendar) -> Date? {
+        defaultReminderDates(due: due, hasTime: hasTime, settings: settings, calendar: calendar).first
+    }
+
+    nonisolated public static func usesDefaultReminder(_ task: TaskItem, settings: AppSettings) -> Bool {
+        if let follows = task.reminderFollowsSchedule { return follows }
+        guard !task.reminderDates.isEmpty else { return true }
+        guard let due = task.dueDate else { return false }
+        var calendar = settings.calendar
+        if let id = task.timeZoneID, let zone = TimeZone(identifier: id) { calendar.timeZone = zone }
+        let expected = defaultReminderDates(due: due, hasTime: task.hasDueTime, settings: settings, calendar: calendar)
+        return expected.count == task.reminderDates.count && zip(expected, task.reminderDates).allSatisfy { pair in abs(pair.0.timeIntervalSince(pair.1)) < 1 }
     }
 
     nonisolated public static func nextDate(after date: Date, rule: RepeatRule, anchorDay: Int? = nil, anchorMonth: Int? = nil, calendar: Calendar = .current) -> Date? {
