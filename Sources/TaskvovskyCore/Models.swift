@@ -35,6 +35,8 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     /// The original month for a yearly schedule, retained across leap years.
     public var recurrenceAnchorMonth: Int?
     public var recurrenceSourceID: UUID?
+    public var wontDoAt: Date?
+    public var timeZoneID: String?
 
     public init(id: UUID = UUID(), title: String, body: String = "", listID: UUID? = nil,
                 tagIDs: [UUID] = [], kind: TaskKind = .task, dueDate: Date? = nil,
@@ -42,13 +44,13 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
                 recurrence: RepeatRule = .none, checklist: [ChecklistItem] = [],
                 completedAt: Date? = nil, deletedAt: Date? = nil, createdAt: Date = Date(),
                 updatedAt: Date = Date(), recurrenceAnchorDay: Int? = nil, recurrenceAnchorMonth: Int? = nil,
-                recurrenceSourceID: UUID? = nil) {
+                recurrenceSourceID: UUID? = nil, wontDoAt: Date? = nil, timeZoneID: String? = nil) {
         self.id = id; self.title = title; self.body = body; self.listID = listID; self.tagIDs = tagIDs
         self.kind = kind; self.dueDate = dueDate; self.hasDueTime = hasDueTime; self.reminderDate = reminderDate
         self.priority = priority; self.recurrence = recurrence; self.checklist = checklist
         self.completedAt = completedAt; self.deletedAt = deletedAt; self.createdAt = createdAt; self.updatedAt = updatedAt
         self.recurrenceAnchorDay = recurrenceAnchorDay; self.recurrenceAnchorMonth = recurrenceAnchorMonth
-        self.recurrenceSourceID = recurrenceSourceID
+        self.recurrenceSourceID = recurrenceSourceID; self.wontDoAt = wontDoAt; self.timeZoneID = timeZoneID
     }
 }
 
@@ -75,7 +77,15 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
     public var tasks: [TaskItem]
     public var lists: [TaskList]
     public var tags: [TaskTag]
-    public init(tasks: [TaskItem] = [], lists: [TaskList] = [], tags: [TaskTag] = []) {
-        self.tasks = tasks; self.lists = lists; self.tags = tags
+    public var filters: [TaskFilter]
+    public var templates: [TaskTemplate]
+    public init(tasks: [TaskItem] = [], lists: [TaskList] = [], tags: [TaskTag] = [], filters: [TaskFilter] = [], templates: [TaskTemplate] = []) {
+        self.tasks = tasks; self.lists = lists; self.tags = tags; self.filters = filters; self.templates = templates
+    }
+    private enum CodingKeys: String, CodingKey { case tasks, lists, tags, filters, templates }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        tasks = try c.decode([TaskItem].self, forKey: .tasks); lists = try c.decode([TaskList].self, forKey: .lists); tags = try c.decode([TaskTag].self, forKey: .tags)
+        filters = try c.decodeIfPresent([TaskFilter].self, forKey: .filters) ?? []; templates = try c.decodeIfPresent([TaskTemplate].self, forKey: .templates) ?? TaskTemplate.builtIns
     }
 }

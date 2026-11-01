@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Taskovsky}",
+            "name": "Debug Taskvovsky",
+            "target": "Taskvovsky",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug Taskvovsky"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:Taskovsky}",
+            "name": "Release Taskvovsky",
+            "target": "Taskvovsky",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release Taskvovsky"
+        }
+    ]
+}

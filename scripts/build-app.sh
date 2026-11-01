@@ -12,6 +12,7 @@ binary_dir="$(swift build --disable-sandbox --manifest-cache local -c release --
 cp "$binary_dir/Taskvovsky" "$app/Contents/MacOS/Taskvovsky"
 cp scripts/Info.plist "$app/Contents/Info.plist"
 swift scripts/make-icon.swift "$app/Contents/Resources/AppIcon.icns"
+python3 scripts/make-sound.py "$app/Contents/Resources/completion.wav"
 codesign --force --deep --sign - "$app"
 if [[ -d "$destination" ]]; then
     previous="$(pwd)/build/.Taskvovsky-previous-$$.app"

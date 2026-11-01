@@ -6,6 +6,125 @@ final class TaskStoreTests: XCTestCase {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("workspace.json")
     }
 
+    @MainActor func testSettingsTemplatesFiltersAndLegacyWorkspace() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("{\"tasks\":[],\"lists\":[],\"tags\":[]}".utf8).write(to: url)
+        let store = TaskStore(fileURL: url, seed: false)
+        XCTAssertEqual(store.data.templates.count, 3)
+        store.settings.defaultPriority = .high
+        let id = store.createTask(title: "Draft tomorrow")
+        let task = try XCTUnwrap(store.data.tasks.first { $0.id == id })
+        XCTAssertEqual(task.priority, .high); XCTAssertNotNil(task.dueDate)
+        let templateID = try XCTUnwrap(store.saveTemplate(from: id))
+        let filter = TaskFilter(name: "High", priority: .high)
+        store.createFilter(filter)
+        let loaded = TaskStore(fileURL: url, seed: false)
+        XCTAssertEqual(loaded.settings.defaultPriority, .high)
+        XCTAssertTrue(loaded.data.templates.contains { $0.id == templateID })
+        XCTAssertTrue(try XCTUnwrap(loaded.data.filters.first).matches(task))
+        XCTAssertNotNil(loaded.createTaskFromTemplate(id: templateID))
+    }
+
+    @MainActor func testUndoRecurringCompletionPreservesEditedSuccessor() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = TaskStore(fileURL: url, seed: false)
+        let id = store.createTask(title: "Repeat", dueDate: Date())
+        var original = try XCTUnwrap(store.data.tasks.first)
+        original.recurrence = .daily; store.updateTask(original)
+        store.toggleComplete(id: id)
+        let successor = try XCTUnwrap(store.data.tasks.first { $0.recurrenceSourceID == id })
+        store.undoCompletion(id: id)
+        XCTAssertFalse(store.data.tasks.contains { $0.id == successor.id })
+        store.toggleComplete(id: id)
+        var edited = try XCTUnwrap(store.data.tasks.first { $0.recurrenceSourceID == id })
+        edited.title = "Edited"; store.updateTask(edited)
+        store.undoCompletion(id: id)
+        XCTAssertTrue(store.data.tasks.contains { $0.id == edited.id && $0.title == "Edited" })
+        store.markWontDo(id: id)
+        XCTAssertNotNil(store.data.tasks.first { $0.id == id }?.wontDoAt)
+        store.reopenTask(id: id)
+        XCTAssertNil(store.data.tasks.first { $0.id == id }?.wontDoAt)
+    }
+
+    @MainActor func testRecognitionAndSettings() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = TaskStore(fileURL: url, seed: false)
+        store.settings.removeDateText = true
+        store.settings.defaultReminder = .fifteenMinutesBefore
+        store.settings.enableTimeZone = true
+        let id = store.createTask(title: "Meet tomorrow 9am #Planning")
+        let task = try XCTUnwrap(store.data.tasks.first { $0.id == id })
+        XCTAssertEqual(task.title, "Meet"); XCTAssertTrue(task.hasDueTime)
+        XCTAssertEqual(try XCTUnwrap(task.dueDate).timeIntervalSince(try XCTUnwrap(task.reminderDate)), 900, accuracy: 0.1)
+        XCTAssertEqual(task.timeZoneID, Calendar.current.timeZone.identifier)
+        XCTAssertEqual(store.data.tags.first?.name, "Planning")
+        XCTAssertEqual(task.tagIDs, store.data.tags.map(\.id))
+        let contextual = Calendar.current.startOfDay(for: Date())
+        let parsedID = store.createTask(title: "Report tomorrow at 14:30", dueDate: contextual, preferRecognizedDate: true)
+        let parsed = try XCTUnwrap(store.data.tasks.first { $0.id == parsedID })
+        let parsedDate = try XCTUnwrap(parsed.dueDate)
+        XCTAssertTrue(Calendar.current.isDateInTomorrow(parsedDate))
+        XCTAssertEqual(Calendar.current.component(.hour, from: parsedDate), 14)
+        XCTAssertEqual(Calendar.current.component(.minute, from: parsedDate), 30)
+        XCTAssertTrue(parsed.hasDueTime)
+        let explicitID = store.createTask(title: "Report tomorrow", dueDate: contextual)
+        XCTAssertEqual(store.data.tasks.first { $0.id == explicitID }?.dueDate, contextual)
+        for (phrase, hour, minute) in [("Meeting at 9 tomorrow", 9, 0), ("Meeting 14:30 tomorrow", 14, 30), ("Meeting 9am tomorrow", 9, 0)] {
+            let id = store.createTask(title: phrase)
+            let recognized = try XCTUnwrap(store.data.tasks.first { $0.id == id })
+            let due = try XCTUnwrap(recognized.dueDate)
+            XCTAssertEqual(recognized.title, "Meeting")
+            XCTAssertTrue(recognized.hasDueTime)
+            XCTAssertTrue(Calendar.current.isDateInTomorrow(due))
+            XCTAssertEqual(Calendar.current.component(.hour, from: due), hour)
+            XCTAssertEqual(Calendar.current.component(.minute, from: due), minute)
+        }
+        store.settings.urlParsing = false
+        let urlID = store.createTask(title: "https://example.com/#section")
+        let urlTask = try XCTUnwrap(store.data.tasks.first { $0.id == urlID })
+        XCTAssertEqual(urlTask.title, "https://example.com/#section")
+        XCTAssertFalse(store.data.tags.contains { $0.name == "section" })
+        store.settings.dateRecognition = false; store.settings.removeTagText = false
+        let plainID = store.createTask(title: "Call tomorrow #Planning")
+        let plain = try XCTUnwrap(store.data.tasks.first { $0.id == plainID })
+        XCTAssertNil(plain.dueDate); XCTAssertEqual(plain.title, "Call tomorrow #Planning")
+    }
+
+    @MainActor func testBuiltInTemplateMigrationRunsOnce() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(WorkspaceData()).write(to: url)
+        let migrated = TaskStore(fileURL: url, seed: true)
+        XCTAssertEqual(migrated.data.templates.count, 3)
+        XCTAssertTrue(migrated.settings.hasInstalledBuiltInTemplates)
+        for template in migrated.data.templates { migrated.deleteTemplate(id: template.id) }
+        let reloaded = TaskStore(fileURL: url, seed: true)
+        XCTAssertTrue(reloaded.data.templates.isEmpty)
+    }
+
+    @MainActor func testRecurringTaskKeepsWallTimeAcrossDST() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 7, hour: 9)))
+        let store = TaskStore(fileURL: url, seed: false)
+        let id = store.createTask(title: "Daily", dueDate: date)
+        var task = try XCTUnwrap(store.data.tasks.first { $0.id == id })
+        task.hasDueTime = true; task.timeZoneID = calendar.timeZone.identifier; task.recurrence = .daily
+        store.updateTask(task)
+        store.toggleComplete(id: id)
+        let next = try XCTUnwrap(store.data.tasks.first { $0.recurrenceSourceID == id }?.dueDate)
+        XCTAssertEqual(calendar.component(.day, from: next), 8)
+        XCTAssertEqual(calendar.component(.hour, from: next), 9)
+        XCTAssertEqual(next.timeIntervalSince(date), 23 * 3600, accuracy: 0.1)
+    }
+
     @MainActor func testPersistenceAndCleanup() throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

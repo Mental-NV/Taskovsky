@@ -15,19 +15,25 @@ For development, `swift run --disable-sandbox Taskvovsky`. Run the model tests w
 
 ## Features
 
-- Tasks and notes with descriptions, Markdown emphasis preview, and checklists.
+- Tasks and notes with plain-text descriptions and checklists. Notes live inside lists; there is no separate Notes tab.
 - Editable, colored task/note lists and tags. Drag task rows to lists or Inbox to move them.
-- All Tasks, Today (including overdue), Tomorrow, Next 7 Days, Inbox, Notes, Reminders, Completed, and Trash views.
+- Configurable All, Today (including overdue), Tomorrow, Next 7 Days, Inbox, Summary, Completed, Won't Do, and Trash smart lists.
 - Due dates, optional times, daily/weekday/weekly/monthly/yearly repetition, and custom reminder dates.
 - Four priority levels, sorting, completed history, duplication, conversion between tasks and notes, and recoverable task deletion.
+- Search tasks, notes, lists, tags, and saved filters. Press Return in quick search for full results with date/list/tag/status criteria, then save those criteria as a filter.
+- Settings (⌘,) for smart-list visibility, week start, week numbers, scheduling time zones, recognition, task defaults, templates, and About.
+- Date/time and #tag recognition during quick entry. Optional URL-only title parsing fetches the page title; disable it in Settings to keep URLs unchanged.
+- Built-in and custom templates, a template gallery, and saving an existing task as a template.
+- A five-second completion/abandonment Undo message and a completion chime. Undoing completion safely handles the next recurring occurrence.
+- Resizable task/detail panes, a collapsible list sidebar, and saved panel sizes.
 - In-app reminders with snooze and dismiss. No OS notifications or background service; check Reminders while the app is open.
-- Every edit saves locally and atomically to `~/Library/Application Support/Taskvovsky/workspace.json`. An unreadable file is preserved, and save failures remain visible.
+- Every edit saves locally and atomically to `~/Library/Application Support/Taskvovsky/workspace.json`; preferences save beside it in `settings.json`. An unreadable file is preserved, and save failures remain visible. Existing workspaces migrate without losing tasks.
 
 Use **⌘N** to add a task, **⇧⌘N** to add a note, and **⇧⌘L** to create a list. Press Return in the quick-add field or a checklist field to add an item. Right-click task rows, lists, or tags for actions. Click an item to edit it in the detail pane. Date changes apply with Save; Cancel leaves the schedule unchanged.
 
 Deleting a list moves its items to Inbox. Deleting a tag removes it from items. Deleted tasks and notes remain in Trash and can be restored; there is no permanent-delete action.
 
-Calendar tab, Eisenhower Matrix, Pomodoro, habits, countdowns, search, accounts, settings, statistics, server sync, system notifications, help, and voice dictation are intentionally excluded. No TickTick data is imported and no network requests are made.
+Calendar tab, Eisenhower Matrix, Pomodoro, habits, countdowns, accounts, statistics, server sync, system notifications, help, voice dictation, and rich text formatting are intentionally excluded. No TickTick data is imported. URL-title recognition is the only network feature; tasks and settings stay on this Mac.
 
 ## Layout reference
 
@@ -35,6 +41,6 @@ The installed TickTick app was inspected through Computer Use. Taskvovsky follow
 
 ## Verification
 
-The release app builds successfully and passes local code-signature verification. Five automated tests cover JSON persistence, list/tag cleanup, trash/restore, recurrence across weekends and short months, recurring reminders, duplicate prevention after reload, normalized tag names, and unreadable-file protection/recovery.
+The release app builds successfully and passes local code-signature verification. Ten automated tests cover JSON persistence, legacy migration, settings/templates/filters, recognition and defaults, list/tag cleanup, trash/restore, recurrence across weekends, short months and daylight-saving changes, recurring reminders, duplicate prevention, completion undo, normalized tag names, and unreadable-file protection/recovery.
 
-Computer Use checks passed for launch and reload, quick task creation, descriptions and checklists, priority changes, list creation and renaming, keyboard tag creation and assignment, date/time/repeat/reminder saving, preserving time when changing the day, generating the next recurring occurrence, note editing and preview, moving notes via the list menu, dragging tasks into lists, Trash/restore, and reminder dismissal. A few sample items created during these checks remain in the local workspace.
+Computer Use checks cover launch and reload, quick creation, descriptions and checklists, priorities, list editing, tags, date/time/repeat/reminder saving, notes, task moves, Trash/restore, smart-list visibility, date-picker options, recognition/default effects, completion Undo, Won't Do/reopen, search and saved filters. A few sample items created during these checks remain in the local workspace.
