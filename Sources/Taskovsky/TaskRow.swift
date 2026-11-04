@@ -8,6 +8,8 @@ struct TaskRow: View {
     let selected: Bool
     let now: Date
     let listContext: String?
+    /// Pane content width for the stateless metadata budget (see metadataBudget).
+    let paneWidth: CGFloat
     let showPreview: Bool
     let showSteps: Bool
     /// Inline rename is disabled where double-click opens a pop-up window.
@@ -22,7 +24,6 @@ struct TaskRow: View {
     @State private var editing = false
     @State private var draft = ""
     @State private var hovering = false
-    @State private var rowWidth: CGFloat = 320
     @State private var swallowSelect = false
     @FocusState private var titleFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -66,16 +67,30 @@ struct TaskRow: View {
                             .simultaneousGesture(TapGesture().onEnded { onSelect() })
                     }
                 }.font(.system(size: 14)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading).layoutPriority(1)
-                if !editing && presentation != .none {
-                    Group {
-                        switch presentation {
-                        case .full: metadata(showTag: true, showExtras: true, showList: true)
-                        case .compact: metadata(showTag: false, showExtras: true, showList: true)
-                        case .date: metadata(showTag: false, showExtras: false, showList: false)
-                        case .calendar: Image(systemName: "calendar").foregroundStyle(accent)
-                        case .none: EmptyView()
+                // ViewThatFits picks the richest metadata variant that fits, with
+                // no measurement state: nothing here writes back into layout,
+                // so live window resizes stay stable. Layout reasoning: the
+                // pane width arrives as a plain value from the workspace
+                // geometry (never measured here), and the budget restores the
+                // historical relative rule — min(190, ~48% of row width) —
+                // while the metadata keeps a higher layout priority than the
+                // flexible title (priority 1), so the HStack measures metadata
+                // first against the budget and the title takes the remainder
+                // and truncates. The relative term (not the 190 cap) is what
+                // keeps title room at compact widths; every shown item stays
+                // whole because ViewThatFits never fragments a variant.
+                if !editing {
+                    ViewThatFits(in: .horizontal) {
+                        metadata(showTag: true, showExtras: true, showList: true).fixedSize()
+                        metadata(showTag: false, showExtras: true, showList: true).fixedSize()
+                        metadata(showTag: false, showExtras: false, showList: false).fixedSize()
+                        if task.dueDate != nil {
+                            Image(systemName: "calendar").foregroundStyle(accent).fixedSize()
                         }
-                    }.fixedSize().help(metadataDescription)
+                    }
+                    .frame(maxWidth: metadataBudget)
+                    .layoutPriority(2)
+                    .help(metadataDescription)
                 }
             }.frame(height: hasExtras ? 24 : 40)
             if let previewLine {
@@ -98,13 +113,6 @@ struct TaskRow: View {
             }
         }.padding(.horizontal, 12).padding(.vertical, hasExtras ? 8 : 0)
         .frame(minHeight: 40)
-        .background(
-            GeometryReader { geometry in
-                Color.clear
-                    .onAppear { rowWidth = geometry.size.width }
-                    .onChange(of: geometry.size.width) { _, width in rowWidth = width }
-            }
-        )
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 9))
         .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 40).padding(.trailing, 12) }
         .onHover { hovering = $0 }
@@ -113,6 +121,11 @@ struct TaskRow: View {
         .onTapGesture(count: 2) { onRowDoubleClick() }
         .accessibilityAction(named: "Rename", rename)
     }
+    /// Pane content width passed down statelessly from the workspace geometry
+    /// (list width docked, available width in overlay). The metadata budget is
+    /// min(190, ~48% of the estimated row width after list padding), restoring
+    /// the historical relative rule with no measurement and no state.
+    private var metadataBudget: CGFloat { min(190, max(0, paneWidth - 32) * 0.48) }
     /// The child Button action runs before this row's tap. The flag is cleared
     /// on the next runloop turn, so a consumed tap can never suppress a later
     /// genuine row click even if the row tap never fires for this event.
@@ -129,33 +142,6 @@ struct TaskRow: View {
         if finished || task.deletedAt != nil { return .secondary }
         if task.priority == .none { return Palette.taskOutline(colorScheme) }
         return task.priority.color
-    }
-    private enum MetadataPresentation { case full, compact, date, calendar, none }
-    private var presentation: MetadataPresentation {
-        metadataPresentation(budget: min(190, rowWidth * 0.48))
-    }
-    private func metadataPresentation(budget: CGFloat) -> MetadataPresentation {
-        let full = metadataWidths(showTag: true, showExtras: true, showList: true)
-        if !full.isEmpty && totalWidth(full) <= budget { return .full }
-        let compact = metadataWidths(showTag: false, showExtras: true, showList: true)
-        if !compact.isEmpty && totalWidth(compact) <= budget { return .compact }
-        if let due = task.dueDate { return textWidth(dueText(due)) <= budget ? .date : .calendar }
-        return .none
-    }
-    private func textWidth(_ text: String) -> CGFloat { ceil((text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 11)]).width) }
-    private func totalWidth(_ widths: [CGFloat]) -> CGFloat { widths.reduce(0, +) + CGFloat(max(0, widths.count - 1)) * 6 + 4 }
-    private func metadataWidths(showTag: Bool, showExtras: Bool, showList: Bool) -> [CGFloat] {
-        var widths: [CGFloat] = []
-        if showList, listContext != nil { widths.append(textWidth(listContext!)) }
-        if showExtras {
-            if !task.body.isEmpty { widths.append(12) }
-            if !task.checklist.isEmpty { widths.append(textWidth("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)")) }
-            if showTag, let tag { widths.append(textWidth("#" + tag.name)) }
-            if task.recurrence != .none { widths.append(12) }
-            if task.reminderDate != nil { widths.append(12) }
-        }
-        if let due = task.dueDate { widths.append(textWidth(dueText(due))) }
-        return widths
     }
     @ViewBuilder private func metadata(showTag: Bool, showExtras: Bool, showList: Bool) -> some View {
         HStack(spacing: 6) {

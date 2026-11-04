@@ -313,6 +313,68 @@ public final class TaskStore: ObservableObject {
         save()
     }
 
+    /// Atomically moves tasks to a list (`nil` = Inbox). Every ID is validated
+    /// before anything mutates: unknown IDs, deleted tasks, duplicate IDs in
+    /// the batch, and unknown target lists all abort with no mutation and no
+    /// save. Tasks already in the target list are left byte-identical
+    /// (timestamps preserved); only genuinely moved records are touched, with
+    /// a single save. An all-already-there batch succeeds without saving.
+    /// Dates, priorities, and status are untouched.
+    @discardableResult public func moveTasksToList(ids: [UUID], listID: UUID?) -> Bool {
+        guard !ids.isEmpty else { return false }
+        if let listID, !data.lists.contains(where: { $0.id == listID }) { return false }
+        var seen = Set<UUID>()
+        var indices: [Int] = []
+        for id in ids {
+            guard seen.insert(id).inserted,
+                  let index = data.tasks.firstIndex(where: { $0.id == id }),
+                  data.tasks[index].deletedAt == nil else { return false }
+            indices.append(index)
+        }
+        let pending = indices.filter { data.tasks[$0].listID != listID }
+        guard !pending.isEmpty else { return true }
+        let now = Date()
+        for index in pending { data.tasks[index].listID = listID; data.tasks[index].updatedAt = now }
+        save()
+        return true
+    }
+
+    /// Atomically reorders tasks: moves `moving` (in the given relative order)
+    /// to just before `target`, or just after it when `afterTarget` is true.
+    /// Validates the whole batch first: unknown or deleted records, duplicate
+    /// IDs, and self-drops (target inside `moving`) abort with no mutation.
+    /// Nothing but array order changes; no other field is touched.
+    @discardableResult public func reorderTasks(moving: [UUID], before target: UUID, afterTarget: Bool = false) -> Bool {
+        guard !moving.isEmpty, !moving.contains(target) else { return false }
+        var seen = Set<UUID>()
+        var movers: [TaskItem] = []
+        for id in moving {
+            guard seen.insert(id).inserted,
+                  let task = data.tasks.first(where: { $0.id == id }),
+                  task.deletedAt == nil else { return false }
+            movers.append(task)
+        }
+        guard data.tasks.contains(where: { $0.id == target && $0.deletedAt == nil }) else { return false }
+        data.tasks.removeAll { moving.contains($0.id) }
+        guard let targetIndex = data.tasks.firstIndex(where: { $0.id == target }) else { return false }
+        data.tasks.insert(contentsOf: movers, at: afterTarget ? targetIndex + 1 : targetIndex)
+        save()
+        return true
+    }
+
+    /// Atomically reorders lists with the same all-or-nothing validation as
+    /// task reordering. Self-drops and unknown IDs abort with no mutation.
+    @discardableResult public func reorderLists(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
+        guard moving != target else { return false }
+        guard let mover = data.lists.first(where: { $0.id == moving }),
+              data.lists.contains(where: { $0.id == target }) else { return false }
+        data.lists.removeAll { $0.id == moving }
+        guard let targetIndex = data.lists.firstIndex(where: { $0.id == target }) else { return false }
+        data.lists.insert(mover, at: afterTarget ? targetIndex + 1 : targetIndex)
+        save()
+        return true
+    }
+
     nonisolated public static func defaultReminderDates(due: Date, hasTime: Bool, settings: AppSettings, calendar: Calendar) -> [Date] {
         let dates: [Date]
         if hasTime {

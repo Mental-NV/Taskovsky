@@ -2,11 +2,24 @@ import SwiftUI
 import AppKit
 import TaskovskyCore
 
+/// Thin resize divider with a wide invisible hit area.
+///
+/// The gesture reports the absolute pointer position in the stable global
+/// coordinate space. The owner captures the start position and start size on
+/// the first event and derives the delta from those, instead of accumulating
+/// the gesture's local translation, so live layout updates can never feed
+/// jitter back into the drag.
 struct PanelDivider: View {
+    /// Absolute global x and whether the gesture ended.
     let drag: (Double, Bool) -> Void
     var body: some View {
         Rectangle().fill(Color.primary.opacity(0.06)).frame(width: 1)
-            .overlay { Color.clear.frame(width: 9).contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 1).onChanged { drag($0.translation.width, false) }.onEnded { drag($0.translation.width, true) }) }
+            .overlay {
+                Color.clear.frame(width: 9).contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                        .onChanged { drag($0.location.x, false) }
+                        .onEnded { drag($0.location.x, true) })
+            }
             .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
             .accessibilityLabel("Resize panel")
     }

@@ -10,7 +10,12 @@ struct TaskovskyApp: App {
     @StateObject private var actions = TaskActionCenter()
     init() { AppMigration.migratePreferences() }
     var body: some Scene {
-        WindowGroup("Taskovsky") { WorkspaceView(store: store, drafts: drafts, actions: actions).frame(minWidth: 780, minHeight: 500).ignoresSafeArea(.container, edges: .top) }
+        // Content floor for the measured compact reference (rail 62 + center
+        // 320): 382 wide with 552 height = 580 total reference minus the
+        // ~28pt hidden-titlebar chrome. A 580 content value here landed a 608
+        // frame. The exact 580 total-window floor is enforced from measured
+        // chrome by WindowFloorBridge in the workspace root.
+        WindowGroup("Taskovsky") { WorkspaceView(store: store, drafts: drafts, actions: actions).frame(minWidth: CGFloat(ResponsiveLayout.minWindowWidth), minHeight: 552).ignoresSafeArea(.container, edges: .top) }
             .defaultSize(width: 1280, height: 740)
             .windowStyle(.hiddenTitleBar)
             .commands {
@@ -152,7 +157,9 @@ struct WorkspaceView: View {
     @State private var destination: Destination = .today
     @State private var quickTitle = ""
     @State private var quickKind: TaskKind = .task
-    @State private var sort = "Date"
+    // Persisted: a Manual order would otherwise appear lost whenever the app
+    // relaunched onto the default Date sort.
+    @AppStorage("Taskovsky.taskSort") private var sort = "Date"
     @State private var showCompleted = true
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
@@ -168,8 +175,34 @@ struct WorkspaceView: View {
     @AppStorage("Taskovsky.sidebarWidth") private var sidebarWidth = 215.0
     @AppStorage("Taskovsky.sidebarCollapsed") private var sidebarCollapsed = false
     @AppStorage("Taskovsky.taskPaneFraction") private var taskPaneFraction = 0.45
+    // Stable divider dragging: gestures report absolute global x; the start
+    // position and start size are captured on the first event and every frame
+    // derives from those, so local translation can never accumulate jitter.
+    // Live sizes stay in transient State and reach AppStorage only on release.
     @State private var sidebarDragStart: Double?
     @State private var paneDragStart: Double?
+    @State private var sidebarStartX: Double?
+    @State private var paneStartX: Double?
+    @State private var sidebarLive: Double?
+    @State private var paneLive: Double?
+    @State private var panelDragging = false
+    // Frozen dock/auto-collapse decisions captured at drag start, so a
+    // divider drag can never flap the detail or sidebar across a snapping
+    // boundary mid-gesture.
+    @State private var frozenShowSidebar: Bool?
+    @State private var frozenDockDetail: Bool?
+    // Narrow-width navigation popover: manual reveal without touching the
+    // remembered collapse preference. Closes on navigation, outside tap,
+    // Escape, expand, or toggle.
+    @State private var sidebarPopoverOpen = false
+    // Scoped Escape dismissal for the nav overlay (native popover behavior
+    // had to be reimplemented with the in-window overlay). Installed only
+    // while the overlay is open, removed on dismiss.
+    @State private var escapeMonitor: Any?
+    // Last measured content width, so the toggle behaves correctly even
+    // before any resize (e.g. a window restored narrow). Refreshed on appear
+    // and on every width change.
+    @State private var lastTotalWidth = 1280.0
     @State private var nextCreationKind: TaskKind?
     @State private var quickFocused = false
     @State private var detailState = DetailSelectionState()
@@ -194,27 +227,44 @@ struct WorkspaceView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             GeometryReader { geometry in
-                // Responsive policy (see ResponsiveLayout): the sidebar only hides via
-                // the manual toggle; responsive pressure goes to the right detail pane.
-                // Docked detail needs center 300 + divider + detail 280; otherwise the
-                // center keeps its width and detail becomes a 300pt overlay drawer.
-                // With the default 215pt sidebar this docks at ~860pt total, which is
-                // consistent with the reference transition bracketed between 757pt
-                // (overlay) and 961pt (docked). The exact TickTick threshold is unknown,
-                // so this derived rule is documented as an approximation.
-                let expandedNavWidth = min(ResponsiveLayout.sidebarMax, max(ResponsiveLayout.sidebarMin, sidebarWidth))
-                let showSidebar = !sidebarCollapsed && destination != .search
+                // Responsive policy (see ResponsiveLayout): responsive pressure
+                // goes to the right detail pane first, then to the sidebar.
+                // Docked detail needs center 300 + divider + detail 280 (859pt
+                // total with the default sidebar); below that the center keeps
+                // its width and detail becomes a 300pt overlay drawer. Below
+                // ~578pt the sidebar auto-hides too, while the manual
+                // preference is remembered and restored on expand. The exact
+                // TickTick thresholds are unknown, so these derived rules are
+                // documented approximations; the 382pt minimum (rail 62 +
+                // center 320, nav/detail hidden) is a measured reference.
+                let liveSidebarWidth = sidebarLive ?? sidebarWidth
+                let expandedNavWidth = min(ResponsiveLayout.sidebarMax, max(ResponsiveLayout.sidebarMin, liveSidebarWidth))
+                // Single resolved layout. The dock decision keys off the manual
+                // collapse preference (or full search): an auto-collapsed
+                // sidebar must NOT free room for a docked detail, or shrinking
+                // from 683 to 682 at custom sidebar 320 would dock the detail
+                // while shrinking and undock it again at 642 — non-monotonic
+                // jumps violating detail-first collapse. The available width
+                // still uses the effective (auto-collapsed) visibility.
+                let computedShowSidebar = ResponsiveLayout.isSidebarDocked(totalWidth: geometry.size.width, sidebarWidth: sidebarWidth, manualCollapsed: sidebarCollapsed, searchActive: destination == .search)
+                let computedDockDetail = ResponsiveLayout.shouldDockDetail(totalWidth: geometry.size.width, sidebarWidth: sidebarWidth, collapsed: sidebarCollapsed || destination == .search)
+                // Frozen during divider drags so the gesture can never flap
+                // either pane across a snapping boundary mid-drag.
+                let showSidebar = frozenShowSidebar ?? computedShowSidebar
+                let dockDetail = frozenDockDetail ?? computedDockDetail
+                let autoCollapsed = ResponsiveLayout.shouldAutoCollapseSidebar(totalWidth: geometry.size.width, sidebarWidth: sidebarWidth)
                 let navWidth = showSidebar ? expandedNavWidth : 0
                 let available = geometry.size.width - ResponsiveLayout.railWidth - navWidth - (showSidebar ? ResponsiveLayout.dividerWidth : 0)
-                let dockDetail = ResponsiveLayout.shouldDockDetail(totalWidth: geometry.size.width, sidebarWidth: sidebarWidth, collapsed: sidebarCollapsed || destination == .search)
                 // Pristine installs default to a 300pt detail with the remaining width
                 // for the center; existing stored fractions are never overwritten. The
                 // preference is only written once the user drags the divider.
                 let pristineDetail = UserDefaults.standard.object(forKey: "Taskovsky.taskPaneFraction") == nil && !taskPaneCustomized
-                let listWidth: Double = {
+                let storedListWidth: Double = {
                     if pristineDetail { return max(ResponsiveLayout.listMin, available - ResponsiveLayout.dividerWidth - ResponsiveLayout.drawerWidth) }
                     return ResponsiveLayout.dockedListWidth(available: available, fraction: taskPaneFraction)
                 }()
+                // Transient drag size; committed to AppStorage only on release.
+                let listWidth = paneLive ?? storedListWidth
                 HStack(spacing: 0) {
                     rail
                     // Keep the contents at their expanded size while the panel slides
@@ -222,7 +272,7 @@ struct WorkspaceView: View {
                     // labels wrap and jump during the transition.
                     HStack(spacing: 0) {
                         sidebar(now: timeline.date).frame(width: expandedNavWidth)
-                        PanelDivider(drag: onSidebarDrag)
+                        PanelDivider { x, ended in onSidebarDrag(x: x, ended: ended, totalWidth: geometry.size.width, showSidebar: computedShowSidebar, dockDetail: computedDockDetail) }
                             .onTapGesture(count: 2, perform: toggleSidebar)
                     }
                     .offset(x: showSidebar ? 0 : -(expandedNavWidth + 1))
@@ -239,16 +289,16 @@ struct WorkspaceView: View {
                         Group {
                             if destination == .search {
                                 SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                            } else { taskPane(now: timeline.date, overlay: false) }
+                            } else { taskPane(now: timeline.date, overlay: false, paneWidth: CGFloat(listWidth)) }
                         }.frame(width: listWidth)
-                        PanelDivider { delta, ended in onPaneDrag(delta: delta, ended: ended, listWidth: listWidth, available: available) }
+                        PanelDivider { x, ended in onPaneDrag(x: x, ended: ended, listWidth: storedListWidth, available: available) }
                         detailDock.frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         ZStack(alignment: .trailing) {
                             Group {
                                 if destination == .search {
                                     SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                                } else { taskPane(now: timeline.date, overlay: true) }
+                                } else { taskPane(now: timeline.date, overlay: true, paneWidth: CGFloat(available)) }
                             }.frame(maxWidth: .infinity, maxHeight: .infinity)
                             // Overlay drawer: right-aligned, fixed 300pt, no scrim, soft
                             // shadow on its leading edge. It never reflows the list.
@@ -256,10 +306,11 @@ struct WorkspaceView: View {
                             // invisible focusable or hittable content behind.
                             if let task = selectedTask, detailState.drawerOpen { drawer(task: task) }
                         }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .animation(reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
+                            .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
                     }
                 }
-                .animation(reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: sidebarCollapsed)
+                .onAppear { lastTotalWidth = geometry.size.width }
+                .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: sidebarCollapsed)
                 // Shrinking into overlay dismisses the drawer but keeps the selection,
                 // so growing back docks the same task. Never auto-opens on shrink.
                 // An open schedule popover is cancelled rather than reopened blank:
@@ -267,6 +318,38 @@ struct WorkspaceView: View {
                 .onChange(of: dockDetail) { _, docked in
                     if !docked { detailState.shrinkToOverlay() }
                     if let sel = detailState.selection { drafts.scheduling[sel] = false }
+                }
+                .onChange(of: geometry.size.width) { _, width in
+                    lastTotalWidth = width
+                    // Expanding back to a docked sidebar retires the popover
+                    // and restores the remembered manual preference in reverse.
+                    if !ResponsiveLayout.shouldAutoCollapseSidebar(totalWidth: width, sidebarWidth: sidebarWidth) { sidebarPopoverOpen = false }
+                }
+                // Main-window-only floor bridge (zero-size, no layout effect).
+                .background(WindowFloorBridge().frame(width: 0, height: 0))
+                // Compact navigation overlay: replaces the native popover,
+                // which centered its 220pt content on the tiny toggle and
+                // clipped outside the window. This stays entirely in-window at
+                // x77 (rail 62 + 15), top 56 under the header toggle, 220pt
+                // wide with rounded background and soft shadow — a floating
+                // popover appearance, not a full-height drawer. Rendered only
+                // while compact and open: a clear full-area layer underneath
+                // catches outside taps (never covering the popover, above it
+                // in z-order), and nothing intercepts clicks when closed.
+                .overlay(alignment: .topLeading) {
+                    if sidebarPopoverOpen && autoCollapsed && destination != .search {
+                        ZStack(alignment: .topLeading) {
+                            Color.clear
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                .contentShape(Rectangle())
+                                .onTapGesture { sidebarPopoverOpen = false }
+                            navPopover(now: timeline.date, maxHeight: max(200, geometry.size.height - 56 - 12))
+                                .offset(x: 77, y: 56)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onAppear { installEscapeMonitor() }
+                        .onDisappear { removeEscapeMonitor() }
+                    }
                 }
             }
             .background(Color(nsColor: .textBackgroundColor))
@@ -341,24 +424,92 @@ struct WorkspaceView: View {
         }
     }
 
-    private func toggleSidebar() { sidebarCollapsed.toggle() }
-    private func onSidebarDrag(delta: Double, ended: Bool) {
-        if sidebarDragStart == nil { sidebarDragStart = sidebarWidth }
-        let start = sidebarDragStart ?? sidebarWidth
-        let proposed = start + delta
-        sidebarWidth = min(ResponsiveLayout.sidebarMax, max(ResponsiveLayout.sidebarMin, proposed))
-        if ended {
-            if proposed < 135 { sidebarWidth = start; sidebarCollapsed = true }
-            sidebarDragStart = nil
+    private func toggleSidebar() {
+        // At a docked width this flips the remembered manual preference.
+        // Auto-collapsed at narrow width, it reveals the navigation popover
+        // instead and never touches the preference.
+        let auto = ResponsiveLayout.shouldAutoCollapseSidebar(totalWidth: lastTotalWidth, sidebarWidth: sidebarWidth)
+        if destination == .search || !auto {
+            sidebarCollapsed.toggle()
+            sidebarPopoverOpen = false
+        } else {
+            sidebarPopoverOpen.toggle()
         }
     }
-    private func onPaneDrag(delta: Double, ended: Bool, listWidth: Double, available: Double) {
-        if paneDragStart == nil { paneDragStart = listWidth }
+    private func onSidebarDrag(x: Double, ended: Bool, totalWidth: Double, showSidebar: Bool, dockDetail: Bool) {
+        if sidebarStartX == nil {
+            sidebarStartX = x
+            sidebarDragStart = sidebarLive ?? sidebarWidth
+            panelDragging = true
+            frozenShowSidebar = showSidebar
+            frozenDockDetail = dockDetail
+        }
+        let delta = x - (sidebarStartX ?? x)
+        let start = sidebarDragStart ?? sidebarWidth
+        // Transient only; AppStorage is written once, on release. While the
+        // detail stays docked the live width additionally clamps to the
+        // dock-safe maximum, so widening the sidebar can never squeeze the
+        // center below its minimum or steal the detail's minimum mid-gesture.
+        let dockMax = dockDetail ? PanelDrag.dockedSidebarMax(totalWidth: totalWidth) : nil
+        sidebarLive = PanelDrag.clampedSidebarWidth(start: start, delta: delta, maxWidth: dockMax)
+        if ended {
+            if PanelDrag.shouldCollapseSidebar(start: start, delta: delta) { sidebarCollapsed = true }
+            else { sidebarWidth = sidebarLive ?? start }
+            sidebarLive = nil
+            sidebarDragStart = nil
+            sidebarStartX = nil
+            panelDragging = false
+            frozenShowSidebar = nil
+            frozenDockDetail = nil
+        }
+    }
+    private func onPaneDrag(x: Double, ended: Bool, listWidth: Double, available: Double) {
+        if paneStartX == nil {
+            paneStartX = x
+            paneDragStart = paneLive ?? listWidth
+            panelDragging = true
+        }
+        let delta = x - (paneStartX ?? x)
         let start = paneDragStart ?? listWidth
-        let limit = max(ResponsiveLayout.listMin, available - ResponsiveLayout.dividerWidth - ResponsiveLayout.detailMin)
-        taskPaneFraction = min(limit, max(ResponsiveLayout.listMin, start + delta)) / available
-        taskPaneCustomized = true
-        if ended { paneDragStart = nil }
+        // Transient only; the persisted fraction is written once, on release.
+        paneLive = min(max(ResponsiveLayout.listMin, available - ResponsiveLayout.dividerWidth - ResponsiveLayout.detailMin), max(ResponsiveLayout.listMin, start + delta))
+        if ended {
+            taskPaneFraction = PanelDrag.paneFraction(startListWidth: start, delta: delta, available: available)
+            taskPaneCustomized = true
+            paneLive = nil
+            paneDragStart = nil
+            paneStartX = nil
+            panelDragging = false
+        }
+    }
+    /// Floating navigation panel for compact widths: the sidebar content in
+    /// a 220pt rounded, shadowed card that scrolls within the visible window
+    /// below the header. The collapsed docked sidebar stays hidden from
+    /// accessibility while this open overlay carries the navigation.
+    private func navPopover(now: Date, maxHeight: CGFloat) -> some View {
+        sidebar(now: now)
+            .frame(width: CGFloat(ResponsiveLayout.sidebarPopoverWidth))
+            .frame(maxHeight: maxHeight)
+            .background(Color(nsColor: .textBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.12), lineWidth: 1))
+            .shadow(color: .black.opacity(0.2), radius: 14, y: 4)
+    }
+    private func installEscapeMonitor() {
+        guard escapeMonitor == nil else { return }
+        // Captured binding (reference-like) rather than struct self, which
+        // an escaping monitor closure cannot mutate.
+        let popover = $sidebarPopoverOpen
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            if event.keyCode == 53 {
+                popover.wrappedValue = false
+                return nil
+            }
+            return event
+        }
+    }
+    private func removeEscapeMonitor() {
+        if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor); escapeMonitor = nil }
     }
     private var detailDock: some View {
         Group {
@@ -412,6 +563,9 @@ struct WorkspaceView: View {
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
                     sectionHeading("Lists") { editor = EntityEditor(isTag: false) }
                     if sectionExpanded("Lists").wrappedValue {
+                    // List rows carry their own drag and drop inside navRow; the
+                    // edit/delete menu stays here, so there is exactly one.
+                    // The order always matches the persisted list order.
                     ForEach(store.data.lists) { list in
                         navRow(.list(list.id), color: Color(hex: list.color), now: now)
                             .contextMenu {
@@ -465,7 +619,7 @@ struct WorkspaceView: View {
             if case .filter(let id) = dest { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
             return dest.includes(task, now: now)
         }.count
-        return SidebarRow(selected: destination == dest, action: { destination = dest; closeDrawer() }) {
+        let row = SidebarRow(selected: destination == dest, action: { destination = dest; sidebarPopoverOpen = false; closeDrawer() }) {
             HStack(spacing: 10) {
                 Group {
                     if case .list(let id) = dest { ListSymbol(symbol: store.data.lists.first { $0.id == id }?.symbol) }
@@ -479,18 +633,29 @@ struct WorkspaceView: View {
                 if count > 0 && dest != .summary { Text("\(count)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit() }
             }
         }
-        .dropDestination(for: String.self) { items, _ in
-            if dest == .inbox { return move(items, to: nil) }
-            if case .list(let id) = dest { return move(items, to: id) }
-            return false
+        // Typed drops only: Inbox and lists accept task payloads (with hover
+        // highlighting and atomic move semantics), and lists accept list
+        // payloads for above/below reordering. One unified per-row delegate
+        // receives both types; it is a modifier on the row itself, never a
+        // covering overlay, so Button clicks, right-clicks, drag initiation,
+        // and context menus keep working. Every other destination has no drop
+        // target and rejects untouched. Task and list payload types are
+        // distinct, so a list can never be read as a task or vice versa.
+        switch dest {
+        case .inbox:
+            return AnyView(SidebarDropRow(title: "Inbox", listID: nil, onDropTasks: { moveTasks($0, to: nil) }, onReorderList: { _, _ in }) { row })
+        case .list(let id):
+            let title = store.data.lists.first { $0.id == id }?.name ?? "List"
+            return AnyView(SidebarDropRow(title: title, listID: id, onDropTasks: { moveTasks($0, to: id) }, onReorderList: { moving, after in store.reorderLists(moving: moving, before: id, afterTarget: after) }) { row })
+        default:
+            return AnyView(row)
         }
     }
-    private func move(_ items: [String], to listID: UUID?) -> Bool {
-        for item in items {
-            guard let id = UUID(uuidString: item), var task = store.data.tasks.first(where: { $0.id == id }), task.deletedAt == nil else { return false }
-            task.listID = listID; store.updateTask(task)
-        }
-        return true
+    /// Atomically moves dragged tasks to a list (nil = Inbox). The store
+    /// validates every ID first; any unknown, deleted, or duplicate record,
+    /// or an unknown target list, aborts with no mutation.
+    private func moveTasks(_ ids: [UUID], to listID: UUID?) -> Bool {
+        store.moveTasksToList(ids: ids, listID: listID)
     }
     private func listContext(for task: TaskItem) -> String? {
         if destination == .inbox { return nil }
@@ -498,7 +663,10 @@ struct WorkspaceView: View {
         if let listID = task.listID { return store.data.lists.first { $0.id == listID }?.name }
         return "Inbox"
     }
-    private func taskPane(now: Date, overlay: Bool) -> some View {
+    /// Center pane. `paneWidth` is the content width rows fill (docked list
+    /// width, or available width in overlay); it flows statelessly into each
+    /// row's metadata budget — never measured back out of layout.
+    private func taskPane(now: Date, overlay: Bool, paneWidth: CGFloat) -> some View {
         let tasks = filteredTasks(now: now)
         let groups = grouped(tasks, now: now)
         return VStack(alignment: .leading, spacing: 0) {
@@ -516,9 +684,10 @@ struct WorkspaceView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { closeDrawer() }
                 Menu {
-                    Picker("Sort by", selection: $sort) { ForEach(["Date", "Priority", "Title", "Created"], id: \.self) { Text($0) } }
+                    Picker("Sort by", selection: $sort) { ForEach(["Manual", "Date", "Priority", "Title", "Created"], id: \.self) { Text($0) } }
+                    Text("Manual order follows your drags and is saved.").font(.caption)
                     if destination != .completed && destination != .trash && destination != .wontDo { Toggle("Show Completed & Won't Do", isOn: $showCompleted) }
-                } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display")
+                } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (Manual enables drag reordering)")
                 Menu {
                     if destination != .completed && destination != .trash && destination != .wontDo && destination != .summary {
                         Button(showCompleted ? "Hide Completed" : "Show Completed") { showCompleted.toggle() }
@@ -549,11 +718,19 @@ struct WorkspaceView: View {
                             Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { if collapsed.contains(title) { collapsed.remove(title) } else { collapsed.insert(title) } } } label: {
                                 HStack(spacing: 7) { Image(systemName: collapsed.contains(title) ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)); Text(title).font(.system(size: 12, weight: .semibold)); Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary); Spacer() }.foregroundStyle(title == "Overdue" || title == "Due reminders" ? .red : .secondary).padding(.vertical, 10)
                             }.buttonStyle(.plain)
-                            if !collapsed.contains(title) { ForEach(items) { task in
-                                TaskRow(store: store, id: task.id, selected: detailState.selection == task.id, now: now, listContext: listContext(for: task), showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
-                                    .modifier(RowDrag(id: task.id, active: task.deletedAt == nil))
-                                    .contextMenu { taskMenu(task) }
-                            } }
+                            // Manual sort reorders in-group by dropping on the top
+                            // or bottom half of a row, with an insertion line
+                            // and a move proposal. No permanent spacing is
+                            // added. Every other sort rejects drops at
+                            // validation: order there is computed, and
+                            // reordering must never silently rewrite dates,
+                            // priorities, or status.
+                            if !collapsed.contains(title) {
+                                let groupIDs = items.map(\.id)
+                                ForEach(items) { task in
+                                    taskRow(task, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth)
+                                }
+                            }
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 24)
                         .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: tasks.map { $0.id })
@@ -591,8 +768,12 @@ struct WorkspaceView: View {
             Divider(); Button("Move to Trash", role: .destructive) { trash(task.id) }
         }
     }
+    /// Manual order follows the stored array order, so drag reordering is the
+    /// sort: positions persist across reload and match what every surface
+    /// shows. All other sorts compute their order and reject task drops.
     private func filteredTasks(now: Date) -> [TaskItem] {
-        store.data.tasks.filter { task in
+        let order = Dictionary(uniqueKeysWithValues: store.data.tasks.enumerated().map { ($0.element.id, $0.offset) })
+        return store.data.tasks.filter { task in
             if case .filter(let id) = destination { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
             if destination.includes(task, now: now) { return true }
             if showCompleted && destination != .completed && destination != .trash && destination != .wontDo && (task.completedAt != nil || task.wontDoAt != nil) && task.deletedAt == nil { var copy = task; copy.completedAt = nil; copy.wontDoAt = nil; return destination.includes(copy, now: now) }
@@ -602,6 +783,7 @@ struct WorkspaceView: View {
             let bActive = b.completedAt == nil && b.wontDoAt == nil
             if aActive != bActive { return aActive }
             switch sort {
+            case "Manual": return (order[a.id] ?? 0) < (order[b.id] ?? 0)
             case "Priority": if a.priority != b.priority { return a.priority.rank < b.priority.rank }
             case "Title": return a.title.localizedStandardCompare(b.title) == .orderedAscending
             case "Created": return a.createdAt > b.createdAt
@@ -695,13 +877,24 @@ struct ListViewportHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-/// Drag support only for non-deleted rows; deleted items can never be dragged
-/// into another list (the sidebar drop target also refuses them).
-struct RowDrag: ViewModifier {
-    let id: UUID
-    let active: Bool
-    func body(content: Content) -> some View {
-        if active { content.draggable(id.uuidString) } else { content }
+/// One center-list row: detail selection, native drag-out with a compact
+/// preview, Manual-sort drop halves with an insertion line, and the row menu.
+/// The drop halves commit atomically on drop only; anything invalid leaves
+/// the saved order untouched.
+private extension WorkspaceView {
+    func taskRow(_ task: TaskItem, groupIDs: [UUID], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
+        TaskRow(store: store, id: task.id, selected: detailState.selection == task.id, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
+            .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: task.deletedAt == nil, reorderEnabled: sort == "Manual" && task.deletedAt == nil, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
+            .contextMenu { taskMenu(task) }
+    }
+    /// Validates and commits an in-group task reorder. Rejects non-manual
+    /// sorts, cross-group drags, self-drops, and empty payloads without
+    /// mutating. The store re-validates records and saves once.
+    func acceptTaskReorder(_ ids: [UUID], before target: UUID, after: Bool, group: [UUID]) -> Bool {
+        guard sort == "Manual" else { return false }
+        guard !ids.isEmpty, !ids.contains(target),
+              Set(ids).isSubset(of: Set(group)), group.contains(target) else { return false }
+        return store.reorderTasks(moving: ids, before: target, afterTarget: after)
     }
 }
 
