@@ -3,6 +3,7 @@ import AppKit
 import TaskovskyCore
 
 struct QuickEntry: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: TaskStore
     @Binding var title: String
     @Binding var kind: TaskKind
@@ -31,8 +32,8 @@ struct QuickEntry: View {
                 Menu {
                     Button("Task") { kind = .task }; Button("Note") { kind = .note }
                     Divider(); Button("Add from Template…", action: onTemplate)
-                } label: { Image(systemName: kind == .task ? "plus" : "doc.text").font(.system(size: 16)).foregroundStyle(.secondary) }
-                    .menuStyle(.borderlessButton).fixedSize().help("Choose task, note, or template")
+                } label: { HoverIcon { Image(systemName: kind == .task ? "plus" : "doc.text").font(.system(size: 16)).foregroundStyle(.secondary).padding(4) } }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Choose task, note, or template")
                 RecognizingField(text: $title, isFocused: Binding(get: { focused }, set: { focused = $0 }), placeholder: kind == .task ? "Add task" : "Add note", dateRange: recognized.map { NSRange($0.range, in: title) }, onSubmit: submit, onDescription: { showDescription = true; focused = false; descriptionFocused = true })
                     .frame(minWidth: 60, minHeight: 22)
                 if let recognized {
@@ -47,7 +48,7 @@ struct QuickEntry: View {
                     }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("Recognized date; click to ignore")
                 }
             }.padding(.horizontal, 12).frame(height: 38)
-                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
+                .background(Palette.card(colorScheme), in: RoundedRectangle(cornerRadius: 9))
                 .overlay { RoundedRectangle(cornerRadius: 9).stroke(focused ? accent : .clear, lineWidth: 1) }
             if showDescription {
                 TextField("Description", text: $description, axis: .vertical).textFieldStyle(.plain).font(.system(size: 14)).lineLimit(2...5).focused($descriptionFocused).padding(10).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 6))

@@ -35,15 +35,18 @@ private struct SearchTaskResult: View {
     var showDate = false
     let onOpen: () -> Void
     let onComplete: () -> Void
+    @State private var hovering = false
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             if task.kind == .note {
                 Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 18, height: 22)
             } else {
                 Button(action: onComplete) {
-                    Image(systemName: task.completedAt != nil ? "checkmark.square.fill" : task.wontDoAt != nil ? "xmark.square.fill" : "square")
-                        .foregroundStyle(task.completedAt != nil ? accent : task.wontDoAt != nil ? Color.secondary : task.priority.color)
-                        .frame(width: 18, height: 22)
+                    HoverIcon {
+                        TaskCheckbox(state: task.wontDoAt != nil ? .wontDo : task.completedAt != nil ? .completed : .open, color: task.priority == .none ? Palette.taskOutline(colorScheme) : task.priority.color)
+                            .frame(width: 18, height: 22).contentShape(Rectangle())
+                    }
                 }.buttonStyle(.plain).accessibilityLabel(task.completedAt != nil || task.wontDoAt != nil ? "Reopen task" : "Complete task")
             }
             Button(action: onOpen) {
@@ -66,6 +69,8 @@ private struct SearchTaskResult: View {
                 }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(.plain)
         }.padding(.vertical, 6)
+            .background(hovering ? Color.primary.opacity(0.032) : .clear, in: RoundedRectangle(cornerRadius: 9))
+            .onHover { hovering = $0 }
     }
     private var listLabel: some View {
         HStack(spacing: 4) { ListSymbol(symbol: listSymbol, size: 12); Text(listName) }
@@ -191,7 +196,7 @@ struct SearchDialog: View {
                             }
                             Button("View more") { remember(); onSearch(trimmed) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(accent).padding(.vertical, 5)
                         } }
-                        if !lists.isEmpty { group("Lists") { ForEach(lists.prefix(8)) { list in result(list.name, symbol: "list.bullet", id: .list(list.id)) } } }
+                        if !lists.isEmpty { group("Lists") { ForEach(lists.prefix(8)) { list in result(list.name, symbol: list.symbol ?? "line.3.horizontal", id: .list(list.id)) } } }
                         if !tags.isEmpty { group("Tags") { ForEach(tags.prefix(8)) { tag in result(tag.name, symbol: "tag", id: .tag(tag.id)) } } }
                         if !filters.isEmpty { group("Filters") { ForEach(filters.prefix(8)) { filter in result(filter.name, symbol: "line.3.horizontal.decrease.circle", id: .filter(filter.id)) } } }
                         if results.isEmpty { Text("No results found").foregroundStyle(.secondary) }

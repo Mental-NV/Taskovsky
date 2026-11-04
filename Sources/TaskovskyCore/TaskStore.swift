@@ -260,6 +260,12 @@ public final class TaskStore: ObservableObject {
     }
     public func trashTask(id: UUID) { mutateTask(id: id) { $0.deletedAt = Date() } }
     public func restoreTask(id: UUID) { mutateTask(id: id) { $0.deletedAt = nil } }
+    /// Permanently removes one trashed record. Refuses missing IDs and active
+    /// items, and never touches other records, lists, tags, or templates.
+    @discardableResult public func purgeTask(id: UUID) -> Bool {
+        guard let index = data.tasks.firstIndex(where: { $0.id == id }), data.tasks[index].deletedAt != nil else { return false }
+        data.tasks.remove(at: index); save(); return true
+    }
     private func mutateTask(id: UUID, _ change: (inout TaskItem) -> Void) {
         guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { return }
         change(&data.tasks[index]); data.tasks[index].updatedAt = Date(); save()

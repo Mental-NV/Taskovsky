@@ -9,12 +9,13 @@ struct ReferenceValueMenu<Value: Equatable>: View {
     @State private var open = false
     @State private var highlighted = 0
     @FocusState private var keyboardFocused: Bool
+    @Environment(\.colorScheme) private var colorScheme
     var body: some View {
         Button { open.toggle() } label: {
             HStack(spacing: 6) {
                 Text(options.first { $0.1 == selection }?.0 ?? "None").lineLimit(1)
                 Image(systemName: "chevron.up.chevron.down").font(.system(size: 8))
-            }.foregroundStyle(.secondary).frame(maxWidth: 190, alignment: .trailing).contentShape(Rectangle())
+            }.foregroundStyle(Palette.values(colorScheme)).frame(maxWidth: 190, alignment: .trailing).contentShape(Rectangle())
         }.buttonStyle(.plain)
             .popover(isPresented: $open, arrowEdge: .bottom) {
                 VStack(alignment: .leading, spacing: 0) {

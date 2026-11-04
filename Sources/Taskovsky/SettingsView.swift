@@ -1,7 +1,66 @@
 import SwiftUI
 import TaskovskyCore
 
+/// Settings-only flat switch: 26x16 track, 14pt white knob, flat accent when on
+/// and measured gray when off. Interaction and accessibility come from a real
+/// Button plus a native-Toggle accessibility representation, so keyboard
+/// focus, Space toggling, and VoiceOver keep working.
+struct FlatSwitchStyle: ToggleStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    func makeBody(configuration: Configuration) -> some View {
+        // Labels-hidden only: the row title already shows the text, so render
+        // just the 26x16 track. The label still reaches assistive tech through
+        // the native-styled representation below (explicit style so it can
+        // never reenter this custom style).
+        Button { configuration.isOn.toggle() } label: { track(isOn: configuration.isOn) }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch) }
+    }
+    private func track(isOn: Bool) -> some View {
+        ZStack(alignment: isOn ? .trailing : .leading) {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isOn ? accent : colorScheme == .dark ? Color(nsColor: .separatorColor) : Color(hex: "#D9D9D9"))
+                .frame(width: 26, height: 16)
+            Circle().fill(.white).frame(width: 14, height: 14)
+                .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+                .padding(1)
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.12), value: isOn)
+    }
+}
+
+/// Settings-only flat checkbox: 14x14 rounded 2-3, flat accent with a white
+/// check when on, measured gray outline on the card when off. Same Button +
+/// native-Toggle accessibility arrangement as the switch.
+struct FlatCheckboxStyle: ToggleStyle {
+    @Environment(\.colorScheme) private var colorScheme
+    func makeBody(configuration: Configuration) -> some View {
+        Button { configuration.isOn.toggle() } label: {
+            HStack(spacing: 8) {
+                ZStack {
+                    if configuration.isOn {
+                        RoundedRectangle(cornerRadius: 2.5).fill(accent)
+                        Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                    } else {
+                        RoundedRectangle(cornerRadius: 2.5)
+                            .fill(colorScheme == .dark ? Color.clear : Palette.card(colorScheme))
+                            .strokeBorder(colorScheme == .dark ? Color.secondary : Color(hex: "#CCCCCC"), lineWidth: 1)
+                    }
+                }.frame(width: 14, height: 14)
+                // The off state is an outline only (transparent fill in dark
+                // mode), so give the box an explicit rectangular hit shape.
+                .contentShape(Rectangle())
+                configuration.label
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityRepresentation { Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.checkbox) }
+    }
+}
+
 struct SettingsView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: TaskStore
     @State private var section: Section = .smartLists
     @State private var editingTemplate: TemplateDraft?
@@ -63,15 +122,22 @@ struct SettingsView: View {
     }
     private func visibilityRow(_ title: String, _ key: SmartListKey) -> some View {
         HStack {
-            Image(systemName: smartListSymbol(key)).frame(width: 20).foregroundStyle(.secondary)
+            smartListIcon(key).frame(width: 20).foregroundStyle(.primary)
             Text(title); Spacer(minLength: 16)
             valueMenu(selection: Binding(get: { store.settings.smartListVisibility[key] ?? .show }, set: { store.settings.smartListVisibility[key] = $0 }), options: key == .summary ? [("Hidden", .hidden), ("Show", .show)] : [
                 ("Hidden", .hidden), ("Show", .show), ("Show if not empty", .showIfNotEmpty)
             ], title: title)
         }.font(.system(size: 14)).frame(minHeight: 40).padding(.horizontal, 18)
     }
+    @ViewBuilder private func smartListIcon(_ key: SmartListKey) -> some View {
+        switch key {
+        case .today: CalendarSymbol(text: String(Calendar.current.component(.day, from: Date())))
+        case .week: CalendarSymbol(text: String(Calendar.current.shortWeekdaySymbols[Calendar.current.component(.weekday, from: Date()) - 1].prefix(2)))
+        default: Image(systemName: smartListSymbol(key)).font(.system(size: 17))
+        }
+    }
     private func smartListSymbol(_ key: SmartListKey) -> String {
-        switch key { case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"; case .inbox: "tray"; case .summary: "doc.text"; case .tags: "tag"; case .filters: "line.3.horizontal.decrease.circle"; case .completed: "checkmark.square"; case .wontDo: "xmark.square"; case .trash: "trash" }
+        switch key { case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"; case .inbox: "tray"; case .summary: "doc.text"; case .tags: "tag"; case .filters: "line.3.horizontal.decrease"; case .completed: "checkmark.square"; case .wontDo: "xmark.square"; case .trash: "trash" }
     }
     private var dateTime: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -139,12 +205,12 @@ struct SettingsView: View {
                                         Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2).padding(.trailing, 20)
                                         if !template.checklist.isEmpty {
                                             ForEach(Array(template.checklist.prefix(5))) { item in
-                                                HStack(alignment: .top, spacing: 5) { Image(systemName: "square"); Text(item.title).lineLimit(1) }.font(.system(size: 12)).foregroundStyle(.secondary)
+                                                HStack(alignment: .top, spacing: 5) { Image(systemName: "square"); Text(item.title).lineLimit(1) }.font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme))
                                             }
                                         } else if !template.body.isEmpty {
-                                            Text(template.body).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(4)
+                                            Text(template.body).font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme)).lineLimit(4)
                                         } else {
-                                            Text(template.title).font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(4)
+                                            Text(template.title).font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme)).lineLimit(4)
                                         }
                                         Spacer(minLength: 0)
                                     }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(14).contentShape(Rectangle())
@@ -165,10 +231,10 @@ struct SettingsView: View {
     private var about: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Taskovsky Pre-Alpha").font(.system(size: 17, weight: .semibold))
-            Text("A quiet place for your tasks.").foregroundStyle(.secondary)
+            Text("A quiet place for your tasks.").foregroundStyle(Palette.explanatory(colorScheme))
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading).background(cardBackground, in: RoundedRectangle(cornerRadius: 8))
     }
-    private var cardBackground: Color { Color.primary.opacity(0.025) }
+    private var cardBackground: Color { Palette.card(colorScheme) }
     private func group<Content: View>(@ViewBuilder content: () -> Content) -> some View {
         VStack(spacing: 0, content: content).background(cardBackground, in: RoundedRectangle(cornerRadius: 8))
     }
@@ -179,13 +245,13 @@ struct SettingsView: View {
         HStack { Text(title).fixedSize(horizontal: false, vertical: true); Spacer(minLength: 16); content() }.font(.system(size: 14)).frame(minHeight: 40).padding(.horizontal, 18)
     }
     private func toggleRow(_ title: String, _ binding: Binding<Bool>) -> some View {
-        row(title) { Toggle(title, isOn: binding).labelsHidden().toggleStyle(.switch).controlSize(.small) }
+        row(title) { Toggle(title, isOn: binding).labelsHidden().toggleStyle(FlatSwitchStyle()) }
     }
     private func checkboxRow(_ title: String, _ binding: Binding<Bool>) -> some View {
-        HStack { Toggle(title, isOn: binding).toggleStyle(.checkbox); Spacer() }.font(.system(size: 13)).frame(minHeight: 44).padding(.horizontal, 18)
+        HStack { Toggle(title, isOn: binding).toggleStyle(FlatCheckboxStyle()); Spacer() }.font(.system(size: 13)).frame(minHeight: 44).padding(.horizontal, 18)
     }
     private func explanation(_ text: String) -> some View {
-        Text(text).font(.system(size: 12)).foregroundStyle(.secondary)
+        Text(text).font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme))
             .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 10)
     }
     private func valueMenu<Value: Equatable>(selection: Binding<Value>, options: [(String, Value)], title: String = "") -> some View {
