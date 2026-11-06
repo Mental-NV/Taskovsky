@@ -90,6 +90,7 @@ struct SettingsView: View {
                 Spacer()
             }.padding(.horizontal, 16).padding(.top, 32).frame(width: 220).frame(maxHeight: .infinity, alignment: .topLeading)
                 .background(Color(nsColor: .controlBackgroundColor))
+                .onReceive(NotificationCenter.default.publisher(for: .openSmartLists)) { _ in section = .smartLists }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
@@ -108,23 +109,43 @@ struct SettingsView: View {
         }.frame(minWidth: 800, minHeight: 680).tint(accent)
             .background(WindowChrome()).ignoresSafeArea(.container, edges: .top)
             .sheet(item: $editingTemplate) { draft in TemplateEditor(draft: draft) { store.updateTemplate($0) } }
+            .onAppear {
+                // Consumes the parked section from a fresh-launch Edit action.
+                // Already-open windows retarget live via the notification above.
+                if UserDefaults.standard.string(forKey: pendingSettingsSectionKey) == "smartLists" {
+                    UserDefaults.standard.removeObject(forKey: pendingSettingsSectionKey)
+                    section = .smartLists
+                }
+            }
     }
 
+    /// Mirrors the persisted sidebar order: top destinations, then the
+    /// Tags/Filters sections, then bottom system destinations. The sidebar
+    /// reorders within the top and bottom groups; this view reflects that
+    /// order so hidden keys restore to their saved slots.
     private var smartLists: some View {
-        VStack(spacing: 20) {
+        let order = store.settings.effectiveSmartListOrder
+        func title(_ key: SmartListKey) -> String {
+            switch key { case .all: "All"; case .today: "Today"; case .tomorrow: "Tomorrow"; case .week: "Next 7 Days"; case .inbox: "Inbox"; case .summary: "Summary"; case .tags: "Tags"; case .filters: "Filters"; case .completed: "Completed"; case .wontDo: "Won't Do"; case .trash: "Trash" }
+        }
+        return VStack(spacing: 20) {
             group {
-                visibilityRow("All", .all); visibilityRow("Today", .today); visibilityRow("Tomorrow", .tomorrow)
-                visibilityRow("Next 7 Days", .week); visibilityRow("Inbox", .inbox); visibilityRow("Summary", .summary)
+                ForEach(order.filter { AppSettings.topSmartGroup.contains($0) }, id: \.self) { key in visibilityRow(title(key), key) }
             }
             group { visibilityRow("Tags", .tags); visibilityRow("Filters", .filters) }
-            group { visibilityRow("Completed", .completed); visibilityRow("Won't Do", .wontDo); visibilityRow("Trash", .trash) }
+            group {
+                ForEach(order.filter { AppSettings.bottomSmartGroup.contains($0) }, id: \.self) { key in visibilityRow(title(key), key) }
+            }
         }
     }
     private func visibilityRow(_ title: String, _ key: SmartListKey) -> some View {
+        // Every smart list — Summary included — offers the same three modes
+        // as the sidebar context menu, so a stored Show-if-not-empty never
+        // renders as None.
         HStack {
             smartListIcon(key).frame(width: 20).foregroundStyle(.primary)
             Text(title); Spacer(minLength: 16)
-            valueMenu(selection: Binding(get: { store.settings.smartListVisibility[key] ?? .show }, set: { store.settings.smartListVisibility[key] = $0 }), options: key == .summary ? [("Hidden", .hidden), ("Show", .show)] : [
+            valueMenu(selection: Binding(get: { store.settings.smartListVisibility[key] ?? .show }, set: { store.settings.smartListVisibility[key] = $0 }), options: [
                 ("Hidden", .hidden), ("Show", .show), ("Show if not empty", .showIfNotEmpty)
             ], title: title)
         }.font(.system(size: 14)).frame(minHeight: 40).padding(.horizontal, 18)

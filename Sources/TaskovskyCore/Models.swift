@@ -67,14 +67,42 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     }
 }
 
+public struct ListFolder: Codable, Identifiable, Equatable, Sendable {
+    public var id: UUID
+    public var name: String
+    public init(id: UUID = UUID(), name: String) {
+        self.id = id; self.name = name
+    }
+    // No custom decoder: id and name are required. A folder record missing
+    // either is malformed and fails the whole workspace decode, which the
+    // existing unreadable-file protection preserves — never silently minted
+    // with a random UUID or placeholder name that would drop memberships.
+}
+
 public struct TaskList: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var name: String
     public var color: String
     public var kind: TaskKind
     public var symbol: String?
-    public init(id: UUID = UUID(), name: String, color: String, kind: TaskKind = .task, symbol: String? = nil) {
-        self.id = id; self.name = name; self.color = color; self.kind = kind; self.symbol = symbol
+    public var folderID: UUID?
+    /// Trailing root placement: ungrouped lists with `true` render below all
+    /// folders instead of above them. Defaults to false so legacy files keep
+    /// their prior top root order; unknown folders still clear to top root.
+    public var belowFolders: Bool
+    public init(id: UUID = UUID(), name: String, color: String, kind: TaskKind = .task, symbol: String? = nil, folderID: UUID? = nil, belowFolders: Bool = false) {
+        self.id = id; self.name = name; self.color = color; self.kind = kind; self.symbol = symbol; self.folderID = folderID; self.belowFolders = belowFolders
+    }
+    private enum CodingKeys: String, CodingKey { case id, name, color, kind, symbol, folderID, belowFolders }
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        color = try c.decode(String.self, forKey: .color)
+        kind = try c.decodeIfPresent(TaskKind.self, forKey: .kind) ?? .task
+        symbol = try c.decodeIfPresent(String.self, forKey: .symbol)
+        folderID = try c.decodeIfPresent(UUID.self, forKey: .folderID)
+        belowFolders = try c.decodeIfPresent(Bool.self, forKey: .belowFolders) ?? false
     }
 }
 
@@ -93,13 +121,24 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
     public var tags: [TaskTag]
     public var filters: [TaskFilter]
     public var templates: [TaskTemplate]
-    public init(tasks: [TaskItem] = [], lists: [TaskList] = [], tags: [TaskTag] = [], filters: [TaskFilter] = [], templates: [TaskTemplate] = []) {
-        self.tasks = tasks; self.lists = lists; self.tags = tags; self.filters = filters; self.templates = templates
+    public var folders: [ListFolder]
+    public init(tasks: [TaskItem] = [], lists: [TaskList] = [], tags: [TaskTag] = [], filters: [TaskFilter] = [], templates: [TaskTemplate] = [], folders: [ListFolder] = []) {
+        self.tasks = tasks; self.lists = lists; self.tags = tags; self.filters = filters; self.templates = templates; self.folders = folders
     }
-    private enum CodingKeys: String, CodingKey { case tasks, lists, tags, filters, templates }
+    private enum CodingKeys: String, CodingKey { case tasks, lists, tags, filters, templates, folders }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         tasks = try c.decode([TaskItem].self, forKey: .tasks); lists = try c.decode([TaskList].self, forKey: .lists); tags = try c.decode([TaskTag].self, forKey: .tags)
         filters = try c.decodeIfPresent([TaskFilter].self, forKey: .filters) ?? []; templates = try c.decodeIfPresent([TaskTemplate].self, forKey: .templates) ?? TaskTemplate.builtIns
+        // Only these two keys tolerate absence: a missing `folders` array means
+        // a pre-folders file (defaults to empty), and a missing `folderID`
+        // means an ungrouped list (defaults to nil, handled in TaskList).
+        folders = try c.decodeIfPresent([ListFolder].self, forKey: .folders) ?? []
+        // Drop folder memberships that reference unknown folders (legacy or
+        // hand-edited files): lists stay, tasks stay, membership clears.
+        let known = Set(folders.map(\.id))
+        if lists.contains(where: { $0.folderID != nil }) {
+            lists = lists.map { var l = $0; if let f = l.folderID, !known.contains(f) { l.folderID = nil }; return l }
+        }
     }
 }

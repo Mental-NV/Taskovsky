@@ -5,7 +5,11 @@ import TaskovskyCore
 struct TaskRow: View {
     @ObservedObject var store: TaskStore
     let id: UUID
-    let selected: Bool
+    /// Live selection binding: `selected` derives on every body evaluation,
+    /// so the grip and highlight can never render a captured stale value
+    /// while the detail already follows a newer selection.
+    @Binding var selection: UUID?
+    private var selected: Bool { selection == id }
     let now: Date
     let listContext: String?
     /// Pane content width for the stateless metadata budget (see metadataBudget).
@@ -14,6 +18,12 @@ struct TaskRow: View {
     let showSteps: Bool
     /// Inline rename is disabled where double-click opens a pop-up window.
     let allowRename: Bool
+    /// Dedicated grip drag source. Built here (never passed in as a view) so
+    /// visibility follows whole-row hover OR selection while the 14pt slot
+    /// stays reserved and the row never reflows. Nil action means no grip
+    /// (trashed read-only rows). The drag source lives on the grip only.
+    var gripActive = false
+    var onGripActivate: (() -> Void)? = nil
     let toggle: () -> Void
     let onSelect: () -> Void
     /// Single routing for title double-click: rename, or the pop-up action.
@@ -49,7 +59,16 @@ struct TaskRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 10) {
+            HStack(spacing: 4) {
+                // Reserved 14pt grip slot: dots appear on whole-row hover or
+                // selection so the row never jumps; no pointer hunt for an
+                // invisible target. Drag-out attaches to the grip only, so
+                // title editing, text selection, and checks are unaffected.
+                if gripActive, let onGrip = onGripActivate {
+                    TaskReorderGrip(id: id, title: task.title, active: true, visible: selected || hovering, onActivate: onGrip)
+                } else {
+                    Color.clear.frame(width: 14, height: 20)
+                }
                 if task.kind == .note { Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 18, height: 20) }
                 else {
                     Button(action: { consumeNextSelect(); toggle() }) {
@@ -57,45 +76,60 @@ struct TaskRow: View {
                     }
                     .buttonStyle(.plain).disabled(task.deletedAt != nil).help(finished ? "Mark incomplete" : "Complete task").accessibilityLabel((finished ? "Reopen " : "Complete ") + task.title)
                 }
-                Group {
-                    if editing {
-                        TextField("Task title", text: $draft).textFieldStyle(.plain).focused($titleFocused).onSubmit(commit)
-                            .onExitCommand { editing = false }.onChange(of: titleFocused) { _, focused in if !focused { commit() } }
-                    } else {
+                if editing {
+                    TextField("Task title", text: $draft).textFieldStyle(.plain).focused($titleFocused).onSubmit(commit)
+                        .onExitCommand { editing = false }.onChange(of: titleFocused) { _, focused in if !focused { commit() } }
+                        .font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    // Title + metadata share one Layout (not an HStack with a
+                    // budgeted metadata frame): the Layout measures the fitted
+                    // metadata against a finite budget first, pins it to the
+                    // trailing edge at its exact intrinsic width, and hands
+                    // every remaining point to the title. No measurement flows
+                    // back into state, so live window resizes stay stable. The
+                    // pane width still arrives as a plain value from the
+                    // workspace geometry (never measured here); the budget
+                    // keeps the historical relative rule — min(190, ~48% of row
+                    // width) — so only the cap shrinks at compact widths while
+                    // the title keeps the remainder.
+                    TaskRowLineLayout(spacing: 4, maxMetadataWidth: metadataBudget) {
                         Text(task.title.isEmpty ? "Untitled" : task.title).foregroundStyle(finished ? finishedTitleColor : Palette.bodyText(colorScheme))
+                            .font(.system(size: 14)).lineLimit(1).allowsTightening(false)
+                            // Inflexible full-width single-line text inside a
+                            // minWidth-0 flexible frame: the text itself never
+                            // truncates (so no ellipsis is ever inserted), the
+                            // frame unconditionally accepts the finite width
+                            // the Layout assigns, and clipped() hard-clips it —
+                            // including a partial glyph — at exactly that
+                            // remainder. The full string stays in the
+                            // accessibility tree; clipped + contentShape bound
+                            // taps to the visible frame so tap-to-select and
+                            // double-click rename work as before.
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
+                            .clipped()
+                            .contentShape(Rectangle())
                             .onTapGesture(count: 2) { if allowRename { rename() } else { onTitleDoubleClick() } }
                             .simultaneousGesture(TapGesture().onEnded { onSelect() })
-                    }
-                }.font(.system(size: 14)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading).layoutPriority(1)
-                // ViewThatFits picks the richest metadata variant that fits, with
-                // no measurement state: nothing here writes back into layout,
-                // so live window resizes stay stable. Layout reasoning: the
-                // pane width arrives as a plain value from the workspace
-                // geometry (never measured here), and the budget restores the
-                // historical relative rule — min(190, ~48% of row width) —
-                // while the metadata keeps a higher layout priority than the
-                // flexible title (priority 1), so the HStack measures metadata
-                // first against the budget and the title takes the remainder
-                // and truncates. The relative term (not the 190 cap) is what
-                // keeps title room at compact widths; every shown item stays
-                // whole because ViewThatFits never fragments a variant.
-                if !editing {
-                    ViewThatFits(in: .horizontal) {
-                        metadata(showTag: true, showExtras: true, showList: true).fixedSize()
-                        metadata(showTag: false, showExtras: true, showList: true).fixedSize()
-                        metadata(showTag: false, showExtras: false, showList: false).fixedSize()
-                        if task.dueDate != nil {
-                            Image(systemName: "calendar").foregroundStyle(accent).fixedSize()
+                        ViewThatFits(in: .horizontal) {
+                            metadata(showTag: true, showExtras: true, showList: true).fixedSize()
+                            metadata(showTag: false, showExtras: true, showList: true).fixedSize()
+                            metadata(showTag: false, showExtras: false, showList: false).fixedSize()
+                            if task.dueDate != nil {
+                                Image(systemName: "calendar").foregroundStyle(accent).fixedSize()
+                            }
+                            // Terminal fallback: zero size when even the bare
+                            // date icon cannot fit, so metadata never covers
+                            // the title or controls.
+                            Color.clear.frame(width: 0, height: 0)
                         }
+                        .help(metadataDescription)
                     }
-                    .frame(maxWidth: metadataBudget)
-                    .layoutPriority(2)
-                    .help(metadataDescription)
                 }
             }.frame(height: hasExtras ? 24 : 40)
             if let previewLine {
                 Text(previewLine).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                    .padding(.leading, 28)
+                    .padding(.leading, 20)
             }
             if showSteps && !task.checklist.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
@@ -109,12 +143,12 @@ struct TaskRow: View {
                                 .foregroundStyle(step.isCompleted ? Color(nsColor: .tertiaryLabelColor) : Color.secondary).lineLimit(1)
                         }
                     }
-                }.padding(.leading, 28)
+                }.padding(.leading, 20)
             }
-        }.padding(.horizontal, 12).padding(.vertical, hasExtras ? 8 : 0)
+        }.padding(.leading, 12).padding(.trailing, 7).padding(.vertical, hasExtras ? 8 : 0)
         .frame(minHeight: 40)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 40).padding(.trailing, 12) }
+        .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 40).padding(.trailing, 7) }
         .onHover { hovering = $0 }
         .contentShape(Rectangle())
         .onTapGesture { if swallowSelect { swallowSelect = false } else { onSelect() } }
@@ -145,16 +179,19 @@ struct TaskRow: View {
     }
     @ViewBuilder private func metadata(showTag: Bool, showExtras: Bool, showList: Bool) -> some View {
         HStack(spacing: 6) {
-            if showList, let listContext { Text(listContext).foregroundStyle(metaColor) }
+            // Optional free text (list/tag names) is capped so an unusually
+            // long name truncates with an ellipsis instead of stealing title
+            // room; the due date itself is never capped.
+            if showList, let listContext { Text(listContext).foregroundStyle(metaColor).truncationMode(.tail).frame(maxWidth: 70, alignment: .trailing) }
             if showExtras {
                 if !task.body.isEmpty { Image(systemName: "doc.plaintext").foregroundStyle(metaColor) }
                 if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)").foregroundStyle(metaColor) }
-                if showTag, let tag { Text("#" + tag.name).foregroundStyle(finished ? metaColor : Color(hex: tag.color)) }
+                if showTag, let tag { Text("#" + tag.name).foregroundStyle(finished ? metaColor : Color(hex: tag.color)).truncationMode(.tail).frame(maxWidth: 96, alignment: .trailing) }
                 if task.recurrence != .none { Image(systemName: "repeat").foregroundStyle(metaColor) }
                 if task.reminderDate != nil { Image(systemName: "bell").foregroundStyle(finished ? metaColor : task.reminderDate! <= now ? .orange : .secondary) }
             }
             if let due = task.dueDate { Text(dueText(due)).foregroundStyle(dueColor(due)) }
-        }.font(.system(size: 11)).lineLimit(1)
+        }.font(.system(size: 10)).lineLimit(1)
     }
     private var metaColor: Color { finished ? Color(nsColor: .tertiaryLabelColor) : Color(nsColor: .secondaryLabelColor) }
     private func dueColor(_ due: Date) -> Color {
@@ -185,5 +222,56 @@ struct TaskRow: View {
         case .past, .future: label = task.dayText(due)
         }
         return DueLabels.rowLabel(for: day, dayText: label, timeText: task.hasDueTime ? task.timeText(due) : nil)
+    }
+}
+
+/// Title + trailing-metadata line for a task row. The metadata subview (a
+/// ViewThatFits over rich-to-compact variants) is measured first against a
+/// finite budget, pinned to the trailing edge at its exact fitted width, and
+/// the title subview receives every remaining point after a fixed gap. Both
+/// passes are pure functions of the proposal: no GeometryReader, no state
+/// writes, so live window resizes stay stable.
+private struct TaskRowLineLayout: Layout {
+    var spacing: CGFloat = 4
+    var maxMetadataWidth: CGFloat = 190
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard subviews.count == 2 else { return .zero }
+        let width = proposal.width ?? .infinity
+        let metaWidth = fittedMetadataWidth(containerWidth: width, height: proposal.height, subview: subviews[1])
+        if width.isFinite {
+            let titleWidth = max(0, width - metaWidth - (metaWidth > 0 ? spacing : 0))
+            let title = subviews[0].sizeThatFits(ProposedViewSize(width: titleWidth, height: proposal.height))
+            let meta = subviews[1].sizeThatFits(ProposedViewSize(width: metaWidth, height: proposal.height))
+            return CGSize(width: width, height: max(title.height, meta.height))
+        }
+        let title = subviews[0].sizeThatFits(ProposedViewSize(width: nil, height: proposal.height))
+        let meta = subviews[1].sizeThatFits(ProposedViewSize(width: metaWidth, height: proposal.height))
+        return CGSize(width: title.width + (metaWidth > 0 ? spacing : 0) + metaWidth, height: max(title.height, meta.height))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2, bounds.width.isFinite, bounds.width > 0 else { return }
+        // The same finite budget proposal used in sizeThatFits: measure the
+        // fitted width, then pin the selected metadata at the trailing edge.
+        let metaWidth = fittedMetadataWidth(containerWidth: bounds.width, height: bounds.height, subview: subviews[1])
+        let titleWidth = max(0, bounds.width - metaWidth - (metaWidth > 0 ? spacing : 0))
+        subviews[0].place(
+            at: CGPoint(x: bounds.minX, y: bounds.midY),
+            anchor: .leading,
+            proposal: ProposedViewSize(width: titleWidth, height: bounds.height)
+        )
+        subviews[1].place(
+            at: CGPoint(x: bounds.maxX, y: bounds.midY),
+            anchor: .trailing,
+            proposal: ProposedViewSize(width: metaWidth, height: bounds.height)
+        )
+    }
+
+    private func fittedMetadataWidth(containerWidth: CGFloat, height: CGFloat?, subview: LayoutSubview) -> CGFloat {
+        let budget = max(0, min(maxMetadataWidth, containerWidth))
+        guard budget > 0, budget.isFinite else { return 0 }
+        let size = subview.sizeThatFits(ProposedViewSize(width: budget, height: height))
+        return min(max(0, size.width), budget)
     }
 }

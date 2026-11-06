@@ -216,22 +216,31 @@ struct EntityEditor: Identifiable {
     var color = palette[0]
     var kind: TaskKind = .task
     var symbol = ""
-    init(isTag: Bool) { self.isTag = isTag }
-    init(list: TaskList) { entityID = list.id; isTag = false; name = list.name; color = list.color; kind = list.kind; symbol = list.symbol ?? "" }
+    /// Preselected folder for new lists, or the stored folder for edits.
+    /// Edit call sites must pass the stored list's folder so unrelated edits
+    /// never accidentally nil membership via a default-constructed editor.
+    var folderID: UUID? = nil
+    /// Trailing root placement for edits; carried through saves so an
+    /// unrelated rename never resets a below-folders list to the top.
+    var belowFolders = false
+    init(isTag: Bool, folderID: UUID? = nil) { self.isTag = isTag; self.folderID = folderID }
+    init(list: TaskList) { entityID = list.id; isTag = false; name = list.name; color = list.color; kind = list.kind; symbol = list.symbol ?? ""; folderID = list.folderID; belowFolders = list.belowFolders }
     init(tag: TaskTag) { entityID = tag.id; isTag = true; name = tag.name; color = tag.color }
 }
 struct EntitySheet: View {
     @Environment(\.dismiss) private var dismiss
     let editor: EntityEditor
-    let save: (String, String, TaskKind, String?) -> Void
+    let folders: [ListFolder]
+    let save: (String, String, TaskKind, String?, UUID?, Bool) -> Void
     @State private var name: String
     @State private var color: String
     @State private var kind: TaskKind
     @State private var symbol: String
+    @State private var folderID: UUID?
     private let symbols = ["line.3.horizontal", "house", "briefcase", "book", "star", "cart", "heart", "folder", "list.bullet"]
     @FocusState private var focused: Bool
-    init(editor: EntityEditor, save: @escaping (String, String, TaskKind, String?) -> Void) {
-        self.editor = editor; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind); _symbol = State(initialValue: editor.symbol)
+    init(editor: EntityEditor, folders: [ListFolder] = [], save: @escaping (String, String, TaskKind, String?, UUID?, Bool) -> Void) {
+        self.editor = editor; self.folders = folders; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind); _symbol = State(initialValue: editor.symbol); _folderID = State(initialValue: editor.folderID)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 22) {
@@ -249,10 +258,37 @@ struct EntitySheet: View {
                 }
                 TextField("Custom emoji", text: Binding(get: { symbols.contains(symbol) ? "" : symbol }, set: { symbol = String($0.prefix(1)) })).textFieldStyle(.roundedBorder)
                 Picker("List type", selection: $kind) { Text("Tasks").tag(TaskKind.task); Text("Notes").tag(TaskKind.note) }.pickerStyle(.segmented)
+                Picker("Folder", selection: $folderID) {
+                    Text("No folder").tag(Optional<UUID>(nil))
+                    ForEach(folders) { folder in Text(folder.name).tag(Optional(folder.id)) }
+                }
+                .help("Choose a folder for this list")
+                .accessibilityLabel("Folder")
             }
             if editor.entityID != nil && !editor.isTag { Text("List type sets the default for new items.").font(.caption).foregroundStyle(.secondary) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(28).frame(width: 360).tint(accent).onAppear { focused = true }
     }
-    private func submit() { let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !cleaned.isEmpty else { return }; let cleanedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines); save(cleaned, color, kind, cleanedSymbol.isEmpty ? nil : cleanedSymbol); dismiss() }
+    private func submit() { let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !cleaned.isEmpty else { return }; let cleanedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines); save(cleaned, color, kind, cleanedSymbol.isEmpty ? nil : cleanedSymbol, folderID, folderID == nil ? editor.belowFolders : false); dismiss() }
+}
+
+/// Name-only folder dialog (TickTick reference: text plus Cancel/Save).
+struct FolderSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let initialName: String
+    let save: (String) -> Void
+    @State private var name: String
+    @FocusState private var focused: Bool
+    init(title: String, initialName: String = "", save: @escaping (String) -> Void) {
+        self.title = title; self.initialName = initialName; self.save = save; _name = State(initialValue: initialName)
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text(title).font(.system(size: 20, weight: .semibold))
+            TextField("Folder name", text: $name).textFieldStyle(.roundedBorder).focused($focused).onSubmit(submit)
+            HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button("Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
+        }.padding(28).frame(width: 320).tint(accent).onAppear { focused = true }
+    }
+    private func submit() { let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !cleaned.isEmpty else { return }; save(cleaned); dismiss() }
 }

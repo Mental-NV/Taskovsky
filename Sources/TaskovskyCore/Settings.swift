@@ -11,6 +11,12 @@ public enum TaskPosition: String, Codable, CaseIterable, Sendable { case top, bo
 
 public struct AppSettings: Codable, Equatable, Sendable {
     public var smartListVisibility: [SmartListKey: SmartListVisibility] = [.all: .hidden, .today: .show, .tomorrow: .hidden, .week: .show, .inbox: .show, .summary: .hidden, .tags: .show, .filters: .show, .completed: .show, .wontDo: .showIfNotEmpty, .trash: .show]
+    /// Persisted deterministic smart-list order. Nil denotes legacy files and
+    /// decodes to the default order; normalization appends missing keys in
+    /// default order and drops duplicates/unknown values. Hidden keys keep
+    /// their slots so showing them later restores their position; only the
+    /// filtered visible order is shown, never a resaved scramble of hidden keys.
+    public var smartListOrder: [SmartListKey]? = nil
     public var startWeekOn = 2
     public var showWeekNumbers = false
     public var enableTimeZone = false
@@ -33,10 +39,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var completionSound = true
     public var hasInstalledBuiltInTemplates = false
     public init() {}
-    private enum CodingKeys: String, CodingKey { case smartListVisibility, startWeekOn, showWeekNumbers, enableTimeZone, dateRecognition, removeDateText, removeTagText, urlParsing, defaultDate, defaultReminder, allDayReminder, timedReminderDefaults, allDayReminderDefaults, defaultPriority, defaultTagID, defaultListID, defaultAddTo, overduePosition, completionSound, hasInstalledBuiltInTemplates }
+    private enum CodingKeys: String, CodingKey { case smartListVisibility, smartListOrder, startWeekOn, showWeekNumbers, enableTimeZone, dateRecognition, removeDateText, removeTagText, urlParsing, defaultDate, defaultReminder, allDayReminder, timedReminderDefaults, allDayReminderDefaults, defaultPriority, defaultTagID, defaultListID, defaultAddTo, overduePosition, completionSound, hasInstalledBuiltInTemplates }
     public init(from decoder: Decoder) throws {
         self.init(); let c = try decoder.container(keyedBy: CodingKeys.self)
         if let values = try c.decodeIfPresent([SmartListKey: SmartListVisibility].self, forKey: .smartListVisibility) { smartListVisibility.merge(values) { _, new in new } }
+        smartListOrder = try c.decodeIfPresent([SmartListKey].self, forKey: .smartListOrder)
         startWeekOn = try c.decodeIfPresent(Int.self, forKey: .startWeekOn) ?? startWeekOn
         showWeekNumbers = try c.decodeIfPresent(Bool.self, forKey: .showWeekNumbers) ?? showWeekNumbers
         enableTimeZone = try c.decodeIfPresent(Bool.self, forKey: .enableTimeZone) ?? enableTimeZone
@@ -58,6 +65,74 @@ public struct AppSettings: Codable, Equatable, Sendable {
         hasInstalledBuiltInTemplates = try c.decodeIfPresent(Bool.self, forKey: .hasInstalledBuiltInTemplates) ?? false
     }
     public var calendar: Calendar { var calendar = Calendar.current; calendar.firstWeekday = min(7, max(1, startWeekOn)); return calendar }
+}
+
+extension AppSettings {
+    /// Canonical sidebar order. Sidebar group structure (documented boundary):
+    /// top destinations `[all, today, tomorrow, week, inbox, summary]` render
+    /// above the Lists/Filters/Tags sections; bottom system destinations
+    /// `[completed, wontDo, trash]` render below them. `tags`/`filters` keys
+    /// control section visibility and are never draggable rows. Reordering is
+    /// constrained within each group and can never cross the boundary.
+    public static let defaultSmartListOrder: [SmartListKey] = [.all, .today, .tomorrow, .week, .inbox, .summary, .tags, .filters, .completed, .wontDo, .trash]
+    public static let topSmartGroup: [SmartListKey] = [.all, .today, .tomorrow, .week, .inbox, .summary]
+    public static let bottomSmartGroup: [SmartListKey] = [.completed, .wontDo, .trash]
+    /// Normalized full order: stored order first (deduped), then any missing
+    /// default keys appended in default order. Legacy nil decodes to default.
+    public var effectiveSmartListOrder: [SmartListKey] {
+        var seen = Set<SmartListKey>()
+        var result: [SmartListKey] = []
+        for key in smartListOrder ?? [] where seen.insert(key).inserted { result.append(key) }
+        for key in Self.defaultSmartListOrder where seen.insert(key).inserted { result.append(key) }
+        return result
+    }
+    /// Atomically reorders one smart key within its group. Cross-group moves,
+    /// unknown groups (tags/filters sections), self-drops, and unknown keys
+    /// abort with no mutation.
+    @discardableResult public mutating func reorderSmartList(moving: SmartListKey, before target: SmartListKey, afterTarget: Bool = false) -> Bool {
+        guard moving != target else { return false }
+        func group(of key: SmartListKey) -> [SmartListKey]? {
+            if Self.topSmartGroup.contains(key) { return Self.topSmartGroup }
+            if Self.bottomSmartGroup.contains(key) { return Self.bottomSmartGroup }
+            return nil
+        }
+        guard let movingGroup = group(of: moving), let targetGroup = group(of: target), movingGroup == targetGroup else { return false }
+        var order = effectiveSmartListOrder
+        guard let from = order.firstIndex(of: moving) else { return false }
+        order.remove(at: from)
+        // The target survives the removal (moving != target is checked above).
+        guard let targetIndex = order.firstIndex(of: target) else { return false }
+        order.insert(moving, at: afterTarget ? targetIndex + 1 : targetIndex)
+        smartListOrder = order
+        return true
+    }
+}
+
+/// Manual-sort (None, including legacy "Manual") grouping: every active
+/// task/note shares one group regardless of due date or priority, so items
+/// with different dates reorder freely without rewriting those fields.
+/// Completed/Won't-Do history and Trash stay separate. The Reminders
+/// destination keeps its semantic Due/Upcoming split (documented scope).
+public enum ManualGroupPolicy {
+    public enum Bucket: Equatable { case deleted, history, active }
+    public static func bucket(completedAt: Date?, wontDoAt: Date?, deletedAt: Date?) -> Bucket {
+        if deletedAt != nil { return .deleted }
+        if completedAt != nil || wontDoAt != nil { return .history }
+        return .active
+    }
+    public static let activeGroupTitle = "Tasks"
+}
+
+/// Persisted task-sort values. Legacy installs stored `"Manual"`; the picker
+/// now shows `"None"` (manual order) for both. `"Date"` and every other stored
+/// value is preserved untouched.
+public enum TaskSortPolicy {
+    public static let manualLegacyRaw = "Manual"
+    public static let manualRaw = "None"
+    public static let reorderDisabledMessage = "Manual drag and drop is not supported while sorting is enabled. Choose None in Sort to reorder tasks."
+    public static func normalized(_ raw: String) -> String { raw == manualLegacyRaw ? manualRaw : raw }
+    public static func isManual(_ raw: String) -> Bool { normalized(raw) == manualRaw }
+    public static func canReorder(_ raw: String) -> Bool { isManual(raw) }
 }
 
 public enum FilterDateRule: String, Codable, CaseIterable, Sendable { case all, today, tomorrow, next7, overdue, noDate }

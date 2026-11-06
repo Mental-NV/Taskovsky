@@ -277,11 +277,18 @@ public final class TaskStore: ObservableObject {
         copy.checklist = copy.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
         data.tasks.append(copy); save(); return copy.id
     }
-    @discardableResult public func createList(name: String, color: String, kind: TaskKind = .task, symbol: String? = nil) -> UUID {
-        let list = TaskList(name: name.trimmingCharacters(in: .whitespacesAndNewlines), color: color, kind: kind, symbol: symbol); data.lists.append(list); save(); return list.id
+    @discardableResult public func createList(name: String, color: String, kind: TaskKind = .task, symbol: String? = nil, folderID: UUID? = nil) -> UUID {
+        let folder = folderID.flatMap { id in data.folders.contains(where: { $0.id == id }) ? id : nil }
+        let list = TaskList(name: name.trimmingCharacters(in: .whitespacesAndNewlines), color: color, kind: kind, symbol: symbol, folderID: folder); data.lists.append(list); save(); return list.id
     }
     public func updateList(_ list: TaskList) {
         guard let index = data.lists.firstIndex(where: { $0.id == list.id }) else { return }
+        var list = list
+        // Membership and trailing placement travel on the record itself:
+        // callers must carry the stored folderID and belowFolders
+        // (EntityEditor(list:) does) or the save resets them. Unknown folder
+        // IDs always clear to top root.
+        if let folder = list.folderID, !data.folders.contains(where: { $0.id == folder }) { list.folderID = nil; list.belowFolders = false }
         data.lists[index] = list; save()
     }
     public func deleteList(id: UUID) {
@@ -364,15 +371,116 @@ public final class TaskStore: ObservableObject {
 
     /// Atomically reorders lists with the same all-or-nothing validation as
     /// task reordering. Self-drops and unknown IDs abort with no mutation.
+    /// The mover adopts the target's folder AND its above/below-folders root
+    /// segment, so drops above/below a list place correctly within/across
+    /// folders and within the indicated top or trailing root segment. Only
+    /// order, the mover's folderID, and its trailing flag change; tasks and
+    /// list IDs stay.
     @discardableResult public func reorderLists(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
         guard moving != target else { return false }
-        guard let mover = data.lists.first(where: { $0.id == moving }),
-              data.lists.contains(where: { $0.id == target }) else { return false }
+        guard var mover = data.lists.first(where: { $0.id == moving }),
+              let targetList = data.lists.first(where: { $0.id == target }) else { return false }
+        mover.folderID = targetList.folderID
+        mover.belowFolders = targetList.folderID == nil && targetList.belowFolders
         data.lists.removeAll { $0.id == moving }
         guard let targetIndex = data.lists.firstIndex(where: { $0.id == target }) else { return false }
         data.lists.insert(mover, at: afterTarget ? targetIndex + 1 : targetIndex)
         save()
         return true
+    }
+
+    // MARK: - Folders (single level; no nesting)
+
+    /// Trims and rejects empty names. Unknown folders and empty batches abort
+    /// with no mutation; one save per accepted move.
+    @discardableResult public func createFolder(name: String) -> UUID? {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return nil }
+        let folder = ListFolder(name: cleaned); data.folders.append(folder); save(); return folder.id
+    }
+    @discardableResult public func renameFolder(id: UUID, name: String) -> Bool {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, let index = data.folders.firstIndex(where: { $0.id == id }) else { return false }
+        data.folders[index].name = cleaned; save(); return true
+    }
+    /// Ungroups a folder: the folder row goes away, lists and their tasks stay
+    /// (lists keep their IDs, membership clears to top root).
+    @discardableResult public func ungroupFolder(id: UUID) -> Bool {
+        guard data.folders.contains(where: { $0.id == id }) else { return false }
+        data.folders.removeAll { $0.id == id }
+        for i in data.lists.indices where data.lists[i].folderID == id { data.lists[i].folderID = nil; data.lists[i].belowFolders = false }
+        save(); return true
+    }
+    @discardableResult public func reorderFolders(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
+        guard moving != target else { return false }
+        guard let mover = data.folders.first(where: { $0.id == moving }),
+              data.folders.contains(where: { $0.id == target }) else { return false }
+        data.folders.removeAll { $0.id == moving }
+        guard let targetIndex = data.folders.firstIndex(where: { $0.id == target }) else { return false }
+        data.folders.insert(mover, at: afterTarget ? targetIndex + 1 : targetIndex)
+        save(); return true
+    }
+    /// Atomically reorders tags in the persisted array order. Self-drops and
+    /// unknown IDs abort with no mutation and no save, as do positional
+    /// no-ops that would land the mover back at its own index (reported as
+    /// success without touching the store). Only array order changes; tag
+    /// IDs, names, colors, and tasks' tag associations stay identical. The
+    /// published array is assigned once and only on a real move, with exactly
+    /// one save per accepted move.
+    @discardableResult public func reorderTags(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
+        guard moving != target else { return false }
+        guard let from = data.tags.firstIndex(where: { $0.id == moving }),
+              data.tags.contains(where: { $0.id == target }) else { return false }
+        var updated = data.tags
+        let mover = updated.remove(at: from)
+        guard let t = updated.firstIndex(where: { $0.id == target }) else { return false }
+        let insertAt = afterTarget ? t + 1 : t
+        guard insertAt != from else { return true }
+        updated.insert(mover, at: insertAt)
+        data.tags = updated
+        save(); return true
+    }
+    /// Drops a list onto a folder or the root heading: assigns membership and
+    /// appends to the end of that segment. A nil folder (heading/root drops,
+    /// the Move-to-Folder "No folder" item) always lands in the TOP root
+    /// segment so legacy order is preserved; the absolute-end strip uses
+    /// `moveListToRootEnd` for the trailing segment instead. Unknown
+    /// lists/folders and self no-ops validate first; exactly one save.
+    @discardableResult public func moveListToFolder(listID: UUID, folderID: UUID?) -> Bool {
+        guard let index = data.lists.firstIndex(where: { $0.id == listID }) else { return false }
+        if let folderID { guard data.folders.contains(where: { $0.id == folderID }) else { return false } }
+        let list = data.lists[index]
+        // No-op when membership already matches: still succeeds without saving.
+        if list.folderID == folderID { return true }
+        data.lists.remove(at: index)
+        var updated = list; updated.folderID = folderID; updated.belowFolders = false
+        if let folderID {
+            let last = data.lists.lastIndex(where: { $0.folderID == folderID })
+            data.lists.insert(updated, at: last.map { $0 + 1 } ?? data.lists.endIndex)
+        } else {
+            // Append after the last TOP root list so legacy order stays stable
+            // and trailing rows are never disturbed by heading drops.
+            let last = data.lists.lastIndex(where: { $0.folderID == nil && !$0.belowFolders })
+            data.lists.insert(updated, at: last.map { $0 + 1 } ?? data.lists.endIndex)
+        }
+        save(); return true
+    }
+
+    /// Drops a list on the absolute-end strip: clears folder membership, marks
+    /// trailing root placement, and appends after any existing trailing lists.
+    /// A repeat drop when already the last trailing row is a no-op success
+    /// without saving. Only array order, folderID, and the trailing flag
+    /// change; IDs, tasks, and other orders stay.
+    @discardableResult public func moveListToRootEnd(listID: UUID) -> Bool {
+        guard let index = data.lists.firstIndex(where: { $0.id == listID }) else { return false }
+        let list = data.lists[index]
+        let trailingLast = data.lists.last(where: { $0.folderID == nil && $0.belowFolders })
+        if list.folderID == nil, list.belowFolders, trailingLast?.id == listID { return true }
+        data.lists.remove(at: index)
+        var updated = list; updated.folderID = nil; updated.belowFolders = true
+        let last = data.lists.lastIndex(where: { $0.folderID == nil && $0.belowFolders })
+        data.lists.insert(updated, at: last.map { $0 + 1 } ?? data.lists.endIndex)
+        save(); return true
     }
 
     nonisolated public static func defaultReminderDates(due: Date, hasTime: Bool, settings: AppSettings, calendar: Calendar) -> [Date] {

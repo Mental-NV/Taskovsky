@@ -71,13 +71,22 @@ extension Notification.Name {
     static let newTask = Notification.Name("Taskovsky.newTask")
     static let newNote = Notification.Name("Taskovsky.newNote")
     static let newList = Notification.Name("Taskovsky.newList")
+    static let newFolder = Notification.Name("Taskovsky.newFolder")
     static let openSearch = Notification.Name("Taskovsky.openSearch")
+    static let openSmartLists = Notification.Name("Taskovsky.openSmartLists")
     static let toggleSidebar = Notification.Name("Taskovsky.toggleSidebar")
     static let trashTask = Notification.Name("Taskovsky.trashTask")
     static let popupClosed = Notification.Name("Taskovsky.popupClosed")
     static let requestPurge = Notification.Name("Taskovsky.requestPurge")
     static let revealRestoredTask = Notification.Name("Taskovsky.revealRestoredTask")
 }
+
+/// UserDefaults key for a consumed-once pending Settings section. The
+/// notification alone can miss a fresh Settings launch (the view does not
+/// exist yet when it is posted), so the section is also parked here and
+/// consumed by SettingsView.onAppear. Already-open windows retarget live via
+/// the notification; fresh windows consume the parked value on appear.
+let pendingSettingsSectionKey = "Taskovsky.pendingSettingsSection"
 
 /// Measured TickTick blue accent (#5171F2, sampled from solid glyph runs).
 let accent = Color(hex: "#5171F2")
@@ -148,21 +157,54 @@ enum Destination: Hashable {
     var smartKey: SmartListKey? {
         switch self { case .all: .all; case .today: .today; case .tomorrow: .tomorrow; case .week: .week; case .inbox: .inbox; case .summary: .summary; case .completed: .completed; case .wontDo: .wontDo; case .trash: .trash; default: nil }
     }
+    init(smartKey: SmartListKey, lists: [TaskList]) {
+        switch smartKey {
+        case .all: self = .all
+        case .today: self = .today
+        case .tomorrow: self = .tomorrow
+        case .week: self = .week
+        case .inbox: self = .inbox
+        case .summary: self = .summary
+        case .completed: self = .completed
+        case .wontDo: self = .wontDo
+        case .trash: self = .trash
+        case .tags, .filters: self = .all
+        }
+        _ = lists
+    }
+}
+
+struct FolderSheetDraft: Identifiable {
+    let id = UUID()
+    var folderID: UUID?
+    var initialName: String
 }
 
 struct WorkspaceView: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
     @ObservedObject var actions: TaskActionCenter
+    // Shared in-app sidebar drag session for smart lists, lists, folders, and
+    // tags (see SidebarDragCoordinator). One instance covers the docked
+    // sidebar and the compact popover, which share the same sidebar view.
+    @StateObject private var sidebarDrag = SidebarDragCoordinator()
     @State private var destination: Destination = .today
     @State private var quickTitle = ""
     @State private var quickKind: TaskKind = .task
     // Persisted: a Manual order would otherwise appear lost whenever the app
-    // relaunched onto the default Date sort.
+    // relaunched onto the default Date sort. Legacy "Manual" reads as "None";
+    // both mean stored-array order and enable drag reordering.
     @AppStorage("Taskovsky.taskSort") private var sort = "Date"
+    private var isManualSort: Bool { TaskSortPolicy.isManual(sort) }
     @State private var showCompleted = true
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
+    @State private var folderDraft: FolderSheetDraft?
+    @AppStorage("Taskovsky.collapsedFolders") private var collapsedFolders = ""
+    private var collapsedFolderIDs: Set<UUID> {
+        get { Set(collapsedFolders.split(separator: "|").compactMap { UUID(uuidString: String($0)) }) }
+        nonmutating set { collapsedFolders = newValue.map(\.uuidString).sorted().joined(separator: "|") }
+    }
     private var isPurgeAlertPresented: Binding<Bool> { Binding(get: { purgeCandidate != nil }, set: { if !$0 { purgeCandidate = nil } }) }
     @State private var recoveryAlert = false
     @State private var searchDialog = false
@@ -218,6 +260,7 @@ struct WorkspaceView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var selectedTask: TaskItem? { store.data.tasks.first { $0.id == detailState.selection } }
     private var sidePeekMode: Bool { detailLayout != "popup" }
@@ -271,7 +314,7 @@ struct WorkspaceView: View {
                     // behind the rail. Reflowing the sidebar at every frame makes its
                     // labels wrap and jump during the transition.
                     HStack(spacing: 0) {
-                        sidebar(now: timeline.date).frame(width: expandedNavWidth)
+                        sidebar(now: timeline.date, registrationActive: showSidebar).frame(width: expandedNavWidth)
                         PanelDivider { x, ended in onSidebarDrag(x: x, ended: ended, totalWidth: geometry.size.width, showSidebar: computedShowSidebar, dockDetail: computedDockDetail) }
                             .onTapGesture(count: 2, perform: toggleSidebar)
                     }
@@ -309,7 +352,7 @@ struct WorkspaceView: View {
                             .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
                     }
                 }
-                .onAppear { lastTotalWidth = geometry.size.width }
+                .onAppear { lastTotalWidth = geometry.size.width; sidebarDrag.bind(store: store) }
                 .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: sidebarCollapsed)
                 // Shrinking into overlay dismisses the drawer but keeps the selection,
                 // so growing back docks the same task. Never auto-opens on shrink.
@@ -351,6 +394,35 @@ struct WorkspaceView: View {
                         .onDisappear { removeEscapeMonitor() }
                     }
                 }
+                // Shared in-app sidebar drag scope, placed AFTER the compact
+                // popover overlay so docked AND compact rows resolve the same
+                // coordinate space, receive the coordinator, and contribute
+                // frames and viewport rects. The floating preview renders
+                // above both sidebars at the workspace-reported pointer.
+                // Rendered once here (not per row), purely visual: hit testing
+                // is off. These modifiers only read geometry and publish
+                // pointer/hover state; they never write layout, so there is no
+                // per-mouse-move layout feedback loop.
+                .overlay(alignment: .topLeading) {
+                    if sidebarDrag.dragging, let preview = sidebarDrag.preview {
+                        SidebarFloatingPreview(preview: preview, width: sidebarDrag.previewWidth)
+                            .position(
+                                x: sidebarDrag.pointer.x + CGFloat(SidebarPreviewSpec.pointerOffsetX),
+                                y: sidebarDrag.pointer.y + CGFloat(SidebarPreviewSpec.pointerOffsetY)
+                            )
+                    }
+                }
+                .coordinateSpace(name: "taskovskySidebar")
+                .environmentObject(sidebarDrag)
+                .onPreferenceChange(SidebarDropFramesKey.self) { sidebarDrag.frames = $0 }
+                .onPreferenceChange(SidebarViewportKey.self) { sidebarDrag.viewport = $0 }
+                .onKeyPress(.escape) {
+                    if sidebarDrag.isActive { sidebarDrag.cancel(); return .handled }
+                    return .ignored
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+                    sidebarDrag.cancel()
+                }
             }
             .background(Color(nsColor: .textBackgroundColor))
             .tint(accent)
@@ -376,14 +448,24 @@ struct WorkspaceView: View {
             Button("Back up and recover") { store.recoverUnreadableWorkspace() }
         } message: { Text("The unreadable file will be copied to a backup beside workspace.json. Your current in-memory items will then be saved as the new workspace.") }
         .sheet(item: $editor) { item in
-            EntitySheet(editor: item) { name, color, kind, symbol in
+            EntitySheet(editor: item, folders: store.data.folders) { name, color, kind, symbol, folderID, belowFolders in
                 if item.isTag {
                     if let id = item.entityID { store.updateTag(TaskTag(id: id, name: name, color: color)) }
                     else { _ = store.createTag(name: name, color: color) }
                 } else {
-                    if let id = item.entityID { store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol)) }
-                    else { destination = .list(store.createList(name: name, color: color, kind: kind, symbol: symbol)) }
+                    if let id = item.entityID {
+                        // Preserve folder membership and trailing placement on
+                        // unrelated edits: the editor carries both stored values,
+                        // so saving them back keeps them instead of resetting.
+                        store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol, folderID: folderID, belowFolders: belowFolders))
+                    } else { destination = .list(store.createList(name: name, color: color, kind: kind, symbol: symbol, folderID: folderID)) }
                 }
+            }
+        }
+        .sheet(item: $folderDraft) { draft in
+            FolderSheet(title: draft.folderID == nil ? "New Folder" : "Rename Folder", initialName: draft.initialName) { name in
+                if let id = draft.folderID { _ = store.renameFolder(id: id, name: name) }
+                else { _ = store.createFolder(name: name) }
             }
         }
         .sheet(isPresented: $searchDialog) {
@@ -401,6 +483,7 @@ struct WorkspaceView: View {
         .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
+        .onReceive(NotificationCenter.default.publisher(for: .newFolder)) { _ in folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
         .onReceive(NotificationCenter.default.publisher(for: .openSearch)) { _ in searchDialog = true }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in toggleSidebar() }
         .onReceive(NotificationCenter.default.publisher(for: .trashTask)) { note in if let id = note.object as? UUID { trash(id) } }
@@ -555,26 +638,16 @@ struct WorkspaceView: View {
             Spacer().frame(height: 18)
         }.frame(width: ResponsiveLayout.railWidth).background(railBackground)
     }
-    private func sidebar(now: Date) -> some View {
+    private func sidebar(now: Date, registrationActive: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             ScrollView {
                 VStack(spacing: 0) {
-                    ForEach([Destination.all, .today, .tomorrow, .week, .inbox, .summary].filter { visible($0, now: now) }, id: \.self) { dest in navRow(dest, now: now) }
+                    // Top smart destinations reorder within their group (group
+                    // boundary below stays fixed). Hidden keys keep their order
+                    // while hidden; only visible rows participate in drags.
+                    ForEach(topSmartDestinations(now: now), id: \.self) { dest in smartNavRow(dest, now: now, registrationActive: registrationActive) }
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
-                    sectionHeading("Lists") { editor = EntityEditor(isTag: false) }
-                    if sectionExpanded("Lists").wrappedValue {
-                    // List rows carry their own drag and drop inside navRow; the
-                    // edit/delete menu stays here, so there is exactly one.
-                    // The order always matches the persisted list order.
-                    ForEach(store.data.lists) { list in
-                        navRow(.list(list.id), color: Color(hex: list.color), now: now)
-                            .contextMenu {
-                                Button("Edit List…") { editor = EntityEditor(list: list) }
-                                Button("Delete List", role: .destructive) { store.deleteList(id: list.id); if destination == .list(list.id) { destination = .inbox } }
-                                Text("Tasks are moved to Inbox")
-                            }
-                    }
-                    }
+                    listsSection(now: now, registrationActive: registrationActive)
                     if sectionVisible(.filters, count: store.data.filters.count) {
                         sectionHeading("Filters") { creatingFilter = true }.padding(.top, 20)
                         if sectionExpanded("Filters").wrappedValue {
@@ -588,7 +661,7 @@ struct WorkspaceView: View {
                     sectionHeading("Tags") { editor = EntityEditor(isTag: true) }.padding(.top, 20)
                     if sectionExpanded("Tags").wrappedValue {
                     ForEach(store.data.tags) { tag in
-                        navRow(.tag(tag.id), color: Color(hex: tag.color), now: now)
+                        navRow(.tag(tag.id), color: Color(hex: tag.color), now: now, registrationActive: registrationActive)
                             .contextMenu {
                                 Button("Edit Tag…") { editor = EntityEditor(tag: tag) }
                                 Button("Delete Tag", role: .destructive) { store.deleteTag(id: tag.id); if destination == .tag(tag.id) { destination = .all } }
@@ -597,14 +670,163 @@ struct WorkspaceView: View {
                     }
                     }
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
-                    ForEach([Destination.completed, .wontDo, .trash].filter { visible($0, now: now) }, id: \.self) { navRow($0, now: now) }
+                    ForEach(bottomSmartDestinations(now: now), id: \.self) { dest in smartNavRow(dest, now: now, registrationActive: registrationActive) }
                 }.padding(.horizontal, 8).padding(.top, 12)
             }
+            // Visible scroll-viewport frame for the drag engine's hit-test
+            // gate, reported in the shared sidebar coordinate space. A
+            // background reader never affects layout, so marker and label
+            // overlays stay zero-layout with no measurement feedback loop.
+            .sidebarViewportFrame(active: registrationActive)
         }.background(Color(nsColor: .textBackgroundColor))
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.18), value: collapsedSidebarSections)
     }
     private func sectionHeading(_ text: String, action: @escaping () -> Void) -> some View {
         SidebarHeading(title: text, expanded: sectionExpanded(text), onAdd: action)
+    }
+    /// Lists section with folders. The heading offers New List / New Folder
+    /// and accepts list drops as the top-root affordance (always visible,
+    /// never a zero-sized target). Folder rows offer Add List / Rename /
+    /// Ungroup, collapse via disclosure, and accept drops even when collapsed.
+    /// List rows reorder within/across folders and adopt the target's folder
+    /// and root segment; dropping onto a folder assigns/appends. The unlabeled
+    /// end strip drops to trailing root below all folders.
+    private func listsSection(now: Date, registrationActive: Bool = true) -> some View {
+        // In-app highlight for list drags over the heading root affordance.
+        // The only native drop here was the dead list source path; tasks
+        // never target the heading.
+        let rootHover = sidebarDrag.isHovered(.root)
+        return VStack(spacing: 0) {
+            // Disclosure fills the remainder while the Menu is pinned to the
+            // trailing content edge (fixedSize keeps the borderless Menu from
+            // accepting extra width and drifting the plus left of the row
+            // counts). The plus reveals on hover anywhere over the heading but
+            // reserves its slot via opacity, so alignment never shifts.
+            HStack(spacing: 5) {
+                Button { sectionExpanded("Lists").wrappedValue.toggle() } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "chevron.right").rotationEffect(.degrees(sectionExpanded("Lists").wrappedValue ? 90 : 0)).font(.system(size: 8, weight: .medium))
+                        Text("Lists").font(.system(size: 12, weight: .medium)); Spacer(minLength: 0)
+                    }.contentShape(Rectangle())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }.buttonStyle(.plain).accessibilityLabel((sectionExpanded("Lists").wrappedValue ? "Collapse " : "Expand ") + "Lists")
+                Menu {
+                    Button("New List") { editor = EntityEditor(isTag: false) }
+                    Button("New Folder") { folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
+                } label: { Image(systemName: "plus").font(.system(size: 12)).frame(width: 16, height: 16).contentShape(Rectangle()) }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                    .fixedSize()
+                    .opacity(listsHeadingHovered ? 1 : 0)
+                    .help("Add list or folder").accessibilityLabel("Add list or folder")
+            }
+            .foregroundStyle(.secondary).padding(.leading, 5).padding(.trailing, 10).padding(.bottom, 6)
+            .contentShape(Rectangle())
+            .onHover { listsHeadingHovered = $0 }
+            .background(rootHover ? accent.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 7))
+            .sidebarDropTargetFrame(.root, active: registrationActive)
+            .contextMenu {
+                Button("New List") { editor = EntityEditor(isTag: false) }
+                Button("New Folder") { folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
+            }
+            if sectionExpanded("Lists").wrappedValue {
+                // Top root lists in persisted order, then folders with their
+                // children, then trailing root lists in persisted order.
+                ForEach(store.data.lists.filter { $0.folderID == nil && !$0.belowFolders }) { list in
+                    navRow(.list(list.id), color: Color(hex: list.color), now: now, registrationActive: registrationActive)
+                        .contextMenu { listMenu(list) }
+                }
+                ForEach(store.data.folders) { folder in folderSection(folder, now: now, registrationActive: registrationActive) }
+                ForEach(store.data.lists.filter { $0.folderID == nil && $0.belowFolders }) { list in
+                    navRow(.list(list.id), color: Color(hex: list.color), now: now, registrationActive: registrationActive)
+                        .contextMenu { listMenu(list) }
+                }
+                // Unlabeled end strip: always available while Lists is expanded
+                // (even with no visible rows), so a list can always drop to the
+                // absolute bottom as trailing root. Constant height, no idle
+                // visual; hover shows a root-level insertion line with a
+                // shallower leading inset than nested row markers.
+                let endHover = sidebarDrag.isHovered(.rootEnd)
+                ZStack(alignment: .center) {
+                    Color.clear.frame(height: 14)
+                    if endHover { SidebarInsertionLine(leadingInset: 10) }
+                }
+                .contentShape(Rectangle())
+                .sidebarDropTargetFrame(.rootEnd, active: registrationActive)
+                .accessibilityHidden(true)
+            }
+        }
+    }
+    @State private var listsHeadingHovered = false
+    private func folderSection(_ folder: ListFolder, now: Date, registrationActive: Bool = true) -> some View {
+        let isCollapsed = collapsedFolderIDs.contains(folder.id)
+        let memberCount = store.data.lists.filter { $0.folderID == folder.id }.count
+        let preview = SidebarDragPreview(title: folder.name, leading: .folder, count: memberCount, showsDisclosure: true)
+        return VStack(spacing: 0) {
+            FolderDropRow(folderID: folder.id, preview: preview, framesActive: registrationActive) {
+                // Tap (not Button) disclosure so the row's drag gesture can win
+                // mouse arbitration once the pointer moves; keyboard and
+                // context menus are preserved explicitly below.
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right").rotationEffect(.degrees(isCollapsed ? 0 : 90)).font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary)
+                    Image(systemName: "folder").font(.system(size: 14)).foregroundStyle(.secondary)
+                    Text(folder.name).font(.system(size: 14)).lineLimit(1)
+                    Spacer(minLength: 2)
+                    Text("\(memberCount)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
+                }
+                .padding(.horizontal, 10).frame(height: 38).contentShape(Rectangle())
+                // Folders are disclosure containers, not navigable
+                // destinations, so rows never carry selection styling.
+                .background(Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                .onTapGesture {
+                    var next = collapsedFolderIDs
+                    if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
+                    collapsedFolderIDs = next
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel((isCollapsed ? "Expand " : "Collapse ") + folder.name)
+                .accessibilityHint("Folder containing lists")
+                .accessibilityAction {
+                    var next = collapsedFolderIDs
+                    if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
+                    collapsedFolderIDs = next
+                }
+                .focusable()
+                .onKeyPress(.return) {
+                    var next = collapsedFolderIDs
+                    if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
+                    collapsedFolderIDs = next
+                    return .handled
+                }
+                .onKeyPress(.space) {
+                    var next = collapsedFolderIDs
+                    if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
+                    collapsedFolderIDs = next
+                    return .handled
+                }
+                .contextMenu {
+                    Button("Add List") { editor = EntityEditor(isTag: false, folderID: folder.id) }
+                    Button("Rename…") { folderDraft = FolderSheetDraft(folderID: folder.id, initialName: folder.name) }
+                    Button("Ungroup") { _ = store.ungroupFolder(id: folder.id) }
+                    Text("Lists and tasks are kept")
+                }
+            }
+            if !isCollapsed {
+                ForEach(store.data.lists.filter { $0.folderID == folder.id }) { list in
+                    navRow(.list(list.id), color: Color(hex: list.color), now: now, indentation: 16, registrationActive: registrationActive)
+                        .contextMenu { listMenu(list) }
+                }
+            }
+        }
+    }
+    @ViewBuilder private func listMenu(_ list: TaskList) -> some View {
+        Button("Edit List…") { editor = EntityEditor(list: list) }
+        Menu("Move to Folder") {
+            Button("No folder") { _ = store.moveListToFolder(listID: list.id, folderID: nil) }
+            ForEach(store.data.folders) { folder in Button(folder.name) { _ = store.moveListToFolder(listID: list.id, folderID: folder.id) } }
+        }
+        Button("Delete List", role: .destructive) { store.deleteList(id: list.id); if destination == .list(list.id) { destination = .inbox } }
+        Text("Tasks are moved to Inbox")
     }
     private func sectionExpanded(_ title: String) -> Binding<Bool> {
         Binding(get: { !collapsedSidebarSections.split(separator: "|").contains(Substring(title)) }, set: { expanded in
@@ -614,7 +836,92 @@ struct WorkspaceView: View {
         })
     }
 
-    private func navRow(_ dest: Destination, color: Color? = nil, now: Date) -> some View {
+    /// Ordered visible top/bottom smart destinations from persisted order.
+    /// Hidden keys keep their slots in settings; filtered drags never resave
+    /// a scrambled hidden order.
+    private func topSmartDestinations(now: Date) -> [Destination] {
+        store.settings.effectiveSmartListOrder.compactMap { key -> Destination? in
+            guard AppSettings.topSmartGroup.contains(key) else { return nil }
+            let dest = Destination(smartKey: key, lists: store.data.lists)
+            // tags/filters keys map to .all above but are never draggable rows;
+            // skip them here so section headings aren't advertised as targets.
+            if key == .tags || key == .filters { return nil }
+            return visible(dest, now: now) ? dest : nil
+        }
+    }
+    private func bottomSmartDestinations(now: Date) -> [Destination] {
+        store.settings.effectiveSmartListOrder.compactMap { key -> Destination? in
+            guard AppSettings.bottomSmartGroup.contains(key) else { return nil }
+            let dest = Destination(smartKey: key, lists: store.data.lists)
+            return visible(dest, now: now) ? dest : nil
+        }
+    }
+    /// Smart row with reorder drag-out/drop halves plus Edit / Show if not
+    /// empty / Hide (TickTick reference). Edit opens Settings=>Smart Lists
+    /// even when Settings is already open elsewhere.
+    private func smartNavRow(_ dest: Destination, now: Date, registrationActive: Bool = true) -> some View {
+        guard let key = dest.smartKey else { return AnyView(navRow(dest, now: now, registrationActive: registrationActive)) }
+        // Preview mirrors the row label: calendar glyphs for Today/Next 7
+        // Days (day number / weekday letters), SF symbol otherwise.
+        let leading: SidebarDragPreview.Leading
+        if dest == .today {
+            leading = .calendarText(String(Calendar.current.component(.day, from: now)))
+        } else if dest == .week {
+            leading = .calendarText(String(Calendar.current.shortWeekdaySymbols[Calendar.current.component(.weekday, from: now) - 1].prefix(2)))
+        } else {
+            leading = .systemImage(dest.symbol)
+        }
+        let count = store.data.tasks.filter { dest.includes($0, now: now) }.count
+        let preview = SidebarDragPreview(title: dest.title(store.data), leading: leading, count: dest == .summary ? nil : count)
+        let row = navRow(dest, now: now, registrationActive: registrationActive)
+        return AnyView(SmartDropRow(key: key, preview: preview, framesActive: registrationActive) { row }
+            .contextMenu {
+                // Exactly the reference actions: Edit, Show if not empty,
+                // Hide. The current mode carries a checkmark instead of a
+                // fourth status row.
+                Button("Edit") { openSmartLists() }
+                Button { store.settings.smartListVisibility[key] = .showIfNotEmpty } label: {
+                    if store.settings.smartListVisibility[key] == .showIfNotEmpty {
+                        Label("Show if not empty", systemImage: "checkmark")
+                    } else {
+                        Text("Show if not empty")
+                    }
+                }
+                Button { hideSmart(key: key, dest: dest) } label: {
+                    if store.settings.smartListVisibility[key] == .hidden {
+                        Label("Hide", systemImage: "checkmark")
+                    } else {
+                        Text("Hide")
+                    }
+                }
+            })
+    }
+    /// Opens Settings on the Smart Lists section. Live notification retargets
+    /// an already-open window (even from About/another pane); the parked
+    /// pending section covers a fresh launch, where the notification alone
+    /// would fire before the view exists. Uses the modern openSettings
+    /// action, not the deprecated showSettingsWindow: selector.
+    private func openSmartLists() {
+        UserDefaults.standard.set("smartLists", forKey: pendingSettingsSectionKey)
+        NotificationCenter.default.post(name: .openSmartLists, object: nil)
+        openSettings()
+    }
+    /// Hides a smart list. If the hidden row is the active destination,
+    /// navigates to the first visible top destination (else Inbox) so the
+    /// center never shows a blank/stale screen.
+    private func hideSmart(key: SmartListKey, dest: Destination) {
+        store.settings.smartListVisibility[key] = .hidden
+        if destination == dest {
+            let now = Date()
+            if let fallback = (topSmartDestinations(now: now) + bottomSmartDestinations(now: now)).first {
+                destination = fallback
+            } else {
+                destination = .inbox
+            }
+            detailState.navigate()
+        }
+    }
+    private func navRow(_ dest: Destination, color: Color? = nil, now: Date, indentation: CGFloat = 0, registrationActive: Bool = true) -> some View {
         let count = store.data.tasks.filter { task in
             if case .filter(let id) = dest { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
             return dest.includes(task, now: now)
@@ -633,20 +940,40 @@ struct WorkspaceView: View {
                 if count > 0 && dest != .summary { Text("\(count)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit() }
             }
         }
-        // Typed drops only: Inbox and lists accept task payloads (with hover
-        // highlighting and atomic move semantics), and lists accept list
-        // payloads for above/below reordering. One unified per-row delegate
-        // receives both types; it is a modifier on the row itself, never a
-        // covering overlay, so Button clicks, right-clicks, drag initiation,
-        // and context menus keep working. Every other destination has no drop
-        // target and rejects untouched. Task and list payload types are
-        // distinct, so a list can never be read as a task or vice versa.
+        // Typed native drops: Inbox and lists accept task payloads (with hover
+        // highlighting and atomic move semantics). Sidebar-to-sidebar moves
+        // (list/smart/folder/tag reorder, folder/root assignment) run through
+        // the shared in-app SidebarDragCoordinator instead of native .onDrag,
+        // whose source never starts inside a Button. Each delegate or frame
+        // modifier sits on the row itself, never a covering overlay, so taps,
+        // right-clicks, drag initiation, and context menus keep working.
+        // Filter rows have no drop target and reject untouched. All five
+        // payload types are distinct.
         switch dest {
         case .inbox:
-            return AnyView(SidebarDropRow(title: "Inbox", listID: nil, onDropTasks: { moveTasks($0, to: nil) }, onReorderList: { _, _ in }) { row })
+            return AnyView(SidebarDropRow(listID: nil, preview: nil, onDropTasks: { moveTasks($0, to: nil) }) { row })
         case .list(let id):
-            let title = store.data.lists.first { $0.id == id }?.name ?? "List"
-            return AnyView(SidebarDropRow(title: title, listID: id, onDropTasks: { moveTasks($0, to: id) }, onReorderList: { moving, after in store.reorderLists(moving: moving, before: id, afterTarget: after) }) { row })
+            let list = store.data.lists.first { $0.id == id }
+            let preview = SidebarDragPreview(
+                title: list?.name ?? dest.title(store.data),
+                leading: .listSymbol(list?.symbol),
+                colorHex: list?.color,
+                count: dest == .summary ? nil : count
+            )
+            let wrapped = SidebarDropRow(listID: id, preview: preview, framesActive: registrationActive, onDropTasks: { moveTasks($0, to: id) }) { row }
+            if indentation > 0 {
+                return AnyView(wrapped.padding(.leading, indentation))
+            }
+            return AnyView(wrapped)
+        case .tag(let id):
+            let tag = store.data.tags.first { $0.id == id }
+            let preview = SidebarDragPreview(
+                title: tag?.name ?? dest.title(store.data),
+                leading: .systemImage(dest.symbol),
+                colorHex: tag?.color,
+                count: dest == .summary ? nil : count
+            )
+            return AnyView(TagDropRow(tagID: id, preview: preview, framesActive: registrationActive) { row })
         default:
             return AnyView(row)
         }
@@ -684,10 +1011,10 @@ struct WorkspaceView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { closeDrawer() }
                 Menu {
-                    Picker("Sort by", selection: $sort) { ForEach(["Manual", "Date", "Priority", "Title", "Created"], id: \.self) { Text($0) } }
-                    Text("Manual order follows your drags and is saved.").font(.caption)
+                    Picker("Sort by", selection: Binding(get: { TaskSortPolicy.normalized(sort) }, set: { sort = $0 })) { ForEach(["None", "Date", "Priority", "Title", "Created"], id: \.self) { Text($0) } }
+                    Text("None follows your drags and is saved.").font(.caption)
                     if destination != .completed && destination != .trash && destination != .wontDo { Toggle("Show Completed & Won't Do", isOn: $showCompleted) }
-                } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (Manual enables drag reordering)")
+                } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (None enables drag reordering)")
                 Menu {
                     if destination != .completed && destination != .trash && destination != .wontDo && destination != .summary {
                         Button(showCompleted ? "Hide Completed" : "Show Completed") { showCompleted.toggle() }
@@ -718,13 +1045,14 @@ struct WorkspaceView: View {
                             Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { if collapsed.contains(title) { collapsed.remove(title) } else { collapsed.insert(title) } } } label: {
                                 HStack(spacing: 7) { Image(systemName: collapsed.contains(title) ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)); Text(title).font(.system(size: 12, weight: .semibold)); Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary); Spacer() }.foregroundStyle(title == "Overdue" || title == "Due reminders" ? .red : .secondary).padding(.vertical, 10)
                             }.buttonStyle(.plain)
-                            // Manual sort reorders in-group by dropping on the top
-                            // or bottom half of a row, with an insertion line
-                            // and a move proposal. No permanent spacing is
-                            // added. Every other sort rejects drops at
-                            // validation: order there is computed, and
-                            // reordering must never silently rewrite dates,
-                            // priorities, or status.
+                            // None (manual) is one group: reorder by dropping on
+                            // the top or bottom half of a row, with an
+                            // insertion line and a move proposal. No permanent
+                            // spacing is added. Every other sort keeps its own
+                            // groups and rejects reorder attempts with a
+                            // message: order there is computed, and reordering
+                            // must never silently rewrite dates, priorities,
+                            // or status. Ordinary list moves still work.
                             if !collapsed.contains(title) {
                                 let groupIDs = items.map(\.id)
                                 ForEach(items) { task in
@@ -768,11 +1096,14 @@ struct WorkspaceView: View {
             Divider(); Button("Move to Trash", role: .destructive) { trash(task.id) }
         }
     }
-    /// Manual order follows the stored array order, so drag reordering is the
-    /// sort: positions persist across reload and match what every surface
-    /// shows. All other sorts compute their order and reject task drops.
+    /// None (manual) order follows the stored array order, so drag reordering
+    /// is the sort: positions persist across reload and match what every
+    /// surface shows. Legacy "Manual" reads as None. All other sorts compute
+    /// their order and reject reorder attempts without mutation (with a
+    /// user-facing message); ordinary list moves still work under any sort.
     private func filteredTasks(now: Date) -> [TaskItem] {
         let order = Dictionary(uniqueKeysWithValues: store.data.tasks.enumerated().map { ($0.element.id, $0.offset) })
+        let normalizedSort = TaskSortPolicy.normalized(sort)
         return store.data.tasks.filter { task in
             if case .filter(let id) = destination { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
             if destination.includes(task, now: now) { return true }
@@ -782,8 +1113,8 @@ struct WorkspaceView: View {
             let aActive = a.completedAt == nil && a.wontDoAt == nil
             let bActive = b.completedAt == nil && b.wontDoAt == nil
             if aActive != bActive { return aActive }
-            switch sort {
-            case "Manual": return (order[a.id] ?? 0) < (order[b.id] ?? 0)
+            switch normalizedSort {
+            case "None": return (order[a.id] ?? 0) < (order[b.id] ?? 0)
             case "Priority": if a.priority != b.priority { return a.priority.rank < b.priority.rank }
             case "Title": return a.title.localizedStandardCompare(b.title) == .orderedAscending
             case "Created": return a.createdAt > b.createdAt
@@ -797,6 +1128,26 @@ struct WorkspaceView: View {
         }
     }
     private func grouped(_ tasks: [TaskItem], now: Date) -> [(String, [TaskItem])] {
+        // None (manual) is a real sequence: one group for all active
+        // tasks/notes — no date/priority partitions — so items with different
+        // dates reorder freely without rewriting those fields. History stays
+        // separate; Reminders keeps its semantic split; Trash is untouched.
+        if TaskSortPolicy.isManual(sort) && destination != .trash && destination != .reminders {
+            var active: [TaskItem] = []; var history: [TaskItem] = []
+            for task in tasks {
+                switch ManualGroupPolicy.bucket(completedAt: task.completedAt, wontDoAt: task.wontDoAt, deletedAt: task.deletedAt) {
+                case .active: active.append(task)
+                case .history, .deleted: history.append(task)
+                }
+            }
+            var result: [(String, [TaskItem])] = []
+            if !active.isEmpty { result.append((ManualGroupPolicy.activeGroupTitle, active)) }
+            if !history.isEmpty {
+                let title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : tasks.contains(where: { $0.wontDoAt != nil }) ? "Completed & Won't Do" : "Completed"
+                result.append((title, history))
+            }
+            return result
+        }
         var keys: [String] = []; var values: [String: [TaskItem]] = [:]
         for task in tasks {
             let title: String
@@ -805,8 +1156,8 @@ struct WorkspaceView: View {
                 title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : tasks.contains(where: { $0.wontDoAt != nil }) ? "Completed & Won't Do" : "Completed"
             }
             else if destination == .reminders { title = task.reminderDate! <= now ? "Due reminders" : "Upcoming reminders" }
-            else if task.kind == .note && sort == "Date" { title = "Note" }
-            else if sort == "Priority" { title = task.priority.label }
+            else if task.kind == .note && TaskSortPolicy.normalized(sort) == "Date" { title = "Note" }
+            else if TaskSortPolicy.normalized(sort) == "Priority" { title = task.priority.label }
             else if let due = task.dueDate {
                 if due < task.scheduleCalendar.startOfDay(for: now) { title = "Overdue" }
                 else if task.scheduleCalendar.isDate(due, inSameDayAs: now) { title = "Today" }
@@ -877,21 +1228,32 @@ struct ListViewportHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
-/// One center-list row: detail selection, native drag-out with a compact
-/// preview, Manual-sort drop halves with an insertion line, and the row menu.
+/// One center-list row: detail selection, grip-only drag-out with a compact
+/// preview, None-sort drop halves with an insertion line, and the row menu.
+/// Non-None sorts reject reorder attempts without mutation and show the
+/// sorted-mode message (no per-frame spam); ordinary list moves still work.
 /// The drop halves commit atomically on drop only; anything invalid leaves
 /// the saved order untouched.
 private extension WorkspaceView {
     func taskRow(_ task: TaskItem, groupIDs: [UUID], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
-        TaskRow(store: store, id: task.id, selected: detailState.selection == task.id, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
-            .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: task.deletedAt == nil, reorderEnabled: sort == "Manual" && task.deletedAt == nil, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
+        let isActive = task.deletedAt == nil
+        // Grip visibility is resolved inside TaskRow from whole-row hover or
+        // selection; the drag source lives on the grip only. Tapping the grip
+        // selects in manual mode and reports the sorted-mode notice otherwise.
+        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, gripActive: isActive, onGripActivate: isActive ? {
+            if isManualSort { selectTask(task.id) }
+            else { actions.notice(TaskSortPolicy.reorderDisabledMessage) }
+        } : nil, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
+            .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: isActive, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
             .contextMenu { taskMenu(task) }
     }
-    /// Validates and commits an in-group task reorder. Rejects non-manual
-    /// sorts, cross-group drags, self-drops, and empty payloads without
-    /// mutating. The store re-validates records and saves once.
+    /// Validates and commits an in-group task reorder. Non-None sorts are
+    /// rejected without mutation and surface the sorted-mode message once per
+    /// drop (callers must not toast per-frame). Cross-group drags, self-drops,
+    /// and empty payloads also abort without mutating. The store re-validates
+    /// records and saves once.
     func acceptTaskReorder(_ ids: [UUID], before target: UUID, after: Bool, group: [UUID]) -> Bool {
-        guard sort == "Manual" else { return false }
+        guard isManualSort else { actions.notice(TaskSortPolicy.reorderDisabledMessage); return false }
         guard !ids.isEmpty, !ids.contains(target),
               Set(ids).isSubset(of: Set(group)), group.contains(target) else { return false }
         return store.reorderTasks(moving: ids, before: target, afterTarget: after)
@@ -934,18 +1296,27 @@ struct RailButton: View {
 }
 
 /// Sidebar row with a neutral selected background, a lighter hover highlight
-/// for unselected rows, and a full-row hit area.
+/// for unselected rows, and a full-row hit area. Selection is a tap gesture
+/// (plus keyboard activation), not a Button, so the row's drag gesture can win
+/// mouse arbitration once the pointer moves: a plain Button swallows the
+/// mouse-down and its `.onDrag` source never starts.
 struct SidebarRow<Content: View>: View {
     let selected: Bool
     let action: () -> Void
     @ViewBuilder let content: () -> Content
     @State private var hovering = false
     var body: some View {
-        Button(action: action) {
-            content()
-                .padding(.horizontal, 10).frame(height: 38).contentShape(Rectangle())
-                .background((selected ? Color.primary.opacity(0.055) : hovering ? Color.primary.opacity(0.032) : .clear), in: RoundedRectangle(cornerRadius: 9))
-        }.buttonStyle(.plain).onHover { hovering = $0 }
+        content()
+            .padding(.horizontal, 10).frame(height: 38).contentShape(Rectangle())
+            .background((selected ? Color.primary.opacity(0.055) : hovering ? Color.primary.opacity(0.032) : .clear), in: RoundedRectangle(cornerRadius: 9))
+            .onTapGesture(perform: action)
+            .onHover { hovering = $0 }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityAction { action() }
+            .focusable()
+            .onKeyPress(.return) { action(); return .handled }
+            .onKeyPress(.space) { action(); return .handled }
     }
 }
 
