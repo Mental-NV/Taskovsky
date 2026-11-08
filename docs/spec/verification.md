@@ -95,3 +95,18 @@ This documentation-only change reconciles [the canonical iPhone specification](i
 - All proposed acceptance scenarios are not run. No iPhone target, portable engine extraction, migration, sync or notification implementation is added. No simulator/device/native UI, API-floor audit, Personal Team signing or local-notification smoke test was performed by this publication task.
 - macOS tests and builds were not run locally for this documentation-only update. Any hosted PR CI is separate, pending exact-head evidence; historical green checks do not validate this specification or its future iPhone implementation.
 - User decisions and documentation approval do not mark implementation verified. Publication does not authorize merging, App Store submission, TestFlight or deployment.
+
+<a id="docs-only-ci-filter"></a>
+## Documentation-only CI filter — November 8, 2026
+
+Requested change [CI-DOCS-001](../changes/skip-docs-only-ci.md) is based on main `6ee96eeb8f88e74a105c518de2202233ea528efa`, on separate branch `ci/skip-docs-only-updates`. The only workflow change adds identical `docs/**`, `README.md` and `AGENTS.md` exclusions to automatic PR/main-push events. This entry does not rewrite historical CI results above.
+
+| Evidence | Result | Limits |
+| --- | --- | --- |
+| Local Python 3 / PyYAML 6.0.3 static acceptance | **Passed:** YAML parse, identical filter lists, structural comparison against base, and byte-for-byte equality from `permissions:` through the end of the workflow. All job steps, pins, manual dispatch, event types, branch restrictions, concurrency and permissions retained. | Linux cloud inspection, not a macOS test/build run or actionlint execution. |
+| Event/path decision matrix | **Passed: 64 cases.** 28 path cases for each automatic event plus eight event/branch/manual cases. Covers nested docs, root README/AGENTS, evidence/assets, mixed source/workflow, source/test/build/resource/configuration paths, Markdown fixtures outside docs, case/prefix lookalikes, deletions and paired old/new rename paths. | A model of these simple patterns using the parsed workflow. Does not execute GitHub's diff construction or prove native rename handling, truncated diffs, queues or cancellation. |
+| Documentation review | **Passed:** changed-document relative targets against the repository tree, whitespace and bounded diff scope. Current CI/workflow specifications and this change record updated. | Static documentation review is not runtime verification. |
+| Repository policy reads | Main metadata reports unprotected, enforcement off and no required contexts; ruleset list empty. Detailed protection read returned integration-access 403. No settings write attempted. | Recheck before future required-check/merge-queue configuration. |
+| Hosted workflow for final PR head | **Pending:** inspect this draft PR's checks and record its exact head, synthetic merge checkout and run URL in the PR description. The workflow file itself is a non-ignored change, so this PR must run full CI. | Application tests/build/signature/archive are not claimed passed until the exact run completes. |
+
+Live documentation-only skipping, manual dispatch, main-push filtering, rename events, oversized diffs and merge queues are **not exercised** by the local matrix. No temporary PRs or changes to the existing iPhone PR were created for filter probes. No local macOS build, app execution or native UI checks were run. The new filter does not cancel existing runs or alter branch protection. See [CI-002](ci-cd.md#ci-002) for the operational contract and native limits.
