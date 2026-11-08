@@ -22,11 +22,9 @@ Confirming an annual ordinal choice in the nested editor displayed a textual rul
 
 Selecting **Duration** replaced the calendar grid with **Start** and **End** date and time fields, an **All Day** switch, a time-zone selector, Reminder and Repeat rows, and Clear/OK. The inspected initial example displayed the same current date for start and end, `00:00` start and `01:00` end, with All Day off. These values arose after opening Time and switching modes and are not established factory defaults. The time-zone control opened a nested panel offering **Fixed Time Zone** and **Floating Time**; the latter is accompanied by `When time zone changes, time remains the same.` A location/time-zone value was displayed for the fixed option. No option was committed. Validate the enabled-setting prerequisite, field ordering and date constraints, defaults when opened afresh, behavior of All Day, timezone conversion and saving/canceling before implementing this state machine.
 
-## Taskovsky comparison (source evidence)
+## Taskovsky implementation status
 
-The Taskovsky `TaskItem` model has one optional `dueDate`, `hasDueTime` and optional `timeZoneID`, but no start/end duration fields or fixed-versus-floating mode ([model](../../Sources/TaskovskyCore/Models.swift)). Thus the reference's Duration UI and state are a confirmed feature gap, rather than a Calendar-tab difference. Taskovsky's recurrence enumeration currently supports none, daily, weekdays, weekly, monthly and yearly; an inclusive end date is stored. The inspected reference custom basis, interval, ordinal/workday, specific-date and end-count controls have no corresponding representation in that enumeration. Multiple reminder dates are represented. Generation and end-date equivalence remain unverified.
-
-On task creation, Taskovsky recognizes a limited English pattern of relative dates and weekday names, optionally removes recognized date text, recognizes `#` tags, applies configured defaults and calculates default reminders ([TaskStore](../../Sources/TaskovskyCore/TaskStore.swift)). Completion of a recurring Taskovsky item creates at most one successor using the task's selected zone, shifts reminders, resets checklist completion, and only removes that successor on undo if it remains identical to its creation snapshot. These are implementation facts, not evidence of reference equivalence.
+Use the [dedicated parity tracker](../parity-implementation-status.md) and [business specification](../spec/business.md) for the current code-derived duration, custom recurrence and reminder behavior. Earlier claims here that those models were absent are superseded. Fixed-versus-floating semantics and reference recurrence equivalence must still be compared explicitly.
 
 ## Required follow-up
 

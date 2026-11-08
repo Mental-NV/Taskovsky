@@ -1,5 +1,7 @@
 # Taskovsky / TickTick parity audit — 1 November 2026
 
+**Historical audit.** These observations and proposals describe November 1, 2026, not the current implementation. Use the [current parity tracker](../parity-implementation-status.md) for status. Old local source-line references below now link to repository files; those links do not establish that the old line numbers are still valid.
+
 Taskovsky implements the requested feature set, but several everyday interactions and much of the visual presentation still differ from the installed TickTick app. The most useful next pass would address task-row compression, entry feedback, search results, and settings consistency before smaller decorative differences.
 
 This is an inspection and proposal. No application source, settings, tasks, or lists were deliberately changed during this audit. A temporary TickTick quick-entry draft was cleared without submitting it. Search navigation may update TickTick's recent-search history.
@@ -67,14 +69,14 @@ Calendar tab, Eisenhower Matrix, Pomodoro, Habit Tracker, countdowns, accounts/s
 
 **Implementation references**
 
-- [Workspace, panel layout, sidebar, rows and feedback](/Users/mental/Projects/Taskovsky/Sources/Taskovsky/App.swift:150)
-- [Search presentation and actions](/Users/mental/Projects/Taskovsky/Sources/Taskovsky/SearchView.swift:4)
-- [Settings layout and icon mappings](/Users/mental/Projects/Taskovsky/Sources/Taskovsky/SettingsView.swift:51)
-- [Task detail and scheduling](/Users/mental/Projects/Taskovsky/Sources/Taskovsky/TaskDetail.swift:140)
-- [Schedule model](/Users/mental/Projects/Taskovsky/Sources/TaskovskyCore/Models.swift:4)
-- [Defaults, filters and built-in templates](/Users/mental/Projects/Taskovsky/Sources/TaskovskyCore/Settings.swift:1)
-- [Original completion sound generator](/Users/mental/Projects/Taskovsky/scripts/make-sound.py:1)
+- [Workspace, panel layout, sidebar, rows and feedback](../../Sources/Taskovsky/App.swift)
+- [Search presentation and actions](../../Sources/Taskovsky/SearchView.swift)
+- [Settings layout and icon mappings](../../Sources/Taskovsky/SettingsView.swift)
+- [Task detail and scheduling](../../Sources/Taskovsky/TaskDetail.swift)
+- [Schedule model](../../Sources/TaskovskyCore/Models.swift)
+- [Defaults, filters and built-in templates](../../Sources/TaskovskyCore/Settings.swift)
+- [Original completion sound generator](../../scripts/make-sound.py)
 
 **Follow-up inspection during implementation**
 
-The unlocked reference app confirmed that default reminders support multiple selections, and Summary generates an editable period report rather than a list of recently updated tasks. Both have been implemented locally. It also clarified the earlier notes observation: date grouping has a separate Note section, while a custom section can mix notes and tasks. The implementation retains the Note section when grouped by date. Completion moves immediately to history with a bottom-center Undo toast; Won't Do moves to the combined history with a crossed checkbox. See the [implementation status](/Users/mental/Projects/Taskovsky/docs/parity-implementation-status.md) for verification and remaining access-dependent checks.
+The unlocked reference app confirmed that default reminders support multiple selections, and Summary generates an editable period report rather than a list of recently updated tasks. Both have been implemented locally. It also clarified the earlier notes observation: date grouping has a separate Note section, while a custom section can mix notes and tasks. The implementation retains the Note section when grouped by date. Completion moves immediately to history with a bottom-center Undo toast; Won't Do moves to the combined history with a crossed checkbox. See the [implementation status](../../docs/parity-implementation-status.md) for verification and remaining access-dependent checks.

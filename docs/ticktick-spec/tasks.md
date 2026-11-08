@@ -6,7 +6,7 @@ Evidence in this section comes from a disposable Inbox task in the installed Tic
 
 Right-clicking the selected active task's row opened a white, rounded, shadowed vertical menu. At its top were a Date icon strip and Priority strip: red, orange, blue and outline flags. Below a separator the observed actions were **Add Subtask**, **Link Parent Task**, **Pin**, **Won't Do**, **Move to** (submenu), **Tags** (submenu), **Start Focus** (submenu), **Duplicate**, **Copy Link**, **Open as Sticky Note**, **Convert to Note**, and **Delete**. Menu items had leading outline icons; submenu rows had right-pointing chevrons. This was a task with no date or children; menu contents may differ for other states. Submenu entries and most actions remain to be inspected.
 
-Choosing **Pin** immediately removed the probe from its No Date group and placed it in a new **Pinned** section above Overdue. Its row stayed selected. A subsequent context menu changed the action label to **Unpin**. This establishes the observed grouping transition, not how pinned items sort in every list, search, or view. Taskovsky's current [task model](../../Sources/TaskovskyCore/Models.swift) and [row context menu](../../Sources/Taskovsky/App.swift) contain no corresponding pin state/action; this is a confirmed gap.
+Choosing **Pin** immediately removed the probe from its No Date group and placed it in a new **Pinned** section above Overdue. Its row stayed selected. A subsequent context menu changed the action label to **Unpin**. This establishes the observed grouping transition, not how pinned items sort in every list, search, or view.
 
 ## Child task creation and completion
 
@@ -16,7 +16,7 @@ Selecting the titled child opened its own detail pane with a parent breadcrumb, 
 
 With two unchecked children (one blank), clicking the parent's checkbox immediately moved the parent and both child rows from Pinned into the Completed section and showed the transient `Task completed` Undo toast. The selected child's detail then displayed a checked completion control. No confirmation appeared in this particular case. Whether completion propagates identically to dated, recurring, previously completed or deeper descendants, and exactly what Undo/reopen does to each child, still needs testing.
 
-Taskovsky stores each checklist entry as an ID, title and completion flag embedded in the parent ([model](../../Sources/TaskovskyCore/Models.swift)); it does not store independently schedulable child tasks or parent links. Its checklist can be toggled and edited, but the observed TickTick hierarchy, child detail and parent-completion propagation are not equivalent. The earlier parity table's broad “subtasks implemented” language should therefore be read as checklist support only.
+Taskovsky implementation status is maintained in the [dedicated parity tracker](../parity-implementation-status.md). Independently selectable child tasks, embedded checklist items, and rich-body checklist paragraphs are distinct concepts; do not infer equivalence from their similar appearance.
 
 ## Further experiments
 

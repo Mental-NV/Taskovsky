@@ -1,5 +1,8 @@
 # Countdown: observed behavior
 
+**Archived reference research, not Taskovsky requirements.** This module is outside the current Taskovsky baseline. Observations and unknowns below are preserved from the November 2026 investigation. See the [current parity tracker](../../parity-implementation-status.md) and [documentation index](../../README.md).
+
+
 This module is outside the original Taskovsky implementation scope. Observations are from the installed macOS app in light appearance on 3 November 2026; account settings can affect defaults and available styles. Personal data is omitted.
 
 ## Workspace and cards

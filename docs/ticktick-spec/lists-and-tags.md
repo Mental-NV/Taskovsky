@@ -26,6 +26,6 @@ Actual effects of each list type, smart-list exclusion, folder changes and view 
 
 Right-clicking a top-level tag showed **Edit**, **Pin**, **Add Sub-tag**, **Merge Tags**, and **Delete**. The Edit Tag dialog showed a name field, Color swatches, a **Parent Tag** selector, Cancel and Save. The parent selector listed `None` and other available tags, with a checkmark on the current choice. The editor was canceled. This establishes the presence of hierarchical tags and merge/pin controls; selection effects, uniqueness, merge semantics, depth and delete behavior remain untested.
 
-## Taskovsky comparison
+## Taskovsky implementation status
 
-Taskovsky's [list and tag models](../../Sources/TaskovskyCore/Models.swift) store each entity's ID, name and color; a list also has a task/note kind and optional symbol. Its [editor](../../Sources/Taskovsky/TaskDetail.swift) offers name, palette, symbols/emoji and list kind. No folder relationship, per-list view type, smart-list inclusion field, list archive or pin state, tag parent relationship, tag merge or tag pin state is represented in these models. These are confirmed differences in available state/control; the precise behavioral requirements still need the experiments above. Sharing and server sync remain outside the original Taskovsky scope.
+Use the [dedicated parity tracker](../parity-implementation-status.md) for current implementation and remaining differences. The earlier comparison in this reference document is superseded. Presence of these TickTick controls does not establish their full semantics or authorize expanding Taskovsky scope.
