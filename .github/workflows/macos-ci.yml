@@ -24,8 +24,8 @@ jobs:
         shell: bash
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
-      CI_LOG_DIR: ${{ runner.temp }}/taskovsky-ci-logs
-      CI_PACKAGE_DIR: ${{ runner.temp }}/taskovsky-ci-package
+      CI_LOG_DIR: build/ci-logs
+      CI_PACKAGE_DIR: build/ci-package
     steps:
       - name: Check out event revision
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
