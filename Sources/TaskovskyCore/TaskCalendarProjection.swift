@@ -38,10 +38,12 @@ public enum TaskCalendarProjection {
                 if entry.overlaps(range) {
                     entries.append(entry)
                     if options.showChecklistItems {
-                        for item in original.checklist where options.showCompleted || !item.isCompleted {
+                        for item in original.checklist {
+                            let completed = entry.isProjected ? false : item.isCompleted
+                            guard options.showCompleted || !completed else { continue }
                             var child = entry
                             child.id += ":check:\(item.id)"; child.checklistID = item.id
-                            child.title = item.title; child.isCompleted = item.isCompleted
+                            child.title = item.title; child.isCompleted = completed
                             entries.append(child)
                         }
                     }
@@ -115,7 +117,12 @@ public enum TaskCalendarProjection {
                                         now: Date = Date(), calendar: Calendar) -> [TaskItem] {
         data.tasks.filter { task in
             guard options.includes(task, data: data), task.completedAt == nil, task.wontDoAt == nil else { return false }
-            if let due = task.dueDate { return overdue && due < calendar.startOfDay(for: now) }
+            if let due = task.dueDate {
+                let local = taskCalendar(task, fallback: calendar)
+                let allDay = task.scheduledDuration?.validated(in: local)?.isAllDay ?? !task.hasDueTime
+                let displayedDue = allDay ? CalendarDates.civilDay(due, from: local, to: calendar) : due
+                return overdue && displayedDue < calendar.startOfDay(for: now)
+            }
             return true
         }
     }

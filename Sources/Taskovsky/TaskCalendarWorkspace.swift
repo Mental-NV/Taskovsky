@@ -15,9 +15,7 @@ struct CalendarEditorDraft: Identifiable {
     let id = UUID()
     var taskID: UUID?
     var title = ""
-    var start: Date
-    var end: Date
-    var allDay: Bool
+    var schedule: CalendarScheduleDraft
     var listID: UUID?
 }
 
@@ -207,7 +205,7 @@ struct TaskCalendarWorkspace: View {
     }
     private func createRange(_ start: Date, _ end: Date, _ allDay: Bool) {
         let scope = options.wrappedValue
-        editor = CalendarEditorDraft(start: start, end: end, allDay: allDay,
+        editor = CalendarEditorDraft(schedule: .init(start: start, end: end, allDay: allDay),
             listID: scope.listIDs?.count == 1 ? scope.listIDs?.first : store.settings.defaultListID)
     }
     private func editEntry(_ entry: CalendarEntry) {
@@ -215,19 +213,16 @@ struct TaskCalendarWorkspace: View {
         edit(task)
     }
     private func edit(_ task: TaskItem) {
-        let local = TaskCalendarProjection.taskCalendar(task, fallback: calendar)
-        let window = task.scheduledDuration?.validated(in: local)
-        let allDay = task.dueDate != nil ? (window?.isAllDay ?? !task.hasDueTime) : !mode.isHourly
-        let rawStart = window?.start ?? task.dueDate ?? CalendarDates.instant(on: focus, minute: 540, calendar: calendar)
-        let start = allDay ? CalendarDates.civilDay(rawStart, from: local, to: calendar) : rawStart
-        let end = allDay ? CalendarDates.civilDay(window?.end ?? rawStart, from: local, to: calendar) : max(window?.end ?? start.addingTimeInterval(1_800), start.addingTimeInterval(900))
-        editor = CalendarEditorDraft(taskID: task.id, title: task.title, start: start, end: end, allDay: allDay, listID: task.listID)
+        editor = CalendarEditorDraft(taskID: task.id, title: task.title,
+            schedule: CalendarScheduleDraft(task: task, focus: focus, hourly: mode.isHourly, calendar: calendar), listID: task.listID)
     }
     private func save(_ draft: CalendarEditorDraft) {
-        let window = TaskDurationRange(start: draft.start, end: draft.end, isAllDay: draft.allDay)
-        if let id = draft.taskID { schedule(id, .setRange(window)) }
-        else {
-            let id = store.createTask(title: draft.title, listID: draft.listID, dueDate: draft.end,
+        if let id = draft.taskID {
+            if let operation = draft.schedule.operation { schedule(id, operation) }
+            else { notice = "Schedule unchanged"; undo = nil }
+        } else {
+            let window = TaskDurationRange(start: draft.schedule.start, end: draft.schedule.end, isAllDay: draft.schedule.allDay)
+            let id = store.createTask(title: draft.title, listID: draft.listID, dueDate: draft.schedule.end,
                 useDefaultList: false, recognizeDates: false, duration: window)
             notice = "Task added to Calendar"; undo = nil
             if let task = store.data.tasks.first(where: { $0.id == id }), !options.wrappedValue.includes(task, data: store.data) {
@@ -261,7 +256,7 @@ struct CalendarTaskEditor: View {
     var save: (CalendarEditorDraft) -> Void
     @FocusState private var titleFocused: Bool
     private var valid: Bool {
-        (draft.taskID != nil || !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && (draft.allDay ? draft.end >= draft.start : draft.end > draft.start)
+        (draft.taskID != nil || !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && draft.schedule.isValid
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -269,19 +264,17 @@ struct CalendarTaskEditor: View {
             if draft.taskID == nil {
                 TextField("Task title", text: $draft.title).focused($titleFocused).accessibilityLabel("Calendar task title")
             } else { Text(draft.title).font(.headline).lineLimit(2) }
-            Toggle("All day", isOn: $draft.allDay)
-                .onChange(of: draft.allDay) { _, allDay in
-                    if allDay {
-                        draft.start = calendar.startOfDay(for: draft.start)
-                        draft.end = max(draft.start, calendar.startOfDay(for: draft.end))
-                    } else {
-                        draft.start = CalendarDates.instant(on: draft.start, minute: 540, calendar: calendar)
-                        draft.end = max(draft.start.addingTimeInterval(1_800), CalendarDates.instant(on: draft.end, minute: 570, calendar: calendar))
-                    }
-                }
-            DatePicker("Start", selection: $draft.start, displayedComponents: draft.allDay ? [.date] : [.date, .hourAndMinute])
-            DatePicker("End", selection: $draft.end, displayedComponents: draft.allDay ? [.date] : [.date, .hourAndMinute])
-            if draft.end < draft.start || (!draft.allDay && draft.end == draft.start) { Text("End must follow start (or be the same all-day date).").foregroundStyle(.red).font(.caption) }
+            Toggle("All day", isOn: Binding(get: { draft.schedule.allDay }, set: { draft.schedule.setAllDay($0, calendar: calendar) }))
+            if draft.taskID != nil {
+                Toggle("Duration", isOn: Binding(get: { draft.schedule.hasDuration }, set: { draft.schedule.setDuration($0) }))
+                    .accessibilityLabel("Calendar schedule duration")
+            }
+            DatePicker(draft.schedule.hasDuration ? "Start" : "Date", selection: $draft.schedule.start,
+                displayedComponents: draft.schedule.allDay ? [.date] : [.date, .hourAndMinute])
+            if draft.schedule.hasDuration {
+                DatePicker("End", selection: $draft.schedule.end, displayedComponents: draft.schedule.allDay ? [.date] : [.date, .hourAndMinute])
+            }
+            if !draft.schedule.isValid { Text("End must not precede start.").foregroundStyle(.red).font(.caption) }
             if draft.taskID == nil {
                 Picker("List", selection: $draft.listID) {
                     Text("Inbox").tag(UUID?.none)

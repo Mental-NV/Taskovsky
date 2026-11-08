@@ -4,6 +4,7 @@ public enum CalendarScheduleOperation: Sendable {
     case move(start: Date, allDay: Bool)
     case resizeEnd(Date)
     case setRange(TaskDurationRange)
+    case setPoint(date: Date, allDay: Bool)
     case unschedule
 }
 
@@ -41,7 +42,7 @@ public enum CalendarScheduling {
             } else {
                 let end: Date
                 if let oldWindow, !oldWindow.isAllDay {
-                    end = target.addingTimeInterval(max(900, oldWindow.end.timeIntervalSince(oldWindow.start)))
+                    end = target.addingTimeInterval(oldWindow.end.timeIntervalSince(oldWindow.start))
                 } else if let oldWindow {
                     let span = local.dateComponents([.day], from: oldWindow.start, to: oldWindow.end).day ?? 0
                     end = span > 0 ? (local.date(byAdding: .day, value: span, to: target) ?? target.addingTimeInterval(duration)) : target.addingTimeInterval(duration)
@@ -49,6 +50,10 @@ public enum CalendarScheduling {
                 task.scheduledDuration = TaskDurationRange(start: target, end: end)
                 task.dueDate = end; task.hasDueTime = true
             }
+        case let .setPoint(date, allDay):
+            guard date.timeIntervalSinceReferenceDate.isFinite else { return nil }
+            task.dueDate = allDay ? CalendarDates.civilDay(date, from: displayCalendar, to: local) : date
+            task.hasDueTime = !allDay; task.scheduledDuration = nil
         case .setRange(let range):
             var range = range
             if range.isAllDay {

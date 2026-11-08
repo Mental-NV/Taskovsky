@@ -187,7 +187,7 @@ private struct CalendarTimedBlock: View {
             .overlay(alignment: .bottom) {
                 if entry.canSchedule && finalSegment {
                     Capsule().fill(Color(hex: entry.color).opacity(0.7)).frame(width: 22, height: 3)
-                        .frame(maxWidth: .infinity).frame(height: 9).contentShape(Rectangle())
+                        .frame(height: 9).contentShape(Rectangle())
                         .accessibilityLabel("Resize " + entry.title).help("Drag to resize in 15-minute steps, or use Schedule…")
                         .highPriorityGesture(DragGesture(minimumDistance: 3)
                             .updating($resizeDelta) { value, state, _ in state = value.translation.height }

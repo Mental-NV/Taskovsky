@@ -1359,6 +1359,9 @@ public final class TaskStore: ObservableObject {
               !SmartListEligibility.isArchived(original, lists: data.lists),
               var changed = CalendarScheduling.applying(operation, to: original, displayCalendar: calendar ?? settings.calendar,
                   defaultMinutes: settings.defaultDurationMinutes > 0 ? settings.defaultDurationMinutes : 30) else { return nil }
+        // A schedule no-op must not rewrite reminder policy, recurrence
+        // position, timestamps or the file just because an editor was saved.
+        guard CalendarScheduleSnapshot(changed) != CalendarScheduleSnapshot(original) else { return nil }
         if Self.usesDefaultReminder(original, settings: settings) {
             // Let updateTask re-anchor the configured default, including
             // timed <-> all-day conversion; manual reminders already shifted.

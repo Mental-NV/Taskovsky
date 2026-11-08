@@ -25,7 +25,7 @@ struct CalendarEntryView: View {
     private var tint: Color { Color(hex: entry.color) }
     private var time: String {
         if entry.isAllDay { return "All day" }
-        if entry.hasDuration { return CalendarText.time(entry.start, calendar: calendar) + " – " + CalendarText.time(entry.end, calendar: calendar) }
+        if entry.hasDuration { return CalendarText.time(entry.start, calendar: calendar) + " – " + CalendarText.time(entry.due, calendar: calendar) }
         return CalendarText.time(entry.due, calendar: calendar)
     }
     var body: some View {

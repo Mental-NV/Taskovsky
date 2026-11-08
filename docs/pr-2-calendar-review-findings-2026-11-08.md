@@ -7,9 +7,9 @@ Exact base / merge base: [`30045bac5355b793a8c155b87ffe58584cb29fb8`](https://gi
 
 ## Summary
 
-Four actionable P2 findings remain in the new Calendar implementation. P2 means an ordinary correctness defect that should be fixed. The first two silently change stored scheduling information during operations that should preserve it.
+The original review identified four actionable P2 findings in the new Calendar implementation. **All four are now addressed; implementation and verification details are recorded below under Resolutions.** P2 means an ordinary correctness defect that should be fixed. The first two silently change stored scheduling information during operations that should preserve it.
 
-This is a separate review of PR #2, not a reopening of the five earlier findings in `docs/code-review-findings-2026-11-08.md`. The PR also changes recurrence and rich-editor behavior; the findings below concern newly added Calendar paths. No application code or tests are changed by this report.
+This is a separate review of PR #2, not a reopening of the five earlier findings in `docs/code-review-findings-2026-11-08.md`. The PR also changes recurrence and rich-editor behavior; the findings below concern newly added Calendar paths. The original report changed no application code or tests; the follow-up implementation is recorded under Resolutions.
 
 ## 1. [P2] Preserve the existing schedule when opening and saving Schedule…
 
@@ -120,3 +120,28 @@ Arrange's Include overdue filter compares every stored due instant directly with
 Address the four findings independently, add the focused regression cases, and run the full documented Swift suite on macOS. Exercise unchanged Schedule saves, short-window drag moves, future checklist display with both visibility settings, and cross-zone Arrange behavior in an isolated workspace. Recheck persistence and Undo after fixes.
 
 This report does not request changes to deliberately deferred external calendar integrations, native Cmd-Z/redo, gesture anchoring parity, or other documented scope exclusions. No code fixes, merge, or deployment were performed as part of this review.
+
+
+## Resolutions — 8 November 2026
+
+All four findings were confirmed against the macOS implementation. The source-derived counterexamples were valid; no finding was dismissed. The original review above remains as provenance for the defects.
+
+| Finding | Resolution | Regression evidence |
+| --- | --- | --- |
+| 1. Unchanged Schedule… save | Added `CalendarScheduleDraft`, used directly by the production editor, to retain point/range shape and exact endpoints. An unchanged draft emits no operation. Existing point tasks show one Date field with Duration off; enabling Duration explicitly seeds a new range. Existing zero-length ranges remain valid. Added `.setPoint` for intentional point edits, plus a store-level no-op guard before reminder/recurrence/timestamp updates. | `CalendarReviewRegressionTests`: unchanged manually reminded repeating point (full snapshot, timestamp and file bytes), unchanged 0/5/10-minute ranges, floating all-day point, point date edits with reminders/Undo, explicit conversion and new/undated defaults. A legacy automatic-reminder no-op test verifies its policy metadata remains unchanged. |
+| 2. Moving short windows | Removed the 15-minute clamp from existing timed-window moves. Exact elapsed seconds survive, including zero and fractional durations; minimum defaults and explicit resize policy remain separate from movement and visual hit area. Captions use the actual due endpoint for zero-length ranges. Narrowed the resize hit area to the visible handle after a live drag on a short title was interpreted as resize. | Store-path move cases cover 0, 5, 10 and 90 minutes, plus fractional seconds, with exact due/reminder offsets, reload and Undo. A point move remains a point. |
+| 3. Future checklist state | Compute effective checklist completion before filtering: current entries keep their actual state, projected entries use unchecked state. Projection remains pure and creates no records. | With Show Completed on/off, both future child rows are present and unchecked; current-cycle filtering remains unchanged. Compared their state with the real successor produced by completion, and asserted that projection did not mutate workspace data. |
+| 4. Cross-zone Arrange | All-day overdue checks map the task's inclusive civil due/end date into the display calendar before comparison. Timed tasks retain absolute-instant behavior and the existing prior-day cutoff. | Yesterday/today/tomorrow points and all-day windows tested for Asia/Tokyo → UTC and Pacific/Auckland → America/Los_Angeles, including inclusive range ends and timed controls. |
+
+### Verification after fixes
+
+- **464 tests passed**: 430 XCTest and 34 Swift Testing, including 11 new review regression tests. `swift test --disable-sandbox --manifest-cache local` compiled the production UI and ran the full suite after the final source changes. Logs are under ignored `build/verification/calendar/review-*.log`.
+- `./scripts/build-app.sh` succeeded and the signed release passed `codesign --verify --deep --strict build/Taskovsky.app`.
+- Live Computer Use used a separately identified debug app from the same source with explicit `/private/tmp/TaskovskyCalendarReviewQA-1108/workspace.json` and `settings.json`. No real Taskovsky files or TickTick items were edited.
+- In Agenda, opened and saved the point, five-minute and zero-length editors unchanged. Their fields retained 10:00, 11:00–11:05 and 12:00–12:00 respectively; Save reported Schedule unchanged. The workspace stayed **byte-identical** after all three saves.
+- Enabled Duration deliberately on the point, observed 10:00–10:30, saved it, and used Undo to restore the point at 10:00 and its original reminder.
+- With checklist previews enabled, tomorrow showed both future items. After hiding completed items, tomorrow still showed both, while today's checked item disappeared and its unchecked item stayed visible.
+- Arrange's Include overdue showed only the Tokyo-dated yesterday task; the Tokyo today task stayed in today's all-day strip and today/tomorrow were absent from the queue. This live check used the host's Europe/Moscow display; UTC and Los Angeles comparisons are automated Foundation tests.
+- A native short-block drag was first interpreted as resize and undone. After narrowing the handle hit area, subsequent native move attempts did not yield a confirmed drop through Computer Use. No successful live short-window move is claimed; exact movement, reminders, persistence and Undo are verified through the production store tests. The QA point/short/zero schedules and reminders matched their original fixtures after cleanup. Closed the QA app and confirmed it left the running-app inventory.
+
+External integrations and the other deliberately deferred parity items remain outside scope. No native Cmd-Z or comprehensive gesture-parity claim is added by these fixes.
