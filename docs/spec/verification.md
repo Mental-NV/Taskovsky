@@ -83,3 +83,15 @@ This section records a later feature integration, not a revision of the historic
 | Final integrated-head hosted macOS CI | **Pending at documentation integration.** Require the checks for the final [PR #3](https://github.com/Mental-NV/Taskovsky/pull/3) head, recording actual checkout SHA and run URL in the PR's verification record before merge. | Do not reuse PR #1 success or the original local 471-test report as proof for the integrated head. Build, tests, signature and restored-archive checks remain separate gates; successful CI does not establish native visual parity. |
 
 The original reference report distinguishes observed named-zone behavior from static Year/icon controls and unknown limits/gestures. Its reference cleanup was confirmed by the user, not independently re-inspected. No external integrations or additional product scope are introduced by this follow-up.
+
+
+<a id="iphone-mobile-specification-2026-11-08"></a>
+## iPhone mobile specification — 8 November 2026
+
+This documentation-only change reconciles [the canonical iPhone specification](iphone.md) and records [CHG-IPHONE-MOBILE-SPEC](../changes/iphone-mobile-spec.md). Base main is `f85e2f6a9c538f36829961961a0749197f29c4e2`. The source freeze includes separately identified, read-only desktop working-tree evidence; its uncommitted Swift files are not included in this PR. Source-file and diff hashes are recorded in the specification, not represented as published commits.
+
+- Static document checks passed: existing IOS-001–IOS-014 anchors retained uniquely, A01–A39 retained uniquely, Markdown table column counts, defined reference links, repository-relative targets and pinned source paths checked against the base repository tree, and three-file Markdown-only diff allowlist.
+- Canonical detail remains in `docs/spec/iphone.md`; the change record links it rather than creating a competing specification. Screenshot assets and private screenshot content are not redistributed.
+- All proposed acceptance scenarios are not run. No iPhone target, portable engine extraction, migration, sync or notification implementation is added. No simulator/device/native UI, API-floor audit, Personal Team signing or local-notification smoke test was performed by this publication task.
+- macOS tests and builds were not run locally for this documentation-only update. Any hosted PR CI is separate, pending exact-head evidence; historical green checks do not validate this specification or its future iPhone implementation.
+- User decisions and documentation approval do not mark implementation verified. Publication does not authorize merging, App Store submission, TestFlight or deployment.
