@@ -72,187 +72,230 @@ struct TaskDetail: View {
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: compact ? 8 : 15) {
-                if let onClose {
-                    Button(action: onClose) { HoverIcon { Image(systemName: "xmark").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary).padding(4) } }.buttonStyle(.plain).help("Close details").accessibilityLabel("Close details")
-                }
-                if task.kind == .task {
-                    Button(action: onComplete) { HoverIcon { TaskCheckbox(state: task.wontDoAt != nil ? .wontDo : task.completedAt != nil ? .completed : .open, color: task.priority == .none ? Palette.taskOutline(colorScheme) : task.priority.color).padding(2).contentShape(Rectangle()) } }.buttonStyle(.plain).help(task.completedAt == nil && task.wontDoAt == nil ? "Complete task" : "Mark incomplete").accessibilityLabel("Toggle completion").disabled(locked)
-                    Divider().frame(height: 20)
-                }
-                Button { scheduling.wrappedValue = true } label: {
-                    HoverIcon {
-                        HStack(spacing: compact ? 4 : 6) {
-                            Image(systemName: "calendar")
-                            Text((task.dueDate.map { dueHeaderText($0) } ?? "Set date") + durationSuffix).lineLimit(1)
-                            if task.isRepeating { Image(systemName: "repeat").font(.system(size: 11)).help(task.repeatLabel()) }
-                        }.font(.system(size: 12)).foregroundStyle(task.dueDate.map { pastDue($0) ? .red : accent } ?? .secondary).padding(4)
-                    }
-                }.buttonStyle(.plain).help("Schedule, repeat, and reminders").disabled(locked)
-                    .popover(isPresented: scheduling, arrowEdge: .bottom) { ScheduleEditor(task: task, settings: store.settings) { updated in store.updateTask(updated, applyDefaultReminders: false) } }
-                Spacer(minLength: 5)
-                Menu {
-                    ForEach(TaskPriority.allCases, id: \.self) { priority in
-                        Button { var updated = task; updated.priority = priority; store.updateTask(updated) } label: { Label(priority.label + (task.priority == priority ? " ✓" : ""), systemImage: "flag") }
-                    }
-                } label: { HoverIcon { Image(systemName: task.priority == .none ? "flag" : "flag.fill").font(.system(size: 16)).foregroundStyle(task.priority.color).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(task.priority.color).fixedSize().help(task.priority.label).disabled(locked)
-            }.padding(.horizontal, compact ? 16 : 24).frame(height: standalonePopup ? 52 : 58)
+            detailHeader
             Divider()
-            if isDeleted {
-                HStack { Text("This item is in Trash.").font(.caption); Spacer(); Button("Restore") { onRestore?() ?? store.restoreTask(id: id) }.controlSize(.small) }.padding(14).background(.orange.opacity(0.07))
-            } else if archivedView {
-                HStack { Text("This list is archived — read-only. Unarchive it from the sidebar to edit.").font(.caption); Spacer() }.padding(14).background(Color.primary.opacity(0.05))
-            }
+            detailStatusBanner
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     TextField("Title", text: field(\.title), axis: .vertical).font(.system(size: 20, weight: .semibold)).textFieldStyle(.plain).disabled(locked).accessibilityLabel("Task title")
                     if task.completedAt != nil { Label("Completed " + task.completedAt!.formatted(date: .abbreviated, time: .shortened), systemImage: "checkmark.circle.fill").font(.caption).foregroundStyle(.secondary) }
                     if task.wontDoAt != nil { Label("Won't Do", systemImage: "xmark.square.fill").font(.caption).foregroundStyle(.secondary) }
-                    if let reminder = task.reminderDates.first, !archivedView {
-                        HStack(spacing: 8) {
-                            Image(systemName: "bell")
-                            Text((reminder <= Date() ? "Reminder due · " : "Remind me ") + task.dayText(reminder) + " at " + task.timeText(reminder) + (task.reminderDates.count > 1 ? " · \(task.reminderDates.count) reminders" : ""))
-                            Spacer()
-                            if reminder <= Date() && !isDeleted { Menu { Button("In 10 minutes") { setReminder(Date().addingTimeInterval(600)) }; Button("In 1 hour") { setReminder(Date().addingTimeInterval(3600)) }; Button("Tomorrow") { setReminder(Calendar.current.date(byAdding: .day, value: 1, to: Date())!) } } label: { Image(systemName: "clock.arrow.circlepath") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Snooze reminder") }
-                            if !isDeleted { Button { var updated = task; updated.reminderDates = []; store.updateTask(updated) } label: { Image(systemName: "xmark").font(.system(size: 9)) }.buttonStyle(.plain).help("Dismiss all reminders") }
-                        }.font(.system(size: 11)).foregroundStyle(reminder <= Date() ? .orange : .secondary).padding(10).background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    // Native rich-text body: toolbar plus an auto-growing AppKit
-                    // editor. The outer detail ScrollView scrolls; the editor
-                    // reports its content height so docked, drawer, and pop-up
-                    // layouts all size it without an inner scroller.
-                    if !locked {
-                        RichBodyToolbar(controller: richController, disabled: false)
-                    }
-                    ZStack(alignment: .topLeading) {
-                        RichBodyEditor(
-                            controller: richController,
-                            documentID: task.id,
-                            text: task.body,
-                            rich: task.richBody?.valid(for: task.body),
-                            disabled: locked,
-                            onChange: updateBody,
-                            onHeightChange: { bodyHeight = $0 },
-                            onFocusChange: { bodyFocused = $0 }
-                        )
-                        .frame(height: max(task.kind == .note ? 120 : 60, bodyHeight))
-                        .accessibilityLabel(task.kind == .note ? "Note content" : "Task description")
-                        if task.body.isEmpty && !bodyFocused && !locked {
-                            HStack(spacing: 4) {
-                                Button("Write something") { richController.focus() }.foregroundStyle(.tertiary)
-                                Text("or").foregroundStyle(.tertiary)
-                                Button("use a template") { showTemplates.wrappedValue = true }.foregroundStyle(accent)
-                            }.buttonStyle(.plain).font(.system(size: 14)).padding(.top, 4).padding(.leading, 1)
-                        }
-                    }.frame(minHeight: task.kind == .note ? 120 : 60, alignment: .topLeading)
-                        .sheet(isPresented: showTemplates) { TemplatePicker(store: store, onChoose: applyTemplate) }
-                    HStack(spacing: 6) {
-                        ForEach(store.data.tags.filter { task.tagIDs.contains($0.id) }) { tag in
-                            Button { if !locked { var updated = task; updated.tagIDs.removeAll { $0 == tag.id }; store.updateTask(updated) } } label: { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).padding(.horizontal, 8).padding(.vertical, 5).background(Color(hex: tag.color).opacity(0.08), in: Capsule()) }.buttonStyle(.plain).help("Remove tag \(tag.name)")
-                        }
-                        if !locked { Button { showTags.wrappedValue.toggle() } label: { Image(systemName: "number").font(.system(size: 12)).foregroundStyle(.tertiary).padding(5) }.buttonStyle(.plain).help("Add tags").popover(isPresented: showTags, arrowEdge: .bottom) { tagPicker } }
-                    }
+                    reminderSection
+                    richBodySection
+                    tagSection
                     if task.kind == .task {
-                        Divider()
-                        // Checklist steps are quick items stored ON this task
-                        // (titles and ticks travel with templates and
-                        // duplicates); subtasks below are real linked records
-                        // with their own dates, lists, and completion.
-                        HStack { Text("Checklist").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count) of \(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
-                        VStack(spacing: 8) {
-                            ForEach(task.checklist) { step in
-                                HStack(spacing: 10) {
-                                    Button { var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) } } label: { TaskCheckbox(state: step.isCompleted ? .completed : .open, color: .secondary) }.buttonStyle(.plain).help("Toggle checklist item")
-                                    TextField("Checklist item", text: Binding(get: { task.checklist.first { $0.id == step.id }?.title ?? "" }, set: { text in var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].title = text; store.updateTask(updated) } })).textFieldStyle(.plain).font(.system(size: 14)).strikethrough(step.isCompleted).foregroundStyle(step.isCompleted ? .secondary : .primary)
-                                    Button { var updated = task; updated.checklist.removeAll { $0.id == step.id }; store.updateTask(updated) } label: { Image(systemName: "minus.circle").font(.system(size: 11)).foregroundStyle(.tertiary) }.buttonStyle(.plain).help("Remove checklist item")
-                                }.disabled(locked)
-                            }
-                            if !locked {
-                                HStack(spacing: 10) { Image(systemName: "plus").foregroundStyle(.tertiary); TextField("Add Checklist Item", text: newStep).textFieldStyle(.plain).font(.system(size: 14)).focused($stepFocused).onSubmit(addStep); if !newStep.wrappedValue.isEmpty { Button(action: addStep) { Image(systemName: "return") }.buttonStyle(.plain) } }
-                            }
-                        }
-                        Divider()
-                        HStack { Text("Subtasks").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).help("Linked child tasks — each keeps its own dates, list, and completion"); Spacer(); if let progress = TaskHierarchy.progress(of: task.id, in: store.data.tasks) { Text("\(progress.done) of \(progress.total)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
-                        VStack(spacing: 8) {
-                            if let parent = store.data.tasks.first(where: { $0.id == task.parentID }) {
-                                HStack(spacing: 10) {
-                                    Image(systemName: "arrow.turn.up.right").foregroundStyle(.tertiary)
-                                    Text("Subtask of").font(.system(size: 13)).foregroundStyle(.secondary)
-                                    if let navigate = onNavigateToTask {
-                                        Button(parent.title.isEmpty ? "Untitled" : parent.title) { navigate(parent.id) }
-                                            .buttonStyle(.plain).font(.system(size: 13)).lineLimit(1)
-                                            .foregroundStyle(accent).help("Open parent task")
-                                            .accessibilityLabel("Open parent task \(parent.title)")
-                                    } else {
-                                        Text(parent.title.isEmpty ? "Untitled" : parent.title).font(.system(size: 13)).lineLimit(1)
-                                    }
-                                    Spacer()
-                                    if !locked, !subtaskParentOptions.isEmpty {
-                                        Menu("Change") { ForEach(subtaskParentOptions) { option in Button(option.title.isEmpty ? "Untitled" : option.title) { _ = store.setTaskParent(id: task.id, parentID: option.id) } } }
-                                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().font(.system(size: 12))
-                                        Button("Remove") { _ = store.setTaskParent(id: task.id, parentID: nil) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).help("Move to top level")
-                                    }
-                                }
-                            }
-                            ForEach(TaskHierarchy.children(of: task.id, in: store.data.tasks)) { child in
-                                HStack(spacing: 10) {
-                                    Button { store.toggleComplete(id: child.id) } label: { TaskCheckbox(state: child.wontDoAt != nil ? .wontDo : child.completedAt != nil ? .completed : .open, color: .secondary) }.buttonStyle(.plain).disabled(locked).help(child.completedAt == nil && child.wontDoAt == nil ? "Complete subtask" : "Reopen subtask")
-                                    if let navigate = onNavigateToTask {
-                                        Button(child.title.isEmpty ? "Untitled" : child.title) { navigate(child.id) }
-                                            .buttonStyle(.plain).font(.system(size: 14)).strikethrough(child.completedAt != nil).foregroundStyle(child.completedAt != nil || child.wontDoAt != nil ? .secondary : .primary).lineLimit(1)
-                                            .help("Open subtask").accessibilityLabel("Open subtask \(child.title)")
-                                    } else {
-                                        Text(child.title.isEmpty ? "Untitled" : child.title).font(.system(size: 14)).strikethrough(child.completedAt != nil).foregroundStyle(child.completedAt != nil || child.wontDoAt != nil ? .secondary : .primary).lineLimit(1)
-                                    }
-                                    Spacer()
-                                    if !locked {
-                                        Button { _ = store.setTaskParent(id: child.id, parentID: nil) } label: { Image(systemName: "minus.circle").font(.system(size: 11)).foregroundStyle(.tertiary) }.buttonStyle(.plain).help("Move subtask to top level")
-                                    }
-                                }
-                            }
-                            if !locked {
-                                HStack(spacing: 10) { Image(systemName: "plus").foregroundStyle(.tertiary); TextField("Add Subtask", text: newSubtask).textFieldStyle(.plain).font(.system(size: 14)).focused($subtaskFocused).onSubmit(addSubtask); if !newSubtask.wrappedValue.isEmpty { Button(action: addSubtask) { Image(systemName: "return") }.buttonStyle(.plain) } }
-                            }
-                        }
+                        checklistSection
+                        subtaskSection
                     }
                     Spacer(minLength: 40)
                 }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
             }
             Divider()
-            HStack {
-                Menu {
-                    Button("Inbox") { var updated = task; updated.listID = nil; store.updateTask(updated) }
-                    ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var updated = task; updated.listID = list.id; store.updateTask(updated) } }
-                } label: { HoverIcon { Label(store.data.lists.first { $0.id == task.listID }?.name ?? "Inbox", systemImage: "tray").font(.system(size: 12)).foregroundStyle(.secondary).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().disabled(locked).help("Move to list")
-                Spacer()
-                Menu {
-                    Text("Created " + task.createdAt.formatted(date: .abbreviated, time: .shortened))
-                    if !locked {
-                        if task.kind == .task && task.wontDoAt == nil { Button("Won't Do", action: onWontDo) }
-                        if task.wontDoAt != nil { Button("Mark incomplete") { store.reopenTask(id: id) } }
-                        if task.completedAt == nil && task.wontDoAt == nil {
-                            Button(task.isPinned ? "Unpin" : "Pin") { _ = store.setPinned(id: id, pinned: !task.isPinned) }
-                        }
-                        Button("Save as Template") { _ = store.saveTemplate(from: id) }
-                        Menu("Apply Template") {
-                            ForEach(store.data.templates) { template in
-                                Button(template.name) { applyTemplate(template) }
-                            }
-                        }
-                        Button("Duplicate") { _ = store.duplicateTask(id: id) }
-                        Button(task.kind == .task ? "Convert to Note" : "Convert to Task") { var updated = task; updated.kind = task.kind == .task ? .note : .task; updated.completedAt = nil; updated.wontDoAt = nil; store.updateTask(updated) }
-                        Divider()
-                        Button("Move to Trash", role: .destructive, action: onTrash)
-                    } else if archivedView {
-                        Text("Archived — read-only")
-                    } else {
-                        Button("Restore") { onRestore?() ?? store.restoreTask(id: id) }
-                        if onPurge != nil { Button("Delete Forever", role: .destructive, action: onPurge!) }
-                    }
-                } label: { HoverIcon { Image(systemName: "ellipsis").font(.system(size: 17)).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().padding(.leading, 12).help("More actions")
-            }.foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
+            detailFooter
         }
     }
+
+    // Keep the original view sections separate so Swift can type-check each
+    // expression without changing state ownership, layout, bindings or actions.
+    @ViewBuilder
+    private var detailHeader: some View {
+        HStack(spacing: compact ? 8 : 15) {
+            if let onClose {
+                Button(action: onClose) { HoverIcon { Image(systemName: "xmark").font(.system(size: 14, weight: .medium)).foregroundStyle(.secondary).padding(4) } }.buttonStyle(.plain).help("Close details").accessibilityLabel("Close details")
+            }
+            if task.kind == .task {
+                Button(action: onComplete) { HoverIcon { TaskCheckbox(state: task.wontDoAt != nil ? .wontDo : task.completedAt != nil ? .completed : .open, color: task.priority == .none ? Palette.taskOutline(colorScheme) : task.priority.color).padding(2).contentShape(Rectangle()) } }.buttonStyle(.plain).help(task.completedAt == nil && task.wontDoAt == nil ? "Complete task" : "Mark incomplete").accessibilityLabel("Toggle completion").disabled(locked)
+                Divider().frame(height: 20)
+            }
+            Button { scheduling.wrappedValue = true } label: {
+                HoverIcon {
+                    HStack(spacing: compact ? 4 : 6) {
+                        Image(systemName: "calendar")
+                        Text((task.dueDate.map { dueHeaderText($0) } ?? "Set date") + durationSuffix).lineLimit(1)
+                        if task.isRepeating { Image(systemName: "repeat").font(.system(size: 11)).help(task.repeatLabel()) }
+                    }.font(.system(size: 12)).foregroundStyle(task.dueDate.map { pastDue($0) ? .red : accent } ?? .secondary).padding(4)
+                }
+            }.buttonStyle(.plain).help("Schedule, repeat, and reminders").disabled(locked)
+                .popover(isPresented: scheduling, arrowEdge: .bottom) { ScheduleEditor(task: task, settings: store.settings) { updated in store.updateTask(updated, applyDefaultReminders: false) } }
+            Spacer(minLength: 5)
+            Menu {
+                ForEach(TaskPriority.allCases, id: \.self) { priority in
+                    Button { var updated = task; updated.priority = priority; store.updateTask(updated) } label: { Label(priority.label + (task.priority == priority ? " ✓" : ""), systemImage: "flag") }
+                }
+            } label: { HoverIcon { Image(systemName: task.priority == .none ? "flag" : "flag.fill").font(.system(size: 16)).foregroundStyle(task.priority.color).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(task.priority.color).fixedSize().help(task.priority.label).disabled(locked)
+        }.padding(.horizontal, compact ? 16 : 24).frame(height: standalonePopup ? 52 : 58)
+    }
+
+    @ViewBuilder
+    private var detailStatusBanner: some View {
+        if isDeleted {
+            HStack { Text("This item is in Trash.").font(.caption); Spacer(); Button("Restore") { onRestore?() ?? store.restoreTask(id: id) }.controlSize(.small) }.padding(14).background(.orange.opacity(0.07))
+        } else if archivedView {
+            HStack { Text("This list is archived — read-only. Unarchive it from the sidebar to edit.").font(.caption); Spacer() }.padding(14).background(Color.primary.opacity(0.05))
+        }
+    }
+
+    @ViewBuilder
+    private var reminderSection: some View {
+        if let reminder = task.reminderDates.first, !archivedView {
+            HStack(spacing: 8) {
+                Image(systemName: "bell")
+                Text((reminder <= Date() ? "Reminder due · " : "Remind me ") + task.dayText(reminder) + " at " + task.timeText(reminder) + (task.reminderDates.count > 1 ? " · \(task.reminderDates.count) reminders" : ""))
+                Spacer()
+                if reminder <= Date() && !isDeleted { Menu { Button("In 10 minutes") { setReminder(Date().addingTimeInterval(600)) }; Button("In 1 hour") { setReminder(Date().addingTimeInterval(3600)) }; Button("Tomorrow") { setReminder(Calendar.current.date(byAdding: .day, value: 1, to: Date())!) } } label: { Image(systemName: "clock.arrow.circlepath") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Snooze reminder") }
+                if !isDeleted { Button { var updated = task; updated.reminderDates = []; store.updateTask(updated) } label: { Image(systemName: "xmark").font(.system(size: 9)) }.buttonStyle(.plain).help("Dismiss all reminders") }
+            }.font(.system(size: 11)).foregroundStyle(reminder <= Date() ? .orange : .secondary).padding(10).background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
+        }
+    }
+
+    @ViewBuilder
+    private var richBodySection: some View {
+        // Native rich-text body: toolbar plus an auto-growing AppKit
+        // editor. The outer detail ScrollView scrolls; the editor
+        // reports its content height so docked, drawer, and pop-up
+        // layouts all size it without an inner scroller.
+        if !locked {
+            RichBodyToolbar(controller: richController, disabled: false)
+        }
+        ZStack(alignment: .topLeading) {
+            RichBodyEditor(
+                controller: richController,
+                documentID: task.id,
+                text: task.body,
+                rich: task.richBody?.valid(for: task.body),
+                disabled: locked,
+                onChange: updateBody,
+                onHeightChange: { bodyHeight = $0 },
+                onFocusChange: { bodyFocused = $0 }
+            )
+            .frame(height: max(task.kind == .note ? 120 : 60, bodyHeight))
+            .accessibilityLabel(task.kind == .note ? "Note content" : "Task description")
+            if task.body.isEmpty && !bodyFocused && !locked {
+                HStack(spacing: 4) {
+                    Button("Write something") { richController.focus() }.foregroundStyle(.tertiary)
+                    Text("or").foregroundStyle(.tertiary)
+                    Button("use a template") { showTemplates.wrappedValue = true }.foregroundStyle(accent)
+                }.buttonStyle(.plain).font(.system(size: 14)).padding(.top, 4).padding(.leading, 1)
+            }
+        }.frame(minHeight: task.kind == .note ? 120 : 60, alignment: .topLeading)
+            .sheet(isPresented: showTemplates) { TemplatePicker(store: store, onChoose: applyTemplate) }
+    }
+
+    @ViewBuilder
+    private var tagSection: some View {
+        HStack(spacing: 6) {
+            ForEach(store.data.tags.filter { task.tagIDs.contains($0.id) }) { tag in
+                Button { if !locked { var updated = task; updated.tagIDs.removeAll { $0 == tag.id }; store.updateTask(updated) } } label: { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).padding(.horizontal, 8).padding(.vertical, 5).background(Color(hex: tag.color).opacity(0.08), in: Capsule()) }.buttonStyle(.plain).help("Remove tag \(tag.name)")
+            }
+            if !locked { Button { showTags.wrappedValue.toggle() } label: { Image(systemName: "number").font(.system(size: 12)).foregroundStyle(.tertiary).padding(5) }.buttonStyle(.plain).help("Add tags").popover(isPresented: showTags, arrowEdge: .bottom) { tagPicker } }
+        }
+    }
+
+    @ViewBuilder
+    private var checklistSection: some View {
+        Divider()
+        // Checklist steps are quick items stored ON this task
+        // (titles and ticks travel with templates and
+        // duplicates); subtasks below are real linked records
+        // with their own dates, lists, and completion.
+        HStack { Text("Checklist").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count) of \(task.checklist.count)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
+        VStack(spacing: 8) {
+            ForEach(task.checklist) { step in
+                HStack(spacing: 10) {
+                    Button { var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) } } label: { TaskCheckbox(state: step.isCompleted ? .completed : .open, color: .secondary) }.buttonStyle(.plain).help("Toggle checklist item")
+                    TextField("Checklist item", text: Binding(get: { task.checklist.first { $0.id == step.id }?.title ?? "" }, set: { text in var updated = task; if let i = updated.checklist.firstIndex(where: { $0.id == step.id }) { updated.checklist[i].title = text; store.updateTask(updated) } })).textFieldStyle(.plain).font(.system(size: 14)).strikethrough(step.isCompleted).foregroundStyle(step.isCompleted ? .secondary : .primary)
+                    Button { var updated = task; updated.checklist.removeAll { $0.id == step.id }; store.updateTask(updated) } label: { Image(systemName: "minus.circle").font(.system(size: 11)).foregroundStyle(.tertiary) }.buttonStyle(.plain).help("Remove checklist item")
+                }.disabled(locked)
+            }
+            if !locked {
+                HStack(spacing: 10) { Image(systemName: "plus").foregroundStyle(.tertiary); TextField("Add Checklist Item", text: newStep).textFieldStyle(.plain).font(.system(size: 14)).focused($stepFocused).onSubmit(addStep); if !newStep.wrappedValue.isEmpty { Button(action: addStep) { Image(systemName: "return") }.buttonStyle(.plain) } }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var subtaskSection: some View {
+        Divider()
+        HStack { Text("Subtasks").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).help("Linked child tasks — each keeps its own dates, list, and completion"); Spacer(); if let progress = TaskHierarchy.progress(of: task.id, in: store.data.tasks) { Text("\(progress.done) of \(progress.total)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
+        VStack(spacing: 8) {
+            if let parent = store.data.tasks.first(where: { $0.id == task.parentID }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "arrow.turn.up.right").foregroundStyle(.tertiary)
+                    Text("Subtask of").font(.system(size: 13)).foregroundStyle(.secondary)
+                    if let navigate = onNavigateToTask {
+                        Button(parent.title.isEmpty ? "Untitled" : parent.title) { navigate(parent.id) }
+                            .buttonStyle(.plain).font(.system(size: 13)).lineLimit(1)
+                            .foregroundStyle(accent).help("Open parent task")
+                            .accessibilityLabel("Open parent task \(parent.title)")
+                    } else {
+                        Text(parent.title.isEmpty ? "Untitled" : parent.title).font(.system(size: 13)).lineLimit(1)
+                    }
+                    Spacer()
+                    if !locked, !subtaskParentOptions.isEmpty {
+                        Menu("Change") { ForEach(subtaskParentOptions) { option in Button(option.title.isEmpty ? "Untitled" : option.title) { _ = store.setTaskParent(id: task.id, parentID: option.id) } } }
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().font(.system(size: 12))
+                        Button("Remove") { _ = store.setTaskParent(id: task.id, parentID: nil) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).help("Move to top level")
+                    }
+                }
+            }
+            ForEach(TaskHierarchy.children(of: task.id, in: store.data.tasks)) { child in
+                HStack(spacing: 10) {
+                    Button { store.toggleComplete(id: child.id) } label: { TaskCheckbox(state: child.wontDoAt != nil ? .wontDo : child.completedAt != nil ? .completed : .open, color: .secondary) }.buttonStyle(.plain).disabled(locked).help(child.completedAt == nil && child.wontDoAt == nil ? "Complete subtask" : "Reopen subtask")
+                    if let navigate = onNavigateToTask {
+                        Button(child.title.isEmpty ? "Untitled" : child.title) { navigate(child.id) }
+                            .buttonStyle(.plain).font(.system(size: 14)).strikethrough(child.completedAt != nil).foregroundStyle(child.completedAt != nil || child.wontDoAt != nil ? .secondary : .primary).lineLimit(1)
+                            .help("Open subtask").accessibilityLabel("Open subtask \(child.title)")
+                    } else {
+                        Text(child.title.isEmpty ? "Untitled" : child.title).font(.system(size: 14)).strikethrough(child.completedAt != nil).foregroundStyle(child.completedAt != nil || child.wontDoAt != nil ? .secondary : .primary).lineLimit(1)
+                    }
+                    Spacer()
+                    if !locked {
+                        Button { _ = store.setTaskParent(id: child.id, parentID: nil) } label: { Image(systemName: "minus.circle").font(.system(size: 11)).foregroundStyle(.tertiary) }.buttonStyle(.plain).help("Move subtask to top level")
+                    }
+                }
+            }
+            if !locked {
+                HStack(spacing: 10) { Image(systemName: "plus").foregroundStyle(.tertiary); TextField("Add Subtask", text: newSubtask).textFieldStyle(.plain).font(.system(size: 14)).focused($subtaskFocused).onSubmit(addSubtask); if !newSubtask.wrappedValue.isEmpty { Button(action: addSubtask) { Image(systemName: "return") }.buttonStyle(.plain) } }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailFooter: some View {
+        HStack {
+            Menu {
+                Button("Inbox") { var updated = task; updated.listID = nil; store.updateTask(updated) }
+                ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var updated = task; updated.listID = list.id; store.updateTask(updated) } }
+            } label: { HoverIcon { Label(store.data.lists.first { $0.id == task.listID }?.name ?? "Inbox", systemImage: "tray").font(.system(size: 12)).foregroundStyle(.secondary).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().disabled(locked).help("Move to list")
+            Spacer()
+            Menu {
+                Text("Created " + task.createdAt.formatted(date: .abbreviated, time: .shortened))
+                if !locked {
+                    if task.kind == .task && task.wontDoAt == nil { Button("Won't Do", action: onWontDo) }
+                    if task.wontDoAt != nil { Button("Mark incomplete") { store.reopenTask(id: id) } }
+                    if task.completedAt == nil && task.wontDoAt == nil {
+                        Button(task.isPinned ? "Unpin" : "Pin") { _ = store.setPinned(id: id, pinned: !task.isPinned) }
+                    }
+                    Button("Save as Template") { _ = store.saveTemplate(from: id) }
+                    Menu("Apply Template") {
+                        ForEach(store.data.templates) { template in
+                            Button(template.name) { applyTemplate(template) }
+                        }
+                    }
+                    Button("Duplicate") { _ = store.duplicateTask(id: id) }
+                    Button(task.kind == .task ? "Convert to Note" : "Convert to Task") { var updated = task; updated.kind = task.kind == .task ? .note : .task; updated.completedAt = nil; updated.wontDoAt = nil; store.updateTask(updated) }
+                    Divider()
+                    Button("Move to Trash", role: .destructive, action: onTrash)
+                } else if archivedView {
+                    Text("Archived — read-only")
+                } else {
+                    Button("Restore") { onRestore?() ?? store.restoreTask(id: id) }
+                    if onPurge != nil { Button("Delete Forever", role: .destructive, action: onPurge!) }
+                }
+            } label: { HoverIcon { Image(systemName: "ellipsis").font(.system(size: 17)).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().padding(.leading, 12).help("More actions")
+        }.foregroundStyle(.secondary).padding(.horizontal, 24).padding(.vertical, 14)
+    }
+
     private var tagPicker: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack { Text("Tags").font(.headline); Spacer(); Button("Done") { showTags.wrappedValue = false }.keyboardShortcut(.cancelAction) }
