@@ -2,7 +2,7 @@
 
 This document proposes a small shared engine with separate macOS and iPhone interfaces. It records the current source boundaries first, then defines a staged extraction that preserves behavior and stored data. The proposal does not require identical editors, navigation, or feature coverage on both platforms.
 
-**Baseline:** static inspection of `main` at `cfdec454acff91285ac00beaa20c0cf0f0961ee1`, dated 2026-11-08. Linked source and tests are evidence of implementation and test intent, not a claim that tests or UI flows were run for this documentation change. Everything labeled **Proposed** requires a later implementation task. This change adds no packages, application code, test harness, or iPhone app.
+**Baseline:** static inspection of `main` at `cfdec454acff91285ac00beaa20c0cf0f0961ee1`, dated 2026-11-08. Linked source and test files establish implementation and test intent. The follow-up hosted [CI results](../spec/verification.md#hosted-macos-ci) are separate execution evidence, not verification of the proposed architecture or native UI flows. Everything labeled **Proposed** requires a later implementation task. This change adds no packages, application code, test harness, or iPhone app.
 
 Related documents: [business rules](../spec/business.md), [macOS UI and UX](../spec/ui-ux.md), [iPhone proposal](../spec/iphone.md), [component contracts](components.md), [implementation workflow](../spec/workflow.md), and [parity status](../parity-implementation-status.md).
 

@@ -1,6 +1,6 @@
 # Documentation reconciliation record
 
-This documentation-only change aligns current specifications to source commit `cfdec454acff91285ac00beaa20c0cf0f0961ee1` and separates future proposals from the baseline. Relative to that merged main commit, application source, tests, fixtures and package/build configuration are unchanged. Existing PR #1 is brought forward without reverting PR #2; all code fixes come from the merged baseline.
+The initial documentation-only change aligns current specifications to source commit `cfdec454acff91285ac00beaa20c0cf0f0961ee1` and separates future proposals from the baseline. The original reconciliation preserved application source, tests, fixtures and package/build configuration. Existing PR #1 is brought forward without reverting PR #2. The subsequently authorized CI implementation and compiler-only source refactor are recorded below.
 
 ## What changed and why
 
@@ -28,4 +28,5 @@ Current behavior belongs in business/UI specifications, implementation progress 
 
 The architecture and iPhone documents are proposals. Merging this documentation must not be interpreted as completing the refactor, implementing an iPhone app, approving an unbounded implementation task, or fixing defects through prose. The ledger records only corrections already in the merged source.
 
-The refresh also adds the requested [macOS CI/CD proposal](spec/ci-cd.md), covering hosted tests/builds, exact-revision evidence, permissions, costs and GUI/minimum-OS limits. No workflow or repository setting is implemented by this Markdown-only PR.
+The user subsequently requested implementation and verification of the [macOS CI specification](spec/ci-cd.md) in PR #1. The PR now also adds `.github/workflows/macos-ci.yml`, with hosted tests/builds, archive/signature verification and diagnostics. Hosted CI revealed a pre-existing `TaskDetail.body` compiler timeout on both tested Xcodes. With explicit user approval, that single file is split into private view sections without changing intended behavior. Other application source, final tests, fixtures, package and build scripts are unchanged; a temporary CI failure-probe test is removed after its controlled run. No main-branch merge, deployment, signing secrets or repository protection/settings changes are included.
+

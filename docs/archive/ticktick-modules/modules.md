@@ -1,9 +1,9 @@
 # Other modules: initial reference observations
 
-**Archived reference research, not Taskovsky requirements.** This module is outside the current Taskovsky baseline. Observations and unknowns below are preserved from the November 2026 investigation. See the [current parity tracker](../../parity-implementation-status.md) and [documentation index](../../README.md).
+**Archived reference research, not current Taskovsky requirements.** This mixed overview preserves the initial November 2026 observations. Its Calendar section is historical: the local Calendar is now implemented, with current evidence in the [active Calendar document](../../ticktick-spec/calendar.md). Matrix, Focus, Habit and Countdown remain outside the current baseline. See the [current parity tracker](../../parity-implementation-status.md) and [documentation index](../../README.md).
 
 
-These screens are included in the reference inventory, not the authorized Taskovsky implementation scope. The following records only the states actually viewed; comprehensive behavior remains outstanding.
+The excluded modules below are reference inventory, not an implementation assignment; the historical Calendar notes do not replace its active specification. The following records only the states actually viewed; comprehensive behavior remains outstanding.
 
 ## Calendar
 

@@ -57,6 +57,9 @@ Open a draft PR unless requested otherwise. PR creation does not authorize mergi
 
 For documentation-only requests, replace the implementation/verification instruction with a Markdown-only allowlist and static document checks. Do not create application tests or fix known defects as a side effect of reconciling documentation.
 
-## Proposed hosted macOS verification
+## Hosted macOS verification
 
-The [CI/CD specification](ci-cd.md) defines a later GitHub Actions implementation for tests, release packaging and local signature verification. It is not an existing gate or deployment plan. Record actual checkout SHAs and run artifacts once implemented, and keep manual native UI/minimum-OS checks separate.
+The [macOS CI workflow](../../.github/workflows/macos-ci.yml) runs tests, release packaging, signature checks and archive integrity checks for PR events, including drafts and docs-only updates. Pushes to main run after integration; manual dispatch becomes available only once the workflow exists on the default branch. The [CI specification](ci-cd.md) describes exact stages, triggers, diagnostics and limits.
+
+For each feature, inspect the latest run for its exact PR head and actual synthetic merge checkout. Download the diagnostics and app artifacts if needed before their 14-day expiry. A failed, skipped or cancelled required stage is not a pass. CI does not replace affected native UI acceptance, macOS 14 testing or Intel testing. Branch-protection enforcement and deployment are not configured by this work.
+

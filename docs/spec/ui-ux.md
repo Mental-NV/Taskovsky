@@ -7,7 +7,7 @@
 This is the **code-derived baseline** at main commit `cfdec454acff91285ac00beaa20c0cf0f0961ee1`, inspected on 2026-11-08. It describes Taskovsky's implementation, not a new TickTick parity target. Source takes precedence over older README claims, reference measurements, comments about intended behavior, and this document when they disagree.
 
 - **Current / code-derived:** declarations and control flow in the linked Swift files. Dimensions below are logical points, not measured device pixels. Numeric colors are literals in source; semantic colors, system fonts, native menus, sheets, and SF Symbol shapes resolve through macOS and appearance settings.
-- **Runtime-unverified in this documentation task:** actual rendered sizes, focus order, pointer arbitration, keyboard routing, VoiceOver announcements, contrast, animation appearance, and OS-specific control sizing. No app, build, automated tests, or UI tests were run for this task. Existing tests are evidence of specified cases, not a claim of a fresh passing run.
+- **Runtime-unverified in this documentation task:** actual rendered sizes, focus order, pointer arbitration, keyboard routing, VoiceOver announcements, contrast, animation appearance, and OS-specific control sizing. The follow-up CI implementation runs automated tests and release packaging, recorded in the verification ledger. It does not launch an interactive UI session or execute these manual acceptance scenarios.
 - **Proposed:** the [iPhone specification](iphone.md) and [component boundaries](../architecture/components.md). They are not shipped features.
 - The five [earlier findings](../code-review-findings-2026-11-08.md) and four [Calendar findings](../pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026) are fixed in the merged baseline. The [verification ledger](verification.md) distinguishes source/regression evidence, prior live results and remaining unchecked paths.
 
@@ -52,7 +52,8 @@ All explicitly configured UI type is the system font. Unspecified font, spacing,
 | Main/sidebar/detail background | `textBackgroundColor` | adaptive native color |
 | Selected row / hovered row | primary at 0.055 / 0.032 | Same opacity expressions |
 | Icon hover | primary at 0.07, radius 8 | Same expression |
-| Priority | High: semantic red; medium: `#F59E0B`; low: app accent; none: secondary | Semantic red/secondary are not fixed hex colors |
+| Task priority | High: semantic red; medium: `#F59E0B`; low: app accent; none: secondary | Semantic red/secondary are not fixed hex colors; Calendar has a separate palette below |
+| Calendar priority | High `#E65757`; medium `#E6A53A`; low `#5B8DEF`; none `#7C6CF2` | Source literals from `TaskCalendarProjection.color`; not the task-row palette |
 
 Some components explicitly use `Color.accentColor`, while others use the global `accent` or `.tint(accent)`. The source does not establish that every resolved accent pixel is identical across all native surfaces.
 
@@ -349,11 +350,11 @@ A storage error overlays the bottom as a caption row with filled warning triangl
 
 | Shortcut / input | Action |
 | --- | --- |
-| ⌘N | Focus new task; redirect history/search/summary creation to Inbox |
-| ⇧⌘N | Focus new note; route unsuitable smart destinations to Inbox |
+| ⌘N | In Calendar, open staged task creation at the focused date; otherwise focus new task and redirect history/search/summary creation to Inbox |
+| ⇧⌘N | Exit Calendar, focus new note; route unsuitable smart destinations to Inbox |
 | ⇧⌘L | New List |
-| ⌘F | Quick Search |
-| ⌥⌘S | Toggle sidebar / compact navigation |
+| ⌘F | Exit Calendar and open Quick Search |
+| ⌥⌘S | Toggle the Calendar sidebar/overlay when active; otherwise toggle task sidebar / compact navigation |
 | ⌘, | Native Settings scene |
 | Return in quick entry/checklist/subtask | Submit that item |
 | Shift-Return in quick entry | Expand description |
@@ -396,7 +397,7 @@ All cases below are **to be executed on a suitable macOS environment**, not pass
 | UX-010 | [ScheduleDraftTests](../../Tests/TaskovskyCoreTests/ScheduleDraftTests.swift), [TaskZoneDurationTests](../../Tests/TaskovskyCoreTests/TaskZoneDurationTests.swift), [CustomRecurrenceTests](../../Tests/TaskovskyCoreTests/CustomRecurrenceTests.swift), [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift), [ReminderTests](../../Tests/TaskovskyCoreTests/ReminderTests.swift) | Cancel/OK/Clear including nested cancellation, invalid ranges, timezone/DST and preview correctness; retained regression coverage does not replace these native checks |
 | UX-011, UX-012 | [FilterIntentTests](../../Tests/TaskovskyCoreTests/FilterIntentTests.swift), [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift), [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift), [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift) | Quick/full search eligibility difference, keyboard navigation, unavailable references, template edits, summary regeneration, settings persistence |
 
-No exact test count, test-pass status, pixel-perfect match, native drag verification, or accessibility certification is asserted here. Existing reference observations under `docs/ticktick-spec/` remain historical comparison material, not authority for unimplemented screens.
+Exact hosted test/build results are recorded in the verification ledger. No pixel-perfect match, native drag verification, or accessibility certification is asserted here. Existing reference observations under `docs/ticktick-spec/` remain historical comparison material, not authority for unimplemented screens.
 
 
 <a id="ux-016"></a>
@@ -432,15 +433,17 @@ Sources: [TaskCalendarWorkspace](../../Sources/Taskovsky/TaskCalendarWorkspace.s
 | Surface | Current layout and interaction |
 | --- | --- |
 | Rail and shell | Calendar opens the local workspace; task cards open the existing Task Details window. Header contains sidebar toggle, month/year jump picker, +, seven-mode selector, previous/Today/next and ellipsis. Header height 58, horizontal padding 18; at Calendar content width <760 it becomes two rows, height 78, padding 10, title 16 rather than 19. |
-| Sidebar / Arrange | Each docked panel is 234 wide. At compact widths they become 234-wide overlays; the main grid scrolls horizontally. Sidebar contains mini-month, Inbox/list and tag scope. Arrange offers grouping, list scope, Include overdue, native drag handle and accessible Schedule button. Calendar scope/display preferences persist; Arrange grouping/list/overdue choices, selected date and Arrange visibility are transient. |
-| Day / Week / Multi-Day | All-day strip above a 24-hour wall-clock grid, current-time line, overlap lanes and optional additional time-zone ruler. Multi-Day count is 2–14. Timed cards use actual schedule endpoints; a minimum visual hit area must not change stored duration. Missing DST wall times advance to the next valid time; repeated times choose the first occurrence. |
+| Sidebar / Arrange | Each docked panel is 234 wide. At compact widths they become 234-wide overlays; the main grid scrolls horizontally. Sidebar contains mini-month, Inbox/list and tag scope. Arrange offers grouping, Include overdue, native drag handle and accessible Schedule button. Its All list choice retains Calendar list/Inbox scope; Inbox or a chosen list overrides it while preserving tag filters. Calendar activation and scope/display preferences persist; Arrange grouping/list/overdue choices, focused date and Arrange visibility are transient. |
+| Day / Week / Multi-Day | All-day strip above a 24-hour wall-clock grid at 60 points/hour, columns at least 118 wide and a 54-point ruler (104 with the additional zone), initially scrolled to 07:00. Current-time line, overlap lanes and optional additional time-zone ruler. Multi-Day count is 2–14. Timed cards use actual schedule endpoints; a minimum visual hit area must not change stored duration. Missing DST wall times advance to the next valid time; repeated times choose the first occurrence. |
 | Month / Multi-Week | Seven-column date cells with neighboring-month dates, compact fragments and +N more opening a contained day-details sheet. Month uses 4–6 rows; Multi-Week count is 2–6. Each day offers creation. Crowded all-day strips scroll rather than exposing every entry at once. |
 | Year / Agenda | Twelve-month quantity heatmap; selecting a Year day returns to the previous detailed mode. Agenda groups the next 30 days from focus. Heatmap intensity is Taskovsky policy; it is not a verified TickTick scale. |
 | View Options | Contained 340-wide sheet, padding 18, Done/Escape dismissal. List/Tag/Priority color, Filled/Outline style, completed/checklist/repeat visibility, multi-day/week counts and local additional time zone. No placeholder account/integration controls. |
-| Creation and editing | Header +, cell +, hourly double-click or range drag opens a staged editor. Non-hourly defaults are all day; hourly header defaults to 09:00–09:30. Cancel saves nothing. Existing Schedule… keeps points and precise ranges; unchanged Save says Schedule unchanged and does not write. Explicit Duration toggling converts shape. Remove date uses the atomic unschedule command. |
+| Cards / color | Title font 11 compact / 12 regular; 3-point corner radius and 2-point leading stripe. Filled background opacity 0.15 (0.06 completed); outline stroke 0.7 points at 0.5 opacity. Whole-card opacity is 0.7 for forecasts, otherwise 0.6 completed or 1. Priority uses the Calendar palette in UX-002. Tag mode uses the first surviving tag, then falls back to list color; Inbox/no-priority fallback is `#7C6CF2`. |
+| Creation and editing | Header +, cell +, hourly double-click or range drag opens a staged editor. Non-hourly defaults are all day; hourly header and undated Arrange Schedule drafts default to 09:00–09:30. Cancel saves nothing. Existing Schedule… keeps points and precise ranges; unchanged Save says Schedule unchanged and does not write. Explicit Duration toggling converts shape. Remove date uses the atomic unschedule command. |
 | Move / resize | Hourly drops anchor at pointer with 15-minute snapping; month drops retain an existing timed clock; all-day drops convert to civil-day scheduling. Timed bottom handle resizes the end; no all-day resize handle. Future/checklist previews cannot be independently scheduled. No drag auto-scroll or TickTick gesture-anchoring parity claim. |
 | Feedback | Calendar has its own bottom material feedback with an explicit Undo schedule and Dismiss control, padding 12, radius 10, bottom offset 58. It is separate from UX-013's five-second task-action toast. Undo restores scheduling fields only, or reports Schedule changed since this edit when stale. No native Calendar Cmd-Z/redo stack. |
 
 **State coverage.** Check empty ranges and Arrange, no selected filters, dense overlaps/overflow, completed/Won't Do visibility, notes, read-only forecasts/checklists, truncated recurrence notice, invalid ranges, Cancel/dismissal, unchanged Save, point-to-range conversion, stale Undo, and both compact overlays. Repeat keyboard, VoiceOver, dark/high-contrast, narrow/large-text and interrupted gesture checks rather than extrapolating from one screenshot.
 
 **Evidence and limits.** [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift) and [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift) cover model/store cases. The [merged Calendar report](../ticktick-spec/calendar.md#pr-2-review-corrections--8-november-2026) records prior seven-view, creation/Cancel, ordinary move/resize, Undo, filters, persistence, unchanged precise saves, checklist-preview and cross-zone Arrange checks. Live short-window moves, Arrange-to-hourly/cross-column drops, independent checklist interactions and the exact 382-point minimum remain unverified. No new native checks were run for this documentation update.
+

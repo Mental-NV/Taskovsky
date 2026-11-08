@@ -1,55 +1,63 @@
-# Proposed macOS continuous integration
+# macOS continuous integration
 
 ## Status and purpose
 
-**Proposal only, not implemented.** Requested with the November 8 refresh of PR #1. The inspected main baseline is `cfdec454acff91285ac00beaa20c0cf0f0961ee1`. It has no committed GitHub Actions workflow and no native UI-test target. No hosted macOS run has been executed for this proposal. Keep implementation in a separate change; this PR remains Markdown-only.
+**Implemented on PR #1's branch**, in [`.github/workflows/macos-ci.yml`](../../.github/workflows/macos-ci.yml), after the user requested implementation and verification on November 8, 2026. This replaces the earlier proposal. Tests, release build, signature and restored-archive checks have passed on the recorded hosted run. Main remains `cfdec454acff91285ac00beaa20c0cf0f0961ee1` until an authorized merge. The [verification ledger](verification.md#hosted-macos-ci) records actual runs, tested revisions and limits.
 
-The goal is to run Taskovsky's existing Swift tests and app packaging on a GitHub-hosted Mac, regardless of the developer or agent's local operating system. A Linux executor lacking Swift/AppKit must not be treated as a reason that remote macOS verification is impossible. CI adds a reproducible build/test result; it does not automatically provide arbitrary interactive GUI coverage, continuous deployment or a notarized release.
+The workflow runs the existing Swift tests and release-app packaging on a GitHub-hosted Mac regardless of a developer's local OS. It is CI plus downloadable build artifacts, **not continuous deployment, Developer ID signing or notarization**. There is no native UI-test target. Architecture extraction and the iPhone app remain proposals.
 
 <a id="ci-001"></a>
 ## CI-001 — Runner and toolchain
 
-Use the standard ARM64 `macos-15` hosted runner as the initial required job and select Xcode 16.4 explicitly, subject to availability when the workflow is implemented. The package needs Swift tools 6, compiles in Swift 5 language mode and declares macOS 14 minimum. Print the selected Xcode, Swift compiler, OS version and architecture in every run. Fail clearly if the selected toolchain is absent; do not silently fall back to the runner's changing default.
+The single job is `Test and package (macOS 15, ARM64)`, on standard hosted `macos-15`. It asserts `uname -m == arm64`. `DEVELOPER_DIR` selects `/Applications/Xcode_26.3.app/Contents/Developer`; setup asserts Xcode 26.3 and logs compiler, SDK, OS, architecture and runner-image versions. Missing or unexpected tools fail rather than silently falling back.
 
-The [runner catalog](https://docs.github.com/en/actions/how-tos/write-workflows/choose-where-workflows-run/choose-the-runner-for-a-job) and [macOS 15 ARM64 image inventory](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md) are the source for labels and installed versions. Recheck them during implementation: an OS label and explicit Xcode path do not freeze the image, SDK patches or preinstalled packages forever. Record the image version in logs and review removal notices.
+The initial proposed Xcode 16.4 pin was actually tested. Its Swift 6.1.2 compiler failed to type-check the existing `TaskDetail.body` at `TaskDetail.swift:73`, before test execution. Xcode 26.3/Swift 6.2.4 reproduced the same source compiler failure. The user then explicitly approved a behavior-preserving `TaskDetail.body` refactor: eight original view sections became private computed `@ViewBuilder` properties, with the original state, bindings, actions and layout retained. The package deployment target and tests are unchanged. See the ledger for actual results after the refactor.
 
-**Minimum-OS gap:** a macOS 15 test does not validate behavior on the declared macOS 14 minimum. GitHub-hosted macOS 14 is unavailable in the reviewed catalog. A later macOS 14 self-hosted/other authorized runner, or an explicit deployment-target decision, is needed for that guarantee. Do not lower or raise the deployment target in the CI-only change. Add Intel coverage only if supported distribution architectures require it and a suitable current runner is selected; a green ARM64 job proves only the tested architecture.
+[Runner inventory](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-arm64-Readme.md) is rechecked when updating the pin. An OS label and Xcode path do not freeze SDK patches or the hosted image forever. The package still uses Swift tools 6, Swift 5 language mode, and declares macOS 14 minimum.
+
+**Coverage gaps:** macOS 15/ARM64 does not establish macOS 14 or Intel compatibility. Hosted macOS 14 is no longer available in the reviewed inventory; use an authorized minimum-OS environment or a separately approved deployment-target decision for that guarantee. Do not change the product target or provision paid runners as routine CI maintenance.
 
 <a id="ci-002"></a>
 ## CI-002 — Events, exact revision and permissions
 
-Propose `pull_request` (open/synchronize/reopen, including drafts), `push` to main and `workflow_dispatch`. Test drafts too; PR #1 and future work should not need ready-for-review status merely to run tests. Use read-only `contents` permission, no repository/user secrets, no personal workspace data and no production signing credentials. Pin third-party actions to reviewed full commit SHAs and update deliberately. Do not execute untrusted PR code using `pull_request_target` with privileged credentials.
+- `pull_request`: opened, synchronize and reopened, including draft and documentation-only PRs. There are no path filters.
+- `push`: main only, after integration.
+- `workflow_dispatch`: manual use **requires this workflow on the default branch first**. Before PR #1 merges, PR synchronization is the verified route; do not merge merely to enable dispatch.
+- Every run records event, repository, PR number, head/base SHA, event ref/SHA and actual `git rev-parse HEAD`. Checkout uses the event revision and asserts it equals `GITHUB_SHA`. PR CI therefore tests GitHub's synthetic merge commit, not just the PR head. The ledger records both.
+- Job timeout is 30 minutes. Concurrency groups combine workflow name with PR number or ref and cancel superseded runs in that group. Different PR numbers and branch refs have separate groups. This grouping is statically checked; unrelated-branch cancellation has not been tested by opening extra PRs. A cancelled run is not a pass.
+- `contents: read` is the only requested token permission. Checkout does not persist credentials. No user/repository secrets, production signing credentials or personal workspace data are needed. There is no privileged `pull_request_target` execution, cache, deployment or repository-settings write.
+- Official actions use verified full commit pins: checkout v7.0.1 (`3d3c42e5aac5ba805825da76410c181273ba90b1`) and upload-artifact v7.0.2 (`cf430e030ddbb5b0abf93d22962f4752f3646cd9`), both Node 24. Review version, inputs and upstream release before changing them.
 
-Record event, repository, PR number when present, head SHA, base SHA, ref and actual `git rev-parse HEAD`. By default a [pull_request event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request) checks a synthetic merge commit, not necessarily the PR head. Label results with the revision actually tested; distinguish a head-specific investigation from the normal merge-compatibility gate. Use explicit SHA inputs/checkouts only in a reviewed manual-run design, and log them. A main push validates the real merged revision separately.
-
-[Manual dispatch](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch) requires the workflow definition on the default branch. A proposed/new branch workflow therefore cannot promise dispatch before that prerequisite is satisfied. PR events are the initial validation route for a new workflow. Give each run a bounded timeout and concurrency cancellation for superseded revisions, without treating cancelled runs as passes. See [secure use](https://docs.github.com/en/actions/reference/security/secure-use).
+See GitHub's [PR event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request), [manual dispatch](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch) and [secure use](https://docs.github.com/en/actions/reference/security/secure-use) documentation.
 
 <a id="ci-003"></a>
-## CI-003 — Required checks and artifacts
+## CI-003 — Stages and artifacts
 
-Run these repository-supported stages on the selected Mac, preserving the real exit status when output is piped to logs:
+1. Checkout and record provenance, then verify pinned toolchain.
+2. Run `swift test --disable-sandbox`, capturing both XCTest and Swift Testing output. Counts are observed evidence, not a hard-coded pass threshold. A compilation failure is not a completed test run.
+3. If the test stage fails, retry the already-built test binary with `swift test --disable-sandbox --skip-build` for additional diagnostics. This cannot erase the original failure and is not a replacement passing gate.
+4. Run the unchanged `./scripts/build-app.sh` after toolchain success, even if tests fail, to collect independent release-build evidence.
+5. Run `codesign --verify --deep --strict --verbose=2 build/Taskovsky.app`.
+6. Package with macOS `ditto -c -k --sequesterRsrc --keepParent`, restore into a disposable directory, check executable permission and byte identity, and verify the restored bundle's signature. Save a SHA-256 checksum next to the archive.
+7. Upload the app ZIP and checksum as `Taskovsky-<actual-tested-SHA>-arm64` only after earlier required stages succeed.
+8. Always write a stage-outcome summary and upload available logs as `diagnostics-<actual-tested-SHA>-ARM64`, including after a failed test/build. Runner loss or cancellation may prevent even an always-run cleanup step; no diagnostics are promised after infrastructure termination.
 
-1. Print checkout/toolchain/environment provenance and resolve/build package dependencies as needed.
-2. `swift test --disable-sandbox`. The existing suite includes Foundation/Combine/AppKit-dependent tests, XCTest and Swift Testing. Capture both frameworks' results; do not hard-code 464 as a permanent expected count. That is the prior PR #2 result, not a CI result.
-3. `./scripts/build-app.sh` to assemble and locally sign the release application.
-4. `codesign --verify --deep --strict --verbose=2 build/Taskovsky.app`.
-5. Upload test/build/signature logs and provenance even when a stage fails. Name artifacts with the actual tested SHA and architecture, use bounded retention, and retain only disposable test data. When sharing the built app, package it on macOS in a format that preserves its bundle layout, permissions and symlinks, then validate the packaged artifact. A raw cross-platform artifact upload must not be assumed to preserve an executable bundle correctly.
+Shell steps use `set -euo pipefail` so `tee` cannot hide command failures. A failed test stage keeps the job failed even if diagnostic tests or independent release/signature checks pass. Archive production/upload require all normal prior stages to succeed; the summary distinguishes `failure`, `success` and `skipped`. Both artifact families retain for **14 days**, not indefinitely. Download needed evidence before expiry; GitHub log retention is separately controlled by repository settings. Artifacts require appropriate GitHub access. The nested ZIP preserves the macOS bundle rather than relying on raw artifact uploads to preserve executable modes.
 
-Start without a build cache to establish reliable baseline behavior. If caching is later useful, key it by OS/architecture, Swift/Xcode version and relevant package inputs; a stale compiled-module cache must not masquerade as a source failure. No secrets are needed for ad-hoc local signing; this is not Developer ID signing, notarization, distribution or deployment. No deployment stage is proposed.
+Start with no build cache. Ad-hoc signing needs no private certificate and does not make this app a trusted distribution release. The archived binary is built and signature-checked, not launched or installed as part of CI.
 
 <a id="ci-004"></a>
 ## CI-004 — GUI and operational limits
 
-- A hosted macOS job can run the existing automated tests; it does not turn the documented manual Calendar/editor checks into automated GUI tests. Native drag/drop, focus, VoiceOver, real window geometry, permissions and interactive session behavior need a separately designed harness and isolated fixtures. Do not claim live gestures passed because store regressions passed.
-- The macOS 15/ARM64 environment differs from both the minimum supported OS and any Intel target. Record that limitation until a deliberate matrix covers them.
-- Standard hosted runners for this public repository are currently free under [GitHub Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions). Larger runners, private-repository execution, storage/retention or future plan changes may incur charges; consult [runner pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing) before changing runner class or repository visibility. Do not provision paid runners under this proposal.
-- Queues, usage/concurrency/time limits and runner availability can delay or cancel jobs. Use the current [Actions limits](https://docs.github.com/en/actions/reference/limits), sensible timeouts and cancellable superseded builds. A missing or cancelled result blocks a gate rather than establishing success.
-- Toolchain pins age as images change. Re-verify Xcode availability and supported labels before implementation and when an image update breaks setup. Preserve logs that distinguish infrastructure/setup failure from compiler/test failure.
-- GitHub app/token access must allow Actions reads to inspect logs and appropriate write permission for dispatch/reruns. Verify those permissions at implementation rather than promising remote execution from an untested connector. The workflow can still run from configured repository events even if a particular client cannot dispatch it.
+- Existing unit/store/text tests are not live Calendar gestures, VoiceOver, focus, window geometry, appearance, OS permissions or native editor Undo/Redo checks. Use isolated fixtures and a separately designed native harness for those.
+- Standard hosted runners for this public repository are currently free under [Actions billing](https://docs.github.com/en/billing/concepts/product-billing/github-actions). Larger runners, private execution, changed storage/retention or future plans can incur charges. Recheck [pricing](https://docs.github.com/en/billing/reference/actions-runner-pricing) before changing scope.
+- Queues, usage limits, image/toolchain changes and runner availability can delay or fail a run. Consult [Actions limits](https://docs.github.com/en/actions/reference/limits) and distinguish infrastructure/setup errors from source failures.
+- GitHub Actions reads and job-log/artifact listing were exercised through the connected client. Dispatch/rerun permissions are separate; this implementation was triggered through PR events. Do not claim a client can dispatch until both permissions and default-branch availability are verified.
+- No branch-protection or required-status rule was added. A visible passing check is not an enforced merge gate until the owner separately authorizes that configuration.
 
 <a id="ci-005"></a>
-## CI-005 — Acceptance for the later implementation
+## CI-005 — Verification and routine use
 
-A separate implementation PR should demonstrate a real macOS run for its exact recorded checkout, with all existing suites, app build and signature check passing, durable logs and clear failure summaries. Prove that an intentional failing test fails the job and uploads diagnostics using a controlled temporary change. Check a docs-only draft PR runs as intended and that concurrency does not cancel an unrelated branch. Verify workflow syntax/security, artifact integrity and the default-branch manual-dispatch prerequisite.
+For a feature branch, push changes to a draft/open PR and inspect its latest macOS CI run. Match the PR head, base and tested merge SHA in provenance before accepting results. Require all applicable stages and inspect failures in `tests.log`, `build.log`, `signature.log` or `package.log`; retrieve `summary.md` and environment logs from diagnostics. A changed head needs a new result.
 
-Only after a stable run should required-status/branch-protection changes be considered under separate authorization. Report remaining minimum-OS, architecture and GUI gaps. Keep [verification](verification.md), [workflow](workflow.md) and future feature acceptance evidence synchronized, using the actual run link and tested SHA rather than the proposed YAML or a historic local test count.
+The [verification ledger](verification.md#hosted-macos-ci) is the implementation acceptance record, including the baseline run, controlled failure behavior, archive validation and exact environment. Hosted success does not close the recorded minimum-OS, Intel or manual UI gaps. Main-push/manual event paths remain configured but unexecuted until separately authorized integration. A later required-status change or deployment needs its own authorization.
