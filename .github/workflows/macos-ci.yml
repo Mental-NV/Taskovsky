@@ -79,14 +79,24 @@ jobs:
           set -euo pipefail
           swift test --disable-sandbox 2>&1 | tee "$CI_LOG_DIR/tests.log"
 
+      - name: Run already-built tests after a failed test stage
+        id: test_diagnostics
+        if: ${{ !cancelled() && steps.tests.outcome == 'failure' }}
+        run: |
+          set -euo pipefail
+          # This diagnostic run never clears the original failing test stage.
+          swift test --disable-sandbox --skip-build 2>&1 | tee "$CI_LOG_DIR/tests-diagnostic.log"
+
       - name: Build release application
         id: build
+        if: ${{ !cancelled() && steps.toolchain.outcome == 'success' }}
         run: |
           set -euo pipefail
           ./scripts/build-app.sh 2>&1 | tee "$CI_LOG_DIR/build.log"
 
       - name: Verify local signature
         id: signature
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: |
           set -euo pipefail
           codesign --verify --deep --strict --verbose=2 build/Taskovsky.app 2>&1 | tee "$CI_LOG_DIR/signature.log"
@@ -125,6 +135,7 @@ jobs:
           PROVENANCE_OUTCOME: ${{ steps.provenance.outcome }}
           TOOLCHAIN_OUTCOME: ${{ steps.toolchain.outcome }}
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          TEST_DIAGNOSTICS_OUTCOME: ${{ steps.test_diagnostics.outcome }}
           BUILD_OUTCOME: ${{ steps.build.outcome }}
           SIGNATURE_OUTCOME: ${{ steps.signature.outcome }}
           PACKAGE_OUTCOME: ${{ steps.package.outcome }}
@@ -135,7 +146,7 @@ jobs:
           {
             printf '# macOS CI result\n\nTested checkout: `%s`\n\n' "${TESTED_SHA:-unavailable}"
             printf '| Stage | Outcome |\n| --- | --- |\n'
-            printf '| Provenance | %s |\n| Toolchain | %s |\n| Tests | %s |\n| Build | %s |\n| Signature | %s |\n| Archive verification | %s |\n| App upload | %s |\n' "$PROVENANCE_OUTCOME" "$TOOLCHAIN_OUTCOME" "$TESTS_OUTCOME" "$BUILD_OUTCOME" "$SIGNATURE_OUTCOME" "$PACKAGE_OUTCOME" "$UPLOAD_OUTCOME"
+            printf '| Provenance | %s |\n| Toolchain | %s |\n| Tests | %s |\n| Diagnostic test retry | %s |\n| Build | %s |\n| Signature | %s |\n| Archive verification | %s |\n| App upload | %s |\n' "$PROVENANCE_OUTCOME" "$TOOLCHAIN_OUTCOME" "$TESTS_OUTCOME" "$TEST_DIAGNOSTICS_OUTCOME" "$BUILD_OUTCOME" "$SIGNATURE_OUTCOME" "$PACKAGE_OUTCOME" "$UPLOAD_OUTCOME"
             printf '\nThe app is ad-hoc signed, not notarized or deployed. This run does not validate macOS 14, Intel, or interactive UI behavior.\n'
           } | tee "$CI_LOG_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
 
