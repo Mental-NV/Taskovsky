@@ -12,6 +12,7 @@ public enum TaskCalendarMode: String, Codable, CaseIterable, Sendable {
 }
 public enum CalendarColorMode: String, Codable, CaseIterable, Sendable { case list, tag, priority }
 public enum CalendarItemStyle: String, Codable, CaseIterable, Sendable { case filled, outline }
+public enum CalendarYearStyle: String, Codable, CaseIterable, Sendable { case standard, heatmap }
 
 /// Local Calendar scope is independent of smart-list inclusion. Archived
 /// lists stay hidden. Missing settings decode to the local defaults.
@@ -25,7 +26,23 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     public var showChecklistItems = false
     public var colorBy: CalendarColorMode = .list
     public var itemStyle: CalendarItemStyle = .filled
-    public var additionalTimeZoneID: String? = nil
+    public var yearStyle: CalendarYearStyle = .heatmap
+    public var showItemIcons = true
+    public var showAdditionalTimeZones = false
+    public var additionalTimeZones: [CalendarTimeZone] = []
+    /// Compatibility with the original single-ruler setting. New callers should
+    /// configure the collection and visibility independently.
+    public var additionalTimeZoneID: String? {
+        get { showAdditionalTimeZones ? CalendarTimeZone.normalized(additionalTimeZones).first?.identifier : nil }
+        set {
+            additionalTimeZones = CalendarTimeZone.normalized(newValue.map { [CalendarTimeZone(identifier: $0)] } ?? [])
+            showAdditionalTimeZones = !additionalTimeZones.isEmpty
+        }
+    }
+    public func visibleTimeZones(primary: TimeZone) -> [CalendarTimeZone] {
+        guard showAdditionalTimeZones else { return [] }
+        return CalendarTimeZone.normalized(additionalTimeZones).filter { $0.identifier != primary.identifier }
+    }
     /// Nil = every active list; [] = none. Inbox is controlled separately.
     public var listIDs: [UUID]? = nil
     public var includeInbox = true
@@ -34,7 +51,8 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     public init() {}
     private enum CodingKeys: String, CodingKey {
         case mode, multiDayCount, multiWeekCount, showSidebar, showCompleted, showRepeatCycles,
-             showChecklistItems, colorBy, itemStyle, additionalTimeZoneID, listIDs, includeInbox, tagIDs
+             showChecklistItems, colorBy, itemStyle, additionalTimeZoneID, listIDs, includeInbox, tagIDs,
+             yearStyle, showItemIcons, showAdditionalTimeZones, additionalTimeZones
     }
     public init(from decoder: Decoder) throws {
         self.init()
@@ -48,11 +66,37 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         showChecklistItems = try c.decodeIfPresent(Bool.self, forKey: .showChecklistItems) ?? showChecklistItems
         colorBy = (try? c.decode(CalendarColorMode.self, forKey: .colorBy)) ?? colorBy
         itemStyle = (try? c.decode(CalendarItemStyle.self, forKey: .itemStyle)) ?? itemStyle
-        additionalTimeZoneID = try c.decodeIfPresent(String.self, forKey: .additionalTimeZoneID)
-        if let id = additionalTimeZoneID, TimeZone(identifier: id) == nil { additionalTimeZoneID = nil }
+        yearStyle = (try? c.decode(CalendarYearStyle.self, forKey: .yearStyle)) ?? yearStyle
+        showItemIcons = try c.decodeIfPresent(Bool.self, forKey: .showItemIcons) ?? showItemIcons
+        if c.contains(.additionalTimeZones) {
+            additionalTimeZones = CalendarTimeZone.normalized((try? c.decode([CalendarTimeZone].self, forKey: .additionalTimeZones)) ?? [])
+            showAdditionalTimeZones = try c.decodeIfPresent(Bool.self, forKey: .showAdditionalTimeZones) ?? !additionalTimeZones.isEmpty
+        } else {
+            additionalTimeZoneID = try c.decodeIfPresent(String.self, forKey: .additionalTimeZoneID)
+        }
         listIDs = try c.decodeIfPresent([UUID].self, forKey: .listIDs)
         includeInbox = try c.decodeIfPresent(Bool.self, forKey: .includeInbox) ?? includeInbox
         tagIDs = try c.decodeIfPresent([UUID].self, forKey: .tagIDs) ?? []
+    }
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(mode, forKey: .mode)
+        try c.encode(multiDayCount, forKey: .multiDayCount)
+        try c.encode(multiWeekCount, forKey: .multiWeekCount)
+        try c.encode(showSidebar, forKey: .showSidebar)
+        try c.encode(showCompleted, forKey: .showCompleted)
+        try c.encode(showRepeatCycles, forKey: .showRepeatCycles)
+        try c.encode(showChecklistItems, forKey: .showChecklistItems)
+        try c.encode(colorBy, forKey: .colorBy)
+        try c.encode(itemStyle, forKey: .itemStyle)
+        try c.encode(yearStyle, forKey: .yearStyle)
+        try c.encode(showItemIcons, forKey: .showItemIcons)
+        try c.encode(showAdditionalTimeZones, forKey: .showAdditionalTimeZones)
+        try c.encode(CalendarTimeZone.normalized(additionalTimeZones), forKey: .additionalTimeZones)
+        try c.encodeIfPresent(additionalTimeZoneID, forKey: .additionalTimeZoneID)
+        try c.encodeIfPresent(listIDs, forKey: .listIDs)
+        try c.encode(includeInbox, forKey: .includeInbox)
+        try c.encode(tagIDs, forKey: .tagIDs)
     }
     public func includes(_ task: TaskItem, data: WorkspaceData) -> Bool {
         guard task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: data.lists) else { return false }

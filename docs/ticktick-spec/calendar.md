@@ -111,3 +111,37 @@ Native automation had inconsistent drag coordinates/sessions in later attempts. 
 The four findings in [the review report](../pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026) were confirmed and fixed. Existing Schedule… drafts retain point/range shape and exact endpoints; unchanged Save performs no mutation, and Duration explicitly converts a point to a range. Moving an existing range preserves exact elapsed duration even below 15 minutes or at zero. Only visual hit areas, new block defaults and explicit resize use their separate minimum policies. Projected checklist items reset to unchecked, matching real successors, while current checklist visibility keeps its existing behavior. Arrange classifies all-day overdue tasks by the same civil due/end date used in Calendar, while timed tasks remain absolute.
 
 The full suite now passes **464 tests** (430 XCTest + 34 Swift Testing), including 11 new regressions. Release build and code-signature verification pass. Isolated live checks confirmed unchanged point/short/zero saves with byte-identical persistence, explicit duration conversion/Undo, preview checklist visibility and Tokyo civil-date Arrange classification. Native short-block drops remained unconfirmed through Computer Use; production store tests verify exact short-window movement, reminder offsets, reload and Undo. See the review's resolution section for precise evidence and limits. External integration deferrals are unchanged.
+
+## Display-gap follow-up — 8 November 2026
+
+The [detailed gap investigation](../calendar-gap-investigation-2026-11-08.md) extends the merged Calendar baseline. It distinguishes runtime observations, static controls, local interpretations and unknowns. The executable digest still matches the reference above. Current hashes also match the retained time-zone and style nib evidence. [REA session diagnostics](evidence/calendar-gap-session-summary.json) record the unavailable Hopper bridge and unknown lease ownership; no native handler analysis or forced recovery was performed.
+
+TickTick runtime confirmed an additional New York zone with a saved custom NYC label and a ruler eight hours behind Moscow, plus the ability to stage another row. Time-zone configuration's maximum, reorder/emoji behavior and Cancel semantics remain unverified. Static time-zone settings nib controls corroborate add/save/cancel/delete/label/zone surfaces. The style nib exposes Standard/Heatmap and Show Item Icon controls; their exact runtime behavior was not established. No weekend control was visible in the inspected Day/Week options despite its presence in resources.
+
+### Added local behavior
+
+- Up to three named secondary time zones, with searchable city/region selection, editable labels, replacement, explicit order/removal buttons and staged Save/Cancel. The three-row limit and 32-character label limit are deliberate Taskovsky policies. The independent visibility switch preserves configured rows. Current-zone duplicates remain configured but their extra ruler is hidden.
+- Day, Week and Multi-Day render these rulers in saved order using Foundation's installed zone data. Header labels fall back to date-specific abbreviations; hour hover text includes the date in that zone. Multi-day rulers use the first displayed date, so a later DST change within the range can have a different offset. No scheduling field or primary-zone setting is changed.
+- Legacy single-zone preferences migrate to an enabled row. New keys take precedence even for an empty collection. Invalid/duplicate IDs are discarded, and hidden configurations survive persistence.
+- Year offers Standard (item dots) and Heatmap (existing count shading). The previous heatmap default and date drill-down are preserved. Card Filled/Outline style remains separate. These rendering choices are local interpretations, not verified TickTick pixel parity.
+- Show Item Icons hides leading task/note/repeat/checklist icons across entry cards. Tasks retain Complete/Reopen in the card context menu. Projection, counts, dates and completion state do not depend on this switch. The options sheet scrolls while keeping Done available.
+
+### Final verification
+
+Full suite: **471 passed** (437 XCTest + 34 Swift Testing), including seven new preference regressions. Release build and `codesign --verify --deep --strict build/Taskovsky.app` pass. Final release executable SHA-256: `ef3346eb5cccc2a36a55aa4f540569a3b9433cf9d3a88fb0d5135bcee57669c4`. Ignored logs: `build/verification/calendar-gap-tests.log` and `calendar-gap-build.log`.
+
+Live checks used the signed release in a separate `local.taskovsky.calendar-display-qa` app with explicit disposable workspace/settings paths under `/private/tmp/TaskovskyCalendarDisplayQA-1108`.
+
+| Check | Observed result |
+| --- | --- |
+| Search / choose | Search New York, Tokyo and London narrowed results. The final picker supports single-click row selection and Choose/Return. An interfering double-click gesture found during QA was removed. |
+| Labels / order / limit | Saved Tokyo and NYC labels appeared before GMT+3 in the chosen order. Tokyo led Moscow by six hours and NYC lagged by eight. A third London ruler appeared; Add was disabled at three. |
+| Save / Cancel / remove | Removing NYC then Cancel preserved it on reopening. Saving a London removal removed that ruler and retained Tokyo/NYC. |
+| Visibility / reload | Off hid both extra rulers; On restored labels/order. Configuration, icon visibility and Year style persisted in settings and were present after process relaunch. |
+| Icons / completion | Icons and checkbox buttons disappeared while task titles and schedule editors remained. The context menu completed and reopened the disposable non-repeating overlap task. |
+| Year | Standard visibly used dots; Heatmap restored shading. Each showed its matching legend. Selecting 8 November returned to the previous Day detail mode. |
+| Isolation / shutdown | The fixture retained 12 tasks; all due dates, duration windows, zones, recurrence/reminder fields and occurrence indices matched a fresh seed after the checks. The QA app was closed and its running-app state became false. No production Taskovsky workspace was used. |
+
+Exact compact-window layout with three rulers, cross-column DST rulers, TickTick style rendering, weekend availability, working-hour handles, gesture anchoring and the earlier unverified drag paths remain outside these checks. Continuous all-day bars, independent checklist scheduling, series exceptions and native Calendar undo/shortcut parity remain open local differences. External integrations remain deliberately deferred in the existing parity decision table.
+
+Reference cleanup: Day mode, hidden sidebar, current date and original window size were restored through Computer Use. Automation could not reach the temporary New York/NYC ruler's delete control. The user subsequently replied “Restored” to the request to remove that extra row and leave Moscow, completing cleanup by user confirmation. The final time-zone state was not independently re-inspected. No pre-existing TickTick task was edited.

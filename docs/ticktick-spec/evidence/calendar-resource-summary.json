@@ -203,11 +203,45 @@
       "actions": [
         "sidebarButtonClicked:"
       ]
+    },
+    {
+      "relative_path": "Contents/Resources/TTCalendarTimeZoneSettingsViewController.nib",
+      "archive_sha256": "287e0a8cfa1cea26aa40e143c24ac5f3e3fbd2eb8702af36c1dae0ca03d25377",
+      "document_kind": "nib",
+      "object_count": 115,
+      "connection_count": 21,
+      "hierarchy_complete": true,
+      "outlets": [
+        "addButton",
+        "cancelButton",
+        "descContainer",
+        "descDivider",
+        "descTextField",
+        "dragIndicator",
+        "emojiButton",
+        "removeButton",
+        "saveButton",
+        "scrollViewBottomLC",
+        "scrollViewHeightLC",
+        "tableView",
+        "timezoneButton",
+        "titleLabel",
+        "view"
+      ],
+      "actions": [
+        "addButtonClicked:",
+        "cancelButtonClicked:",
+        "deleteButtonClicked:",
+        "emojiButtonClicked:",
+        "saveButtonClicked:",
+        "timezoneButtonClicked:"
+      ]
     }
   ],
   "localization_evidence_id": "ev_fc67899dfdd7aabe3be6073d5dd180bd3821f355ac378bafe8b955f146b29e55",
   "localization_excerpt": {
     "calendar_view_year_heatmap": "Heatmap",
     "calendar_view_year_heatmap_desc": "Show a heatmap of all items by quantity in the yearly view."
-  }
+  },
+  "rechecked_source_hashes_on": "2026-11-08"
 }

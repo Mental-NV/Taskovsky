@@ -12,7 +12,8 @@ struct CalendarHourlyView: View {
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
     private let hourHeight: CGFloat = 60
-    private var gutter: CGFloat { options.additionalTimeZoneID == nil ? 54 : 104 }
+    private var zones: [CalendarTimeZone] { options.visibleTimeZones(primary: calendar.timeZone) }
+    private var gutter: CGFloat { 54 + CGFloat(zones.count) * 64 }
 
     var body: some View {
         GeometryReader { geometry in
@@ -21,10 +22,11 @@ struct CalendarHourlyView: View {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         HStack(spacing: 4) {
-                            if let id = options.additionalTimeZoneID, let zone = TimeZone(identifier: id) {
-                                Text(zone.abbreviation(for: days.first ?? Date()) ?? id)
-                                    .help(id + " · " + CalendarText.date(days.first ?? Date(), "MMM d", calendar: calendar))
-                                    .frame(maxWidth: .infinity)
+                            ForEach(zones) { zone in
+                                Text(zone.title(at: days.first ?? Date())).lineLimit(1)
+                                    .help(zone.identifier + " · Ruler for " + CalendarText.date(days.first ?? Date(), "MMM d", calendar: calendar))
+                                    .accessibilityLabel("Time zone " + zone.title(at: days.first ?? Date()) + ", " + zone.identifier)
+                                    .frame(width: 60)
                             }
                             Text(calendar.timeZone.abbreviation(for: days.first ?? Date()) ?? calendar.timeZone.identifier)
                                 .help(calendar.timeZone.identifier).frame(maxWidth: .infinity)
@@ -68,7 +70,7 @@ struct CalendarHourlyView: View {
                 let next = calendar.date(byAdding: .day, value: 1, to: day) ?? day
                 ScrollView(.vertical) { VStack(spacing: 3) {
                     ForEach(entries.filter { $0.isAllDay && $0.start < next && $0.end > day }) { entry in
-                        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, compact: true,
+                        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showItemIcons, compact: true,
                             open: open, complete: complete, edit: edit).calendarDraggable(entry)
                     }
                     Button { create(day, day, true) } label: { Image(systemName: "plus").font(.system(size: 9)).frame(maxWidth: .infinity) }
@@ -88,11 +90,14 @@ struct CalendarHourlyView: View {
         VStack(spacing: 0) {
             ForEach(0..<24, id: \.self) { hour in
                 HStack(spacing: 4) {
-                    if let id = options.additionalTimeZoneID, let zone = TimeZone(identifier: id) {
+                    ForEach(zones) { ruler in
                         var other = calendar
-                        let _ = other.timeZone = zone
-                        Text(CalendarText.time(CalendarDates.instant(on: days.first ?? Date(), minute: hour * 60, calendar: calendar), calendar: other))
-                            .help(id).foregroundStyle(.tertiary)
+                        let _ = other.timeZone = TimeZone(identifier: ruler.identifier) ?? calendar.timeZone
+                        let instant = CalendarDates.instant(on: days.first ?? Date(), minute: hour * 60, calendar: calendar)
+                        Text(CalendarText.time(instant, calendar: other))
+                            .frame(width: 60, alignment: .trailing)
+                            .help(ruler.identifier + " · " + CalendarText.date(instant, "EEE MMM d HHmm", calendar: other))
+                            .foregroundStyle(.tertiary)
                     }
                     Text(String(format: "%02d:00", hour)).foregroundStyle(.secondary)
                 }.font(.system(size: 10)).frame(width: gutter - 8, height: hourHeight, alignment: .topTrailing)
@@ -180,7 +185,7 @@ private struct CalendarTimedBlock: View {
     }
     var body: some View {
         let height = max(15, CGFloat(placement.endMinute - placement.startMinute) * scale + resizeDelta)
-        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, compact: height < 40,
+        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showItemIcons, compact: height < 40,
             open: open, complete: complete, edit: edit)
             .frame(height: height, alignment: .top).clipped()
             .calendarDraggable(entry)
@@ -291,7 +296,7 @@ private struct CalendarMonthCell: View {
             }
     }
     private func card(_ entry: CalendarEntry) -> some View {
-        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, compact: true,
+        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showItemIcons, compact: true,
             open: open, complete: complete, edit: edit).calendarDraggable(entry)
     }
 }
@@ -300,6 +305,7 @@ struct CalendarYearView: View {
     var focus: Date
     var entries: [CalendarEntry]
     var calendar: Calendar
+    var style: CalendarYearStyle
     var select: (Date) -> Void
     var body: some View {
         let start = calendar.dateInterval(of: .year, for: focus)?.start ?? focus
@@ -311,11 +317,11 @@ struct CalendarYearView: View {
                 ForEach(months, id: \.self) { month in
                     VStack(alignment: .leading, spacing: 10) {
                         Text(CalendarText.date(month, "MMMM", calendar: calendar)).font(.system(size: 15, weight: .semibold))
-                        CalendarMiniMonth(month: month, counts: counts, heatmap: true, calendar: calendar, select: select)
+                        CalendarMiniMonth(month: month, counts: counts, heatmap: style == .heatmap, calendar: calendar, select: select)
                     }
                 }
             }.padding(24)
-            Text("Darker dates contain more visible items. Select a date to open it.")
+            Text(style == .heatmap ? "Darker dates contain more visible items. Select a date to open it." : "Dots mark dates with visible items. Select a date to open it.")
                 .font(.caption).foregroundStyle(.secondary).padding(.bottom, 20)
         }
     }
@@ -347,7 +353,7 @@ struct CalendarAgendaView: View {
                             }
                             if items.isEmpty { Text("No scheduled tasks").font(.system(size: 12)).foregroundStyle(.secondary) }
                             ForEach(items) { entry in
-                                CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar,
+                                CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showItemIcons,
                                     open: open, complete: complete, edit: edit).fixedSize(horizontal: false, vertical: true).calendarDraggable(entry)
                             }
                         }

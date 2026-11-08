@@ -166,9 +166,9 @@ struct TaskCalendarWorkspace: View {
                 .accessibilityLabel("Calendar actions")
                 .sheet(isPresented: $viewOptions) {
                     VStack(alignment: .leading, spacing: 18) {
-                        CalendarViewOptions(options: options)
+                        ScrollView { CalendarViewOptions(options: options, calendar: calendar) }
                         HStack { Spacer(); Button("Done") { viewOptions = false }.keyboardShortcut(.cancelAction) }
-                    }.padding(18).frame(width: 340)
+                    }.padding(18).frame(width: 360, height: 560)
                 }
         }
     }
@@ -184,7 +184,7 @@ struct TaskCalendarWorkspace: View {
             CalendarHourlyView(days: days, entries: entries, calendar: calendar, options: options.wrappedValue,
                 open: onOpenTask, complete: complete, create: createRange, schedule: schedule, edit: editEntry)
         } else if mode == .year {
-            CalendarYearView(focus: focus, entries: entries, calendar: calendar) { day in
+            CalendarYearView(focus: focus, entries: entries, calendar: calendar, style: options.wrappedValue.yearStyle) { day in
                 focus = day; options.wrappedValue.mode = detailedMode
             }
         } else if mode == .agenda {
@@ -297,6 +297,8 @@ struct CalendarTaskEditor: View {
 
 struct CalendarViewOptions: View {
     @Binding var options: TaskCalendarOptions
+    var calendar: Calendar
+    @State private var timeZoneSettings = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Calendar View Options").font(.headline)
@@ -304,6 +306,16 @@ struct CalendarViewOptions: View {
                 ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }
             Picker("Style", selection: $options.itemStyle) { Text("Filled").tag(CalendarItemStyle.filled); Text("Outline").tag(CalendarItemStyle.outline) }
+            if options.mode == .year {
+                Picker("Year style", selection: $options.yearStyle) {
+                    Text("Standard").tag(CalendarYearStyle.standard)
+                    Text("Heatmap").tag(CalendarYearStyle.heatmap)
+                }
+            } else {
+                Toggle("Show Item Icons", isOn: $options.showItemIcons)
+                Text("With icons hidden, use a task's context menu to complete or reopen it.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Divider()
             Toggle("Show Completed", isOn: $options.showCompleted)
             Toggle("Show Checklist Items", isOn: $options.showChecklistItems)
@@ -312,10 +324,22 @@ struct CalendarViewOptions: View {
             Stepper("Multi-Day: \(options.multiDayCount) days", value: $options.multiDayCount, in: 2...14)
             Stepper("Multi-Week: \(options.multiWeekCount) weeks", value: $options.multiWeekCount, in: 2...6)
             Divider()
-            Picker("Additional time zone", selection: Binding(get: { options.additionalTimeZoneID ?? "" }, set: { options.additionalTimeZoneID = $0.isEmpty ? nil : $0 })) {
-                Text("None").tag("")
-                ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) }
+            Toggle("Additional Time Zones", isOn: $options.showAdditionalTimeZones)
+            HStack {
+                Button("Time Zone Settings…") { timeZoneSettings = true }
+                Spacer()
+                Text("\(options.additionalTimeZones.count) configured").foregroundStyle(.secondary)
             }
+                .sheet(isPresented: $timeZoneSettings) {
+                    CalendarTimeZoneSettings(zones: options.additionalTimeZones, primary: calendar.timeZone) { zones in
+                        options.additionalTimeZones = zones
+                    }
+                }
+            Text("Rulers appear in Day, Week and Multi-Day. They use the first displayed date; hover an hour for its date in that zone.")
+                .font(.caption).foregroundStyle(.secondary)
         }.font(.system(size: 12)).toggleStyle(.switch)
+            .onChange(of: options.showAdditionalTimeZones) { _, enabled in
+                if enabled && options.additionalTimeZones.isEmpty { timeZoneSettings = true }
+            }
     }
 }
