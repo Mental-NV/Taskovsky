@@ -31,6 +31,6 @@ The Normal Date selector's accessibility tree listed All, No Date, Overdue, Repe
 
 Advanced mode displayed a sequence of `Filter`, `Logic`, `Filter` placeholders and a plus button. Clicking plus added another Logic/Filter pair. The placeholders appeared disabled in the observed account state; the reason and the expression semantics have not been established. No filter was saved, so whether all current full-search criteria transfer to the saved filter is unknown.
 
-## Taskovsky comparison
+## Taskovsky implementation status
 
-Taskovsky's [full search](../../Sources/Taskovsky/SearchView.swift) offers All Dates, Today, Tomorrow, Next 7 Days, Overdue and No Date, plus multi-select lists/tags and status. Its [filter model](../../Sources/TaskovskyCore/Settings.swift) represents a single date rule and optional single priority, and matches any selected tag. It lacks the observed search week/month/custom ranges, a No Tags choice, and the saved-filter multi-date, multi-priority, task/note type and advanced expression controls. This comparison establishes control/model differences; it does not establish how TickTick combines selected criteria. The user excluded account/sync features from Taskovsky, so Cloud Search remains outside implementation scope.
+Use the [dedicated parity tracker](../parity-implementation-status.md) for current search/filter support and differences. The earlier model comparison in this reference document is superseded. TickTick combination semantics above remain unverified; Taskovsky's AND/OR/NOT rules are independent implementation choices, not proven reference equivalence. Cloud Search remains outside the current Taskovsky scope.
