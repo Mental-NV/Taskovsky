@@ -1,0 +1,149 @@
+name: macOS CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-and-build:
+    name: Test and package (macOS 15, ARM64)
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
+      CI_LOG_DIR: ${{ runner.temp }}/taskovsky-ci-logs
+      CI_PACKAGE_DIR: ${{ runner.temp }}/taskovsky-ci-package
+    steps:
+      - name: Check out event revision
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Record checkout and runner provenance
+        id: provenance
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT_REF: ${{ github.ref }}
+          EVENT_SHA: ${{ github.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$CI_LOG_DIR" "$CI_PACKAGE_DIR"
+          actual_sha="$(git rev-parse HEAD)"
+          architecture="$(uname -m)"
+          printf 'sha=%s\narch=%s\n' "$actual_sha" "$architecture" >> "$GITHUB_OUTPUT"
+          {
+            printf 'event=%s\nrepository=%s\nref=%s\nevent_sha=%s\n' "$EVENT_NAME" "$REPOSITORY" "$EVENT_REF" "$EVENT_SHA"
+            printf 'pr=%s\npr_head_sha=%s\npr_base_sha=%s\n' "$PR_NUMBER" "$PR_HEAD_SHA" "$PR_BASE_SHA"
+            printf 'tested_sha=%s\narchitecture=%s\n' "$actual_sha" "$architecture"
+            printf 'image_os=%s\nimage_version=%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+            printf 'developer_dir=%s\nrun_id=%s\nrun_attempt=%s\n' "$DEVELOPER_DIR" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            sw_vers
+            uname -a
+            git status --short
+          } 2>&1 | tee "$CI_LOG_DIR/provenance.log"
+          test "$architecture" = arm64
+          test "$actual_sha" = "$EVENT_SHA"
+
+      - name: Verify pinned toolchain
+        id: toolchain
+        run: |
+          set -euo pipefail
+          {
+            test -d "$DEVELOPER_DIR"
+            xcodebuild -version
+            xcrun swift --version
+            xcrun --sdk macosx --show-sdk-version
+            test "$(xcodebuild -version | head -n 1)" = 'Xcode 16.4'
+          } 2>&1 | tee "$CI_LOG_DIR/toolchain.log"
+
+      - name: Run all Swift tests
+        id: tests
+        run: |
+          set -euo pipefail
+          swift test --disable-sandbox 2>&1 | tee "$CI_LOG_DIR/tests.log"
+
+      - name: Build release application
+        id: build
+        run: |
+          set -euo pipefail
+          ./scripts/build-app.sh 2>&1 | tee "$CI_LOG_DIR/build.log"
+
+      - name: Verify local signature
+        id: signature
+        run: |
+          set -euo pipefail
+          codesign --verify --deep --strict --verbose=2 build/Taskovsky.app 2>&1 | tee "$CI_LOG_DIR/signature.log"
+
+      - name: Package and verify application archive
+        id: package
+        run: |
+          set -euo pipefail
+          {
+            archive="$CI_PACKAGE_DIR/Taskovsky-macos-arm64.zip"
+            ditto -c -k --sequesterRsrc --keepParent build/Taskovsky.app "$archive"
+            restored="$(mktemp -d "$RUNNER_TEMP/taskovsky-archive-check.XXXXXX")"
+            trap 'rm -rf "$restored"' EXIT
+            ditto -x -k "$archive" "$restored"
+            test -x "$restored/Taskovsky.app/Contents/MacOS/Taskovsky"
+            cmp build/Taskovsky.app/Contents/MacOS/Taskovsky "$restored/Taskovsky.app/Contents/MacOS/Taskovsky"
+            codesign --verify --deep --strict --verbose=2 "$restored/Taskovsky.app"
+            file "$restored/Taskovsky.app/Contents/MacOS/Taskovsky"
+            (cd "$CI_PACKAGE_DIR" && shasum -a 256 Taskovsky-macos-arm64.zip > SHA256SUMS)
+            cat "$CI_PACKAGE_DIR/SHA256SUMS"
+          } 2>&1 | tee "$CI_LOG_DIR/package.log"
+
+      - name: Upload application archive
+        id: upload_app
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Taskovsky-${{ steps.provenance.outputs.sha }}-${{ steps.provenance.outputs.arch }}
+          path: ${{ env.CI_PACKAGE_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Write result summary
+        if: always()
+        env:
+          TESTED_SHA: ${{ steps.provenance.outputs.sha }}
+          PROVENANCE_OUTCOME: ${{ steps.provenance.outcome }}
+          TOOLCHAIN_OUTCOME: ${{ steps.toolchain.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          SIGNATURE_OUTCOME: ${{ steps.signature.outcome }}
+          PACKAGE_OUTCOME: ${{ steps.package.outcome }}
+          UPLOAD_OUTCOME: ${{ steps.upload_app.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$CI_LOG_DIR"
+          {
+            printf '# macOS CI result\n\nTested checkout: `%s`\n\n' "${TESTED_SHA:-unavailable}"
+            printf '| Stage | Outcome |\n| --- | --- |\n'
+            printf '| Provenance | %s |\n| Toolchain | %s |\n| Tests | %s |\n| Build | %s |\n| Signature | %s |\n| Archive verification | %s |\n| App upload | %s |\n' "$PROVENANCE_OUTCOME" "$TOOLCHAIN_OUTCOME" "$TESTS_OUTCOME" "$BUILD_OUTCOME" "$SIGNATURE_OUTCOME" "$PACKAGE_OUTCOME" "$UPLOAD_OUTCOME"
+            printf '\nThe app is ad-hoc signed, not notarized or deployed. This run does not validate macOS 14, Intel, or interactive UI behavior.\n'
+          } | tee "$CI_LOG_DIR/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: diagnostics-${{ steps.provenance.outputs.sha || github.sha }}-${{ runner.arch }}
+          path: ${{ env.CI_LOG_DIR }}
+          if-no-files-found: error
+          retention-days: 14
