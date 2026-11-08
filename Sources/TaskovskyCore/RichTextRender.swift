@@ -473,6 +473,42 @@ public enum RichTyping {
         }
     }
 
+    /// Quote indentation shared by the empty-document arm and the
+    /// trailing-paragraph toggle so both paths arm/disarm identically.
+    public static let quoteIndent: CGFloat = 16
+
+    /// Empty-document Quote toggle state: armed when the typing attributes
+    /// already carry the quote marker. A second tap while armed must disarm
+    /// (not re-arm) — mirroring the list/checklist toggle-off.
+    public static func isQuoteArmed(in attrs: [NSAttributedString.Key: Any]) -> Bool {
+        (attrs[RichRender.quoteKey] as? Bool) == true
+    }
+
+    /// Arms quote typing (marker + quote indentation), preserving all other
+    /// typing attributes (inline formatting survives the toggle-on).
+    public static func armedQuoteAttributes(from attrs: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+        var attrs = attrs
+        let style = (attrs[.paragraphStyle] as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+        style.headIndent = quoteIndent
+        style.firstLineHeadIndent = quoteIndent
+        attrs[.paragraphStyle] = style
+        attrs[RichRender.quoteKey] = true
+        return attrs
+    }
+
+    /// Disarms quote typing (drops the marker, zeroes quote indentation),
+    /// preserving all other typing attributes (inline formatting survives
+    /// the toggle-off).
+    public static func disarmedQuoteAttributes(from attrs: [NSAttributedString.Key: Any]) -> [NSAttributedString.Key: Any] {
+        var attrs = attrs
+        let style = (attrs[.paragraphStyle] as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+        style.headIndent = 0
+        style.firstLineHeadIndent = 0
+        attrs[.paragraphStyle] = style
+        attrs.removeValue(forKey: RichRender.quoteKey)
+        return attrs
+    }
+
     /// Typing-attribute half of a Return exit from a paragraph with no
     /// characters to mutate (the trailing empty paragraph, or an armed
     /// empty document). Mirrors what `exitEmptyBlock` clears in storage:
@@ -506,6 +542,42 @@ public enum RichMutate {
         // paragraph math onto the first paragraph instead of the caret.
         if range.length == 0, range.location == storage.length { return range }
         return NSIntersectionRange(range, NSRange(location: 0, length: storage.length))
+    }
+
+    /// Block-formatting range for a selection: the union of the paragraphs
+    /// holding selected characters. An `NSRange` end is exclusive, so the
+    /// last paragraph resolves from the final INCLUDED UTF-16 unit, never
+    /// from the caret position past a trailing newline — otherwise a
+    /// selection ending right after "\n" would swallow the next, unselected
+    /// paragraph. Collapsed carets keep the caret paragraph (existing editor
+    /// behavior, including the exact-EOF caret). Out-of-range locations
+    /// (`NSNotFound`, negative, past the end) and oversized lengths clamp
+    /// to the string without trapping on integer overflow.
+    public static func blockRange(for selection: NSRange, in string: NSString) -> NSRange {
+        let length = string.length
+        guard length > 0 else { return NSRange(location: 0, length: 0) }
+        // Clamp the location first: NSMaxRange-style addition below must
+        // never overflow, so NSNotFound/negative/oversized locations map to
+        // the nearest string edge before any arithmetic.
+        let location: Int
+        if selection.location == NSNotFound || selection.location > length {
+            location = length
+        } else if selection.location < 0 {
+            location = 0
+        } else {
+            location = selection.location
+        }
+        guard selection.length > 0 else {
+            return string.paragraphRange(for: NSRange(location: min(location, max(0, length - 1)), length: 0))
+        }
+        // Cap the end without adding first: `length - location` cannot
+        // underflow (location <= length) and bounds the added span.
+        let remaining = length - location
+        let span = (selection.length == NSNotFound || selection.length < 0) ? remaining : min(selection.length, remaining)
+        let start = string.paragraphRange(for: NSRange(location: min(location, max(0, length - 1)), length: 0))
+        let lastIncluded = max(location, location + span - 1)
+        let end = string.paragraphRange(for: NSRange(location: min(lastIncluded, max(0, length - 1)), length: 0))
+        return NSUnionRange(start, end)
     }
 
     public static func toggleTrait(_ trait: NSFontTraitMask, in storage: NSTextStorage, range: NSRange) {

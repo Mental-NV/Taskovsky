@@ -61,10 +61,15 @@ final class RecurrenceIntegrationTests: XCTestCase {
         let id = store.createTask(title: "Counted", dueDate: date(calendar, 2026, 11, 9))
         var task = try XCTUnwrap(store.data.tasks.first { $0.id == id })
         task.customRecurrence = CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days, maxOccurrences: 2)
-        task.occurrenceIndex = 2
         store.updateTask(task)
         store.toggleComplete(id: id)
-        XCTAssertNil(store.data.tasks.first { $0.recurrenceSourceID == id })
+        // First completion spawns occurrence 2 of 2; completing THAT ends
+        // the series with no further successor (nil never resurrects).
+        let first = try XCTUnwrap(store.data.tasks.first { $0.recurrenceSourceID == id })
+        XCTAssertEqual(first.occurrenceIndex, 2)
+        store.toggleComplete(id: first.id)
+        XCTAssertNil(store.data.tasks.first { $0.recurrenceSourceID == first.id })
+        XCTAssertNil(TaskStore.nextRecurrenceDate(for: first, calendar: calendar))
     }
 
     @MainActor func testCustomCompletionAnchorMeasuresFromCompletion() throws {

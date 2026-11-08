@@ -282,7 +282,7 @@ struct TaskDetail: View {
         // cross-task identity); a changed rule restarts the series at 1.
         updated.checklist = template.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
         updated.customRecurrence = template.customRecurrence
-        if updated.customRecurrence != task.customRecurrence { updated.occurrenceIndex = 1 }
+        updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence)
         updated.scheduledDuration = template.scheduledDuration
         updated.priority = template.priority; updated.tagIDs = template.tagIDs.filter { id in store.data.tags.contains { $0.id == id } }; updated.kind = template.kind
         store.updateTask(updated)
