@@ -1,6 +1,6 @@
 # Taskovsky feature parity: source-based baseline
 
-This is a traceable starting point, not a claim of full parity. Reference behavior is only marked confirmed when observed; source presence establishes implementation, not correctness or visual equivalence. The latest user scope excludes the separate Calendar tab, Matrix, Pomodoro, Habit, Countdown, account, sync, notifications, help, voice and rich formatting from Taskovsky implementation even though the reference specification covers them. Explicit user-requested scope takes precedence over older absent/out-of-scope notes in this file: single-level list folders, grouped smart-list reordering, the None manual sequence, and reorder grips are implemented (see [implementation status](../parity-implementation-status.md)).
+This is a traceable starting point, not a claim of full parity. Reference behavior is only marked confirmed when observed; source presence establishes implementation, not correctness or visual equivalence. The original baseline excluded Calendar and rich formatting; subsequent requests implemented rich formatting and added the local Calendar on 8 November 2026. Matrix, Pomodoro, Habit, Countdown, accounts, sync, system notifications, help and voice remain outside the implementation scope. Rows unrelated to Calendar below retain their historical baseline; use the implementation status and current source for subsequent work. Explicit user-requested scope takes precedence over older absent/out-of-scope notes in this file: single-level list folders, grouped smart-list reordering, the None manual sequence, and reorder grips are implemented (see [implementation status](../parity-implementation-status.md)).
 
 | Capability | TickTick evidence | Taskovsky implementation evidence | Status / unresolved work |
 | --- | --- | --- | --- |
@@ -18,10 +18,27 @@ This is a traceable starting point, not a claim of full parity. Reference behavi
 | Recognition / defaults | Date recognition, URL parsing and task defaults inspected; reference has Date/Duration mode and duration default | Recognition and requested defaults in [settings UI](../../Sources/Taskovsky/SettingsView.swift); persisted settings have no default date mode or duration | Partial; duration mode/default absent. Parsing language, rule coverage and side effects require experiments |
 | Templates | Reference settings card opens Preview with Apply; applying the observed checklist created an Inbox item. In-app guidance describes saving and replacing from task detail | Settings card opens an editor directly; a separate [template picker](../../Sources/Taskovsky/TemplatePicker.swift) creates from a template, and task detail can apply or save one | Confirmed settings-card interaction difference. Taskovsky `saveTemplate` appends a template; reference replacement is described by guidance but not yet tested. Seed checklist content also differs: observed reference travelling template has 17 entries, Taskovsky seed has five |
 | Persistence / sync | Reference app has sync/account surfaces | Local atomic workspace/settings JSON, no server sync (README) | Deliberately different by scope |
-| Additional modules | Calendar, Matrix, Pomodoro, Habit and Countdown screens observed | Not implemented | Explicitly excluded from app scope; continue documenting reference modules |
+| Calendar (local) | Seven views, header/sidebar, Arrange tasks, task color choices and visibility options observed; Calendar nib outlets/actions and localization corroborate these surfaces | [Workspace and editor](../../Sources/Taskovsky/TaskCalendarWorkspace.swift), [view layouts](../../Sources/Taskovsky/CalendarViews.swift), [panels](../../Sources/Taskovsky/CalendarPanels.swift), [projection](../../Sources/TaskovskyCore/TaskCalendarProjection.swift), [scheduling/Undo](../../Sources/TaskovskyCore/CalendarScheduling.swift); [evidence and policies](calendar.md#local-taskovsky-calendar-8-november-2026) | Local implementation: Day/Week/Month/Year/Agenda/Multi-Day/Multi-Week, creation, scheduling, move/resize gestures, Arrange, filters, colors/styles, recurrence previews and local additional time-zone ruler. Exact TickTick gesture rules, style rendering and preview semantics are unverified; no claim of full parity. |
+| Additional modules | Matrix, Pomodoro, Habit and Countdown screens observed | Not implemented | Explicitly excluded from app scope; continue documenting reference modules |
 
 ## Known implementation semantics to compare
 
 Taskovsky's search criteria use case-insensitive substring matching against title, description and checklist; empty keyword matches all. Filter list selection uses any selected list, and tag selection matches any selected tag. Today in a saved filter means the current calendar day; overdue timed tasks compare with the current instant while all-day tasks compare with start of day. The Today smart list includes dates before tomorrow, including overdue items. These distinctions should be tested against the reference rather than silently generalized across smart lists and filters.
 
 Taskovsky's defaults are stored locally: date recognition on, retain date text, remove tag text, URL parsing on, no default date or priority, timed reminder on time, no all-day reminder, insertion at top, and Monday week start in a new settings object. Existing user settings may differ. A source default is not evidence of TickTick's factory default.
+
+
+## Calendar integrations deliberately deferred — 8 November 2026
+
+Per the user's explicit local-only scope, Calendar introduces **no external integrations**. The TickTick Calendar Subscription surface is evidence of a reference feature, not authorization to implement it. These capabilities are deliberately deferred:
+
+| Deferred capability | Decision |
+| --- | --- |
+| Google, Outlook, Exchange, CalDAV or other calendar accounts | No sign-in, credentials, provider SDKs, account linking or provider network requests |
+| Apple Calendar / EventKit | No calendar database access, EventKit dependency or OS calendar permission request |
+| Calendar subscriptions and feeds | No ICS/webcal subscriptions, background feed fetches or refresh jobs |
+| Calendar import/export | No ICS import/export, TickTick import or external event-to-task conversion |
+| Calendar sync and sharing | No cloud sync, two-way event updates, invites, attendees, meeting links or shared-calendar writes |
+| External event overlays | No external calendar events, availability or conferencing overlays |
+
+The additional time-zone ruler uses Foundation's installed time-zone database; it is a local display preference. All Calendar records and options use the existing local workspace/settings files. There are no inactive integration buttons or placeholder account flows. Existing optional URL-title recognition is unchanged and is not used to fetch Calendar data.

@@ -169,31 +169,112 @@ public func parseMonthDayList(_ text: String) -> [Int]? {
     return out
 }
 
+/// Outer repeat-draft policy for the Custom recurrence sheet. Opening the
+/// sheet stages a seed WITHOUT touching the committed draft: only an
+/// explicit Done (including intentional Clear Rule) commits. Cancel and
+/// sheet dismissal drop the staged value and preserve the previous
+/// complete recurrence state, both no-rule and existing simple/custom
+/// rule. The ScheduleEditor routes its Custom… / Edit Custom… buttons and
+/// the sheet callbacks through this so the transitions stay tested.
+public struct RepeatDraft: Equatable, Sendable {
+    public var repeatRule: RepeatRule
+    public var customRule: CustomRecurrence?
+    /// Seed captured when the sheet opens; nil while the sheet is closed
+    /// and after any commit or cancel. Never read as recurrence state.
+    public var stagedCustom: CustomRecurrence?
+
+    public init(repeatRule: RepeatRule = .none, customRule: CustomRecurrence? = nil) {
+        self.repeatRule = repeatRule; self.customRule = customRule; self.stagedCustom = nil
+    }
+
+    /// Opens the sheet: stages the committed rule, or the caller-supplied
+    /// seed for a task with no custom rule yet. The committed draft is
+    /// untouched, so Cancel/dismissal cannot leak a rule into the outer OK.
+    public mutating func openCustomSheet(seed: CustomRecurrence) {
+        stagedCustom = customRule ?? seed
+    }
+
+    /// Explicit Done commits a rule (a valid rule clears the legacy enum);
+    /// Clear Rule commits nil and keeps the caller's legacy pick. Either
+    /// way the sheet state drops.
+    public mutating func commitCustom(_ rule: CustomRecurrence?) {
+        customRule = rule
+        if rule != nil { repeatRule = .none }
+        stagedCustom = nil
+    }
+
+    /// Cancel and dismissal paths: the staged value drops and the committed
+    /// draft stays exactly as it was before the sheet opened.
+    public mutating func cancelCustom() {
+        stagedCustom = nil
+    }
+
+    /// "Use Simple": drops the custom rule and keeps the legacy pick.
+    public mutating func dropCustom() {
+        customRule = nil; stagedCustom = nil
+    }
+}
+
+/// Effective nominal for a recurrence preview/membership walk given staged
+/// draft values and the saved task: when the staged rule differs (a rule
+/// change restarts the series) or the staged due differs (a manual
+/// reschedule rebases it), the staged due IS the series position —
+/// mirroring the store's restart/rebase policy — otherwise the stored
+/// nominal (possibly nil for legacy records). The editor passes this (not
+/// the raw stored nominal) so previews agree with what saving the draft
+/// and completing will actually produce.
+public func stagedNominal(draftDue: Date, draftRule: CustomRecurrence?, task: TaskItem) -> Date? {
+    if draftRule != task.customRecurrence { return draftDue }
+    if task.dueDate.map({ $0 != draftDue }) ?? true { return draftDue }
+    return task.recurrenceNominalDate
+}
+
 /// Occurrences still ahead of `current` for a custom rule: with an end count,
 /// exactly the `max - index` following occurrences (index4/max5 yields just
 /// the current + 1); without one, the next `extraLimit` occurrences.
 /// Completion-anchored series assume on-time completion.
+///
+/// - Parameter nominal: the unadjusted nominal occurrence corresponding to
+///   `current` (the displayed, possibly rolled due date). Monthly/yearly
+///   weekend-rolling previews advance from the nominal so the preview
+///   matches what completing the task will actually produce; nil previews
+///   from `current` (legacy behavior for upgraded records).
 public func remainingOccurrences(
     rule: CustomRecurrence,
     current: Date,
     index: Int,
     calendar: Calendar,
-    extraLimit: Int = 5
+    extraLimit: Int = 5,
+    nominal: Date? = nil
 ) -> [Date] {
     guard rule.isValid, index >= 1, extraLimit > 0 else { return [] }
-    if let max = rule.maxOccurrences {
-        guard index < max else { return [] }
-        var out: [Date] = []
-        var cursor = current
-        var cursorIndex = index
-        while cursorIndex < max, out.count < extraLimit {
-            let completedAt = rule.anchor == .completionDate ? cursor : nil
-            guard let next = rule.nextOccurrence(after: cursor, completedAt: completedAt, calendar: calendar, occurrenceIndex: cursorIndex) else { break }
+    if let max = rule.maxOccurrences, index >= max { return [] }
+    // One bounded walk for counted and uncounted previews alike, stepping
+    // from the actual current display date, nominal, and index — never a
+    // fresh index-1 walk from the nominal, which would reset the remaining
+    // count for a rolled current occurrence. Completion anchor assumes
+    // on-time completion; due-date shapes share the production stepping
+    // policy (nominal chaining where needed, adjusted end check,
+    // no-duplicate progress) with the store, so previews match completion
+    // exactly. Each step strictly advances the displayed date (or ends the
+    // series), so the loop terminates with at most `extraLimit` dates.
+    var out: [Date] = []
+    var cursor = current
+    var cursorNominal: Date? = nominal ?? current
+    var cursorIndex = index
+    while out.count < extraLimit {
+        if let max = rule.maxOccurrences, cursorIndex >= max { break }
+        if rule.anchor == .completionDate {
+            guard let next = rule.nextOccurrence(after: cursor, completedAt: cursor, calendar: calendar, occurrenceIndex: cursorIndex) else { break }
             out.append(next)
             cursor = next
-            cursorIndex += 1
+        } else {
+            guard let step = rule.nextDueDateStep(after: cursor, nominalBase: cursorNominal, calendar: calendar, occurrenceIndex: cursorIndex) else { break }
+            out.append(step.adjusted)
+            cursor = step.adjusted
+            cursorNominal = step.nominal
         }
-        return out
+        cursorIndex += 1
     }
-    return Array(rule.occurrences(from: current, limit: extraLimit + 1, calendar: calendar).dropFirst())
+    return out
 }

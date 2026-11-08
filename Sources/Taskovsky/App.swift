@@ -358,6 +358,7 @@ struct WorkspaceView: View {
     @State private var listViewportHeight: CGFloat = 0
     private var listFillerHeight: CGFloat { max(0, listViewportHeight - listContentHeight) }
     @AppStorage("Taskovsky.showDetailsPreview", store: IsolatedDefaults.store) private var showDetailsPreview = false
+    @AppStorage("Taskovsky.calendarActive", store: IsolatedDefaults.store) private var calendarActive = false
     @AppStorage("Taskovsky.showChecklistItems", store: IsolatedDefaults.store) private var showChecklistItems = false
     @AppStorage("Taskovsky.detailLayout", store: IsolatedDefaults.store) private var detailLayout = "sidePeek"
     @AppStorage("Taskovsky.taskPaneCustomized", store: IsolatedDefaults.store) private var taskPaneCustomized = false
@@ -414,46 +415,51 @@ struct WorkspaceView: View {
                 let listWidth = paneLive ?? storedListWidth
                 HStack(spacing: 0) {
                     rail
-                    // Keep the contents at their expanded size while the panel slides
-                    // behind the rail. Reflowing the sidebar at every frame makes its
-                    // labels wrap and jump during the transition.
-                    HStack(spacing: 0) {
-                        sidebar(now: timeline.date, registrationActive: showSidebar).frame(width: expandedNavWidth)
-                        PanelDivider { x, ended in onSidebarDrag(x: x, ended: ended, totalWidth: geometry.size.width, showSidebar: computedShowSidebar, dockDetail: computedDockDetail) }
-                            .onTapGesture(count: 2, perform: toggleSidebar)
-                    }
-                    .offset(x: showSidebar ? 0 : -(expandedNavWidth + 1))
-                    .frame(width: showSidebar ? expandedNavWidth + 1 : 0, alignment: .leading)
-                    .clipped()
-                    .allowsHitTesting(showSidebar)
-                    .accessibilityHidden(!showSidebar)
-                    if destination == .summary {
-                        SummaryView(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
-                    } else if dockDetail {
-                        // Full search keeps its query/filter/results here; selecting a
-                        // result docks its detail beside them. Closing the detail
-                        // leaves the results untouched.
-                        Group {
-                            if destination == .search {
-                                SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                            } else { taskPane(now: timeline.date, overlay: false, paneWidth: CGFloat(listWidth)) }
-                        }.frame(width: listWidth)
-                        PanelDivider { x, ended in onPaneDrag(x: x, ended: ended, listWidth: storedListWidth, available: available) }
-                        detailDock.frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if calendarActive {
+                        TaskCalendarWorkspace(store: store, onOpenTask: openPopup, onComplete: complete)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
-                        ZStack(alignment: .trailing) {
+                        // Keep the contents at their expanded size while the panel slides
+                        // behind the rail. Reflowing the sidebar at every frame makes its
+                        // labels wrap and jump during the transition.
+                        HStack(spacing: 0) {
+                            sidebar(now: timeline.date, registrationActive: showSidebar).frame(width: expandedNavWidth)
+                            PanelDivider { x, ended in onSidebarDrag(x: x, ended: ended, totalWidth: geometry.size.width, showSidebar: computedShowSidebar, dockDetail: computedDockDetail) }
+                                .onTapGesture(count: 2, perform: toggleSidebar)
+                        }
+                        .offset(x: showSidebar ? 0 : -(expandedNavWidth + 1))
+                        .frame(width: showSidebar ? expandedNavWidth + 1 : 0, alignment: .leading)
+                        .clipped()
+                        .allowsHitTesting(showSidebar)
+                        .accessibilityHidden(!showSidebar)
+                        if destination == .summary {
+                            SummaryView(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if dockDetail {
+                            // Full search keeps its query/filter/results here; selecting a
+                            // result docks its detail beside them. Closing the detail
+                            // leaves the results untouched.
                             Group {
                                 if destination == .search {
                                     SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                                } else { taskPane(now: timeline.date, overlay: true, paneWidth: CGFloat(available)) }
+                                } else { taskPane(now: timeline.date, overlay: false, paneWidth: CGFloat(listWidth)) }
+                            }.frame(width: listWidth)
+                            PanelDivider { x, ended in onPaneDrag(x: x, ended: ended, listWidth: storedListWidth, available: available) }
+                            detailDock.frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else {
+                            ZStack(alignment: .trailing) {
+                                Group {
+                                    if destination == .search {
+                                        SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
+                                    } else { taskPane(now: timeline.date, overlay: true, paneWidth: CGFloat(available)) }
+                                }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                                // Overlay drawer: right-aligned, fixed 300pt, no scrim, soft
+                                // shadow on its leading edge. It never reflows the list.
+                                // Only rendered while open, so a closed drawer leaves no
+                                // invisible focusable or hittable content behind.
+                                if let task = selectedTask, detailState.drawerOpen { drawer(task: task) }
                             }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            // Overlay drawer: right-aligned, fixed 300pt, no scrim, soft
-                            // shadow on its leading edge. It never reflows the list.
-                            // Only rendered while open, so a closed drawer leaves no
-                            // invisible focusable or hittable content behind.
-                            if let task = selectedTask, detailState.drawerOpen { drawer(task: task) }
-                        }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                            .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
+                                .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
+                        }
                     }
                 }
                 .onAppear { lastTotalWidth = geometry.size.width; sidebarDrag.bind(store: store) }
@@ -605,17 +611,18 @@ struct WorkspaceView: View {
                 templatePicker = false
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
-        .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in guard !calendarActive else { return }; quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in calendarActive = false; if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
         .onReceive(NotificationCenter.default.publisher(for: .newFolder)) { _ in folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
-        .onReceive(NotificationCenter.default.publisher(for: .openSearch)) { _ in searchDialog = true }
-        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in toggleSidebar() }
+        .onReceive(NotificationCenter.default.publisher(for: .openSearch)) { _ in calendarActive = false; searchDialog = true }
+        .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in if !calendarActive { toggleSidebar() } }
         .onReceive(NotificationCenter.default.publisher(for: .trashTask)) { note in if let id = note.object as? UUID { trash(id) } }
         .onReceive(NotificationCenter.default.publisher(for: .popupClosed)) { note in if let id = note.object as? UUID { openPopups.remove(id) } }
         .onReceive(NotificationCenter.default.publisher(for: .requestPurge)) { note in if let id = note.object as? UUID { purgeCandidate = id } }
         .onReceive(NotificationCenter.default.publisher(for: .revealRestoredTask)) { note in
             if let id = note.object as? UUID, let task = store.data.tasks.first(where: { $0.id == id }) {
+                calendarActive = false
                 destination = task.listID.map(Destination.list) ?? .inbox
                 detailState.navigate()
             }
@@ -756,8 +763,9 @@ struct WorkspaceView: View {
     private var rail: some View {
         VStack(spacing: 26) {
             Spacer().frame(height: 12)
-            RailButton(title: "Tasks", active: destination != .search, symbol: "checkmark", selectedTile: true) { destination = .today; closeDrawer() }
-            RailButton(title: "Search", active: destination == .search, symbol: "magnifyingglass", selectedTile: false) { searchDialog = true }
+            RailButton(title: "Tasks", active: !calendarActive && destination != .search, symbol: "checkmark", selectedTile: true) { calendarActive = false; destination = .today; closeDrawer() }
+            RailButton(title: "Calendar", active: calendarActive, symbol: "calendar", selectedTile: true) { calendarActive = true; sidebarPopoverOpen = false; closeDrawer() }
+            RailButton(title: "Search", active: !calendarActive && destination == .search, symbol: "magnifyingglass", selectedTile: false) { calendarActive = false; searchDialog = true }
             Spacer()
             SettingsLink { HoverIcon { Image(systemName: "gearshape").font(.system(size: 22)).foregroundStyle(.secondary).padding(8) } }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel("Settings")
             Spacer().frame(height: 18)

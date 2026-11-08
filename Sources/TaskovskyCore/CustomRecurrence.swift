@@ -68,7 +68,12 @@ import Foundation
 ///   so same-month leftovers (multiple `monthDays`) never shift the phase.
 ///   Each later call re-anchors at the previous occurrence, which preserves
 ///   the phase because consecutive occurrences differ by exactly `interval`
-///   periods (plus same-period leftovers, which keep the period).
+///   periods (plus same-period leftovers, which keep the period) — EXCEPT
+///   across a weekend roll that crosses a period boundary. Monthly/yearly
+///   due-date series with `skipWeekends` therefore chain on the stored
+///   unadjusted nominal occurrence (`TaskItem.recurrenceNominalDate`,
+///   `nextNominalOccurrence`, `occurrences`/`isOccurrence` nominal cursors)
+///   and roll each step for display, so the roll never redefines alignment.
 
 // MARK: - Small composable pieces
 
@@ -354,6 +359,76 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
         calendar: Calendar = .current,
         occurrenceIndex: Int = 1
     ) -> Date? {
+        nextCandidate(after: scheduledDate, completedAt: completedAt, calendar: calendar, occurrenceIndex: occurrenceIndex, rollWeekends: true)
+    }
+
+    /// Unadjusted nominal occurrence (no weekend roll), or nil under the
+    /// same validity, count, end, and forward-progress guards as
+    /// `nextOccurrence`. Due-date-anchored stepping only: the caller
+    /// advances from the stored nominal and rolls the result for display
+    /// with `weekendAdjusted`. Completion-anchored callers keep using
+    /// `nextOccurrence`, which advances from the completion instant.
+    /// Meaningful for monthly/yearly series, where a roll can cross a
+    /// period boundary; daily/weekly skip semantics chain adjusted dates.
+    public func nextNominalOccurrence(
+        after scheduledDate: Date,
+        calendar: Calendar = .current,
+        occurrenceIndex: Int = 1
+    ) -> Date? {
+        nextCandidate(after: scheduledDate, completedAt: nil, calendar: calendar, occurrenceIndex: occurrenceIndex, rollWeekends: false)
+    }
+
+    /// Display date for an unadjusted nominal occurrence: the skip-weekends
+    /// roll, or the nominal itself when the checkbox is off or the date is
+    /// a weekday. Explicit-date rules always return the stored instant
+    /// verbatim, even with the checkbox on. Nil when the roll pushes the
+    /// occurrence past the inclusive `endDate`, so adjusted dates never
+    /// escape the custom end.
+    public func weekendAdjusted(_ date: Date, calendar: Calendar = .current) -> Date? {
+        guard !hasSpecificDates else { return date }
+        guard let rolled = rolledPastWeekend(date, calendar: calendar) else { return nil }
+        if let end = endDate, calendar.startOfDay(for: rolled) > calendar.startOfDay(for: end) { return nil }
+        return rolled
+    }
+
+    /// One due-date-anchored series step: the shared stepping policy used
+    /// by the store (`nextRecurrenceDate`/successors) and the previews, so
+    /// engine, completion, and preview never diverge. Shapes needing nominal
+    /// chaining (monthly/yearly with skipWeekends) advance from
+    /// `nominalBase` (falling back to `dueDate`) and roll each step; every
+    /// other shape steps from the displayed `dueDate` exactly as
+    /// `nextOccurrence` does — explicit dates verbatim, daily/weekly with
+    /// their historical adjusted chaining. Returns the adjusted display
+    /// date and the nominal to record (identical for non-chaining shapes).
+    /// Forward progress is strict against the displayed `dueDate`: a rolled
+    /// collision with the current day advances to a genuinely later
+    /// occurrence instead of duplicating, and the step never goes backward.
+    /// A nil result ends the series (count/end exhausted) and must not
+    /// fall back to another step. Completion-anchored series keep using
+    /// `nextOccurrence`, which advances from the completion instant.
+    public func nextDueDateStep(after dueDate: Date, nominalBase: Date?, calendar: Calendar = .current, occurrenceIndex: Int = 1) -> (adjusted: Date, nominal: Date?)? {
+        guard isValid, occurrenceIndex >= 1 else { return nil }
+        if !chainsNominally {
+            guard let next = nextOccurrence(after: dueDate, calendar: calendar, occurrenceIndex: occurrenceIndex) else { return nil }
+            return (next, next)
+        }
+        var cursor = nominalBase ?? dueDate
+        for _ in 0..<Self.traversalLimit {
+            guard let unrolled = nextNominalOccurrence(after: cursor, calendar: calendar, occurrenceIndex: occurrenceIndex),
+                  let rolled = weekendAdjusted(unrolled, calendar: calendar) else { return nil }
+            if rolled > dueDate { return (rolled, unrolled) }
+            cursor = unrolled
+        }
+        return nil
+    }
+
+    private func nextCandidate(
+        after scheduledDate: Date,
+        completedAt: Date? = nil,
+        calendar: Calendar = .current,
+        occurrenceIndex: Int = 1,
+        rollWeekends: Bool
+    ) -> Date? {
         guard isValid else { return nil }
         guard occurrenceIndex >= 1 else { return nil }
         if let max = maxOccurrences, occurrenceIndex >= max { return nil }
@@ -368,9 +443,9 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
             case .weeks:
                 candidate = nextWeekly(after: base, scheduledTimeFrom: scheduledDate, calendar: calendar)
             case .months:
-                candidate = nextMonthly(after: base, scheduledTimeFrom: scheduledDate, calendar: calendar)
+                candidate = nextMonthly(after: base, scheduledTimeFrom: scheduledDate, calendar: calendar, rollWeekends: rollWeekends)
             case .years:
-                candidate = nextYearly(after: base, scheduledTimeFrom: scheduledDate, calendar: calendar)
+                candidate = nextYearly(after: base, scheduledTimeFrom: scheduledDate, calendar: calendar, rollWeekends: rollWeekends)
             }
         }
         // The sole forward-progress invariant is against the anchor base
@@ -425,6 +500,11 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
             return Array(kept.prefix(capped))
         }
         var current = start
+        // Nominal cursor for monthly/yearly weekend-rolling series (see
+        // `nextDueDateStep`): the chain advances on unadjusted occurrences
+        // and rolls each for display, so a cross-boundary roll never
+        // redefines alignment.
+        var nominal: Date? = start
         var index = 1
         var iterations = 0
         // Include the start itself when it does not already violate end/count.
@@ -434,12 +514,21 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
         while result.count < capped, iterations < Self.traversalLimit {
             iterations += 1
             // Completion anchor preview: assume each occurrence completes
-            // exactly at its scheduled time.
-            let completedAt = anchor == .completionDate ? current : nil
-            guard let next = nextOccurrence(after: current, completedAt: completedAt, calendar: calendar, occurrenceIndex: index) else { break }
-            if let through, next > through { break }
-            result.append(next)
-            current = next
+            // exactly at its scheduled time. Due-date shapes share the
+            // production stepping policy (nominal chaining, adjusted end
+            // check, no-duplicate progress) with the store.
+            if anchor == .completionDate {
+                guard let next = nextOccurrence(after: current, completedAt: current, calendar: calendar, occurrenceIndex: index) else { break }
+                if let through, next > through { break }
+                result.append(next)
+                current = next
+            } else {
+                guard let step = nextDueDateStep(after: current, nominalBase: nominal, calendar: calendar, occurrenceIndex: index) else { break }
+                if let through, step.adjusted > through { break }
+                result.append(step.adjusted)
+                current = step.adjusted
+                nominal = step.nominal
+            }
             index += 1
         }
         return result
@@ -455,10 +544,17 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
     /// (documented horizon: 5,000 occurrences — ~13 years daily, ~96 years
     /// weekly, ~416 years monthly). Completion-anchored series assume
     /// on-time completion, matching `occurrences`.
+    ///
+    /// - Parameter nominalStart: the unadjusted nominal occurrence
+    ///   corresponding to `seriesStart` (the displayed, possibly rolled due
+    ///   date). Monthly/yearly weekend-rolling walks chain on nominals and
+    ///   compare rolled days; nil walks from `seriesStart` (legacy behavior,
+    ///   which can drift after a cross-boundary roll for upgraded records).
     public func isOccurrence(
         on date: Date,
         seriesStart: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        nominalStart: Date? = nil
     ) -> Bool {
         guard isValid else { return false }
         let targetDay = calendar.startOfDay(for: date)
@@ -469,15 +565,22 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
             return sortedSpecificInstants().contains { calendar.isDate($0, inSameDayAs: targetDay) }
         }
         var current = seriesStart
+        var nominal: Date? = nominalStart ?? seriesStart
         var index = 1
         for _ in 0..<Self.traversalLimit {
             if calendar.isDate(current, inSameDayAs: targetDay) { return true }
             if calendar.startOfDay(for: current) > targetDay { return false }
             // Completion anchor preview: each occurrence completes exactly at
-            // its scheduled time.
-            let completedAt = anchor == .completionDate ? current : nil
-            guard let next = nextOccurrence(after: current, completedAt: completedAt, calendar: calendar, occurrenceIndex: index) else { return false }
-            current = next
+            // its scheduled time. Due-date shapes share the production
+            // stepping policy with the store.
+            if anchor == .completionDate {
+                guard let next = nextOccurrence(after: current, completedAt: current, calendar: calendar, occurrenceIndex: index) else { return false }
+                current = next
+            } else {
+                guard let step = nextDueDateStep(after: current, nominalBase: nominal, calendar: calendar, occurrenceIndex: index) else { return false }
+                current = step.adjusted
+                nominal = step.nominal
+            }
             index += 1
         }
         return false
@@ -535,7 +638,7 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
 
     // MARK: Monthly
 
-    private func nextMonthly(after base: Date, scheduledTimeFrom: Date, calendar: Calendar) -> Date? {
+    private func nextMonthly(after base: Date, scheduledTimeFrom: Date, calendar: Calendar, rollWeekends: Bool = true) -> Date? {
         // Candidate months: base month + interval*k for k = 0, 1, ... bounded.
         // k = 0 covers days later in the base month itself (e.g. the 15th when
         // the base is the 2nd); the `occurrence > base` filter below skips
@@ -551,7 +654,7 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
             for day in days.sorted() {
                 if let occurrence = occurrenceOn(day: day, probe: probe, time: time, calendar: calendar),
                    occurrence > base {
-                    return rolledPastWeekend(occurrence, calendar: calendar)
+                    return rollWeekends ? rolledPastWeekend(occurrence, calendar: calendar) : occurrence
                 }
             }
             // A month whose selectors yield nothing (e.g. nonexistent 5th
@@ -582,7 +685,7 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
 
     // MARK: Yearly
 
-    private func nextYearly(after base: Date, scheduledTimeFrom: Date, calendar: Calendar) -> Date? {
+    private func nextYearly(after base: Date, scheduledTimeFrom: Date, calendar: Calendar, rollWeekends: Bool = true) -> Date? {
         let time = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: scheduledTimeFrom)
         // Without an explicit yearMonth/anchorMonth the probe (base + N
         // years) already carries the scheduled month forward. Leap-day
@@ -612,7 +715,7 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
             for day in days.sorted() {
                 if let occurrence = occurrenceOn(year: targetYear, month: month, day: day, time: time, calendar: calendar),
                    occurrence > base {
-                    return rolledPastWeekend(occurrence, calendar: calendar)
+                    return rollWeekends ? rolledPastWeekend(occurrence, calendar: calendar) : occurrence
                 }
             }
         }
@@ -667,6 +770,18 @@ public struct CustomRecurrence: Codable, Equatable, Sendable {
         components.second = time.second
         components.nanosecond = time.nanosecond
         return calendar.date(from: components)
+    }
+
+    /// Monthly/yearly due-date cadences whose weekend roll can cross a period
+    /// boundary chain on nominal occurrences (each rolled for display), so
+    /// the roll never redefines interval alignment. Every other shape keeps
+    /// adjusted-date chaining, and explicit-date rules are always verbatim:
+    /// daily/weekly skip semantics advance past weekend days, the completion
+    /// anchor advances from completion, stored instants never roll.
+    /// Module-internal so the store and preview helpers share the exact
+    /// predicate instead of reimplementing it.
+    var chainsNominally: Bool {
+        anchor == .dueDate && skipWeekends && (unit == .months || unit == .years) && !hasSpecificDates
     }
 
     private func rolledPastWeekend(_ date: Date, calendar: Calendar) -> Date? {

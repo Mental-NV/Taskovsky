@@ -177,6 +177,11 @@ public final class TaskStore: ObservableObject {
         if old.dueDate != task.dueDate || old.recurrence != task.recurrence {
             task.recurrenceAnchorDay = nil; task.recurrenceAnchorMonth = nil
         }
+        // Series position follows manual schedule edits at the store
+        // boundary: rule changes restart, date edits rebase the nominal so
+        // the next completion advances from the new due. No-op saves keep
+        // the stored nominal (including rolled tasks).
+        task.normalizeSeriesPosition(old: old)
         if applyDefaultReminders, task.reminderDates != old.reminderDates, task.reminderFollowsSchedule == old.reminderFollowsSchedule {
             task.reminderFollowsSchedule = false
         }
@@ -382,19 +387,44 @@ public final class TaskStore: ObservableObject {
     /// The subtree keeps its relative structure around the new occurrence:
     /// timed members (dues and reminders) shift by the exact elapsed delta
     /// between the old and new parent dues; all-day members shift whole
-    /// calendar days, preserving day spans across DST. Duration windows
-    /// re-anchor their end at the shifted due date. Members without dues
-    /// keep none — except an undated member holding an absolute window,
-    /// which anchors its due at the window end (records are never undated
-    /// with absolute windows). Returns the clones (for pristine tracking).
+    /// calendar days, preserving day spans across DST. The parent's day
+    /// displacement (`dayDelta`, measured in the root calendar) applies to
+    /// every member, but all-day dues, reminders, and duration windows shift
+    /// in the APPLICABLE MEMBER zone (its own record zone when set,
+    /// otherwise the root calendar), so a 09:00 reminder keeps its
+    /// wall-clock time across a DST transition in the member's zone instead
+    /// of inheriting the root's. Duration windows re-anchor their end at
+    /// the shifted due date. Members without dues keep none — except an
+    /// undated member holding an absolute window, which anchors its due at
+    /// the window end (records are never undated with absolute windows).
+    /// Returns the clones (for pristine tracking).
     private func cloneSubtreeIntoSuccessor(originalRootID: UUID, newParentID: UUID, parentDue: Date, successorDue: Date, now: Date, calendar: Calendar) -> [TaskItem] {
         let members = TaskHierarchy.descendants(of: originalRootID, in: data.tasks).filter { $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt == nil }
         guard !members.isEmpty else { return [] }
         let elapsedDelta = successorDue.timeIntervalSince(parentDue)
         let dayDelta = calendar.dateComponents([.day], from: calendar.startOfDay(for: parentDue), to: calendar.startOfDay(for: successorDue)).day ?? 0
-        func shift(_ date: Date, timed: Bool) -> Date {
+        func calendarFor(_ member: TaskItem) -> Calendar {
+            guard let id = member.timeZoneID, let zone = TimeZone(identifier: id) else { return calendar }
+            var memberCalendar = calendar
+            memberCalendar.timeZone = zone
+            return memberCalendar
+        }
+        func shift(_ date: Date, timed: Bool, in memberCalendar: Calendar) -> Date {
             if timed { return date.addingTimeInterval(elapsedDelta) }
-            return calendar.date(byAdding: .day, value: dayDelta, to: calendar.startOfDay(for: date)) ?? date
+            return memberCalendar.date(byAdding: .day, value: dayDelta, to: memberCalendar.startOfDay(for: date)) ?? date
+        }
+        /// Reminder instants shift like the member's due date (elapsed for
+        /// timed members, whole calendar days for all-day ones) but keep
+        /// their own wall-clock time in the member zone: an all-day
+        /// member's 09:00 reminder is day-shifted from its own instant —
+        /// never via startOfDay, which would reset it to midnight and
+        /// collapse distinct reminders.
+        func shiftReminder(_ reminder: Date, memberDue: Date, cloneDue: Date, timed: Bool, in memberCalendar: Calendar) -> Date {
+            if timed { return reminder.addingTimeInterval(elapsedDelta) }
+            let dayOffset = memberCalendar.dateComponents([.day], from: memberCalendar.startOfDay(for: memberDue), to: memberCalendar.startOfDay(for: reminder)).day ?? 0
+            let reminderDay = memberCalendar.date(byAdding: .day, value: dayOffset, to: memberCalendar.startOfDay(for: cloneDue)) ?? cloneDue
+            let parts = memberCalendar.dateComponents([.hour, .minute, .second], from: reminder)
+            return memberCalendar.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: parts.second ?? 0, of: reminderDay) ?? reminderDay
         }
         var idMap: [UUID: UUID] = [:]
         for member in members { idMap[member.id] = UUID() }
@@ -407,16 +437,24 @@ public final class TaskStore: ObservableObject {
             clone.recurrenceSourceID = member.id
             if member.isCustomRepeating { clone.occurrenceIndex = member.occurrenceIndex + 1 }
             clone.checklist = member.checklist.map { ChecklistItem(title: $0.title) }
+            let memberCalendar = calendarFor(member)
             if let memberDue = member.dueDate {
-                let newDue = shift(memberDue, timed: member.hasDueTime)
+                let newDue = shift(memberDue, timed: member.hasDueTime, in: memberCalendar)
                 clone.dueDate = newDue
-                clone.reminderDates = member.reminderDates.map { shift($0, timed: member.hasDueTime) }
-                if let window = member.scheduledDuration?.validated(in: calendar) {
-                    clone.scheduledDuration = window.anchoredEnd(at: newDue, calendar: calendar)
+                clone.reminderDates = member.reminderDates.map { shiftReminder($0, memberDue: memberDue, cloneDue: newDue, timed: member.hasDueTime, in: memberCalendar) }
+                // The clone continues the member's series from the same
+                // nominal offset: shifting the nominal by the same delta
+                // keeps the nominal<->due relationship the clone's future
+                // completions advance from.
+                if let nominal = member.recurrenceNominalDate {
+                    clone.recurrenceNominalDate = shift(nominal, timed: member.hasDueTime, in: memberCalendar)
+                }
+                if let window = member.scheduledDuration?.validated(in: memberCalendar) {
+                    clone.scheduledDuration = window.anchoredEnd(at: newDue, calendar: memberCalendar)
                 } else if member.scheduledDuration != nil {
                     clone.scheduledDuration = nil
                 }
-            } else if let window = member.scheduledDuration?.validated(in: calendar) {
+            } else if let window = member.scheduledDuration?.validated(in: memberCalendar) {
                 clone.scheduledDuration = window
                 clone.dueDate = window.end
                 clone.hasDueTime = !window.isAllDay
@@ -455,6 +493,15 @@ public final class TaskStore: ObservableObject {
         var copy = original
         copy.id = UUID(); copy.dueDate = next; copy.completedAt = nil; copy.deletedAt = nil; copy.wontDoAt = nil
         copy.occurrenceIndex = customIndex ?? original.occurrenceIndex
+        // Weekend-rolling custom series record the unadjusted nominal
+        // alongside the displayed (possibly rolled) due date, so the next
+        // completion advances from the nominal and interval alignment
+        // survives month-boundary rolls. Recomputed from the same inputs
+        // (pure step), so it always matches the date above. Completion
+        // anchor and legacy successors carry no nominal.
+        copy.recurrenceNominalDate = original.isCustomRepeating
+            ? Self.nextCustomStep(for: original, now: now, calendar: calendar)?.nominal
+            : nil
         copy.reminderDates = original.reminderDates.map { reminder in
             guard !original.hasDueTime else { return next.addingTimeInterval(reminder.timeIntervalSince(due)) }
             let dayOffset = calendar.dateComponents([.day], from: calendar.startOfDay(for: due), to: calendar.startOfDay(for: reminder)).day ?? 0
@@ -700,9 +747,11 @@ public final class TaskStore: ObservableObject {
             copy.id = idMap[member]!
             if member == id {
                 copy.completedAt = nil; copy.deletedAt = nil; copy.wontDoAt = nil
-                // The duplicate starts a new custom series at position 1;
-                // the rule itself carries over.
+                // The duplicate restarts the series at position 1 with the
+                // nominal back at the copy's due date (the new series start);
+                // the rule itself carries over. Clearing the rule drops it.
                 copy.occurrenceIndex = 1
+                copy.restartCustomSeries(ruleChangedFrom: nil)
             }
             copy.recurrenceSourceID = nil
             // Links inside the copied subtree remap; the root keeps its
@@ -1234,17 +1283,39 @@ public final class TaskStore: ObservableObject {
         return expected.count == task.reminderDates.count && zip(expected, task.reminderDates).allSatisfy { pair in abs(pair.0.timeIntervalSince(pair.1)) < 1 }
     }
 
+    /// One custom-series step with the nominal/adjusted split. Due-date
+    /// series use the shared engine stepping policy (`nextDueDateStep`):
+    /// nominal chaining where the shape needs it, verbatim adjusted
+    /// stepping otherwise, with the adjusted date validated against the
+    /// rule end and strict forward progress against the displayed due.
+    /// Completion-date series advance from the completion instant and carry
+    /// no nominal. Returns the adjusted date, the nominal to record (nil
+    /// for the completion anchor), and the next index. Pure, so the
+    /// successor path and `nextRecurrenceDate` share it; a nil result ends
+    /// the series and never falls back to another step.
+    nonisolated private static func nextCustomStep(for task: TaskItem, now: Date, calendar: Calendar) -> (adjusted: Date, nominal: Date?, index: Int)? {
+        guard let rule = task.customRecurrence, rule.isValid, let due = task.dueDate else { return nil }
+        if rule.anchor == .completionDate {
+            guard let next = rule.nextOccurrence(after: due, completedAt: now, calendar: calendar, occurrenceIndex: task.occurrenceIndex),
+                  task.recurrenceEndDate.map({ calendar.startOfDay(for: next) <= calendar.startOfDay(for: $0) }) ?? true else { return nil }
+            return (next, nil, task.occurrenceIndex + 1)
+        }
+        guard let step = rule.nextDueDateStep(after: due, nominalBase: task.recurrenceNominalDate, calendar: calendar, occurrenceIndex: task.occurrenceIndex),
+              task.recurrenceEndDate.map({ calendar.startOfDay(for: step.adjusted) <= calendar.startOfDay(for: $0) }) ?? true else { return nil }
+        return (step.adjusted, step.nominal, task.occurrenceIndex + 1)
+    }
+
     /// Next due date for a repeating task, or nil when the series ends.
     /// Returns the date plus the successor's custom-series index (nil for
     /// legacy series, which carry no index). A valid custom rule supersedes
-    /// the legacy enum; both honor the legacy end date.
+    /// the legacy enum; both honor the legacy end date. Due-date custom
+    /// series advance from the stored nominal (see `nextCustomStep`), so
+    /// the returned date already reflects the weekend roll.
     nonisolated public static func nextRecurrenceDate(for task: TaskItem, now: Date = Date(), calendar: Calendar = .current) -> (Date, Int?)? {
         guard let due = task.dueDate else { return nil }
-        if let rule = task.customRecurrence, rule.isValid {
-            let completedAt = rule.anchor == .completionDate ? now : nil
-            guard let next = rule.nextOccurrence(after: due, completedAt: completedAt, calendar: calendar, occurrenceIndex: task.occurrenceIndex),
-                  task.recurrenceEndDate.map({ calendar.startOfDay(for: next) <= calendar.startOfDay(for: $0) }) ?? true else { return nil }
-            return (next, task.occurrenceIndex + 1)
+        if task.isCustomRepeating {
+            guard let step = nextCustomStep(for: task, now: now, calendar: calendar) else { return nil }
+            return (step.adjusted, step.index)
         }
         guard task.recurrence != .none,
               let next = nextDate(after: due, rule: task.recurrence,
@@ -1279,6 +1350,42 @@ public final class TaskStore: ObservableObject {
             target.day = min(max(day, 1), days.count)
             return calendar.date(from: target)
         }
+    }
+
+    /// The Calendar's drag, resize, context-menu and accessible scheduling
+    /// controls all use this one store mutation path.
+    @discardableResult public func scheduleOnCalendar(id: UUID, operation: CalendarScheduleOperation, calendar: Calendar? = nil) -> CalendarScheduleUndo? {
+        guard let original = data.tasks.first(where: { $0.id == id }), original.deletedAt == nil,
+              !SmartListEligibility.isArchived(original, lists: data.lists),
+              var changed = CalendarScheduling.applying(operation, to: original, displayCalendar: calendar ?? settings.calendar,
+                  defaultMinutes: settings.defaultDurationMinutes > 0 ? settings.defaultDurationMinutes : 30) else { return nil }
+        if Self.usesDefaultReminder(original, settings: settings) {
+            // Let updateTask re-anchor the configured default, including
+            // timed <-> all-day conversion; manual reminders already shifted.
+            changed.reminderDates = original.reminderDates
+            changed.reminderFollowsSchedule = true
+        }
+        updateTask(changed)
+        guard let saved = data.tasks.first(where: { $0.id == id }) else { return nil }
+        let before = CalendarScheduleSnapshot(original), after = CalendarScheduleSnapshot(saved)
+        guard before != after else { return nil }
+        return CalendarScheduleUndo(taskID: id, before: before, after: after,
+                                    completedAt: saved.completedAt, wontDoAt: saved.wontDoAt)
+    }
+
+    @discardableResult public func undoCalendarSchedule(_ token: CalendarScheduleUndo) -> Bool {
+        guard let index = data.tasks.firstIndex(where: { $0.id == token.taskID }) else { return false }
+        let current = data.tasks[index]
+        guard current.deletedAt == nil, !SmartListEligibility.isArchived(current, lists: data.lists),
+              current.completedAt == token.completedAt, current.wontDoAt == token.wontDoAt,
+              CalendarScheduleSnapshot(current) == token.after else { return false }
+        // A known schedule snapshot restores directly: the manual-edit
+        // normalization in updateTask would discard the original nominal.
+        var restored = token.before.restoring(on: current)
+        restored.updatedAt = Date()
+        data.tasks[index] = restored
+        save()
+        return true
     }
 
     private static func starterData() -> WorkspaceData {
