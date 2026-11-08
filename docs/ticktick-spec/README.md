@@ -17,6 +17,7 @@ These documents preserve observations of the installed TickTick desktop applicat
 - [Visual measurements](design-measurements.md): limited geometry/color samples and their uncertainty.
 - [Tasks and hierarchy](tasks.md): context actions, pinning and child-task observations.
 - [Lists, folders and tags](lists-and-tags.md): menus and editor controls.
+- [Calendar](calendar.md): historical reference survey, November 8 UI/resource evidence, local implementation policies and bounded verification.
 - [Scheduling](scheduling.md): date/duration and custom recurrence controls; this path is retained because source comments cite it.
 - [Search and saved filters](search-and-filters.md): controls, result states and unknown expression semantics.
 - [Settings](settings.md): mixed inventory of requested and excluded reference controls; not every page is implemented.
@@ -25,8 +26,9 @@ These documents preserve observations of the installed TickTick desktop applicat
 
 - [November 1 audit](../archive/ticktick-parity-audit-2026-11-01.md).
 - [November 8 investigation](../ticktick-rea-findings-2026-11-08.md), including explicit independent behavior choices and local-artifact limitations.
-- Archived [module overview](../archive/ticktick-modules/modules.md), [Calendar](../archive/ticktick-modules/calendar.md), [Matrix](../archive/ticktick-modules/eisenhower-matrix.md), [Focus](../archive/ticktick-modules/focus.md), [Habit](../archive/ticktick-modules/habit.md), and [Countdown](../archive/ticktick-modules/countdown.md).
+- Archived [module overview](../archive/ticktick-modules/modules.md), [Matrix](../archive/ticktick-modules/eisenhower-matrix.md), [Focus](../archive/ticktick-modules/focus.md), [Habit](../archive/ticktick-modules/habit.md), and [Countdown](../archive/ticktick-modules/countdown.md).
 
 ## Environment and limits
 
 The initial pass used macOS, the installed TickTick application, and light appearance on November 2, 2026; individual files record later probes. The initial app version, display scale, system font metrics, motion measurements and exact colors were not verified. Unknown gestures, controls, error states and edge cases remain unknown. The documentation reconciliation performed no fresh reference-app experiments.
+

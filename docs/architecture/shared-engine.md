@@ -2,7 +2,7 @@
 
 This document proposes a small shared engine with separate macOS and iPhone interfaces. It records the current source boundaries first, then defines a staged extraction that preserves behavior and stored data. The proposal does not require identical editors, navigation, or feature coverage on both platforms.
 
-**Baseline:** static inspection of `main` at `30045bac5355b793a8c155b87ffe58584cb29fb8`, dated 2026-11-08. Linked source and tests are evidence of implementation and test intent, not a claim that tests or UI flows were run for this documentation change. Everything labeled **Proposed** requires a later implementation task. This change adds no packages, application code, test harness, or iPhone app.
+**Baseline:** static inspection of `main` at `cfdec454acff91285ac00beaa20c0cf0f0961ee1`, dated 2026-11-08. Linked source and tests are evidence of implementation and test intent, not a claim that tests or UI flows were run for this documentation change. Everything labeled **Proposed** requires a later implementation task. This change adds no packages, application code, test harness, or iPhone app.
 
 Related documents: [business rules](../spec/business.md), [macOS UI and UX](../spec/ui-ux.md), [iPhone proposal](../spec/iphone.md), [component contracts](components.md), [implementation workflow](../spec/workflow.md), and [parity status](../parity-implementation-status.md).
 
@@ -19,7 +19,7 @@ Core is a useful starting point, but its name does not establish portability:
 | --- | --- |
 | [Models.swift](../../Sources/TaskovskyCore/Models.swift), [Organization.swift](../../Sources/TaskovskyCore/Organization.swift), [Settings.swift](../../Sources/TaskovskyCore/Settings.swift) | Foundation value models, hierarchy helpers, eligibility, settings, filter evaluation, templates, and text matching already provide reusable logic. Settings also mixes product defaults with UI preferences; these need classification rather than wholesale movement. |
 | [TaskStore.swift](../../Sources/TaskovskyCore/TaskStore.swift) | `@MainActor ObservableObject` combines commands, recurrence spawning, lifecycle/cascade ledgers, ordering, JSON persistence, settings persistence, migration, and error reporting. It is not a pure domain engine. Combine is an Apple dependency, not the AppKit blocker, but observation need not define the domain API. |
-| [CustomRecurrence.swift](../../Sources/TaskovskyCore/CustomRecurrence.swift), [ScheduleDraft.swift](../../Sources/TaskovskyCore/ScheduleDraft.swift) | Foundation recurrence/duration calculations and a staged schedule draft already have separable seams. Complete save/clear decisions still live in a view. |
+| [CustomRecurrence.swift](../../Sources/TaskovskyCore/CustomRecurrence.swift), [ScheduleDraft.swift](../../Sources/TaskovskyCore/ScheduleDraft.swift) | Foundation recurrence/duration calculations, nominal-position helpers and `RepeatDraft` transaction state have separable seams. Complete detail-editor save/clear decisions still live in a view; Calendar has its own shared store commands. |
 | [RichText.swift](../../Sources/TaskovskyCore/RichText.swift) | `RichBody`, UTF-16 safety, and document-reset policy are Foundation-based. The same file also contains task pin grouping, which is unrelated to editor representation. |
 | [RichTextRender.swift](../../Sources/TaskovskyCore/RichTextRender.swift) | Imports AppKit and operates on `NSTextView`, `NSTextStorage`, `NSFont`, paragraph styles, typing attributes, and toolbar state. Rendering and many editing policies are mixed. |
 | [ListDecorations.swift](../../Sources/TaskovskyCore/ListDecorations.swift), [ListLayoutManager.swift](../../Sources/TaskovskyCore/ListLayoutManager.swift), [RichEditorSizing.swift](../../Sources/TaskovskyCore/RichEditorSizing.swift) | All import AppKit. Even the marker projection uses `NSTextList.MarkerFormat`. The layout manager lives in Core so existing tests can exercise the real drawing computation; moving it must preserve that test access. |
@@ -38,7 +38,7 @@ The extraction must inspect implementations, not infer behavior from type names 
 - [`SearchPane` and `SearchDialog`](../../Sources/Taskovsky/SearchView.swift) compose search scope and criteria around [TaskFilter and TaskSearch](../../Sources/TaskovskyCore/Settings.swift). Highlighting and snippets are presentation; result eligibility should not be independently re-created on iPhone.
 - [`RichBodyController` and the representable coordinator](../../Sources/Taskovsky/RichBodyEditor.swift) own important selection, pending-style, Return, undo, and callback behavior. Core-only helper tests do not by themselves exercise this host wiring.
 
-These are extraction candidates, not a claim that every rule must become its own module. The [existing code review](../code-review-findings-2026-11-08.md) records open issues around schedule cancellation, recurring subtasks, recurrence cadence, and editor commands. Their fixes are outside this documentation PR and must remain with the separate fix work.
+These are extraction candidates, not a claim that every rule must become its own module. The [existing code review](../code-review-findings-2026-11-08.md) retains those original issues and their fixes, now in merged PR #2. Extraction must preserve the new recurrence, nested-draft, reminder-cloning and native text-policy regressions. This documentation PR does not alter those implementations.
 
 <a id="arch-002"></a>
 ## ARCH-002 Proposed target and dependency direction
@@ -106,7 +106,7 @@ A characterization test should capture any source disagreement before extraction
 <a id="arch-005"></a>
 ## ARCH-005 Proposed migration stages
 
-These stages are a future implementation sequence, not work performed by this PR. Coordinate against the separately owned fixes before starting; do not duplicate or overwrite them.
+These stages are a future implementation sequence, not work performed by this PR. Start from the merged corrections and preserve their regressions; do not reintroduce the prior defects during extraction.
 
 | Stage | Smallest useful change | Acceptance gate before advancing |
 | --- | --- | --- |
@@ -139,3 +139,9 @@ Relevant existing suites include [TaskStoreTests](../../Tests/TaskovskyCoreTests
 3. Workspace/rich-format version envelopes, opaque payload retention, migrations, and compatibility with older writers. Agree and test these before sharing files between versions; the current source has no version negotiation.
 4. Scope and timing of richer iPhone editing after the conservative first release. Each capability can be added independently without promising full desktop parity.
 5. Any sync, notifications, accounts, or unrelated modules. These remain outside this proposal, not hidden dependencies of the shared engine.
+
+## Merged Calendar seams
+
+The current baseline already contains pure Core [Calendar projection/options/date helpers](../../Sources/TaskovskyCore/TaskCalendarProjection.swift), alongside BoardProjection. [CalendarScheduling](../../Sources/TaskovskyCore/CalendarScheduling.swift) and [CalendarScheduleDraft](../../Sources/TaskovskyCore/CalendarScheduleDraft.swift) separate schedule operations and point/range preservation from the macOS panels. Store commands apply automatic/manual reminder policy and guarded scheduling-only Undo. Reuse these seams rather than proposing to recreate Calendar logic inside either native UI.
+
+This does not make the entire existing Core iOS-portable: AppKit rich rendering and other dependencies described above still require separation, and detail schedule apply/clear plus destination composition remain partly in views. See [CMP-005](components.md#cmp-005), [BUS-027–030](../spec/business.md#bus-027), and [UX-017](../spec/ui-ux.md#ux-017). Local Calendar adds no account, EventKit or cross-device service and does not expand the initial iPhone proposal.

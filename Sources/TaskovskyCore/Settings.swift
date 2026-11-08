@@ -10,6 +10,7 @@ public enum AllDayReminder: String, Codable, CaseIterable, Sendable { case none,
 public enum TaskPosition: String, Codable, CaseIterable, Sendable { case top, bottom }
 
 public struct AppSettings: Codable, Equatable, Sendable {
+    public var calendarOptions = TaskCalendarOptions()
     public var smartListVisibility: [SmartListKey: SmartListVisibility] = [.all: .hidden, .today: .show, .tomorrow: .hidden, .week: .show, .inbox: .show, .summary: .hidden, .tags: .show, .filters: .show, .completed: .show, .wontDo: .showIfNotEmpty, .trash: .show]
     /// Persisted deterministic smart-list order. Nil denotes legacy files and
     /// decodes to the default order; normalization appends missing keys in
@@ -43,9 +44,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var defaultDurationMinutes = 0
     public var hasInstalledBuiltInTemplates = false
     public init() {}
-    private enum CodingKeys: String, CodingKey { case smartListVisibility, smartListOrder, startWeekOn, showWeekNumbers, enableTimeZone, dateRecognition, removeDateText, removeTagText, urlParsing, defaultDate, defaultReminder, allDayReminder, timedReminderDefaults, allDayReminderDefaults, defaultPriority, defaultTagID, defaultListID, defaultAddTo, overduePosition, completionSound, hasInstalledBuiltInTemplates, defaultDurationMinutes }
+    private enum CodingKeys: String, CodingKey { case calendarOptions, smartListVisibility, smartListOrder, startWeekOn, showWeekNumbers, enableTimeZone, dateRecognition, removeDateText, removeTagText, urlParsing, defaultDate, defaultReminder, allDayReminder, timedReminderDefaults, allDayReminderDefaults, defaultPriority, defaultTagID, defaultListID, defaultAddTo, overduePosition, completionSound, hasInstalledBuiltInTemplates, defaultDurationMinutes }
     public init(from decoder: Decoder) throws {
         self.init(); let c = try decoder.container(keyedBy: CodingKeys.self)
+        calendarOptions = try c.decodeIfPresent(TaskCalendarOptions.self, forKey: .calendarOptions) ?? calendarOptions
         if let values = try c.decodeIfPresent([SmartListKey: SmartListVisibility].self, forKey: .smartListVisibility) { smartListVisibility.merge(values) { _, new in new } }
         smartListOrder = try c.decodeIfPresent([SmartListKey].self, forKey: .smartListOrder)
         startWeekOn = try c.decodeIfPresent(Int.self, forKey: .startWeekOn) ?? startWeekOn

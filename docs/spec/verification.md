@@ -2,37 +2,38 @@
 
 ## Snapshot and evidence levels
 
-Source baseline: [`30045bac5355b793a8c155b87ffe58584cb29fb8`](https://github.com/Mental-NV/Taskovsky/commit/30045bac5355b793a8c155b87ffe58584cb29fb8), inspected November 8, 2026. Its application code is unchanged from [`18732856fb3b9d2d5b9ca55a621dabbea3aeb761`](https://github.com/Mental-NV/Taskovsky/commit/18732856fb3b9d2d5b9ca55a621dabbea3aeb761); the later commit adds the static review report.
+Source baseline: [`cfdec454acff91285ac00beaa20c0cf0f0961ee1`](https://github.com/Mental-NV/Taskovsky/commit/cfdec454acff91285ac00beaa20c0cf0f0961ee1), inspected November 8, 2026. This is main after [PR #2](https://github.com/Mental-NV/Taskovsky/pull/2) merged; its implementation head is [`b9de0dfe4522a818c5d08674dfbe04a396ad330a`](https://github.com/Mental-NV/Taskovsky/commit/b9de0dfe4522a818c5d08674dfbe04a396ad330a). PR #1 retains its documentation structure while incorporating that baseline. Application source, tests, fixtures, build/package files and dependencies are identical to main in the resulting documentation tree.
 
-| Evidence | What it establishes | What it does not establish |
+| Evidence | What it establishes | Limit |
 | --- | --- | --- |
-| Source at the baseline commit | Implemented fields, branches, constants and command paths | Runtime correctness, visual equivalence or successful builds |
-| Existing named tests linked by the specs | Cases represented by test source | Execution or a current pass |
-| Prior implementation/QA narratives | Historical reported results | A current reproducible gate; several logs/captures are not committed |
-| TickTick observed controls/actions | That observation in the recorded state | Unexercised semantics or blanket parity |
-| Proposed contracts | Intended future design | Existing implementation, product approval or assigned work |
+| Exact merged source and regression files | Implemented Calendar behavior and corrective code paths | Static inspection is not runtime execution |
+| [Final PR #2 correction report](../pr-2-calendar-review-findings-2026-11-08.md#verification-after-fixes) | Prior reported 464 tests passed (430 XCTest + 34 Swift Testing), release build and strict codesign verification | Not rerun for this documentation task; logs are in ignored local build directories, not durable CI artifacts |
+| [Calendar verification history](../ticktick-spec/calendar.md#verification-status--8-november-2026) | Earlier 453-test snapshot and bounded isolated live checks, followed by final 464-test correction evidence | Earlier totals are historical stages, not separate current gates; UI checks span release and identified debug fixtures |
+| [Earlier review resolution](../code-review-findings-2026-11-08.md) | Reminder/cadence/editor regressions and selected live nested-Cancel/Quote checks | Native app Undo/Redo, quote/list switching and live paragraph-selection reproduction were not verified |
+| TickTick observations/resource extract | Bounded reference UI/action/structure evidence | Not recovered scheduling algorithms or blanket parity |
+| Proposed architecture, iPhone and CI contracts | Intended future design | No implementation or successful workflow run implied |
 
-The documentation reconciliation ran no application build, test suite, native UI session or fresh TickTick experiment. Documentation checks cover links, source references and changed-file scope only. The prior reported 370-test pass remains [historical](../archive/parity-implementation-history.md), not a new result. There is no committed `.github` workflow configuration or separate native UI-test target in this baseline.
+This documentation refresh ran no Swift suite, macOS build, native UI session or new TickTick experiment. Its verification is static source review, Markdown links/anchors, whitespace and exact documentation-only tree comparison. No `.github` workflow or separate native UI-test target exists in the merged baseline. The [CI proposal](ci-cd.md) describes how to add hosted macOS verification in a separate implementation change.
 
 <a id="known-deviations"></a>
-## Known deviations carried forward
+## Review deviations and merged resolutions
 
-These are the five prior **static source findings**, not newly reproduced bugs. The review links pin their original evidence. Code remains the description of current behavior, while the expected outcome below is a proposed corrective acceptance condition. This documentation change does not perform fixes or close findings.
+Stable IDs are retained. These original source findings are fixed in the merged baseline; original reports are preserved rather than rewritten. “Fixed” here means corrective source and regression evidence are present, with prior execution reported below, not that this documentation task independently reran every acceptance case.
 
-| ID | Observed source deviation | Acceptance condition for a separately authorized fix | Evidence |
-| --- | --- | --- | --- |
-| DEV-001 | Opening Custom seeds the outer schedule draft; canceling its sheet can leave that rule available for outer OK | Nested Cancel/dismissal preserves prior none/simple/custom recurrence; Done and Clear have distinct explicit effects | [Finding 1](../code-review-findings-2026-11-08.md#1-canceling-a-new-custom-recurrence-can-still-save-a-weekly-rule) |
-| DEV-002 | Recurring-parent subtree cloning normalizes all-day descendant reminder instants to midnight before shifting | Preserve reminder wall-clock times and relative days, including multiple reminders and DST boundaries | [Finding 2](../code-review-findings-2026-11-08.md#2-cloning-an-all-day-subtask-resets-its-reminder-time-to-midnight) |
-| DEV-003 | A weekend roll across month boundary can change an every-N-month cadence anchor | Keep nominal cadence independent of the adjusted occurrence; verify the documented March/May/July case and further successors | [Finding 3](../code-review-findings-2026-11-08.md#3-weekend-adjustment-can-change-an-every-n-month-recurrences-cadence) |
-| DEV-004 | Block formatting can include the unselected paragraph when a selection ends at its start | Respect the exclusive UTF-16 selection end when expanding block ranges; cover newline boundaries, emoji, undo and reload | [Finding 4](../code-review-findings-2026-11-08.md#4-block-formatting-can-include-the-paragraph-after-a-selection) |
-| DEV-005 | Empty-editor quote handling can re-arm a quote instead of toggling it off | A second quote toggle returns empty typing state to plain and stays plain on input, toolbar read, extraction and undo | [Finding 5](../code-review-findings-2026-11-08.md#5-quote-formatting-cannot-be-toggled-off-in-an-empty-editor) |
+| ID | Merged resolution | Evidence / remaining validation |
+| --- | --- | --- |
+| DEV-001 | `RepeatDraft` isolates nested Custom state; Cancel/dismiss preserves outer none/simple/custom, Done and Clear are explicit | [RepeatDraftTests](../../Tests/TaskovskyCoreTests/RepeatDraftTests.swift); [original report and live checks](../code-review-findings-2026-11-08.md#live-verification-final-build-2026-11-08) |
+| DEV-002 | All-day descendant reminder shifts retain wall-clock time and relative days in the task zone | [CloneReminderTests](../../Tests/TaskovskyCoreTests/CloneReminderTests.swift), including DST, multiple/previous-day reminders, completion and persistence; no separate live reminder-delivery claim |
+| DEV-003 | Nominal cadence is persisted and stepped independently of displayed weekend rolls; due edits rebase nominal state without resetting count | [NominalCadenceTests](../../Tests/TaskovskyCoreTests/NominalCadenceTests.swift), [NominalSeriesIntegrationTests](../../Tests/TaskovskyCoreTests/NominalSeriesIntegrationTests.swift); actual store successors, count/end bounds, reload and legacy fallback |
+| DEV-004 | Block-range expansion respects the exclusive UTF-16 end | [BlockRangeTests](../../Tests/TaskovskyCoreTests/BlockRangeTests.swift), native text-policy cases; app-controller/live selection scenario and app Undo/Redo remain unverified |
+| DEV-005 | Empty Quote toggles off to plain typing state instead of rearming | [QuoteToggleTests](../../Tests/TaskovskyCoreTests/QuoteToggleTests.swift); prior live on/off/type/reload evidence, with native app Undo/Redo and quote/list switching still unverified |
 
-Do not mark a feature `Verified` just because a fix branch exists. When another agent's fix is merged, inspect that exact commit, refresh affected baseline descriptions and parity rows, and attach the actual regression/visual results. Keep original review provenance; record resolution commit and verified acceptance cases here instead of rewriting historical evidence.
+The four [Calendar review findings](../pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026) are also fixed: unchanged point/precise saves are no-ops; existing short windows retain exact duration on move; future checklist rows reset completion before visibility filtering; and all-day Arrange uses displayed civil dates. [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift) has 11 named review tests; [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift) adds 18 Calendar cases. The final report records 464 total passing tests after final changes.
+
+Prior live checks confirmed byte-identical unchanged point/short/zero saves, explicit Duration conversion with Undo, future checklist visibility under both completed settings, and Tokyo overdue classification on a Europe/Moscow host. Live short-block moves were not confirmed after the resize-handle fix. Arrange-to-hourly and cross-column drops, independent checklist interactions, exact 382-point minimum, exhaustive keyboard/VoiceOver/theme coverage and full gesture parity remain open validation work. Automated store coverage must not be described as live gesture proof.
 
 ## Evidence record for future changes
 
-For each affected acceptance case, record requirement/case ID, platform, source/PR commit, test or manual procedure, environment, fixture, command, date, result (`passed`, `failed`, `not run`) and durable artifact. Include explicit limits. A result for one platform or state does not verify another.
+Record requirement/case ID, platform, exact source/checkout SHA, test or manual procedure, environment, fixture, command, date, result (`passed`, `failed`, `not run`) and durable artifact. A GitHub PR event may test a synthetic merge SHA rather than its head; record both explicitly. Prior local results and a future CI run are distinct evidence.
 
-Visual evidence additionally needs OS version, window content dimensions versus frame dimensions, screenshot scale, light/dark appearance, locale/timezone, text size, contrast and reduced-motion settings. Use disposable data. Check the affected component state matrix and interruption paths, not only a happy-path screenshot.
-
-Until a case has such evidence, the source-derived baseline is **implemented, runtime unverified in this reconciliation**. Individual specifications and parity rows provide the relevant source/test links; avoid duplicating every link in this ledger.
+Visual records additionally need OS, logical content versus frame size, screenshot scale, appearance, locale/zone, text size, contrast and reduced motion. Use disposable data and cover interruption/repeated actions. The source-derived baseline remains **implemented, not independently runtime-verified by this documentation refresh**. Preserve live limitations even when unit/store checks pass.

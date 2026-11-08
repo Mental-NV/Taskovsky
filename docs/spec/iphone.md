@@ -4,11 +4,11 @@
 
 ## IOS-001 — Status, goals, and limits
 
-**Proposal only. Nothing in this document is a claim of current iOS support.** The inspected baseline is main commit `30045bac5355b793a8c155b87ffe58584cb29fb8`, as of 2026-11-08. [Package.swift](../../Package.swift) currently declares macOS 14 and a macOS executable; the [current UI specification](ui-ux.md) describes that implementation.
+**Proposal only. Nothing in this document is a claim of current iOS support.** The inspected baseline is main commit `cfdec454acff91285ac00beaa20c0cf0f0961ee1`, as of 2026-11-08. [Package.swift](../../Package.swift) currently declares macOS 14 and a macOS executable; the [current UI specification](ui-ux.md) describes that implementation.
 
 The proposed iPhone product should retain Taskovsky's tasks/notes, scheduling, organization, and data meaning while using a native touch interface. A shared business engine is the target. Shared AppKit screens, a 382-point-wide Mac window, and complete desktop editor feature parity are not requirements. This document adds no app target, shared package, UIKit editor, migration, sync service, OS notification integration, or tests.
 
-Use stable `IOS-xxx` IDs in implementation tickets and acceptance tests. “Must” below is a proposed requirement for the eventual feature, not a statement about existing source. Release sequencing and minimum iOS version still require an implementation decision. Follow [shared-engine boundaries](../architecture/shared-engine.md#arch-002), [component contracts](../architecture/components.md), [business behavior](business.md), and the [verification/deviation register](verification.md). The five known source-review deviations remain out of scope here.
+Use stable `IOS-xxx` IDs in implementation tickets and acceptance tests. “Must” below is a proposed requirement for the eventual feature, not a statement about existing source. Release sequencing and minimum iOS version still require an implementation decision. Follow [shared-engine boundaries](../architecture/shared-engine.md#arch-002), [component contracts](../architecture/components.md), [business behavior](business.md), and the [verification/deviation register](verification.md). Merged PR #2 resolves the five earlier source-review findings; preserve their regression contracts when extracting the engine. This proposal adds no iPhone implementation.
 
 Goals:
 
@@ -132,7 +132,7 @@ Initial supported authoring scope:
 - Explicit reminders and timed/all-day duration can be added when the shared draft engine is extracted and tested. Until supported, render them with a summary and preserve them; do not drop them on unrelated date edits. If a date edit would require an unsupported transformation, disable that edit with a reason rather than saving incoherent data.
 - Custom recurrence may initially be **view/preserve only**: show its human-readable rule, remaining count, and supported preview. “Edit on Mac” is guidance, not a promise of a handoff/sync feature. An explicit replacement with a supported simple rule must clearly name the replacement and require the user's deliberate choice.
 
-Advanced recurrence authoring can later use a dedicated native screen for anchor, cadence, weekday/month/year selectors, specific dates, and endings. Its Cancel must restore the entire prior outer draft. It must not reproduce the known Mac Custom → Cancel → outer OK deviation. Similarly, shared recurrence fixes and regression tests must address the known month-end cadence and all-day descendant-reminder deviations before claiming their corrected behavior.
+Advanced recurrence authoring can later use a dedicated native screen for anchor, cadence, weekday/month/year selectors, specific dates, and endings. Its Cancel must restore the entire prior outer draft. Reuse the merged Mac correction: sheet-local Cancel preserves outer recurrence, due edits rebase nominal cadence without resetting occurrence count, and all-day descendant reminders keep their clocks. Carry the existing regressions into the shared implementation and verify the native phone transactions separately.
 
 Reminder presentation and system notification delivery are separate. Initial iPhone scope must not promise notifications while the app is closed. Adding notifications later needs a platform adapter, explicit authorization UX, permission-denied state, time-zone/background delivery tests, and a policy for rescheduling/canceling notifications after edits. Storing reminder dates alone is not notification support.
 
@@ -263,3 +263,4 @@ Minimum end-to-end scenarios:
 10. Complete primary flows using VoiceOver and large text without swipe-only actions, clipped controls, color-only status, or hidden focus; audit feedback expiry and keyboard obstruction.
 
 Record actual results, OS/device/build, fixture, and remaining gaps in the [verification ledger](verification.md). Documentation approval alone does not satisfy any implementation gate.
+

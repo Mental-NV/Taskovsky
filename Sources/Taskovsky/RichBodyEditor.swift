@@ -543,30 +543,33 @@ final class RichBodyController: ObservableObject {
     }
 
     func toggleQuote() {
+        // A second tap while quote is armed in an empty document disarms
+        // (a tap must toggle off, not re-arm) — mirroring the list and
+        // checklist toggle. Unrelated inline formatting survives; the
+        // pending-list displacement rides the same undo group.
+        if ((textView?.string ?? "") as NSString).length == 0,
+           RichTyping.isQuoteArmed(in: textView?.typingAttributes ?? [:]) {
+            setTyping(RichTyping.disarmedQuoteAttributes(from: textView?.typingAttributes ?? RichRender.baseAttributes),
+                      label: "Quote", pending: .some(nil))
+            return
+        }
         // Choosing a quote is a different block: it displaces a pending
         // list arm (with undo).
         if armEmptyDocumentForBlock(font: nil,
                                     markers: [RichRender.quoteKey: true],
                                     label: "Quote",
-                                    paragraph: { $0.headIndent = 16; $0.firstLineHeadIndent = 16 },
+                                    paragraph: { $0.headIndent = RichTyping.quoteIndent; $0.firstLineHeadIndent = RichTyping.quoteIndent },
                                     pending: .some(nil)) { return }
         if isCaretInTrailingEmptyParagraph {
             // Toggle the typing attributes: the trailing paragraph has no
-            // characters, so quoting arms (or disarms) future text.
-            var attrs = textView?.typingAttributes ?? RichRender.baseAttributes
-            let style = (attrs[.paragraphStyle] as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
-            if (attrs[RichRender.quoteKey] as? Bool) == true {
-                style.headIndent = 0
-                style.firstLineHeadIndent = 0
-                attrs[.paragraphStyle] = style
-                attrs.removeValue(forKey: RichRender.quoteKey)
-                setTyping(attrs, label: "Quote")
+            // characters, so quoting arms (or disarms) future text. Shared
+            // transforms keep the constants identical to the empty-document
+            // path above.
+            let attrs = textView?.typingAttributes ?? RichRender.baseAttributes
+            if RichTyping.isQuoteArmed(in: attrs) {
+                setTyping(RichTyping.disarmedQuoteAttributes(from: attrs), label: "Quote")
             } else {
-                style.headIndent = 16
-                style.firstLineHeadIndent = 16
-                attrs[.paragraphStyle] = style
-                attrs[RichRender.quoteKey] = true
-                setTyping(attrs, label: "Quote", pending: .some(nil))
+                setTyping(RichTyping.armedQuoteAttributes(from: attrs), label: "Quote", pending: .some(nil))
             }
             return
         }
@@ -880,16 +883,9 @@ final class RichBodyController: ObservableObject {
 
     private func paragraphRange() -> NSRange {
         guard let view = textView else { return NSRange(location: 0, length: 0) }
-        let selected = view.selectedRange()
-        let string = view.string as NSString
-        if selected.length == 0, string.length == 0 { return NSRange(location: 0, length: 0) }
-        if selected.length == 0 {
-            return string.paragraphRange(for: NSRange(location: min(selected.location, max(0, string.length - 1)), length: 0))
-        }
-        var result = string.paragraphRange(for: NSRange(location: selected.location, length: 0))
-        let end = string.paragraphRange(for: NSRange(location: max(selected.location, min(selected.location + selected.length, string.length)), length: 0))
-        result = NSUnionRange(result, end)
-        return result
+        // Shared production policy (tested): the exclusive range end never
+        // pulls the next paragraph in when a selection ends after "\n".
+        return RichMutate.blockRange(for: view.selectedRange(), in: view.string as NSString)
     }
 
 }

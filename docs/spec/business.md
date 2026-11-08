@@ -2,7 +2,7 @@
 
 ## Authority and scope
 
-This document describes the behavior implemented in source baseline `30045bac5355b793a8c155b87ffe58584cb29fb8` (main), reviewed on 2026-11-08. Executable source takes precedence over old reports and source comments. These are current-behavior requirements, not a claim of complete TickTick equivalence or a promise that every path is correct.
+This document describes the behavior implemented in source baseline `cfdec454acff91285ac00beaa20c0cf0f0961ee1` (main), reviewed on 2026-11-08. Executable source takes precedence over old reports and source comments. These are current-behavior requirements, not a claim of complete TickTick equivalence or a promise that every path is correct.
 
 Each stable `BUS-###` identifier names one behavior area. Acceptance cases below are review scenarios, **not results of tests run for this documentation change**. Linked test files establish that relevant test code exists. No build, test suite, native macOS interaction, or TickTick experiment was run for this refresh. See the [verification ledger](verification.md), [UI/UX specification](ui-ux.md), and separate [TickTick parity tracker](../parity-implementation-status.md). The [iPhone scope](iphone.md) and [component proposals](../architecture/components.md) describe future work, not current functionality.
 
@@ -12,7 +12,7 @@ Each stable `BUS-###` identifier names one behavior area. Acceptance cases below
 
 ### BUS-001 — Local macOS product
 
-**Current rule.** Taskovsky is a local task/note application. The package declares macOS 14+, an executable application and a Core target. A workspace contains tasks, lists, folders, tags, saved filters, templates, and lifecycle ledgers. No account, server sync, team permissions, or iPhone application is implemented in this package. Calendar date pickers belong to task scheduling; they are not a standalone calendar module.
+**Current rule.** Taskovsky is a local task/note application. The package declares macOS 14+, an executable application and a Core target. A workspace contains tasks, lists, folders, tags, saved filters, templates, and lifecycle ledgers. No account, server sync, team permissions, or iPhone application is implemented in this package. The local Calendar workspace projects and schedules those same tasks; it adds no separate event database or external calendar integration (BUS-027–030).
 
 **Acceptance.** Open an isolated workspace, create and edit a task, then reopen the same workspace and inspect its stored content. This is a persistence scenario, not a sync scenario. Proposed iPhone capability differences must be evaluated against the future iPhone scope rather than recorded as current macOS defects.
 
@@ -62,7 +62,7 @@ Date recognition is a limited English parser: today, tomorrow, day after tomorro
 
 **Acceptance.** Save styled text containing emoji, reopen it, and compare plain text plus styles. Independently replace the plain body and confirm stale style ranges do not carry over. Switch between different records with identical bodies and inspect undo isolation. Test Return continuation and exit for each block type.
 
-**Known deviations and limits.** [DEV-004 and DEV-005](verification.md#known-deviations) cover paragraph-selection spillover and the empty-document Quote toggle. Body-box pointer toggling, attachments/images, tables, source-mode editing and arbitrary foreign rich-text fidelity are not implemented/claimed. Mid-list Return after reloading may start a plain paragraph. Large list numbers can exceed the fixed gutter. These limits are not a declaration that the entire rich editor is absent.
+**Corrections and limits.** Merged PR #2 fixes paragraph-selection spillover and the empty-document Quote toggle ([DEV-004/005](verification.md#known-deviations)); block expansion respects the exclusive UTF-16 selection end and a second empty-editor Quote toggle returns to plain typing state. [BlockRangeTests](../../Tests/TaskovskyCoreTests/BlockRangeTests.swift) and [QuoteToggleTests](../../Tests/TaskovskyCoreTests/QuoteToggleTests.swift) retain regressions; live Undo/Redo and selection checks remain limited. Body-box pointer toggling, attachments/images, tables, source-mode editing and arbitrary foreign rich-text fidelity are not implemented/claimed. Mid-list Return after reloading may start a plain paragraph. Large list numbers can exceed the fixed gutter. These limits are not a declaration that the entire rich editor is absent.
 
 **Evidence.** [RichText](../../Sources/TaskovskyCore/RichText.swift); [RichTextRender](../../Sources/TaskovskyCore/RichTextRender.swift); [RichBodyEditor](../../Sources/Taskovsky/RichBodyEditor.swift); [ListLayoutManager](../../Sources/TaskovskyCore/ListLayoutManager.swift); [RichRenderTests](../../Tests/TaskovskyCoreTests/RichRenderTests.swift); [RichTextPinTests](../../Tests/TaskovskyCoreTests/RichTextPinTests.swift); [BlockCoherenceTests](../../Tests/TaskovskyCoreTests/BlockCoherenceTests.swift); [ListContinuationTests](../../Tests/TaskovskyCoreTests/ListContinuationTests.swift); [PendingListArmTests](../../Tests/TaskovskyCoreTests/PendingListArmTests.swift).
 
@@ -98,7 +98,7 @@ Undo removes a spawned record only when it can prove that record is unchanged fr
 
 **Acceptance.** Complete a repeating parent and verify one successor tree, not separate child trees. Edit one successor child, undo the original, and verify that child and its required ancestors remain. Repeat after reload and expect conservative successor retention.
 
-**Known deviation.** [DEV-002](verification.md#known-deviations): cloned all-day child reminders currently lose their clock time; do not claim complete reminder fidelity for this path.
+**Reminder preservation.** All-day descendant reminders shift by calendar days without midnight normalization, preserving wall-clock times and relative days in the task zone. [DEV-002](verification.md#known-deviations) is fixed in merged PR #2; [CloneReminderTests](../../Tests/TaskovskyCoreTests/CloneReminderTests.swift) cover multiple times, previous-day reminders, DST and reload.
 
 **Evidence.** [TaskStore.spawnSuccessor/cloneSubtreeIntoSuccessor/removePristineSpawns](../../Sources/TaskovskyCore/TaskStore.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
 
@@ -140,11 +140,11 @@ Templates capture one record's title, body/styles, quick steps, priority, valid 
 
 ### BUS-012 — Schedule editing and cancellation
 
-**Current rule.** The schedule editor stages dates, time, duration, reminders, recurrence and zone before outer OK. Cancel/dismiss does not invoke the save callback. Clear immediately commits removal of due date, duration, reminders, zone and recurrence state, then dismisses. A changed custom rule resets the series position; ordinary date editing does not. `ScheduleDraft` coordinates all-day/timed transitions, quick dates and wall-clock zone changes.
+**Current rule.** The schedule editor stages dates, time, duration, reminders, recurrence and zone before outer OK. Cancel/dismiss does not invoke the save callback. Clear immediately commits removal of due date, duration, reminders, zone and recurrence state, then dismisses. A changed custom recurrence rule resets occurrence count to 1 and nominal date to the coherent due date; clearing removes nominal state. Ordinary date edits preserve the count but rebase nominal position, while unchanged saves preserve a rolled nominal date. The store enforces this normalization at its boundary. `ScheduleDraft` coordinates all-day/timed transitions, quick dates and wall-clock zone changes.
 
 **Acceptance.** Change several schedule fields and cancel the outer editor; reopen and inspect the original. Apply a duration and inspect due/end coherence. Clear a repeating schedule and verify all related fields clear. Test nested Cancel separately from outer Cancel.
 
-**Known deviation.** [DEV-001](verification.md#known-deviations): opening a new Custom rule seeds the outer draft before the nested editor confirms. Custom → Cancel → outer OK can therefore save a weekly custom rule. The intended cancel-safe behavior is a repair target, not a current guarantee.
+**Nested transaction.** Custom opens a sheet-local recurrence draft. Cancel or dismissal leaves the outer none/simple/custom rule unchanged; Done applies a valid draft and Clear Rule explicitly removes the custom rule. Merged PR #2 fixes [DEV-001](verification.md#known-deviations); [RepeatDraftTests](../../Tests/TaskovskyCoreTests/RepeatDraftTests.swift) and the retained live report cover these distinct paths.
 
 **Evidence.** [ScheduleEditor](../../Sources/Taskovsky/ScheduleEditor.swift); [CustomRecurrenceEditor](../../Sources/Taskovsky/CustomRecurrenceEditor.swift); [ScheduleDraft](../../Sources/TaskovskyCore/ScheduleDraft.swift); [ScheduleDraftTests](../../Tests/TaskovskyCoreTests/ScheduleDraftTests.swift). Draft-unit tests alone do not verify the nested-sheet transaction.
 
@@ -158,7 +158,7 @@ Workday means Monday–Friday without a holiday calendar. Weekend skipping rolls
 
 **Acceptance.** Verify several successive occurrences, not just the first, for end counts, end days, short months, leap years, DST, explicit dates and completion anchors. A rule at its maximum count has no successor. Invalid interval/day input must not create an unbounded query.
 
-**Known deviation.** [DEV-003](verification.md#known-deviations): rolling a monthly candidate into the following month can change the subsequent every-N-month alignment. The nominal cadence invariant is not currently reliable for that case.
+**Nominal cadence.** Persisted `recurrenceNominalDate` separates the unadjusted cadence from the displayed weekend-rolled due date. Monthly/yearly weekend-rolling shapes chain nominal dates; daily/weekly shapes retain adjusted chaining and explicit dates remain verbatim. Completion anchors use actual completion rather than nominal state. Legacy decoded records fall back to due when the optional nominal field is absent. Shared `nextDueDateStep` enforces forward progress and adjusted end bounds without falling back after a nil result. Successor generation and Calendar forecasts use that position, occurrence count and end conditions; due/rule edits rebase nominal position without resetting the count merely for a date edit. Merged PR #2 fixes [DEV-003](verification.md#known-deviations); [NominalCadenceTests](../../Tests/TaskovskyCoreTests/NominalCadenceTests.swift) and [NominalSeriesIntegrationTests](../../Tests/TaskovskyCoreTests/NominalSeriesIntegrationTests.swift) cover multiple successors, month/year boundaries, persistence and legacy recovery.
 
 **Evidence.** [CustomRecurrence](../../Sources/TaskovskyCore/CustomRecurrence.swift); [TaskStore.nextRecurrenceDate](../../Sources/TaskovskyCore/TaskStore.swift); [CustomRecurrenceTests](../../Tests/TaskovskyCoreTests/CustomRecurrenceTests.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift).
 
@@ -172,7 +172,7 @@ Taskovsky stores these reminders and exposes in-app reminder information. There 
 
 **Acceptance.** Select multiple defaults, move the due date and inspect recalculated reminders; manually override one and repeat. Check all-day 09:00 and task-zone DST behavior. Archive/unarchive a list without deleting its reminder data. Do not use a stored reminder as proof that a notification will fire.
 
-**Known deviation.** The all-day descendant cloning path remains affected by [DEV-002](verification.md#known-deviations), even though direct successor reminder shifting preserves wall-clock components.
+**Calendar edits and cloning.** Calendar moves shift manual reminders with the due date and recalculate automatic reminders through the store. All-day descendant cloning now preserves wall-clock components ([DEV-002 resolution](verification.md#known-deviations)); this does not add OS notification delivery.
 
 **Evidence.** [Models.reminderDates](../../Sources/TaskovskyCore/Models.swift); [TaskStore reminder helpers](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [Organization](../../Sources/TaskovskyCore/Organization.swift); [ReminderTests](../../Tests/TaskovskyCoreTests/ReminderTests.swift); [TaskZoneDurationTests](../../Tests/TaskovskyCoreTests/TaskZoneDurationTests.swift).
 
@@ -296,7 +296,7 @@ Full search retains its query/filter state while opening detail and combines tex
 
 ### BUS-025 — Settings and durable local state
 
-**Current rule.** Workspace and settings are separate JSON files. Normal storage is under the application-support Taskovsky directory; legacy Taskvovsky migration preserves the original if moving fails and does not overwrite an existing current directory. Workspace writes are atomic. A workspace decode failure preserves the original and blocks writes until explicit recovery backs it up; settings decode failure similarly prevents overwriting the unreadable settings. Some UI state, including recent searches and layout preferences, uses UserDefaults rather than workspace JSON.
+**Current rule.** Workspace and settings are separate JSON files. Normal storage is under the application-support Taskovsky directory; legacy Taskvovsky migration preserves the original if moving fails and does not overwrite an existing current directory. Workspace writes are atomic. A workspace decode failure preserves the original and blocks writes until explicit recovery backs it up; settings decode failure similarly prevents overwriting the unreadable settings. Calendar display options are stored in settings JSON with backward-compatible defaults: Week, five days/two weeks, sidebar/completed/repeat on, checklist off, List colors, Filled style, all active lists plus Inbox and unrestricted tags. Additional zone and list/tag scope persist too. Focus date and Arrange visibility are transient. Calendar View Options is separate from the four main Settings sections. Some UI state, including recent searches and layout preferences, uses UserDefaults rather than workspace JSON.
 
 The four Settings sections are Smart Lists, Date & Time, More and About. Configurable behavior includes week start/numbers, time-zone/date/tag recognition, URL title parsing, default creation choices/reminders/duration, task/overdue position, completion sound and templates. Optional legacy fields decode with defaults; malformed hierarchy references are sanitized without intentionally deleting content. This is not arbitrary corrupt-file recovery or a cross-device synchronization system.
 
@@ -308,8 +308,48 @@ The four Settings sections are Smart Lists, Date & Time, More and About. Configu
 
 ### BUS-026 — Verification boundaries and future decisions
 
-**Current rule.** Implemented source, existing tests, historical runtime reports and unverified behavior are different evidence classes. The five [open deviations](verification.md#known-deviations) remain open until separately fixed and verified; documenting a desired outcome does not fix it. Historical test totals in the [archived implementation log](../archive/parity-implementation-history.md) are not a current gate.
+**Current rule.** Implemented source, existing tests, historical runtime reports and unverified behavior are different evidence classes. The five [earlier deviations](verification.md#known-deviations) now have merged corrections and prior regression evidence; their remaining live-check limits stay explicit. Documenting a desired outcome does not fix code. Historical test totals in the [archived implementation log](../archive/parity-implementation-history.md) are not a current gate.
 
-**Future/proposed.** The [shared-engine proposal](../architecture/shared-engine.md), [component boundaries](../architecture/components.md) and [iPhone capability plan](iphone.md) may evolve independently of macOS presentation. In particular, rich editing can be developed/tested as a component with a smaller iPhone feature set, provided supported data is preserved and unsupported operations are explicit. Standalone Calendar, Focus/Pomodoro, Habits, Matrix, Countdown, accounts/sync/sharing and OS notification delivery are outside the current implementation baseline, not promised by this document.
+**Future/proposed.** The [shared-engine proposal](../architecture/shared-engine.md), [component boundaries](../architecture/components.md) and [iPhone capability plan](iphone.md) may evolve independently of macOS presentation. In particular, rich editing can be developed/tested as a component with a smaller iPhone feature set, provided supported data is preserved and unsupported operations are explicit. External Calendar integrations, Focus/Pomodoro, Habits, Matrix, Countdown, accounts/sync/sharing and OS notification delivery are outside the current implementation baseline, not promised by this document.
 
 **Acceptance for later changes.** Name affected BUS and parity IDs; distinguish intended behavior from an existing deviation; add relevant implementation/tests in the separately scoped change; record the exact revision, environment and checks actually run. Update this specification when source changes, rather than maintaining competing “current” behavior in chronological logs. Follow the [change workflow](workflow.md).
+
+## Local Calendar
+
+<a id="bus-027"></a>
+### BUS-027 — Calendar projection and scope
+
+**Current rule.** Calendar reads the existing workspace. Day, Week, Month, Year, Agenda, Multi-Day and Multi-Week use the configured week start. Agenda covers 30 days; Multi-Day accepts 2–14 days (default 5), Multi-Week 2–6 weeks (default 2). List/Inbox filters combine with any selected tag, including its descendants. Archived and deleted tasks are excluded regardless of scope; smart-list exclusion does not exclude a task from Calendar. Completed/Won't Do visibility, inherited checklist rows and repeat previews are optional. All-day dates float by civil date in the task zone; stored inclusive all-day ends become exclusive display ends. Timed intervals use absolute instants and exclude an ending midnight from the following day's fragments.
+
+**Acceptance.** Project an excluded-but-active list, archived list, parent tag with a tagged descendant, multi-day span and midnight-ending timed window. Compare Today in opposite-side time zones for all-day points and ranges. Check each visible range around leap days and configured week starts.
+
+**Evidence.** [TaskCalendar](../../Sources/TaskovskyCore/TaskCalendar.swift); [TaskCalendarProjection](../../Sources/TaskovskyCore/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
+
+<a id="bus-028"></a>
+### BUS-028 — Read-only recurrence forecasts and Arrange
+
+**Current rule.** Future cycles use the same recurrence engine as completion, but persist no records. Completion-based previews assume on-time completion. Current checklist rows retain actual checked state; future rows are unchecked, matching real successors, under either Show Completed setting. Projected occurrences and checklist rows cannot be independently scheduled. Each task's traversal is capped at 5,000 occurrences and truncation is surfaced. Arrange includes undated tasks and optionally tasks due before the current display day, grouped by list/first tag/priority with an additional list scope. All-day overdue classification uses the task's displayed civil due/end date; timed classification retains an absolute prior-day cutoff.
+
+**Acceptance.** Compare tomorrow's checklist preview with the actual generated successor; toggle completed visibility without hiding future unchecked items. Confirm projection leaves stored bytes unchanged. Check Tokyo/UTC and Auckland/Los Angeles yesterday/today/tomorrow classification and a bounded long-running series.
+
+**Evidence.** [TaskCalendarProjection](../../Sources/TaskovskyCore/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
+
+<a id="bus-029"></a>
+### BUS-029 — Atomic Calendar scheduling and guarded Undo
+
+**Current rule.** Calendar creation is staged; Cancel creates nothing. Editing an existing task preserves point/range shape and exact endpoints. Unchanged Save emits no mutation, retaining timestamps, reminders, nominal recurrence position and persisted bytes. Turning Duration on is explicit; turning it off keeps the range's due endpoint. Grid snapping is 15 minutes. Existing timed moves preserve exact elapsed seconds, including zero/short/fractional durations; point moves stay points. Default new timed blocks and explicit resize minima are separate policies. All-day movement preserves civil spans; month drops preserve an existing timed clock. Invalid, deleted or archived edits are refused.
+
+Schedule changes go through `scheduleOnCalendar`; automatic reminders are recomputed and manual reminders shift with the schedule. Remove date clears the duration, reminders and repetition. Undo restores only scheduling fields and their recurrence anchors; text/tag/list edits survive, while a later schedule/rule/status change invalidates the token. This is a guarded in-memory operation, not a persisted history or native Cmd-Z/redo stack.
+
+**Acceptance.** Unchanged Save on reminded repeating points and 0/5/10-minute ranges must preserve the full schedule and file bytes. Move short and fractional windows, then reload and Undo in separate scenarios. Confirm an unrelated text edit survives Undo and a later schedule/status edit blocks it. Cancel a new task; explicitly convert a point to a range and undo it.
+
+**Evidence.** [CalendarScheduleDraft](../../Sources/TaskovskyCore/CalendarScheduleDraft.swift); [CalendarScheduling](../../Sources/TaskovskyCore/CalendarScheduling.swift); [TaskStore](../../Sources/TaskovskyCore/TaskStore.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift).
+
+<a id="bus-030"></a>
+### BUS-030 — Local Calendar boundaries
+
+**Current rule.** Calendar has no external account, EventKit access, subscription/feed, import/export, sync, sharing or external-event overlay. Additional time-zone display uses Foundation's installed data. Habit/focus/countdown overlays, repeating-series exceptions, independent checklist scheduling and all-day resize handles are absent. Multi-day fragments, Year heatmap scaling and gesture policies are Taskovsky choices rather than recovered TickTick algorithms. Calendar's macOS implementation does not add an iPhone target or expand the iPhone proposal's scope.
+
+**Acceptance.** Launch Calendar without account or permission prompts; verify records/options remain local. Do not interpret a stored reminder or additional ruler as network integration. Keep the deferred-integration table and the platform proposal explicit when requesting follow-up features.
+
+**Evidence.** [Calendar evidence and limits](../ticktick-spec/calendar.md); [deferred integrations](../parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026); [iPhone proposal](iphone.md).

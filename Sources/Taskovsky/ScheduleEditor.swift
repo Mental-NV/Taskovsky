@@ -9,8 +9,7 @@ struct ScheduleEditor: View {
     @State private var date: Date
     @State private var hasDate: Bool
     @State private var hasTime: Bool
-    @State private var repeatRule: RepeatRule
-    @State private var customRule: CustomRecurrence?
+    @State private var repeatDraft: RepeatDraft
     @State private var showCustomEditor = false
     @State private var hasDuration: Bool
     @State private var durationStart: Date
@@ -31,8 +30,7 @@ struct ScheduleEditor: View {
         _date = State(initialValue: task.dueDate ?? Calendar.current.startOfDay(for: Date()))
         _hasDate = State(initialValue: task.dueDate != nil)
         _hasTime = State(initialValue: task.hasDueTime)
-        _repeatRule = State(initialValue: task.recurrence)
-        _customRule = State(initialValue: task.customRecurrence)
+        _repeatDraft = State(initialValue: RepeatDraft(repeatRule: task.recurrence, customRule: task.customRecurrence))
         _hasEnd = State(initialValue: task.recurrenceEndDate != nil)
         _endDate = State(initialValue: task.recurrenceEndDate ?? task.dueDate ?? Date())
         _reminders = State(initialValue: task.reminderDates)
@@ -80,22 +78,26 @@ struct ScheduleEditor: View {
     private func isOccurrence(_ day: Date) -> Bool {
         let start = calendar.startOfDay(for: effectiveDate), target = calendar.startOfDay(for: day)
         guard hasDate, target > start else { return false }
-        if let rule = customRule, rule.isValid {
-            return rule.isOccurrence(on: target, seriesStart: effectiveDate, calendar: calendar)
+        if let rule = repeatDraft.customRule, rule.isValid {
+            // The staged draft may have moved the due date or changed the
+            // rule: the walk advances from the effective staged position,
+            // mirroring what saving the draft would store.
+            return rule.isOccurrence(on: target, seriesStart: effectiveDate, calendar: calendar,
+                                     nominalStart: stagedNominal(draftDue: effectiveDate, draftRule: repeatDraft.customRule, task: task))
         }
-        guard repeatRule != .none,
+        guard repeatDraft.repeatRule != .none,
               !hasEnd || target <= calendar.startOfDay(for: endDate) else { return false }
-        let unchanged = task.dueDate == date && task.recurrence == repeatRule
+        let unchanged = task.dueDate == date && task.recurrence == repeatDraft.repeatRule
         let anchorDay = (unchanged ? task.recurrenceAnchorDay : nil) ?? calendar.component(.day, from: date)
         let anchorMonth = (unchanged ? task.recurrenceAnchorMonth : nil) ?? calendar.component(.month, from: date)
-        switch repeatRule {
+        switch repeatDraft.repeatRule {
         case .none: return false
         case .daily: return true
         case .weekdays: return (2...6).contains(calendar.component(.weekday, from: target))
         case .weekly:
             return (calendar.dateComponents([.day], from: start, to: target).day ?? 0) % 7 == 0
         case .monthly, .yearly:
-            if repeatRule == .yearly && calendar.component(.month, from: target) != anchorMonth { return false }
+            if repeatDraft.repeatRule == .yearly && calendar.component(.month, from: target) != anchorMonth { return false }
             guard let days = calendar.range(of: .day, in: .month, for: target) else { return false }
             return calendar.component(.day, from: target) == min(anchorDay, days.count)
         }
@@ -107,7 +109,7 @@ struct ScheduleEditor: View {
                 shortcut("Tomorrow", symbol: "sun.horizon", days: 1)
                 shortcut("Next week", symbol: "calendar.badge.clock", days: 7)
                 Button { setQuickDate(days: 0); setDue(calendar.date(bySettingHour: 18, minute: 0, second: 0, of: effectiveDate) ?? effectiveDate); hasTime = true } label: { Image(systemName: "moon.stars").frame(maxWidth: .infinity).frame(height: 30) }.help("This evening")
-                Button { hasDate = false; hasTime = false; repeatRule = .none; hasEnd = false; reminders = []; automaticReminder = true } label: { Image(systemName: "calendar.badge.minus").frame(maxWidth: .infinity).frame(height: 30) }.help("No date")
+                Button { hasDate = false; hasTime = false; repeatDraft.repeatRule = .none; hasEnd = false; reminders = []; automaticReminder = true } label: { Image(systemName: "calendar.badge.minus").frame(maxWidth: .infinity).frame(height: 30) }.help("No date")
             }.buttonStyle(.plain).foregroundStyle(accent)
             CalendarGrid(date: dueBinding, calendar: calendar, showWeekNumbers: settings.showWeekNumbers, hasSelection: hasDate, isOccurrence: isOccurrence) { hasDate = true }
             Divider()
@@ -155,10 +157,11 @@ struct ScheduleEditor: View {
             }
             row("Repeat", symbol: "repeat", value: repeatLabel, row: .repeatRule).disabled(!hasDate)
             if expanded == .repeatRule && hasDate {
-                if let rule = customRule, rule.isValid {
+                if let rule = repeatDraft.customRule, rule.isValid {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(rule.shortLabel(calendar: calendar)).font(.system(size: 11))
-                        let preview = remainingOccurrences(rule: rule, current: effectiveDate, index: task.occurrenceIndex, calendar: calendar)
+                        let preview = remainingOccurrences(rule: rule, current: effectiveDate, index: task.occurrenceIndex, calendar: calendar,
+                                                                 nominal: stagedNominal(draftDue: effectiveDate, draftRule: repeatDraft.customRule, task: task))
                         ForEach(Array(preview.enumerated()), id: \.offset) { _, next in
                             Text("Then " + format(next, dateStyle: .medium, timeStyle: .none)).font(.system(size: 11)).foregroundStyle(.secondary)
                         }
@@ -166,21 +169,27 @@ struct ScheduleEditor: View {
                             Text("Occurrence \(min(task.occurrenceIndex, max)) of \(max)").font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         HStack {
-                            Button("Edit Custom…") { showCustomEditor = true }.buttonStyle(.borderless)
-                            Button("Use Simple") { customRule = nil }.buttonStyle(.borderless)
+                            Button("Edit Custom…") {
+                                repeatDraft.openCustomSheet(seed: CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days))
+                                showCustomEditor = true
+                            }.buttonStyle(.borderless)
+                            Button("Use Simple") { repeatDraft.dropCustom() }.buttonStyle(.borderless)
                         }.font(.system(size: 11))
                     }.padding(.horizontal, 8)
                 } else {
-                    Picker("Repeat", selection: $repeatRule) { ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) } }.labelsHidden()
-                        .onChange(of: repeatRule) { _, value in if value != .none { customRule = nil } }
+                    Picker("Repeat", selection: $repeatDraft.repeatRule) { ForEach(RepeatRule.allCases, id: \.self) { Text($0.label).tag($0) } }.labelsHidden()
+                        .onChange(of: repeatDraft.repeatRule) { _, value in if value != .none { repeatDraft.dropCustom() } }
                     Button("Custom…") {
+                        // Opening stages a seed WITHOUT touching the
+                        // committed draft: only Done commits. Cancel and
+                        // dismissal leave the outer draft exactly as before.
                         let weekday = calendar.component(.weekday, from: date)
-                        customRule = CustomRecurrence(anchor: .dueDate, interval: 1, unit: .weeks, weekdays: [weekday])
+                        repeatDraft.openCustomSheet(seed: CustomRecurrence(anchor: .dueDate, interval: 1, unit: .weeks, weekdays: [weekday]))
                         showCustomEditor = true
                     }.buttonStyle(.borderless).font(.system(size: 11))
                 }
             }
-            if repeatRule != .none && customRule?.isValid != true && hasDate {
+            if repeatDraft.repeatRule != .none && repeatDraft.customRule?.isValid != true && hasDate {
                 row("End", symbol: "calendar.badge.clock", value: hasEnd ? format(endDate, dateStyle: .medium, timeStyle: .none) : "Endlessly", row: .end)
                 if expanded == .end {
                     Picker("End", selection: $hasEnd) { Text("Endlessly").tag(false); Text("Until date").tag(true) }
@@ -196,10 +205,14 @@ struct ScheduleEditor: View {
                     .disabled(hasDate && hasDuration && draftDuration == nil)
             }.font(.system(size: 12))
         }.padding(14).frame(width: 300).background(Color(nsColor: .textBackgroundColor))
-            .sheet(isPresented: $showCustomEditor) {
-                CustomRecurrenceEditor(rule: customRule ?? CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days), scheduledDate: date, calendar: calendar) { rule in
-                    customRule = rule
-                    if rule != nil { repeatRule = .none }
+            .sheet(isPresented: $showCustomEditor, onDismiss: {
+                // All dismissal paths (Cancel, swipe-down) drop the staged
+                // seed and preserve the committed draft. After Done/Clear
+                // the staged value is already nil, so this is a safe no-op.
+                repeatDraft.cancelCustom()
+            }) {
+                CustomRecurrenceEditor(rule: repeatDraft.stagedCustom ?? CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days), scheduledDate: date, calendar: calendar) { rule in
+                    repeatDraft.commitCustom(rule)
                 }
             }
             .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
@@ -239,14 +252,14 @@ struct ScheduleEditor: View {
         return startText + " – " + endText
     }
     private var repeatLabel: String {
-        if let rule = customRule, rule.isValid {
+        if let rule = repeatDraft.customRule, rule.isValid {
             if let max = rule.maxOccurrences {
                 return rule.shortLabel(calendar: calendar) + " (\(min(task.occurrenceIndex, max))/\(max))"
             }
             return rule.shortLabel(calendar: calendar)
         }
-        if repeatRule == .weekly { let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone; formatter.setLocalizedDateFormatFromTemplate("EEEE"); return "Weekly on " + formatter.string(from: date) }
-        return repeatRule.label
+        if repeatDraft.repeatRule == .weekly { let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone; formatter.setLocalizedDateFormatFromTemplate("EEEE"); return "Weekly on " + formatter.string(from: date) }
+        return repeatDraft.repeatRule.label
     }
     private func row(_ title: String, symbol: String, value: String, row: Row) -> some View {
         Button { expanded = expanded == row ? nil : row } label: {
@@ -307,23 +320,24 @@ struct ScheduleEditor: View {
         hasDate = true
     }
     private func clear() {
-        var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.scheduledDuration = nil; updated.timeZoneID = nil; save(updated); dismiss()
+        var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence); updated.scheduledDuration = nil; updated.timeZoneID = nil; save(updated); dismiss()
     }
     private func apply() {
         // Custom and legacy repeats stay mutually exclusive: a valid custom
         // rule clears the enum, a legacy pick clears the rule.
-        let custom = hasDate ? customRule.flatMap({ $0.isValid ? $0 : nil }) : nil
+        let custom = hasDate ? repeatDraft.customRule.flatMap({ $0.isValid ? $0 : nil }) : nil
         var updated = task
         // Range end is the due date; a staged window decides timed/all-day.
         let timed = hasDate && (hasDuration ? !durationAllDay : hasTime)
         let end = hasDuration ? durationEnd : date
         updated.dueDate = hasDate ? (timed ? end : calendar.startOfDay(for: end)) : nil
         updated.hasDueTime = timed
-        updated.recurrence = hasDate && custom == nil ? repeatRule : .none
+        updated.recurrence = hasDate && custom == nil ? repeatDraft.repeatRule : .none
         updated.customRecurrence = custom
-        // Plain date edits never restart the series; only a rule change does.
-        if updated.customRecurrence != task.customRecurrence { updated.occurrenceIndex = 1 }
-        updated.recurrenceEndDate = hasDate && custom == nil && repeatRule != .none && hasEnd ? calendar.startOfDay(for: endDate) : nil
+        // Plain date edits never restart the series; only a rule change
+        // does (index back to 1, nominal back to the new series start).
+        updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence)
+        updated.recurrenceEndDate = hasDate && custom == nil && repeatDraft.repeatRule != .none && hasEnd ? calendar.startOfDay(for: endDate) : nil
         updated.scheduledDuration = hasDate ? draftDuration : nil
         updated.reminderDates = hasDate ? reminders : []
         updated.reminderFollowsSchedule = hasDate ? automaticReminder : nil

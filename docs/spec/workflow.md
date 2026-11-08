@@ -56,3 +56,7 @@ Open a draft PR unless requested otherwise. PR creation does not authorize mergi
 > Implement change `<ID>` from `<path>` at its approved revision. Preserve unrelated behavior and concurrent work. Follow the linked business/UI/component contracts and verification plan. Report unresolved decisions before broadening scope. Update the current specifications and evidence, distinguish not-run checks, and open a draft PR. Do not merge.
 
 For documentation-only requests, replace the implementation/verification instruction with a Markdown-only allowlist and static document checks. Do not create application tests or fix known defects as a side effect of reconciling documentation.
+
+## Proposed hosted macOS verification
+
+The [CI/CD specification](ci-cd.md) defines a later GitHub Actions implementation for tests, release packaging and local signature verification. It is not an existing gate or deployment plan. Record actual checkout SHAs and run artifacts once implemented, and keep manual native UI/minimum-OS checks separate.

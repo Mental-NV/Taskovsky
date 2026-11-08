@@ -57,6 +57,15 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     /// each generated successor increments it, so `maxOccurrences` counting
     /// survives reloads. New series always start at 1.
     public var occurrenceIndex: Int
+    /// Unadjusted nominal occurrence for the current due date in a custom
+    /// weekend-rolling series: the pure-cadence date before any
+    /// skip-weekends roll is applied. Interval alignment is computed from
+    /// this date, never reconstructed from the displayed adjusted due, so
+    /// a roll across a month boundary cannot redefine an every-N-month
+    /// series. Nil for legacy records (falls back to the due date for one
+    /// transition) and for series that carry no nominal (completion anchor,
+    /// no custom rule).
+    public var recurrenceNominalDate: Date?
     /// Parent task for subtask nesting. Nil denotes a top-level task; unknown
     /// parents clear to top level on load and cycles are refused by the store,
     /// so orphaned subtasks always render as roots instead of vanishing.
@@ -91,6 +100,35 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         return recurrence == .none ? "Does not repeat" : recurrence.rawValue.capitalized
     }
 
+    /// Restarts the custom series after a rule change: the position returns
+    /// to 1 and the nominal occurrence returns to the current due date (the
+    /// new series start). Clearing the rule drops the nominal. A no-op when
+    /// the rule is unchanged. Call after assigning `customRecurrence`.
+    public mutating func restartCustomSeries(ruleChangedFrom old: CustomRecurrence?) {
+        guard customRecurrence != old else { return }
+        occurrenceIndex = 1
+        recurrenceNominalDate = customRecurrence == nil ? nil : dueDate
+    }
+
+    /// Reconciles the custom-series position when a save changes the
+    /// schedule outside completion (the store boundary, not just the
+    /// schedule editor). A changed rule — including clear and replace —
+    /// restarts the series at the new due date. A changed due date under an
+    /// unchanged rule rebases the nominal to the new due: the count is
+    /// preserved, and the next completion advances forward from the
+    /// manually chosen occurrence instead of behind it. Anything else —
+    /// including a no-op save of a rolled task — leaves the position
+    /// untouched, so stored nominals are never clobbered. Call after
+    /// schedule coherence settles the final due date.
+    public mutating func normalizeSeriesPosition(old: TaskItem) {
+        if customRecurrence != old.customRecurrence {
+            restartCustomSeries(ruleChangedFrom: old.customRecurrence)
+            return
+        }
+        guard isCustomRepeating, dueDate != old.dueDate, let due = dueDate else { return }
+        recurrenceNominalDate = due
+    }
+
     public init(id: UUID = UUID(), title: String, body: String = "", listID: UUID? = nil,
                 tagIDs: [UUID] = [], kind: TaskKind = .task, dueDate: Date? = nil,
                 hasDueTime: Bool = false, reminderDate: Date? = nil, priority: TaskPriority = .none,
@@ -100,7 +138,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
                 recurrenceSourceID: UUID? = nil, recurrenceEndDate: Date? = nil, additionalReminderDates: [Date]? = nil, reminderFollowsSchedule: Bool? = nil, wontDoAt: Date? = nil, timeZoneID: String? = nil,
                 customRecurrence: CustomRecurrence? = nil, occurrenceIndex: Int = 1, parentID: UUID? = nil,
                 scheduledDuration: TaskDurationRange? = nil,
-                richBody: RichBody? = nil, isPinned: Bool = false) {
+                richBody: RichBody? = nil, isPinned: Bool = false, recurrenceNominalDate: Date? = nil) {
         self.id = id; self.title = title; self.body = body; self.listID = listID; self.tagIDs = tagIDs
         self.kind = kind; self.dueDate = dueDate; self.hasDueTime = hasDueTime; self.reminderDate = reminderDate
         self.priority = priority; self.recurrence = recurrence; self.checklist = checklist
@@ -108,6 +146,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         self.recurrenceAnchorDay = recurrenceAnchorDay; self.recurrenceAnchorMonth = recurrenceAnchorMonth
         self.recurrenceSourceID = recurrenceSourceID; self.recurrenceEndDate = recurrenceEndDate; self.additionalReminderDates = additionalReminderDates; self.reminderFollowsSchedule = reminderFollowsSchedule; self.wontDoAt = wontDoAt; self.timeZoneID = timeZoneID
         self.customRecurrence = customRecurrence; self.occurrenceIndex = max(1, occurrenceIndex)
+        self.recurrenceNominalDate = recurrenceNominalDate
         self.parentID = parentID
         self.scheduledDuration = scheduledDuration
         self.richBody = richBody; self.isPinned = isPinned
@@ -118,7 +157,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
              additionalReminderDates, reminderFollowsSchedule, priority, recurrence, checklist,
              completedAt, deletedAt, createdAt, updatedAt, recurrenceAnchorDay, recurrenceAnchorMonth,
              recurrenceSourceID, recurrenceEndDate, wontDoAt, timeZoneID, customRecurrence, occurrenceIndex, parentID, scheduledDuration,
-             richBody, isPinned
+             richBody, isPinned, recurrenceNominalDate
     }
 
     public init(from decoder: Decoder) throws {
@@ -151,6 +190,8 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         // (legacy-only series) and the index defaults to the series start.
         customRecurrence = try c.decodeIfPresent(CustomRecurrence.self, forKey: .customRecurrence)
         occurrenceIndex = max(1, try c.decodeIfPresent(Int.self, forKey: .occurrenceIndex) ?? 1)
+        // Pre-nominal files omit the anchor: nil falls back to the due date.
+        recurrenceNominalDate = try c.decodeIfPresent(Date.self, forKey: .recurrenceNominalDate)
         // Pre-hierarchy files omit the parent link; subtasks decode as roots.
         parentID = try c.decodeIfPresent(UUID.self, forKey: .parentID)
         // Pre-duration files omit the window; no planned block.
