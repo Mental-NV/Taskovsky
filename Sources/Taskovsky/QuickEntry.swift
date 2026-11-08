@@ -61,7 +61,7 @@ struct QuickEntry: View {
             if focused, let tagQuery {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(tagMatches.prefix(5)) { tag in
-                        Button { chooseTag(tag.name) } label: { Label(tag.name, systemImage: "tag").foregroundStyle(Color(hex: tag.color)).frame(maxWidth: .infinity, alignment: .leading).padding(7) }.buttonStyle(.plain)
+                        Button { chooseTag(tag.name) } label: { Label(String(repeating: "  ", count: TagHierarchy.ancestors(of: tag.id, in: store.data.tags).count) + tag.name, systemImage: "tag").foregroundStyle(Color(hex: tag.color)).frame(maxWidth: .infinity, alignment: .leading).padding(7) }.buttonStyle(.plain)
                     }
                     if !tagQuery.isEmpty && !store.data.tags.contains(where: { $0.name.localizedCaseInsensitiveCompare(tagQuery) == .orderedSame }) {
                         Button { chooseTag(tagQuery) } label: { Text("Create tag \"\(tagQuery)\"").frame(maxWidth: .infinity, alignment: .leading).padding(7) }.buttonStyle(.plain)

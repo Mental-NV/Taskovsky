@@ -18,6 +18,11 @@ struct TaskRow: View {
     let showSteps: Bool
     /// Inline rename is disabled where double-click opens a pop-up window.
     let allowRename: Bool
+    /// Archived-list rows: no toggling, steps, or rename (selection kept).
+    var readOnly = false
+    /// Hierarchy nesting depth from the group's display walk. Indentation is
+    /// capped so deep chains stay readable; the data itself is unbounded.
+    var depth = 0
     /// Dedicated grip drag source. Built here (never passed in as a view) so
     /// visibility follows whole-row hover OR selection while the 14pt slot
     /// stays reserved and the row never reflows. Nil action means no grip
@@ -74,7 +79,7 @@ struct TaskRow: View {
                     Button(action: { consumeNextSelect(); toggle() }) {
                         TaskCheckbox(state: boxState, color: boxColor).frame(width: 18, height: 20).contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain).disabled(task.deletedAt != nil).help(finished ? "Mark incomplete" : "Complete task").accessibilityLabel((finished ? "Reopen " : "Complete ") + task.title)
+                    .buttonStyle(.plain).disabled(task.deletedAt != nil || readOnly).help(finished ? "Mark incomplete" : "Complete task").accessibilityLabel((finished ? "Reopen " : "Complete ") + task.title)
                 }
                 if editing {
                     TextField("Task title", text: $draft).textFieldStyle(.plain).focused($titleFocused).onSubmit(commit)
@@ -137,7 +142,7 @@ struct TaskRow: View {
                         HStack(spacing: 8) {
                             Button(action: { consumeNextSelect(); toggleStep(step.id) }) {
                                 TaskCheckbox(state: step.isCompleted ? .completed : .open, color: .secondary, size: 12)
-                            }.buttonStyle(.plain).help(step.isCompleted ? "Uncheck subtask" : "Check subtask")
+                            }.buttonStyle(.plain).disabled(readOnly).help(step.isCompleted ? "Uncheck subtask" : "Check subtask")
                                 .accessibilityLabel((step.isCompleted ? "Uncheck " : "Check ") + step.title)
                             Text(step.title.isEmpty ? "Untitled" : step.title).font(.system(size: 13))
                                 .foregroundStyle(step.isCompleted ? Color(nsColor: .tertiaryLabelColor) : Color.secondary).lineLimit(1)
@@ -145,7 +150,7 @@ struct TaskRow: View {
                     }
                 }.padding(.leading, 20)
             }
-        }.padding(.leading, 12).padding(.trailing, 7).padding(.vertical, hasExtras ? 8 : 0)
+        }.padding(.leading, 12 + CGFloat(min(max(depth, 0), 6)) * 14).padding(.trailing, 7).padding(.vertical, hasExtras ? 8 : 0)
         .frame(minHeight: 40)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 9))
         .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 40).padding(.trailing, 7) }
@@ -186,8 +191,16 @@ struct TaskRow: View {
             if showExtras {
                 if !task.body.isEmpty { Image(systemName: "doc.plaintext").foregroundStyle(metaColor) }
                 if !task.checklist.isEmpty { Text("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)").foregroundStyle(metaColor) }
+                if let subtasks = TaskHierarchy.progress(of: task.id, in: store.data.tasks) {
+                    // Indent glyph distinguishes subtask counts from the
+                    // checklist "done/total" beside it.
+                    HStack(spacing: 2) {
+                        Image(systemName: "list.bullet.indent")
+                        Text("\(subtasks.done)/\(subtasks.total)")
+                    }.help("\(subtasks.done) of \(subtasks.total) subtasks done").accessibilityLabel("\(subtasks.done) of \(subtasks.total) subtasks done")
+                }
                 if showTag, let tag { Text("#" + tag.name).foregroundStyle(finished ? metaColor : Color(hex: tag.color)).truncationMode(.tail).frame(maxWidth: 96, alignment: .trailing) }
-                if task.recurrence != .none { Image(systemName: "repeat").foregroundStyle(metaColor) }
+                if task.isRepeating { Image(systemName: "repeat").foregroundStyle(metaColor).help(task.repeatLabel()) }
                 if task.reminderDate != nil { Image(systemName: "bell").foregroundStyle(finished ? metaColor : task.reminderDate! <= now ? .orange : .secondary) }
             }
             if let due = task.dueDate { Text(dueText(due)).foregroundStyle(dueColor(due)) }
@@ -201,13 +214,14 @@ struct TaskRow: View {
     private var metadataDescription: String {
         ([tag.map { "#" + $0.name }, task.dueDate.map(dueText), listContext ?? listName].compactMap { $0 }).joined(separator: " · ")
     }
-    private func rename() { guard allowRename, task.deletedAt == nil else { return }; draft = task.title; editing = true; titleFocused = true }
+    private func rename() { guard allowRename, !readOnly, task.deletedAt == nil else { return }; draft = task.title; editing = true; titleFocused = true }
     private func commit() {
         guard editing else { return }; editing = false
         let value = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         if !value.isEmpty && value != task.title { var updated = task; updated.title = value; store.updateTask(updated) }
     }
     private func toggleStep(_ stepID: UUID) {
+        guard !readOnly else { return }
         var updated = task
         if let i = updated.checklist.firstIndex(where: { $0.id == stepID }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) }
     }

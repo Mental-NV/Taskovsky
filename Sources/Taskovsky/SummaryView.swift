@@ -147,6 +147,9 @@ struct SummaryView: View {
         saved = false
         let eligible = store.data.tasks.filter { task in
             task.deletedAt == nil && task.kind == .task && (listIDs.isEmpty || listIDs.contains(task.listID ?? TaskFilter.inboxListID)) && statusMatches(task)
+                // Same explicit-selection policy as saved filters: archived or
+                // opted-out lists stay out unless explicitly selected.
+                && (listIDs.contains(task.listID ?? TaskFilter.inboxListID) || !SmartListEligibility.isExcludedFromSmart(task, lists: store.data.lists))
         }
         let current = eligible.filter { inPeriod($0.dueDate) || inPeriod($0.completedAt) || inPeriod($0.wontDoAt) }
         var sections: [(String, [TaskItem])] = []

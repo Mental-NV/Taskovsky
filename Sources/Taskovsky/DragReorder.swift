@@ -62,8 +62,9 @@ private final class BatchCollector {
 }
 
 /// Loads every provider's representation, then calls `finish` exactly once
-/// with the collected data (nil when any load failed).
-private func loadBatch(_ providers: [NSItemProvider], type: UTType, finish: @escaping ([Data]?) -> Void) {
+/// with the collected data (nil when any load failed). Shared with the
+/// Kanban column drops so every task drop decodes through one helper.
+func loadBatch(_ providers: [NSItemProvider], type: UTType, finish: @escaping ([Data]?) -> Void) {
     let collector = BatchCollector(count: providers.count, done: finish)
     for (index, provider) in providers.enumerated() {
         provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { data, _ in

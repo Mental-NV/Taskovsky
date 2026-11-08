@@ -1,14 +1,72 @@
 import SwiftUI
 import AppKit
+import UniformTypeIdentifiers
 import TaskovskyCore
+
+/// Preference suite routing: normal launches share the user's defaults; an
+/// isolated `--workspace` QA launch uses a throwaway suite so visual QA
+/// never reads or writes real preferences (they persist separately per
+/// machine, keeping repeat QA runs stable without touching real state).
+enum IsolatedDefaults {
+    static var store: UserDefaults {
+        guard LaunchIsolation.isIsolated else { return .standard }
+        return UserDefaults(suiteName: "Taskovsky.isolated-qa") ?? .standard
+    }
+}
+
+/// Isolated visual-QA launch: `--workspace <absolute-path>` (plus adjacent
+/// `--settings <absolute-path>`) points storage at an explicit file such as a
+/// seeded /tmp fixture. Preference migration is skipped in that mode so the
+/// real workspace is never touched; normal launch behavior is unchanged.
+/// Policy lives in `IsolatedLaunch` (unit-tested): flag presence alone
+/// isolates — even a bare `--workspace` with no value — and only absolute
+/// file paths (never directories, never another flag) count as explicit
+/// values. A missing/invalid value falls back to a fresh temp workspace,
+/// never to the real one, with a stderr warning.
+enum LaunchIsolation {
+    private static var resolution: IsolatedLaunchResolution {
+        IsolatedLaunch.resolve(arguments: CommandLine.arguments)
+    }
+    static var workspaceOverride: URL? { resolution.workspace }
+    static var settingsOverride: URL? { resolution.settings }
+    static var isIsolated: Bool { resolution.isIsolated }
+    /// Temp fallback for a missing/invalid `--workspace` value: a fresh
+    /// per-process workspace that keeps QA off the user's real data.
+    static var fallbackWorkspace: URL {
+        FileManager.default.temporaryDirectory
+            .appendingPathComponent("Taskovsky-isolated-\(ProcessInfo.processInfo.processIdentifier)")
+            .appendingPathComponent("workspace.json")
+    }
+    static func warnIfNeeded() {
+        if resolution.isIsolated && resolution.workspaceValueInvalid {
+            fputs("Taskovsky: --workspace needs an absolute file path; using a fresh temp workspace instead.\n", stderr)
+        }
+    }
+}
 
 @main
 struct TaskovskyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @StateObject private var store = TaskStore()
+    @StateObject private var store: TaskStore
     @StateObject private var drafts = DetailDrafts()
     @StateObject private var actions = TaskActionCenter()
-    init() { AppMigration.migratePreferences() }
+    init() {
+        if LaunchIsolation.isIsolated {
+            // Explicit file, no migration side effects on real storage. A
+            // missing/invalid flag value still isolates (fresh temp
+            // workspace, never the real one).
+            LaunchIsolation.warnIfNeeded()
+            let workspace = LaunchIsolation.workspaceOverride ?? LaunchIsolation.fallbackWorkspace
+            if !FileManager.default.fileExists(atPath: workspace.path) {
+                try? FileManager.default.createDirectory(at: workspace.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try? Data("{\"tasks\":[],\"lists\":[],\"tags\":[],\"filters\":[]}".utf8).write(to: workspace)
+            }
+            _store = StateObject(wrappedValue: TaskStore(fileURL: workspace, settingsURL: LaunchIsolation.settingsOverride, seed: false))
+        } else {
+            AppMigration.migratePreferences()
+            _store = StateObject(wrappedValue: TaskStore())
+        }
+    }
     var body: some Scene {
         // Content floor for the measured compact reference (rail 62 + center
         // 320): 382 wide with 552 height = 580 total reference minus the
@@ -132,15 +190,28 @@ enum Destination: Hashable {
         case .wontDo: "Won't Do"; case .summary: "Summary"; case .search: "Search"
         }
     }
-    func includes(_ task: TaskItem, now: Date = Date()) -> Bool {
+    func includes(_ task: TaskItem, data: WorkspaceData, now: Date = Date()) -> Bool {
         if self == .trash { return task.deletedAt != nil }
         guard task.deletedAt == nil else { return false }
         if self == .wontDo { return task.wontDoAt != nil }
-        if self == .summary { return task.updatedAt >= Calendar.current.date(byAdding: .day, value: -7, to: now)! }
+        if self == .summary {
+            // Summary is a history view, but archived or opted-out lists stay
+            // hidden there like in every other smart destination.
+            guard !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists) else { return false }
+            return task.updatedAt >= Calendar.current.date(byAdding: .day, value: -7, to: now)!
+        }
         if self == .completed { return task.completedAt != nil }
         guard task.completedAt == nil && task.wontDoAt == nil else { return false }
         let cal = task.scheduleCalendar
         let day = cal.startOfDay(for: now)
+        switch self {
+        case .all, .today, .tomorrow, .week, .notes:
+            guard !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists) else { return false }
+        case .reminders:
+            guard !SmartListEligibility.isArchived(task, lists: data.lists) else { return false }
+        case .inbox, .list, .tag, .completed, .trash, .wontDo, .summary, .search, .filter:
+            break
+        }
         switch self {
         case .all: return true
         case .today: return task.dueDate.map { $0 < cal.date(byAdding: .day, value: 1, to: day)! } == true
@@ -150,7 +221,8 @@ enum Destination: Hashable {
         case .notes: return task.kind == .note
         case .reminders: return task.reminderDate != nil
         case .list(let id): return task.listID == id
-        case .tag(let id): return task.tagIDs.contains(id)
+        case .tag(let id):
+            return SmartListEligibility.taskMatchesTag(task, tagID: id, tags: data.tags)
         case .completed, .trash, .wontDo, .summary, .search, .filter: return false
         }
     }
@@ -180,6 +252,14 @@ struct FolderSheetDraft: Identifiable {
     var initialName: String
 }
 
+/// Pending tag merge: the source tag is selected by the caller, the target in
+/// the sheet below. Merging rewrites task/template/filter refs and reparents
+/// the source's children, then deletes the source.
+struct TagMergeDraft: Identifiable {
+    let id = UUID()
+    var sourceID: UUID
+}
+
 struct WorkspaceView: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
@@ -194,29 +274,53 @@ struct WorkspaceView: View {
     // Persisted: a Manual order would otherwise appear lost whenever the app
     // relaunched onto the default Date sort. Legacy "Manual" reads as "None";
     // both mean stored-array order and enable drag reordering.
-    @AppStorage("Taskovsky.taskSort") private var sort = "Date"
+    @AppStorage("Taskovsky.taskSort", store: IsolatedDefaults.store) private var sort = "Date"
     private var isManualSort: Bool { TaskSortPolicy.isManual(sort) }
     @State private var showCompleted = true
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
     @State private var folderDraft: FolderSheetDraft?
-    @AppStorage("Taskovsky.collapsedFolders") private var collapsedFolders = ""
+    @AppStorage("Taskovsky.collapsedFolders", store: IsolatedDefaults.store) private var collapsedFolders = ""
     private var collapsedFolderIDs: Set<UUID> {
         get { Set(collapsedFolders.split(separator: "|").compactMap { UUID(uuidString: String($0)) }) }
         nonmutating set { collapsedFolders = newValue.map(\.uuidString).sorted().joined(separator: "|") }
     }
     private var isPurgeAlertPresented: Binding<Bool> { Binding(get: { purgeCandidate != nil }, set: { if !$0 { purgeCandidate = nil } }) }
     @State private var recoveryAlert = false
+    /// Per-list center view, stored on the list record itself (List default)
+    /// so each list remembers its own mode across rename, edit, duplicate,
+    /// and reload. The segmented control below reads and writes the current
+    /// list; every other destination always renders rows. The board is a
+    /// status-column Kanban (Open / Completed / Won't Do) over the same
+    /// filtered tasks — no custom sections or column editing.
+    private var listViewBinding: Binding<Bool> {
+        Binding(get: {
+            if case .list(let id) = destination, let list = store.data.lists.first(where: { $0.id == id }) { return list.viewMode == .board }
+            return false
+        }, set: { board in
+            if case .list(let id) = destination, var list = store.data.lists.first(where: { $0.id == id }) {
+                list.viewMode = board ? .board : .list
+                store.updateList(list)
+            }
+        })
+    }
+    /// True when the current destination renders a Kanban board.
+    private var isBoardDestination: Bool { if case .list = destination { return true }; return false }
+    /// The board's list scope. Separate from `activeList` (which resolves to
+    /// nil for dangling destinations): a missing list must not silently fall
+    /// back to Inbox scope.
+    private var boardListID: UUID? { if case .list(let id) = destination { return id }; return nil }
     @State private var searchDialog = false
     @State private var searchQuery = ""
     @State private var filterEditor: TaskFilter?
+    @State private var mergeDraft: TagMergeDraft?
     @State private var creatingFilter = false
     @State private var templatePicker = false
     @State private var purgeCandidate: UUID?
-    @AppStorage("Taskovsky.collapsedSidebarSections") private var collapsedSidebarSections = ""
-    @AppStorage("Taskovsky.sidebarWidth") private var sidebarWidth = 215.0
-    @AppStorage("Taskovsky.sidebarCollapsed") private var sidebarCollapsed = false
-    @AppStorage("Taskovsky.taskPaneFraction") private var taskPaneFraction = 0.45
+    @AppStorage("Taskovsky.collapsedSidebarSections", store: IsolatedDefaults.store) private var collapsedSidebarSections = ""
+    @AppStorage("Taskovsky.sidebarWidth", store: IsolatedDefaults.store) private var sidebarWidth = 215.0
+    @AppStorage("Taskovsky.sidebarCollapsed", store: IsolatedDefaults.store) private var sidebarCollapsed = false
+    @AppStorage("Taskovsky.taskPaneFraction", store: IsolatedDefaults.store) private var taskPaneFraction = 0.45
     // Stable divider dragging: gestures report absolute global x; the start
     // position and start size are captured on the first event and every frame
     // derives from those, so local translation can never accumulate jitter.
@@ -253,10 +357,10 @@ struct WorkspaceView: View {
     @State private var listContentHeight: CGFloat = 0
     @State private var listViewportHeight: CGFloat = 0
     private var listFillerHeight: CGFloat { max(0, listViewportHeight - listContentHeight) }
-    @AppStorage("Taskovsky.showDetailsPreview") private var showDetailsPreview = false
-    @AppStorage("Taskovsky.showChecklistItems") private var showChecklistItems = false
-    @AppStorage("Taskovsky.detailLayout") private var detailLayout = "sidePeek"
-    @AppStorage("Taskovsky.taskPaneCustomized") private var taskPaneCustomized = false
+    @AppStorage("Taskovsky.showDetailsPreview", store: IsolatedDefaults.store) private var showDetailsPreview = false
+    @AppStorage("Taskovsky.showChecklistItems", store: IsolatedDefaults.store) private var showChecklistItems = false
+    @AppStorage("Taskovsky.detailLayout", store: IsolatedDefaults.store) private var detailLayout = "sidePeek"
+    @AppStorage("Taskovsky.taskPaneCustomized", store: IsolatedDefaults.store) private var taskPaneCustomized = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.openWindow) private var openWindow
@@ -448,17 +552,31 @@ struct WorkspaceView: View {
             Button("Back up and recover") { store.recoverUnreadableWorkspace() }
         } message: { Text("The unreadable file will be copied to a backup beside workspace.json. Your current in-memory items will then be saved as the new workspace.") }
         .sheet(item: $editor) { item in
-            EntitySheet(editor: item, folders: store.data.folders) { name, color, kind, symbol, folderID, belowFolders in
+            EntitySheet(editor: item, folders: store.data.folders, tags: store.data.tags) { name, color, kind, symbol, folderID, belowFolders, parentTagID, showsInSmartLists, viewMode in
                 if item.isTag {
-                    if let id = item.entityID { store.updateTag(TaskTag(id: id, name: name, color: color)) }
-                    else { _ = store.createTag(name: name, color: color) }
+                    if let id = item.entityID {
+                        let stored = store.data.tags.first { $0.id == id }
+                        store.updateTag(TaskTag(id: id, name: name, color: color, parentID: stored?.parentID, isCollapsed: stored?.isCollapsed ?? false, isPinned: stored?.isPinned ?? false))
+                        // Parent changes route through cycle-safe validation.
+                        _ = store.setTagParent(id: id, parentID: parentTagID)
+                    }
+                    else { _ = store.createTag(name: name, color: color, parentID: parentTagID) }
                 } else {
                     if let id = item.entityID {
-                        // Preserve folder membership and trailing placement on
-                        // unrelated edits: the editor carries both stored values,
-                        // so saving them back keeps them instead of resetting.
-                        store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol, folderID: folderID, belowFolders: belowFolders))
-                    } else { destination = .list(store.createList(name: name, color: color, kind: kind, symbol: symbol, folderID: folderID)) }
+                        // Preserve folder membership, trailing placement,
+                        // archive/pin flags, and smart-list inclusion on
+                        // unrelated edits: the editor carries the stored
+                        // values, so saving them back keeps them.
+                        let stored = store.data.lists.first { $0.id == id }
+                        store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol, viewMode: viewMode, folderID: folderID, belowFolders: belowFolders, isArchived: stored?.isArchived ?? false, showsInSmartLists: showsInSmartLists, isPinned: stored?.isPinned ?? false))
+                    } else {
+                        let id = store.createList(name: name, color: color, kind: kind, symbol: symbol, folderID: folderID, showsInSmartLists: showsInSmartLists)
+                        if viewMode == .board, var list = store.data.lists.first(where: { $0.id == id }) {
+                            list.viewMode = .board
+                            store.updateList(list)
+                        }
+                        destination = .list(id)
+                    }
                 }
             }
         }
@@ -472,6 +590,13 @@ struct WorkspaceView: View {
             SearchDialog(store: store, onSearch: { searchQuery = $0; destination = .search; detailState.clear(); searchDialog = false }, onSelectTask: { selectSearchTask($0); searchDialog = false }, onSelectList: { destination = .list($0); detailState.navigate(); searchDialog = false }, onSelectFilter: { destination = .filter($0); detailState.navigate(); searchDialog = false }, onSelectTag: { destination = .tag($0); detailState.navigate(); searchDialog = false }, onComplete: complete)
         }
         .sheet(item: $filterEditor) { FilterEditorView(store: store, filter: $0) }
+        .sheet(item: $mergeDraft) { draft in
+            MergeTagsSheet(store: store, sourceID: draft.sourceID) { targetID in
+                if store.mergeTags(source: draft.sourceID, target: targetID) {
+                    if destination == .tag(draft.sourceID) { destination = .tag(targetID); detailState.navigate() }
+                }
+            }
+        }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(store: store) }
         .sheet(isPresented: $viewOptions) { ViewOptionsView(layout: $detailLayout) }
         .sheet(isPresented: $templatePicker) {
@@ -496,7 +621,7 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: destination) { _, _ in
-            if let task = selectedTask, !destination.includes(task) { detailState.clear() }
+            if let task = selectedTask, !destination.includes(task, data: store.data) { detailState.clear() }
             quickKind = nextCreationKind ?? (activeList?.kind == .note ? .note : .task); nextCreationKind = nil
         }
         .alert("Delete Forever?", isPresented: isPurgeAlertPresented, presenting: purgeCandidate) { id in
@@ -597,12 +722,12 @@ struct WorkspaceView: View {
     private var detailDock: some View {
         Group {
             if let task = selectedTask {
-                TaskDetail(store: store, drafts: drafts, id: task.id, onTrash: { trash(task.id) }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: nil, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }).id(task.id)
+                TaskDetail(store: store, drafts: drafts, id: task.id, onTrash: { trash(task.id) }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: nil, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
             } else { DetailPlaceholder() }
         }
     }
     private func drawer(task: TaskItem) -> some View {
-        TaskDetail(store: store, drafts: drafts, id: task.id, onTrash: { trash(task.id); closeDrawer() }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: closeDrawer, compact: true, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }).id(task.id)
+        TaskDetail(store: store, drafts: drafts, id: task.id, onTrash: { trash(task.id); closeDrawer() }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: closeDrawer, compact: true, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
             .frame(width: ResponsiveLayout.drawerWidth).frame(maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor))
             .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1) }
@@ -647,12 +772,16 @@ struct WorkspaceView: View {
                     // while hidden; only visible rows participate in drags.
                     ForEach(topSmartDestinations(now: now), id: \.self) { dest in smartNavRow(dest, now: now, registrationActive: registrationActive) }
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
+                    if hasPinnedShortcuts {
+                        pinnedSection(now: now, registrationActive: registrationActive)
+                    }
                     listsSection(now: now, registrationActive: registrationActive)
+                    archivedListsSection(now: now, registrationActive: registrationActive)
                     if sectionVisible(.filters, count: store.data.filters.count) {
                         sectionHeading("Filters") { creatingFilter = true }.padding(.top, 20)
                         if sectionExpanded("Filters").wrappedValue {
                         ForEach(store.data.filters) { filter in
-                            navRow(.filter(filter.id), now: now).contextMenu { Button("Edit Filter…") { filterEditor = filter }; Button("Delete Filter", role: .destructive) { store.deleteFilter(id: filter.id); if destination == .filter(filter.id) { destination = .inbox } } }
+                            navRow(.filter(filter.id), now: now).contextMenu { filterMenu(filter) }
                         }
                         if store.data.filters.isEmpty { Text("Display tasks filtered by list, date, priority, tag, and more").font(.system(size: 12)).foregroundStyle(.secondary).padding(10).background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8)) }
                     }
@@ -660,13 +789,7 @@ struct WorkspaceView: View {
                     if sectionVisible(.tags, count: store.data.tags.count) {
                     sectionHeading("Tags") { editor = EntityEditor(isTag: true) }.padding(.top, 20)
                     if sectionExpanded("Tags").wrappedValue {
-                    ForEach(store.data.tags) { tag in
-                        navRow(.tag(tag.id), color: Color(hex: tag.color), now: now, registrationActive: registrationActive)
-                            .contextMenu {
-                                Button("Edit Tag…") { editor = EntityEditor(tag: tag) }
-                                Button("Delete Tag", role: .destructive) { store.deleteTag(id: tag.id); if destination == .tag(tag.id) { destination = .all } }
-                            }
-                    }
+                        tagTreeRows(TagHierarchy.roots(in: store.data.tags), now: now, depth: 0, registrationActive: registrationActive)
                     }
                     }
                     Divider().padding(.vertical, 16).padding(.horizontal, 8)
@@ -683,6 +806,153 @@ struct WorkspaceView: View {
     }
     private func sectionHeading(_ text: String, action: @escaping () -> Void) -> some View {
         SidebarHeading(title: text, expanded: sectionExpanded(text), onAdd: action)
+    }
+    /// A heading row without an add action (Pinned, Archived Lists).
+    private func plainSectionHeading(_ text: String) -> some View {
+        let expanded = sectionExpanded(text)
+        return Button { expanded.wrappedValue.toggle() } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "chevron.right").rotationEffect(.degrees(expanded.wrappedValue ? 90 : 0)).font(.system(size: 8, weight: .medium))
+                Text(text).font(.system(size: 12, weight: .medium)); Spacer(minLength: 0)
+            }.contentShape(Rectangle())
+        }.buttonStyle(.plain).foregroundStyle(.secondary).padding(.leading, 5).padding(.trailing, 10).padding(.bottom, 6)
+            .accessibilityLabel((expanded.wrappedValue ? "Collapse " : "Expand ") + text)
+    }
+    /// Pinned shortcuts for lists, folders, tags, and saved filters. Rendered
+    /// only when at least one pin exists; normal sections keep their order.
+    /// A pinned folder expands inline (a folder is not a task destination).
+    private var hasPinnedShortcuts: Bool {
+        store.data.lists.contains { $0.isPinned && !$0.isArchived } || store.data.folders.contains { $0.isPinned } || store.data.tags.contains { $0.isPinned } || store.data.filters.contains { $0.isPinned }
+    }
+    private func pinnedSection(now: Date, registrationActive: Bool = true) -> some View {
+        VStack(spacing: 0) {
+            plainSectionHeading("Pinned")
+            if sectionExpanded("Pinned").wrappedValue {
+                let lists = store.data.lists.filter { $0.isPinned && !$0.isArchived }
+                if !lists.isEmpty {
+                    pinnedCaption("Lists")
+                    ForEach(lists) { list in
+                        navRow(.list(list.id), color: Color(hex: list.color), now: now, registrationActive: registrationActive)
+                            .contextMenu { listMenu(list) }
+                    }
+                }
+                let folders = store.data.folders.filter(\.isPinned)
+                if !folders.isEmpty {
+                    pinnedCaption("Folders")
+                    ForEach(folders) { folder in pinnedFolderRow(folder, now: now, registrationActive: registrationActive) }
+                }
+                let tags = store.data.tags.filter(\.isPinned)
+                if !tags.isEmpty {
+                    pinnedCaption("Tags")
+                    ForEach(tags) { tag in
+                        navRow(.tag(tag.id), color: Color(hex: tag.color), now: now, registrationActive: registrationActive)
+                            .contextMenu { tagMenu(tag) }
+                    }
+                }
+                let filters = store.data.filters.filter(\.isPinned)
+                if !filters.isEmpty {
+                    pinnedCaption("Filters")
+                    ForEach(filters) { filter in
+                        navRow(.filter(filter.id), now: now).contextMenu { filterMenu(filter) }
+                    }
+                }
+            }
+        }.padding(.bottom, 6)
+    }
+    private func pinnedCaption(_ text: String) -> some View {
+        Text(text).font(.system(size: 10, weight: .semibold)).foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 10).padding(.top, 4).padding(.bottom, 2)
+    }
+    private func pinnedFolderRow(_ folder: ListFolder, now: Date, registrationActive: Bool = true) -> some View {
+        let isCollapsed = collapsedFolderIDs.contains(folder.id)
+        return VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Button { var next = collapsedFolderIDs; if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }; collapsedFolderIDs = next } label: {
+                    Image(systemName: "chevron.right").rotationEffect(.degrees(isCollapsed ? 0 : 90)).font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary)
+                }.buttonStyle(.plain).accessibilityLabel((isCollapsed ? "Expand " : "Collapse ") + folder.name)
+                Image(systemName: "folder").font(.system(size: 14)).foregroundStyle(.secondary)
+                Text(folder.name).font(.system(size: 14)).lineLimit(1)
+                Spacer(minLength: 2)
+            }
+            .padding(.horizontal, 10).frame(height: 38).contentShape(Rectangle())
+            .onTapGesture {
+                var next = collapsedFolderIDs
+                if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
+                collapsedFolderIDs = next
+            }
+            .contextMenu { folderMenu(folder) }
+            if !isCollapsed {
+                ForEach(store.data.lists.filter { $0.folderID == folder.id && !$0.isArchived }) { list in
+                    navRow(.list(list.id), color: Color(hex: list.color), now: now, indentation: 16, registrationActive: registrationActive)
+                        .contextMenu { listMenu(list) }
+                }
+            }
+        }
+    }
+    /// Archived lists keep their stored order and folder slots; only active
+    /// lists render in the normal Lists section. Rows navigate to a read-only
+    /// list view and never accept drops.
+    private func archivedListsSection(now: Date, registrationActive: Bool = true) -> some View {
+        let archived = store.data.lists.filter(\.isArchived)
+        return Group {
+            if !archived.isEmpty {
+                VStack(spacing: 0) {
+                    plainSectionHeading("Archived Lists").padding(.top, 20)
+                    if sectionExpanded("Archived Lists").wrappedValue {
+                        ForEach(archived) { list in
+                            navRow(.list(list.id), color: Color(hex: list.color), now: now, allowDrop: false, dimmed: true, registrationActive: registrationActive)
+                                .contextMenu { listMenu(list) }
+                        }
+                        Text("Archived lists are read-only. Unarchive to edit again.").font(.caption).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(10)
+                    }
+                }
+            }
+        }
+    }
+    /// Recursive tag tree. Counts include descendants (see `includes`); the
+    /// collapse state persists on the tag. `AnyView` breaks the recursion for
+    /// the opaque return type.
+    private func tagTreeRows(_ tags: [TaskTag], now: Date, depth: Int, registrationActive: Bool) -> AnyView {
+        AnyView(ForEach(tags) { tag in
+            VStack(spacing: 0) {
+                HStack(spacing: 2) {
+                    if TagHierarchy.children(of: tag.id, in: store.data.tags).isEmpty {
+                        Color.clear.frame(width: 16, height: 20)
+                    } else {
+                        Button { _ = store.setTagCollapsed(id: tag.id, collapsed: !tag.isCollapsed) } label: {
+                            Image(systemName: "chevron.right").rotationEffect(.degrees(tag.isCollapsed ? 0 : 90)).font(.system(size: 8, weight: .medium)).foregroundStyle(.secondary).frame(width: 16, height: 20).contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityLabel((tag.isCollapsed ? "Expand " : "Collapse ") + tag.name)
+                    }
+                    navRow(.tag(tag.id), color: Color(hex: tag.color), now: now, registrationActive: registrationActive)
+                        .contextMenu { tagMenu(tag) }
+                }.padding(.leading, CGFloat(depth) * 12)
+                if !tag.isCollapsed {
+                    tagTreeRows(TagHierarchy.children(of: tag.id, in: store.data.tags), now: now, depth: depth + 1, registrationActive: registrationActive)
+                }
+            }
+        })
+    }
+    @ViewBuilder private func tagMenu(_ tag: TaskTag) -> some View {
+        Button(tag.isPinned ? "Unpin" : "Pin") { _ = store.setTagPinned(id: tag.id, pinned: !tag.isPinned) }
+        Button("Edit Tag…") { editor = EntityEditor(tag: tag) }
+        Button("Add Sub-tag") { editor = EntityEditor(isTag: true, parentTagID: tag.id) }
+        Button("Merge Tags…") { mergeDraft = TagMergeDraft(sourceID: tag.id) }
+        Button("Delete Tag", role: .destructive) {
+            store.deleteTag(id: tag.id)
+            if destination == .tag(tag.id) { destination = .all }
+        }
+    }
+    @ViewBuilder private func filterMenu(_ filter: TaskFilter) -> some View {
+        Button(filter.isPinned ? "Unpin" : "Pin") { _ = store.setFilterPinned(id: filter.id, pinned: !filter.isPinned) }
+        Button("Edit Filter…") { filterEditor = filter }
+        Button("Delete Filter", role: .destructive) { store.deleteFilter(id: filter.id); if destination == .filter(filter.id) { destination = .inbox } }
+    }
+    @ViewBuilder private func folderMenu(_ folder: ListFolder) -> some View {
+        Button(folder.isPinned ? "Unpin" : "Pin") { _ = store.setFolderPinned(id: folder.id, pinned: !folder.isPinned) }
+        Button("Add List") { editor = EntityEditor(isTag: false, folderID: folder.id) }
+        Button("Rename…") { folderDraft = FolderSheetDraft(folderID: folder.id, initialName: folder.name) }
+        Button("Ungroup") { _ = store.ungroupFolder(id: folder.id) }
+        Text("Lists and tasks are kept")
     }
     /// Lists section with folders. The heading offers New List / New Folder
     /// and accepts list drops as the top-root affordance (always visible,
@@ -731,12 +1001,12 @@ struct WorkspaceView: View {
             if sectionExpanded("Lists").wrappedValue {
                 // Top root lists in persisted order, then folders with their
                 // children, then trailing root lists in persisted order.
-                ForEach(store.data.lists.filter { $0.folderID == nil && !$0.belowFolders }) { list in
+                ForEach(store.data.lists.filter { $0.folderID == nil && !$0.belowFolders && !$0.isArchived }) { list in
                     navRow(.list(list.id), color: Color(hex: list.color), now: now, registrationActive: registrationActive)
                         .contextMenu { listMenu(list) }
                 }
                 ForEach(store.data.folders) { folder in folderSection(folder, now: now, registrationActive: registrationActive) }
-                ForEach(store.data.lists.filter { $0.folderID == nil && $0.belowFolders }) { list in
+                ForEach(store.data.lists.filter { $0.folderID == nil && $0.belowFolders && !$0.isArchived }) { list in
                     navRow(.list(list.id), color: Color(hex: list.color), now: now, registrationActive: registrationActive)
                         .contextMenu { listMenu(list) }
                 }
@@ -759,7 +1029,7 @@ struct WorkspaceView: View {
     @State private var listsHeadingHovered = false
     private func folderSection(_ folder: ListFolder, now: Date, registrationActive: Bool = true) -> some View {
         let isCollapsed = collapsedFolderIDs.contains(folder.id)
-        let memberCount = store.data.lists.filter { $0.folderID == folder.id }.count
+        let memberCount = store.data.lists.filter { $0.folderID == folder.id && !$0.isArchived }.count
         let preview = SidebarDragPreview(title: folder.name, leading: .folder, count: memberCount, showsDisclosure: true)
         return VStack(spacing: 0) {
             FolderDropRow(folderID: folder.id, preview: preview, framesActive: registrationActive) {
@@ -791,7 +1061,7 @@ struct WorkspaceView: View {
                     if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
                     collapsedFolderIDs = next
                 }
-                .focusable()
+                .focusable().focusEffectDisabled()
                 .onKeyPress(.return) {
                     var next = collapsedFolderIDs
                     if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
@@ -804,15 +1074,10 @@ struct WorkspaceView: View {
                     collapsedFolderIDs = next
                     return .handled
                 }
-                .contextMenu {
-                    Button("Add List") { editor = EntityEditor(isTag: false, folderID: folder.id) }
-                    Button("Rename…") { folderDraft = FolderSheetDraft(folderID: folder.id, initialName: folder.name) }
-                    Button("Ungroup") { _ = store.ungroupFolder(id: folder.id) }
-                    Text("Lists and tasks are kept")
-                }
+                .contextMenu { folderMenu(folder) }
             }
             if !isCollapsed {
-                ForEach(store.data.lists.filter { $0.folderID == folder.id }) { list in
+                ForEach(store.data.lists.filter { $0.folderID == folder.id && !$0.isArchived }) { list in
                     navRow(.list(list.id), color: Color(hex: list.color), now: now, indentation: 16, registrationActive: registrationActive)
                         .contextMenu { listMenu(list) }
                 }
@@ -820,12 +1085,32 @@ struct WorkspaceView: View {
         }
     }
     @ViewBuilder private func listMenu(_ list: TaskList) -> some View {
+        Button(list.isPinned ? "Unpin" : "Pin") { _ = store.setListPinned(id: list.id, pinned: !list.isPinned) }
         Button("Edit List…") { editor = EntityEditor(list: list) }
+        Button("Duplicate List") {
+            if let id = store.duplicateList(id: list.id) { destination = .list(id); detailState.navigate() }
+        }
         Menu("Move to Folder") {
             Button("No folder") { _ = store.moveListToFolder(listID: list.id, folderID: nil) }
             ForEach(store.data.folders) { folder in Button(folder.name) { _ = store.moveListToFolder(listID: list.id, folderID: folder.id) } }
         }
-        Button("Delete List", role: .destructive) { store.deleteList(id: list.id); if destination == .list(list.id) { destination = .inbox } }
+        Button(list.showsInSmartLists ? "Hide from Smart Lists" : "Show in Smart Lists") {
+            _ = store.setListSmartInclusion(id: list.id, shows: !list.showsInSmartLists)
+        }
+        Divider()
+        if list.isArchived {
+            Button("Unarchive List") { _ = store.setListArchived(id: list.id, archived: false) }
+        } else {
+            Button("Archive List") {
+                if store.setListArchived(id: list.id, archived: true), destination == .list(list.id) {
+                    destination = .inbox; detailState.navigate()
+                }
+            }
+        }
+        Button("Delete List", role: .destructive) {
+            store.deleteList(id: list.id)
+            if destination == .list(list.id) { destination = .inbox }
+        }
         Text("Tasks are moved to Inbox")
     }
     private func sectionExpanded(_ title: String) -> Binding<Bool> {
@@ -871,7 +1156,7 @@ struct WorkspaceView: View {
         } else {
             leading = .systemImage(dest.symbol)
         }
-        let count = store.data.tasks.filter { dest.includes($0, now: now) }.count
+        let count = store.data.tasks.filter { dest.includes($0, data: store.data, now: now) }.count
         let preview = SidebarDragPreview(title: dest.title(store.data), leading: leading, count: dest == .summary ? nil : count)
         let row = navRow(dest, now: now, registrationActive: registrationActive)
         return AnyView(SmartDropRow(key: key, preview: preview, framesActive: registrationActive) { row }
@@ -921,10 +1206,10 @@ struct WorkspaceView: View {
             detailState.navigate()
         }
     }
-    private func navRow(_ dest: Destination, color: Color? = nil, now: Date, indentation: CGFloat = 0, registrationActive: Bool = true) -> some View {
+    private func navRow(_ dest: Destination, color: Color? = nil, now: Date, indentation: CGFloat = 0, allowDrop: Bool = true, dimmed: Bool = false, registrationActive: Bool = true) -> some View {
         let count = store.data.tasks.filter { task in
-            if case .filter(let id) = dest { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
-            return dest.includes(task, now: now)
+            if case .filter(let id) = dest { return store.data.filters.first { $0.id == id }?.matches(task, lists: store.data.lists, now: now, calendar: store.settings.calendar) ?? false }
+            return dest.includes(task, data: store.data, now: now)
         }.count
         let row = SidebarRow(selected: destination == dest, action: { destination = dest; sidebarPopoverOpen = false; closeDrawer() }) {
             HStack(spacing: 10) {
@@ -936,10 +1221,11 @@ struct WorkspaceView: View {
                 }.foregroundStyle(.primary).frame(width: 20)
                 Text(dest.title(store.data)).font(.system(size: 14)).lineLimit(1)
                 if let color { Circle().fill(color).frame(width: 7, height: 7).accessibilityHidden(true) }
+                if dimmed { Image(systemName: "archivebox").font(.system(size: 11)).foregroundStyle(.tertiary).accessibilityHidden(true) }
                 Spacer(minLength: 2)
                 if count > 0 && dest != .summary { Text("\(count)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit() }
             }
-        }
+        }.opacity(dimmed ? 0.75 : 1)
         // Typed native drops: Inbox and lists accept task payloads (with hover
         // highlighting and atomic move semantics). Sidebar-to-sidebar moves
         // (list/smart/folder/tag reorder, folder/root assignment) run through
@@ -953,6 +1239,14 @@ struct WorkspaceView: View {
         case .inbox:
             return AnyView(SidebarDropRow(listID: nil, preview: nil, onDropTasks: { moveTasks($0, to: nil) }) { row })
         case .list(let id):
+            // Archived rows never accept drops; the store refuses archived
+            // targets, so no highlight-or-reject flash is shown at all.
+            if !allowDrop {
+                if indentation > 0 {
+                    return AnyView(row.padding(.leading, indentation))
+                }
+                return AnyView(row)
+            }
             let list = store.data.lists.first { $0.id == id }
             let preview = SidebarDragPreview(
                 title: list?.name ?? dest.title(store.data),
@@ -993,6 +1287,16 @@ struct WorkspaceView: View {
     /// Center pane. `paneWidth` is the content width rows fill (docked list
     /// width, or available width in overlay); it flows statelessly into each
     /// row's metadata budget — never measured back out of layout.
+    /// True when the center shows an archived list: QuickEntry hides, rows
+    /// and detail lock, and only deliberate moves (row menu) stay available.
+    private var isArchivedView: Bool {
+        if case .list(let id) = destination { return store.data.lists.first { $0.id == id }?.isArchived == true }
+        return false
+    }
+    /// True when a task sits in an archived list (row-level variant).
+    private func isInArchivedList(_ task: TaskItem) -> Bool {
+        task.listID.flatMap { id in store.data.lists.first { $0.id == id } }?.isArchived ?? false
+    }
     private func taskPane(now: Date, overlay: Bool, paneWidth: CGFloat) -> some View {
         let tasks = filteredTasks(now: now)
         let groups = grouped(tasks, now: now)
@@ -1015,6 +1319,9 @@ struct WorkspaceView: View {
                     Text("None follows your drags and is saved.").font(.caption)
                     if destination != .completed && destination != .trash && destination != .wontDo { Toggle("Show Completed & Won't Do", isOn: $showCompleted) }
                 } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (None enables drag reordering)")
+                if isBoardDestination {
+                    Picker("View", selection: listViewBinding) { Text("List").tag(false); Text("Board").tag(true) }.pickerStyle(.segmented).frame(width: 130).help("List or Kanban board").accessibilityLabel("List or board view")
+                }
                 Menu {
                     if destination != .completed && destination != .trash && destination != .wontDo && destination != .summary {
                         Button(showCompleted ? "Hide Completed" : "Show Completed") { showCompleted.toggle() }
@@ -1027,14 +1334,24 @@ struct WorkspaceView: View {
                 } label: { HoverIcon { Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("More actions")
             }.padding(.horizontal, 20).frame(height: 58)
             if destination == .summary { Text("Updated in the last 7 days").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 12) }
-            if destination != .trash && destination != .completed && destination != .wontDo && destination != .summary {
+            if destination != .trash && destination != .completed && destination != .wontDo && destination != .summary && !isArchivedView {
                 QuickEntry(store: store, title: $quickTitle, kind: $quickKind, focused: $quickFocused, onTemplate: { templatePicker = true }) { body, recognizeDates in
                     addTask(body: body, recognizeDates: recognizeDates)
                 }.padding(.horizontal, 20).padding(.bottom, 16)
             }
             if destination == .reminders { Text("Check due and upcoming reminders here. New items are set for one hour from now.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if destination == .trash { Text("Deleted items stay here until you restore them.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
-            if tasks.isEmpty {
+            if isArchivedView { Text("Archived lists are read-only. Unarchive the list from the sidebar to edit, or use a row's Move to for a deliberate move.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
+            if listViewBinding.wrappedValue && isBoardDestination, let boardListID {
+                // Status board: every non-deleted status in this list (see
+                // BoardProjection), independent of the rows' Show Completed
+                // toggle — a completed drop stays visible and an
+                // all-completed list still renders its columns. Drops change
+                // status (completing a recurring task spawns its successor
+                // like the row checkbox); notes refuse status columns with a
+                // message. Hierarchy renders flat here.
+                kanbanBoard(tasks: BoardProjection.tasks(forList: boardListID, in: store.data), overlay: overlay, now: now)
+            } else if tasks.isEmpty {
                 VStack(spacing: 12) { Spacer(); Image(systemName: destination == .trash ? "trash" : "checkmark.circle").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(accent.opacity(0.5)); Text(destination == .trash ? "Trash is empty" : "All clear").font(.system(size: 17, weight: .medium)); Text(destination == .today ? "Enjoy the space. Add something for today." : "Your \(destination == .notes ? "notes" : "tasks") will appear here.").font(.system(size: 12)).foregroundStyle(.secondary); Spacer(); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
                     .onTapGesture { closeDrawer() }
@@ -1055,8 +1372,12 @@ struct WorkspaceView: View {
                             // or status. Ordinary list moves still work.
                             if !collapsed.contains(title) {
                                 let groupIDs = items.map(\.id)
-                                ForEach(items) { task in
-                                    taskRow(task, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth)
+                                // Subtasks nest directly under their parent when
+                                // the parent is in the same group; orphans
+                                // (parent filtered out) render as top-level
+                                // rows so nothing vanishes.
+                                ForEach(TaskHierarchy.displayOrder(items), id: \.task.id) { entry in
+                                    taskRow(entry.task, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth, depth: entry.depth)
                                 }
                             }
                         }
@@ -1087,14 +1408,40 @@ struct WorkspaceView: View {
             Button("Restore") { restoreExplicit(task.id) }
             Button("Delete Forever", role: .destructive) { purgeCandidate = task.id }
         }
+        else if isInArchivedList(task) {
+            // Archived rows keep one deliberate escape hatch: Move to an
+            // active list. Archived lists never accept moves (store refuses).
+            Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
+            Text("Archived — read-only")
+        }
         else {
             if task.kind == .task { Button(task.completedAt == nil && task.wontDoAt == nil ? "Complete" : "Mark incomplete") { complete(task.id) }; if task.wontDoAt == nil { Button("Won't Do") { abandon(task.id) } } }
+            if task.completedAt == nil && task.wontDoAt == nil { Button(task.isPinned ? "Unpin" : "Pin") { _ = store.setPinned(id: task.id, pinned: !task.isPinned) } }
             Menu("Priority") { ForEach(TaskPriority.allCases, id: \.self) { value in Button(value.label) { var t = task; t.priority = value; store.updateTask(t) } } }
-            Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
+            Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
             Button("Duplicate") { if let id = store.duplicateTask(id: task.id) { selectTask(id) } }
             Button("Save as Template") { _ = store.saveTemplate(from: task.id) }
+            if task.kind == .task {
+                Button("Add Subtask") { if let id = store.addSubtask(to: task.id, title: "New subtask") { selectTask(id) } }
+                if task.parentID != nil {
+                    Button("Move to Top Level") { _ = store.setTaskParent(id: task.id, parentID: nil) }
+                }
+                let candidates = subtaskParentCandidates(for: task)
+                if !candidates.isEmpty {
+                    Menu("Make Subtask Of") {
+                        ForEach(candidates) { parent in
+                            Button(parent.title.isEmpty ? "Untitled" : parent.title) { _ = store.setTaskParent(id: task.id, parentID: parent.id) }
+                        }
+                    }
+                }
+            }
             Divider(); Button("Move to Trash", role: .destructive) { trash(task.id) }
         }
+    }
+    /// Candidate parents for "Make Subtask Of", shared with the detail view
+    /// through the Core policy (same list, active, never a descendant).
+    private func subtaskParentCandidates(for task: TaskItem) -> [TaskItem] {
+        TaskHierarchy.parentCandidates(for: task, in: store.data.tasks)
     }
     /// None (manual) order follows the stored array order, so drag reordering
     /// is the sort: positions persist across reload and match what every
@@ -1102,12 +1449,15 @@ struct WorkspaceView: View {
     /// their order and reject reorder attempts without mutation (with a
     /// user-facing message); ordinary list moves still work under any sort.
     private func filteredTasks(now: Date) -> [TaskItem] {
-        let order = Dictionary(uniqueKeysWithValues: store.data.tasks.enumerated().map { ($0.element.id, $0.offset) })
+        // Last-wins on duplicate IDs (a malformed file must never trap the
+        // whole list the way uniqueKeysWithValues would).
+        var order: [UUID: Int] = [:]
+        for (offset, task) in store.data.tasks.enumerated() { order[task.id] = offset }
         let normalizedSort = TaskSortPolicy.normalized(sort)
         return store.data.tasks.filter { task in
-            if case .filter(let id) = destination { return store.data.filters.first { $0.id == id }?.matches(task, now: now, calendar: store.settings.calendar) ?? false }
-            if destination.includes(task, now: now) { return true }
-            if showCompleted && destination != .completed && destination != .trash && destination != .wontDo && (task.completedAt != nil || task.wontDoAt != nil) && task.deletedAt == nil { var copy = task; copy.completedAt = nil; copy.wontDoAt = nil; return destination.includes(copy, now: now) }
+            if case .filter(let id) = destination { return store.data.filters.first { $0.id == id }?.matches(task, lists: store.data.lists, now: now, calendar: store.settings.calendar) ?? false }
+            if destination.includes(task, data: store.data, now: now) { return true }
+            if showCompleted && destination != .completed && destination != .trash && destination != .wontDo && (task.completedAt != nil || task.wontDoAt != nil) && task.deletedAt == nil { var copy = task; copy.completedAt = nil; copy.wontDoAt = nil; return destination.includes(copy, data: store.data, now: now) }
             return false
         }.sorted { a, b in
             let aActive = a.completedAt == nil && a.wontDoAt == nil
@@ -1141,7 +1491,12 @@ struct WorkspaceView: View {
                 }
             }
             var result: [(String, [TaskItem])] = []
-            if !active.isEmpty { result.append((ManualGroupPolicy.activeGroupTitle, active)) }
+            // Pinned active rows group above the normal manual sequence; each
+            // side keeps stored-array order and stays its own reorder group,
+            // so the None drag policy needs no exception.
+            let (pinned, rest) = PinnedGrouping.partition(active)
+            if !pinned.isEmpty { result.append((PinnedGrouping.pinnedGroupTitle, pinned)) }
+            if !rest.isEmpty { result.append((ManualGroupPolicy.activeGroupTitle, rest)) }
             if !history.isEmpty {
                 let title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : tasks.contains(where: { $0.wontDoAt != nil }) ? "Completed & Won't Do" : "Completed"
                 result.append((title, history))
@@ -1149,7 +1504,11 @@ struct WorkspaceView: View {
             return result
         }
         var keys: [String] = []; var values: [String: [TaskItem]] = [:]
-        for task in tasks {
+        // Pinned active rows lift out of their computed groups into one Pinned
+        // group above everything else (Trash, Completed, and Won't Do never
+        // contain pinned rows by construction).
+        let (pinned, unpinned) = PinnedGrouping.partition(tasks)
+        for task in unpinned {
             let title: String
             if destination == .trash { title = "Deleted" }
             else if task.completedAt != nil || task.wontDoAt != nil {
@@ -1168,7 +1527,9 @@ struct WorkspaceView: View {
         }
         if let i = keys.firstIndex(of: "Note") { keys.remove(at: i); keys.insert("Note", at: keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
         if store.settings.overduePosition == .bottom, let i = keys.firstIndex(of: "Overdue") { keys.remove(at: i); keys.insert("Overdue", at: keys.firstIndex(of: "Note") ?? keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
-        return keys.map { ($0, values[$0]!) }
+        var result = keys.map { ($0, values[$0]!) }
+        if !pinned.isEmpty { result.insert((PinnedGrouping.pinnedGroupTitle, pinned), at: 0) }
+        return result
     }
     private func addTask(body: String = "", recognizeDates: Bool = true) {
         let title = quickTitle.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
@@ -1177,7 +1538,7 @@ struct WorkspaceView: View {
         if case .tag(let tagID) = destination, var task = store.data.tasks.first(where: { $0.id == id }), !task.tagIDs.contains(tagID) { task.tagIDs.append(tagID); store.updateTask(task) }
         if destination == .reminders, var task = store.data.tasks.first(where: { $0.id == id }) { task.reminderDates = due.map { [$0] } ?? []; task.hasDueTime = quickKind == .task; store.updateTask(task) }
         if quickKind == .note && (destination == .today || destination == .tomorrow || destination == .week || destination == .all) { destination = .inbox }
-        if let created = store.data.tasks.first(where: { $0.id == id }), !destination.includes(created), destination != .search {
+        if let created = store.data.tasks.first(where: { $0.id == id }), !destination.includes(created, data: store.data), destination != .search {
             if case .filter = destination { } else if case .tag = destination { } else { destination = created.listID.map(Destination.list) ?? .inbox }
         }
         selectTask(id); quickTitle = ""; quickFocused = true
@@ -1185,7 +1546,7 @@ struct WorkspaceView: View {
     private func trash(_ id: UUID) { actions.trash(store: store, id: id); if detailState.selection == id { detailState.clear() } }
     private func restoreExplicit(_ id: UUID) {
         actions.restore(store: store, id: id)
-        if let task = store.data.tasks.first(where: { $0.id == id }), !destination.includes(task) { detailState.clear() }
+        if let task = store.data.tasks.first(where: { $0.id == id }), !destination.includes(task, data: store.data) { detailState.clear() }
     }
     private var contextualDate: Date? {
         let cal = store.settings.calendar
@@ -1196,7 +1557,7 @@ struct WorkspaceView: View {
     }
     private func visible(_ dest: Destination, now: Date) -> Bool {
         guard let key = dest.smartKey else { return true }
-        return sectionVisible(key, count: store.data.tasks.filter { dest.includes($0, now: now) }.count)
+        return sectionVisible(key, count: store.data.tasks.filter { dest.includes($0, data: store.data, now: now) }.count)
     }
     private func selectSearchTask(_ id: UUID) {
         guard let task = store.data.tasks.first(where: { $0.id == id }) else { return }
@@ -1228,6 +1589,37 @@ struct ListViewportHeightKey: PreferenceKey {
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
 }
 
+/// Tag merge picker: chooses a distinct target tag for the source. The store
+/// repoints task, template, and filter refs (deduped), follows the default
+/// tag, and reparents surviving children without cycles.
+struct MergeTagsSheet: View {
+    @ObservedObject var store: TaskStore
+    let sourceID: UUID
+    let onMerge: (UUID) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var targetID: UUID?
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Merge Tags").font(.system(size: 18, weight: .bold))
+            if let source = store.data.tags.first(where: { $0.id == sourceID }) {
+                Text("Merge “\(source.name)” into:").foregroundStyle(.secondary)
+            }
+            Picker("Target tag", selection: $targetID) {
+                Text("Choose target").tag(Optional<UUID>(nil))
+                ForEach(store.data.tags.filter { $0.id != sourceID }) { tag in
+                    Text(indent(tag) + tag.name).tag(Optional(tag.id))
+                }
+            }.pickerStyle(.menu).labelsHidden().frame(maxWidth: .infinity, alignment: .leading)
+            Text("Tasks, templates, filters, and the default tag move to the target. The source's sub-tags reparent without cycles, then the source is deleted.").font(.caption).foregroundStyle(.secondary)
+            HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button("Merge") { if let targetID { onMerge(targetID) }; dismiss() }.keyboardShortcut(.defaultAction).disabled(targetID == nil) }
+        }.padding(24).frame(width: 420).tint(accent)
+    }
+    /// Indented display name so nesting survives in a flat picker.
+    private func indent(_ tag: TaskTag) -> String {
+        String(repeating: "  ", count: TagHierarchy.ancestors(of: tag.id, in: store.data.tags).count)
+    }
+}
+
 /// One center-list row: detail selection, grip-only drag-out with a compact
 /// preview, None-sort drop halves with an insertion line, and the row menu.
 /// Non-None sorts reject reorder attempts without mutation and show the
@@ -1235,16 +1627,18 @@ struct ListViewportHeightKey: PreferenceKey {
 /// The drop halves commit atomically on drop only; anything invalid leaves
 /// the saved order untouched.
 private extension WorkspaceView {
-    func taskRow(_ task: TaskItem, groupIDs: [UUID], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
+    func taskRow(_ task: TaskItem, groupIDs: [UUID], overlay: Bool, now: Date, paneWidth: CGFloat, depth: Int = 0) -> some View {
         let isActive = task.deletedAt == nil
+        let readOnly = isInArchivedList(task)
+        let interactive = isActive && !readOnly
         // Grip visibility is resolved inside TaskRow from whole-row hover or
         // selection; the drag source lives on the grip only. Tapping the grip
         // selects in manual mode and reports the sorted-mode notice otherwise.
-        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, gripActive: isActive, onGripActivate: isActive ? {
+        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, readOnly: readOnly, depth: depth, gripActive: interactive, onGripActivate: interactive ? {
             if isManualSort { selectTask(task.id) }
             else { actions.notice(TaskSortPolicy.reorderDisabledMessage) }
         } : nil, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
-            .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: isActive, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
+            .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: interactive, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
             .contextMenu { taskMenu(task) }
     }
     /// Validates and commits an in-group task reorder. Non-None sorts are
@@ -1253,10 +1647,221 @@ private extension WorkspaceView {
     /// and empty payloads also abort without mutating. The store re-validates
     /// records and saves once.
     func acceptTaskReorder(_ ids: [UUID], before target: UUID, after: Bool, group: [UUID]) -> Bool {
+        guard !isArchivedView else { actions.notice("Archived lists are read-only."); return false }
         guard isManualSort else { actions.notice(TaskSortPolicy.reorderDisabledMessage); return false }
         guard !ids.isEmpty, !ids.contains(target),
-              Set(ids).isSubset(of: Set(group)), group.contains(target) else { return false }
+              Set(ids).isSubset(of: Set(group)), group.contains(target) else {
+            // Pinned boundary crossings explain themselves; every other
+            // invalid drop stays silent as before.
+            var byID: [UUID: TaskItem] = [:]
+            for task in store.data.tasks { byID[task.id] = task }
+            if PinnedGrouping.crossesPinnedBoundary(draggedIDs: ids, targetID: target, in: byID) {
+                actions.notice("Pinned tasks reorder only within the Pinned group.")
+            }
+            return false
+        }
         return store.reorderTasks(moving: ids, before: target, afterTarget: after)
+    }
+
+    /// Status columns for the per-list board, in fixed order. Uses the
+    /// shared `BoardProjection.split` so the UI and its tests agree on the
+    /// bucketing (notes always land in Open).
+    func kanbanColumns(_ tasks: [TaskItem]) -> [(KanbanColumn, [TaskItem])] {
+        let split = BoardProjection.split(tasks)
+        return [(.open, split.open), (.completed, split.completed), (.wontDo, split.wontDo)]
+    }
+
+    /// Per-list Kanban: three status columns over the same filtered tasks.
+    /// Archived lists render read-only (select only, no drag, drops refuse).
+    func kanbanBoard(tasks: [TaskItem], overlay: Bool, now: Date) -> some View {
+        let readOnly = isArchivedView
+        let boardIDs = Set(tasks.map(\.id))
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 12) {
+                ForEach(kanbanColumns(tasks), id: \.0) { column, items in
+                    kanbanColumn(column, items: items, boardIDs: boardIDs, overlay: overlay, now: now, readOnly: readOnly)
+                }
+            }.padding(.horizontal, 16).padding(.bottom, 24)
+        }
+    }
+
+    private func kanbanColumn(_ column: KanbanColumn, items: [TaskItem], boardIDs: Set<UUID>, overlay: Bool, now: Date, readOnly: Bool) -> some View {
+        KanbanColumnView(
+            column: column, items: items, readOnly: readOnly,
+            store: store, selection: $detailState.selection, now: now,
+            onSelect: { selectTask($0) },
+            onToggle: { complete($0) },
+            onDrop: { ids in applyKanbanDrop(ids, to: column, boardIDs: boardIDs) }
+        )
+    }
+
+    /// Commits a board drop as a status change. Drops from outside this board
+    /// are ignored; notes refuse status columns with a message instead of
+    /// silently doing nothing.
+    func applyKanbanDrop(_ ids: [UUID], to column: KanbanColumn, boardIDs: Set<UUID>) {
+        guard isBoardDestination else { return }
+        guard !isArchivedView else { actions.notice("Archived lists are read-only."); return }
+        for id in ids {
+            guard boardIDs.contains(id),
+                  let task = store.data.tasks.first(where: { $0.id == id }),
+                  task.deletedAt == nil else { continue }
+            switch column {
+            case .open:
+                if task.completedAt != nil || task.wontDoAt != nil { store.reopenTask(id: id) }
+            case .completed:
+                guard task.kind == .task else { actions.notice("Notes can't be completed."); continue }
+                if task.completedAt == nil { actions.complete(store: store, id: id) }
+            case .wontDo:
+                guard task.kind == .task else { actions.notice("Notes can't be marked Won't Do."); continue }
+                if task.wontDoAt == nil { store.markWontDo(id: id) }
+            }
+        }
+    }
+}
+
+/// One Kanban status column; drops decode through the shared batch helper so
+/// one malformed provider voids the whole drop, never half-applies it.
+enum KanbanColumn: Hashable {
+    case open, completed, wontDo
+    var title: String {
+        switch self { case .open: return "Open"; case .completed: return "Completed"; case .wontDo: return "Won't Do" }
+    }
+}
+
+private struct KanbanColumnView: View {
+    let column: KanbanColumn
+    let items: [TaskItem]
+    let readOnly: Bool
+    @ObservedObject var store: TaskStore
+    @Binding var selection: UUID?
+    let now: Date
+    let onSelect: (UUID) -> Void
+    let onToggle: (UUID) -> Void
+    let onDrop: ([UUID]) -> Void
+    @State private var targeted = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(column.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary)
+                Spacer()
+            }.padding(.vertical, 6)
+            ForEach(items) { task in
+                KanbanCard(store: store, id: task.id, selected: selection == task.id, now: now, readOnly: readOnly, onSelect: { onSelect(task.id) }, onToggle: { onToggle(task.id) })
+            }
+        }
+        .padding(8)
+        .frame(width: 250, alignment: .top)
+        .background(targeted ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+        .overlay { if targeted { RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor.opacity(0.4), lineWidth: 1) } }
+        .onDrop(of: [.taskovskyTask], delegate: KanbanColumnDropDelegate(
+            enabled: !readOnly,
+            onHover: { targeted = $0 },
+            onDrop: onDrop
+        ))
+    }
+}
+
+private struct KanbanColumnDropDelegate: DropDelegate {
+    let enabled: Bool
+    let onHover: (Bool) -> Void
+    let onDrop: ([UUID]) -> Void
+    private var taskType: UTType { .taskovskyTask }
+
+    func validateDrop(info: DropInfo) -> Bool {
+        // Same type hygiene as row drops: task payloads only, never mixed
+        // with list/folder/tag/smart drops; the commit handler explains
+        // policy rejections with a user message.
+        enabled
+            && info.hasItemsConforming(to: [taskType])
+            && !info.hasItemsConforming(to: [.taskovskyList])
+            && !info.hasItemsConforming(to: [.taskovskySmart])
+            && !info.hasItemsConforming(to: [.taskovskyFolder])
+            && !info.hasItemsConforming(to: [.taskovskyTag])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard validateDrop(info: info) else { return }
+        onHover(true)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard validateDrop(info: info) else { return nil }
+        onHover(true)
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { onHover(false) }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard validateDrop(info: info) else { onHover(false); return false }
+        let providers = info.itemProviders(for: [taskType]).filter { $0.hasItemConformingToTypeIdentifier(taskType.identifier) }
+        guard !providers.isEmpty else { onHover(false); return false }
+        onHover(false)
+        loadBatch(providers, type: taskType) { datas in
+            guard let datas, let ids = DragBatch.combinedTaskIDs(from: datas) else { return }
+            Task { @MainActor in onDrop(ids) }
+        }
+        return true
+    }
+}
+
+/// Compact board card: checkbox (task status toggle), title, due line.
+/// Whole-card drag reuses the row payload so board and sidebar drops agree.
+private struct KanbanCard: View {
+    @ObservedObject var store: TaskStore
+    let id: UUID
+    let selected: Bool
+    let now: Date
+    var readOnly = false
+    let onSelect: () -> Void
+    let onToggle: () -> Void
+    @Environment(\.colorScheme) private var colorScheme
+    private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
+    private var finished: Bool { task.completedAt != nil || task.wontDoAt != nil }
+
+    var body: some View {
+        Group {
+            if readOnly {
+                cardContent.onTapGesture(perform: onSelect)
+            } else {
+                cardContent.onTapGesture(perform: onSelect)
+                    .onDrag { DragProviders.task(TaskDragPayload(ids: [id])) } preview: {
+                        CompactDragPreview(title: task.title, count: 1)
+                    }
+            }
+        }
+        .accessibilityElement(children: .combine).accessibilityLabel(task.title.isEmpty ? "Untitled" : task.title)
+        .accessibilityAddTraits(.isButton).accessibilityAction { onSelect() }
+    }
+
+    private var cardContent: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .top, spacing: 6) {
+                if task.kind == .note {
+                    Image(systemName: "doc.text").foregroundStyle(.secondary).frame(width: 16)
+                } else {
+                    Button(action: onToggle) { TaskCheckbox(state: task.wontDoAt != nil ? .wontDo : task.completedAt != nil ? .completed : .open, color: .secondary).frame(width: 16, height: 16).contentShape(Rectangle()) }
+                        .buttonStyle(.plain).disabled(readOnly || task.deletedAt != nil)
+                        .help(finished ? "Mark incomplete" : "Complete task")
+                        .accessibilityLabel((finished ? "Reopen " : "Complete ") + task.title)
+                }
+                Text(task.title.isEmpty ? "Untitled" : task.title).font(.system(size: 13)).lineLimit(3)
+                    .foregroundStyle(finished ? (colorScheme == .dark ? Color(nsColor: .tertiaryLabelColor) : Color(hex: "#A0A0A0")) : Color.primary)
+            }
+            HStack(spacing: 6) {
+                if let due = task.dueDate {
+                    Text(due.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+                if task.isRepeating {
+                    Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(.secondary).help(task.repeatLabel())
+                }
+            }
+        }
+        .padding(8).frame(maxWidth: .infinity, alignment: .leading)
+        .background(selected ? Color.primary.opacity(0.055) : Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .overlay { RoundedRectangle(cornerRadius: 8).stroke(Color.primary.opacity(0.09), lineWidth: 1) }
     }
 }
 
@@ -1314,7 +1919,7 @@ struct SidebarRow<Content: View>: View {
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityAction { action() }
-            .focusable()
+            .focusable().focusEffectDisabled()
             .onKeyPress(.return) { action(); return .handled }
             .onKeyPress(.space) { action(); return .handled }
     }
@@ -1391,13 +1996,18 @@ struct TaskDetailWindow: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
     @ObservedObject var actions: TaskActionCenter
-    let id: UUID
+    /// Task shown in this window; child/parent navigation swaps it in place.
+    @State private var currentID: UUID
+    init(store: TaskStore, drafts: DetailDrafts, actions: TaskActionCenter, id: UUID) {
+        self.store = store; self.drafts = drafts; self.actions = actions
+        _currentID = State(initialValue: id)
+    }
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         Group {
-            if store.data.tasks.contains(where: { $0.id == id }) {
-                TaskDetail(store: store, drafts: drafts, id: id, onTrash: { NotificationCenter.default.post(name: .trashTask, object: id); dismiss() }, onComplete: { actions.complete(store: store, id: id) }, onWontDo: { actions.abandon(store: store, id: id) }, onClose: nil, compact: true, standalonePopup: true, onRestore: { actions.restore(store: store, id: id) }, onPurge: { NotificationCenter.default.post(name: .requestPurge, object: id) }).id(id)
+            if store.data.tasks.contains(where: { $0.id == currentID }) {
+                TaskDetail(store: store, drafts: drafts, id: currentID, onTrash: { NotificationCenter.default.post(name: .trashTask, object: currentID); dismiss() }, onComplete: { actions.complete(store: store, id: currentID) }, onWontDo: { actions.abandon(store: store, id: currentID) }, onClose: nil, compact: true, standalonePopup: true, onRestore: { actions.restore(store: store, id: currentID) }, onPurge: { NotificationCenter.default.post(name: .requestPurge, object: currentID) }, onNavigateToTask: { currentID = $0 }).id(currentID)
             } else {
                 Text("This item is no longer available.").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
@@ -1411,7 +2021,7 @@ struct TaskDetailWindow: View {
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: actions.feedback?.id)
-        .onDisappear { NotificationCenter.default.post(name: .popupClosed, object: id) }
+        .onDisappear { NotificationCenter.default.post(name: .popupClosed, object: currentID) }
     }
 }
 

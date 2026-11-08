@@ -282,6 +282,47 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(store.data.tasks.first { $0.id == taskID }?.title, "Example")
     }
 
+    @MainActor func testSettingsURLOverrideReadsAndWrites() throws {
+        let workspace = temporaryURL()
+        let settings = workspace.deletingLastPathComponent().appendingPathComponent("elsewhere").appendingPathComponent("prefs.json")
+        defer { try? FileManager.default.removeItem(at: workspace.deletingLastPathComponent()) }
+        let store = TaskStore(fileURL: workspace, settingsURL: settings, seed: false)
+        XCTAssertEqual(store.settingsURL, settings)
+        store.settings.defaultPriority = .high
+        store.settings.defaultDurationMinutes = 45
+        // Settings land at the override, not adjacent to the workspace.
+        XCTAssertTrue(FileManager.default.fileExists(atPath: settings.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: workspace.deletingLastPathComponent().appendingPathComponent("settings.json").path))
+        let reloaded = TaskStore(fileURL: workspace, settingsURL: settings, seed: false)
+        XCTAssertEqual(reloaded.settings.defaultPriority, .high)
+        XCTAssertEqual(reloaded.settings.defaultDurationMinutes, 45)
+    }
+
+    @MainActor func testPinnedBoundaryCrossingAndMoveRetention() throws {
+        let store = TaskStore(fileURL: temporaryURL(), seed: false)
+        let pinned = store.createTask(title: "Pinned")
+        let plain = store.createTask(title: "Plain")
+        store.setPinned(id: pinned, pinned: true)
+        var byID: [UUID: TaskItem] = [:]
+        for task in store.data.tasks { byID[task.id] = task }
+        XCTAssertFalse(PinnedGrouping.crossesPinnedBoundary(draggedIDs: [pinned], targetID: pinned, in: byID))
+        XCTAssertTrue(PinnedGrouping.crossesPinnedBoundary(draggedIDs: [pinned], targetID: plain, in: byID))
+        XCTAssertTrue(PinnedGrouping.crossesPinnedBoundary(draggedIDs: [plain], targetID: pinned, in: byID))
+        XCTAssertFalse(PinnedGrouping.crossesPinnedBoundary(draggedIDs: [plain], targetID: plain, in: byID))
+        XCTAssertFalse(PinnedGrouping.crossesPinnedBoundary(draggedIDs: [], targetID: plain, in: byID))
+        XCTAssertFalse(PinnedGrouping.crossesPinnedBoundary(draggedIDs: [UUID()], targetID: UUID(), in: byID))
+        // List moves keep the pin; positional reorder works within the group.
+        let list = store.createList(name: "Elsewhere", color: "#000000")
+        XCTAssertTrue(store.moveTasksToList(ids: [pinned], listID: list))
+        XCTAssertTrue(store.data.tasks.first { $0.id == pinned }?.isPinned == true)
+        XCTAssertEqual(store.data.tasks.first { $0.id == pinned }?.listID, list)
+        let pinned2 = store.createTask(title: "Pinned 2")
+        store.setPinned(id: pinned2, pinned: true)
+        XCTAssertTrue(store.reorderTasks(moving: [pinned2], before: pinned))
+        let rendered = PinnedGrouping.partition(store.data.tasks).pinned.map(\.id)
+        XCTAssertEqual(rendered.first, pinned2)
+    }
+
     func testCalendarRecurrenceAcrossWeekendsAndShortMonths() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!

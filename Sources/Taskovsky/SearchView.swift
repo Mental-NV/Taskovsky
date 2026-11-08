@@ -93,10 +93,16 @@ struct SearchPane: View {
     let onClose: () -> Void
     @State private var query: String
     @State private var editing = false
-    @State private var dateRule: FilterDateRule = .all
+    @State private var dateRules: Set<FilterDateRule> = []
     @State private var status: FilterStatus = .all
     @State private var listIDs: Set<UUID> = []
     @State private var tagIDs: Set<UUID> = []
+    @State private var tagMode: FilterTagMode = .any
+    @State private var kinds: Set<TaskKind> = []
+    @State private var customFrom = Date()
+    @State private var hasCustomFrom = false
+    @State private var customTo = Date()
+    @State private var hasCustomTo = false
     @State private var saveFilter = false
     init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onComplete: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
         self.onClose = onClose; self.onComplete = onComplete
@@ -104,9 +110,15 @@ struct SearchPane: View {
         _query = State(initialValue: initialQuery)
     }
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var criteria: TaskFilter {
+        TaskFilter(
+            name: "", listIDs: Array(listIDs), tagIDs: Array(tagIDs),
+            dateRules: Array(dateRules), status: status, kinds: Array(kinds), tagMode: tagMode,
+            customDateFrom: dateRules.contains(.custom) && hasCustomFrom ? customFrom : nil,
+            customDateTo: dateRules.contains(.custom) && hasCustomTo ? customTo : nil)
+    }
     private var tasks: [TaskItem] {
-        let criteria = TaskFilter(name: "", listIDs: Array(listIDs), tagIDs: Array(tagIDs), dateRule: dateRule, status: status)
-        return store.data.tasks.filter { criteria.matches($0, calendar: store.settings.calendar) && TaskSearch.matches($0, query: trimmed) }
+        store.data.tasks.filter { criteria.matches($0, lists: store.data.lists, calendar: store.settings.calendar) && TaskSearch.matches($0, query: trimmed) }
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -119,12 +131,14 @@ struct SearchPane: View {
             }.padding(.bottom, 20)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
-                    valueMenu(dateLabel, options: [("All Dates", .all), ("Today", .today), ("Tomorrow", .tomorrow), ("Next 7 Days", .next7), ("Overdue", .overdue), ("No Date", .noDate)], selection: $dateRule)
+                    dateMenu
                     multiMenu(listIDs.isEmpty ? "All Lists" : "Lists (\(listIDs.count))", entries: [(TaskFilter.inboxListID, "Inbox")] + store.data.lists.map { ($0.id, $0.name) }, selection: $listIDs)
-                    multiMenu(tagIDs.isEmpty ? "All Tags" : "Tags (\(tagIDs.count))", entries: store.data.tags.map { ($0.id, $0.name) }, selection: $tagIDs)
+                    tagMenu
+                    kindMenu
                     valueMenu(statusLabel, options: [("All Status", .all), ("Uncompleted", .active), ("Completed", .completed), ("Won't Do", .wontDo)], selection: $status)
                 }
             }.padding(.bottom, 16)
+            if dateRules.contains(.custom) { customRangeRow.padding(.bottom, 12) }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
@@ -135,9 +149,66 @@ struct SearchPane: View {
                 }.padding(.vertical, 20)
             }
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .sheet(isPresented: $saveFilter) { FilterEditorView(store: store, filter: nil, initialKeyword: trimmed, initialDateRule: dateRule, initialStatus: status, initialListIDs: Array(listIDs), initialTagIDs: Array(tagIDs)) }
+            .sheet(isPresented: $saveFilter) {
+                FilterEditorView(
+                    store: store, filter: nil, initialKeyword: trimmed,
+                    initialDateRules: Array(dateRules), initialStatus: status,
+                    initialListIDs: Array(listIDs), initialTagIDs: Array(tagIDs),
+                    initialTagMode: tagMode, initialKinds: Array(kinds),
+                    initialCustomFrom: dateRules.contains(.custom) && hasCustomFrom ? customFrom : nil,
+                    initialCustomTo: dateRules.contains(.custom) && hasCustomTo ? customTo : nil)
+            }
     }
-    private var dateLabel: String { switch dateRule { case .all: "All Dates"; case .today: "Today"; case .tomorrow: "Tomorrow"; case .next7: "Next 7 Days"; case .overdue: "Overdue"; case .noDate: "No Date" } }
+    private var dateMenu: some View {
+        Menu {
+            ForEach(FilterDateRule.allCases, id: \.self) { rule in
+                Button { toggle(rule, in: $dateRules) } label: {
+                    if dateRules.contains(rule) { Label(rule.label, systemImage: "checkmark") } else { Text(rule.label) }
+                }
+            }
+        } label: { menuLabel(dateRules.isEmpty ? "All Dates" : dateRules.count == 1 ? dateRules.first!.label : "Dates (\(dateRules.count))") }
+    }
+    private var tagMenu: some View {
+        Menu {
+            Picker("Match", selection: $tagMode) { ForEach(FilterTagMode.allCases, id: \.self) { Text($0.label).tag($0) } }
+            if tagMode == .any || tagMode == .all {
+                Divider()
+                ForEach(store.data.tags) { tag in
+                    Button { toggle(tag.id, in: $tagIDs) } label: {
+                        if tagIDs.contains(tag.id) { Label(tag.name, systemImage: "checkmark") } else { Text(tag.name) }
+                    }
+                }
+            }
+        } label: { menuLabel(tagLabel) }
+    }
+    private var tagLabel: String {
+        switch tagMode {
+        case .any: return tagIDs.isEmpty ? "All Tags" : "Tags (\(tagIDs.count))"
+        case .all: return tagIDs.isEmpty ? "All Tags" : "Tags, all (\(tagIDs.count))"
+        case .none: return "No Tags"
+        case .anyTagged: return "Any Tag"
+        }
+    }
+    private var kindMenu: some View {
+        Menu {
+            Button { toggle(TaskKind.task, in: $kinds) } label: {
+                if kinds.contains(.task) { Label("Tasks", systemImage: "checkmark") } else { Text("Tasks") }
+            }
+            Button { toggle(TaskKind.note, in: $kinds) } label: {
+                if kinds.contains(.note) { Label("Notes", systemImage: "checkmark") } else { Text("Notes") }
+            }
+        } label: { menuLabel(kinds.isEmpty ? "All Types" : kinds.count == 2 ? "All Types" : kinds.contains(.task) ? "Tasks" : "Notes") }
+    }
+    private var customRangeRow: some View {
+        HStack(spacing: 16) {
+            HStack { Toggle("From", isOn: $hasCustomFrom); DatePicker("", selection: $customFrom, displayedComponents: .date).labelsHidden().disabled(!hasCustomFrom) }
+            HStack { Toggle("To", isOn: $hasCustomTo); DatePicker("", selection: $customTo, displayedComponents: .date).labelsHidden().disabled(!hasCustomTo) }
+            if !hasCustomFrom, !hasCustomTo { Text("Pick at least one bound.").font(.caption).foregroundStyle(.secondary) }
+        }.font(.system(size: 13))
+    }
+    private func toggle<T: Hashable>(_ value: T, in binding: Binding<Set<T>>) {
+        if binding.wrappedValue.contains(value) { binding.wrappedValue.remove(value) } else { binding.wrappedValue.insert(value) }
+    }
     private var statusLabel: String { switch status { case .all: "All Status"; case .active: "Uncompleted"; case .completed: "Completed"; case .wontDo: "Won't Do" } }
     private func menuLabel(_ text: String) -> some View { HStack(spacing: 5) { Text(text); Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold)) }.font(.system(size: 13)).foregroundStyle(.secondary) }
     private func valueMenu<T: Equatable>(_ label: String, options: [(String, T)], selection: Binding<T>) -> some View {

@@ -207,7 +207,8 @@ struct SettingsView: View {
                     group {
                         row("Default Priority") { valueMenu(selection: $store.settings.defaultPriority, options: TaskPriority.allCases.map { ($0.label, $0) }) }
                         row("Default Tag") { valueMenu(selection: $store.settings.defaultTagID, options: [("None", nil)] + store.data.tags.map { ($0.name, Optional($0.id)) }) }
-                        row("Default List") { valueMenu(selection: $store.settings.defaultListID, options: [("Inbox", nil)] + store.data.lists.map { ($0.name, Optional($0.id)) }) }
+                        row("Default List") { valueMenu(selection: $store.settings.defaultListID, options: defaultListOptions) }
+                        row("Default Duration") { valueMenu(selection: $store.settings.defaultDurationMinutes, options: [("None", 0), ("15 minutes", 15), ("30 minutes", 30), ("1 hour", 60), ("2 hours", 120)]) }
                     }
                     group {
                         positionRow("Default Add to", $store.settings.defaultAddTo)
@@ -278,6 +279,18 @@ struct SettingsView: View {
     private func valueMenu<Value: Equatable>(selection: Binding<Value>, options: [(String, Value)], title: String = "") -> some View {
         ReferenceValueMenu(selection: selection, options: options, title: title)
     }
+    /// Active lists plus Inbox. When the stored default was archived elsewhere,
+    /// it still shows (marked Archived) instead of silently reading "None";
+    /// creation falls back to Inbox until a new default is picked.
+    private var defaultListOptions: [(String, UUID?)] {
+        var options: [(String, UUID?)] = [("Inbox", nil)]
+        options += store.data.lists.filter { !$0.isArchived }.map { ($0.name, Optional($0.id)) }
+        if let current = store.settings.defaultListID,
+           let archived = store.data.lists.first(where: { $0.id == current && $0.isArchived }) {
+            options.append((archived.name + " (Archived)", Optional(archived.id)))
+        }
+        return options
+    }
 
     private func positionRow(_ title: String, _ binding: Binding<TaskPosition>) -> some View {
         row(title) { valueMenu(selection: binding, options: [("Top of List", .top), ("Bottom of List", .bottom)]) }
@@ -289,6 +302,7 @@ struct SettingsView: View {
         store.settings.defaultPriority = defaults.defaultPriority
         store.settings.defaultTagID = defaults.defaultTagID; store.settings.defaultListID = defaults.defaultListID
         store.settings.defaultAddTo = defaults.defaultAddTo; store.settings.overduePosition = defaults.overduePosition
+        store.settings.defaultDurationMinutes = defaults.defaultDurationMinutes
     }
 }
 
@@ -371,7 +385,11 @@ private struct TemplateEditor: View {
             Picker("Priority", selection: $priority) { ForEach(TaskPriority.allCases, id: \.self) { Text($0.label).tag($0) } }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button("Save") {
                 let lines = checklist.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-                let template = TaskTemplate(id: draft.id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, checklist: lines.map { ChecklistItem(title: $0) }, priority: priority, tagIDs: draft.original?.tagIDs ?? [], kind: draft.original?.kind ?? .task)
+                // Plain-text template edits keep styles only when the body is
+                // untouched; a replaced body clears stale styles instead of
+                // silently reapplying them to different text.
+                let richBody = bodyText == (draft.original?.body ?? "") ? draft.original?.richBody?.valid(for: bodyText) : nil
+                let template = TaskTemplate(id: draft.id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, checklist: lines.map { ChecklistItem(title: $0) }, priority: priority, tagIDs: draft.original?.tagIDs ?? [], kind: draft.original?.kind ?? .task, richBody: richBody)
                 save(template); dismiss()
             }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 480).tint(accent)
