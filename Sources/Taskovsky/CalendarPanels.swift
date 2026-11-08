@@ -18,6 +18,7 @@ struct CalendarEntryView: View {
     var entry: CalendarEntry
     var style: CalendarItemStyle
     var calendar: Calendar
+    var showItemIcons = true
     var compact = false
     var open: (UUID) -> Void
     var complete: (UUID) -> Void
@@ -30,18 +31,20 @@ struct CalendarEntryView: View {
     }
     var body: some View {
         HStack(alignment: .top, spacing: 5) {
-            if entry.isProjected {
-                Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(tint)
-                    .accessibilityLabel("Future repeat preview")
-            } else if entry.isNote {
-                Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(tint)
-            } else if entry.checklistID != nil {
-                Image(systemName: entry.isCompleted ? "checkmark.square" : "square").font(.system(size: 10)).foregroundStyle(tint)
-            } else {
-                Button { complete(entry.taskID) } label: {
-                    Image(systemName: entry.isCompleted ? "checkmark.square.fill" : "square").font(.system(size: 10))
-                }.buttonStyle(.plain).foregroundStyle(tint)
-                    .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
+            if showItemIcons {
+                if entry.isProjected {
+                    Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(tint)
+                        .accessibilityLabel("Future repeat preview")
+                } else if entry.isNote {
+                    Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(tint)
+                } else if entry.checklistID != nil {
+                    Image(systemName: entry.isCompleted ? "checkmark.square" : "square").font(.system(size: 10)).foregroundStyle(tint)
+                } else {
+                    Button { complete(entry.taskID) } label: {
+                        Image(systemName: entry.isCompleted ? "checkmark.square.fill" : "square").font(.system(size: 10))
+                    }.buttonStyle(.plain).foregroundStyle(tint)
+                        .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
+                }
             }
             Button { open(entry.taskID) } label: {
                 VStack(alignment: .leading, spacing: 2) {
@@ -62,6 +65,9 @@ struct CalendarEntryView: View {
         .help((entry.isProjected ? "Future repeat preview. Open the repeating task.\n" : "") + entry.title + "\n" + time)
         .contextMenu {
             Button(entry.isProjected ? "Open repeating task" : "Open task") { open(entry.taskID) }
+            if !entry.isProjected && !entry.isNote && entry.checklistID == nil {
+                Button(entry.isCompleted ? "Reopen task" : "Complete task") { complete(entry.taskID) }
+            }
             if entry.canSchedule { Button("Schedule…") { edit(entry) } }
         }
     }

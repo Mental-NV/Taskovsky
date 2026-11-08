@@ -8,6 +8,8 @@ The baseline is the source at [`cfdec454acff91285ac00beaa20c0cf0f0961ee1`](https
 
 A source-derived behavior can still be a bug. Known deviations are recorded separately instead of quietly being turned into desired requirements. The baseline includes [merged PR #2](https://github.com/Mental-NV/Taskovsky/pull/2): local Calendar plus fixes for the [five earlier findings](code-review-findings-2026-11-08.md) and [four Calendar findings](pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026). The documentation records those merged fixes. Follow-up CI reruns existing regressions; a separately approved `TaskDetail` view-section extraction addresses a compiler limit without changing intended behavior, as recorded in the verification ledger.
 
+The Calendar display follow-up in [PR #3](https://github.com/Mental-NV/Taskovsky/pull/3), source head `13a3a486153fc1217f6228cb8e6cd8266dffb366`, adds named secondary rulers, Year styles and item-icon visibility to this baseline while retaining main `b4216dec6ee2d95471038cf41ca6f92efcb94039` documentation, CI and the TaskDetail refactor. Prior local results and pending final integration CI are distinguished in the verification ledger. See the [display investigation](calendar-gap-investigation-2026-11-08.md) and [verification ledger](spec/verification.md#calendar-display-follow-up). No new native checks were run during the cloud integration.
+
 For future work, an explicitly approved change specification defines the intended delta. If that proposal, code, and baseline disagree, record the mismatch and resolve the product decision before changing behavior. TickTick observations and archived progress reports never override Taskovsky requirements.
 
 ## Read by purpose

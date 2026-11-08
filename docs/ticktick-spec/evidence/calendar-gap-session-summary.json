@@ -1,0 +1,129 @@
+{
+  "recorded": "2026-11-08",
+  "authority": "REA MCP binary_session diagnostics; not native code analysis",
+  "server_identity": {
+    "package": {
+      "name": "rea-agents",
+      "version": "6.7.0",
+      "root_path": "/opt/homebrew/lib/node_modules/rea-agents",
+      "build_commit": null
+    },
+    "server": {
+      "name": "rea",
+      "version": "6.7.0",
+      "started_at": "2026-11-08T14:46:19.275Z",
+      "command_path": "/opt/homebrew/bin/rea"
+    },
+    "sdk": {
+      "server": "2.3.1",
+      "client_test": "2.3.1",
+      "core": "2.3.1"
+    },
+    "negotiated_protocol_version": "2025-06-18",
+    "client": {
+      "name": "codex-mcp-client",
+      "version": "0.167.0-alpha.3.2"
+    },
+    "skill": {
+      "name": "reverse-engineer-anything",
+      "expected_version": "42"
+    },
+    "catalog": {
+      "counts": {
+        "cli_commands": 153,
+        "mcp_tools": 207,
+        "mcp_prompts": 6
+      },
+      "digests": {
+        "tools_sha256": "af39310c9591bb981893ec0d2188b1bcf6e9cc8ba3ac513d5bbefc8ddcb85639",
+        "prompts_sha256": "7152916ab48bd2a9677a5ad9cdbde0a51dc53c113934952ad096e93f5f18aa7e",
+        "combined_sha256": "96d8f6e6ea1b1ba13557216624a3461c738729d53c79b4b0100d1f3a3a32441c"
+      }
+    },
+    "protocol_features": {
+      "progress": true,
+      "cancellation": true,
+      "elicitation": false
+    },
+    "alignment": {
+      "state": "unknown",
+      "reasons": [],
+      "remediation": "Supply expected package, catalog, or registration identity to compare the live server."
+    }
+  },
+  "selected_target": {
+    "path": "/Applications/TickTick.app/Contents/MacOS/TickTick",
+    "sha256": "e76d6757e4a1e71fd16814443bb3b02d15d0d547ac69abb67306d8dfa3ee35af",
+    "format": "mach-o-universal",
+    "architecture": "arm64",
+    "open": true,
+    "cleanup_pending": false
+  },
+  "analysis_run": {
+    "run_id": "efbe74ed-f309-45b2-bb24-3c5e94659d55",
+    "process_lineage": {
+      "status": "not_observed"
+    }
+  },
+  "analysis_activity": {
+    "status": "idle",
+    "providers": [
+      {
+        "provider": {
+          "id": "hopper",
+          "name": "Hopper Disassembler",
+          "version": "launcher-sha256:0964601782b7a6a5cc0a6a3d687f21cd81eb9356585016c1e519a51573163521"
+        },
+        "active": null,
+        "queued_requests": 0
+      }
+    ]
+  },
+  "provider_operation_health": {
+    "state": "unknown",
+    "stage": "launch",
+    "retry_action": "unknown",
+    "exit_code": null,
+    "requests": []
+  },
+  "hopper_status": [
+    {
+      "provider": {
+        "id": "hopper",
+        "name": "Hopper Disassembler",
+        "version": "launcher-sha256:0964601782b7a6a5cc0a6a3d687f21cd81eb9356585016c1e519a51573163521"
+      },
+      "availability": [
+        {
+          "available": false,
+          "reason": "HopperStartError: Hopper application bridge could not be started"
+        },
+        {
+          "available": false,
+          "reason": "HopperStartError: Hopper application bridge could not be started"
+        },
+        {
+          "available": false,
+          "reason": "HopperStartError: Hopper application bridge could not be started"
+        },
+        {
+          "available": false,
+          "reason": "HopperStartError: Hopper application bridge could not be started"
+        },
+        {
+          "available": false,
+          "reason": "HopperStartError: Hopper application bridge could not be started"
+        },
+        {
+          "available": false,
+          "reason": "HopperStartError: Hopper application bridge could not be started"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "No lease-owner process or session identifier is exposed by these diagnostics.",
+    "A selected target and idle queue do not establish ownership of the separate unresponsive Hopper lease.",
+    "No close, restart, socket removal or process termination was attempted; the uncertain lease was left untouched."
+  ]
+}
