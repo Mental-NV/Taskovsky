@@ -1,5 +1,8 @@
 # Calendar module
 
+**Archived reference research, not Taskovsky requirements.** This module is outside the current Taskovsky baseline. Observations and unknowns below are preserved from the November 2026 investigation. See the [current parity tracker](../../parity-implementation-status.md) and [documentation index](../../README.md).
+
+
 Reference: installed TickTick macOS app, light appearance, 2 November 2026. The separate Calendar module is excluded from Taskovsky's original implementation scope, but included here to document the reference product. Displayed dates, events, colors and visible options depend on account settings and data. No existing event was modified; an empty add editor was dismissed without entering content. The previously selected Day view was restored after inspection.
 
 ## Shell and view selection

@@ -1,5 +1,8 @@
 # Pomodoro and focus: observed behavior
 
+**Archived reference research, not Taskovsky requirements.** This module is outside the current Taskovsky baseline. Observations and unknowns below are preserved from the November 2026 investigation. See the [current parity tracker](../../parity-implementation-status.md) and [documentation index](../../README.md).
+
+
 This reference module is outside the original Taskovsky implementation scope. Observations are from the installed macOS app in light appearance on 2 November 2026; account configuration and existing records can affect the screen. Personal timer and task names are omitted.
 
 ## Workspace and timers

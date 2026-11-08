@@ -1,5 +1,8 @@
 # Other modules: initial reference observations
 
+**Archived reference research, not Taskovsky requirements.** This module is outside the current Taskovsky baseline. Observations and unknowns below are preserved from the November 2026 investigation. See the [current parity tracker](../../parity-implementation-status.md) and [documentation index](../../README.md).
+
+
 These screens are included in the reference inventory, not the authorized Taskovsky implementation scope. The following records only the states actually viewed; comprehensive behavior remains outstanding.
 
 ## Calendar

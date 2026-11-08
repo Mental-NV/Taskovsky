@@ -1,5 +1,7 @@
 # TickTick investigation and Taskovsky implementation
 
+**Historical investigation and implementation report.** Preserve this document as provenance, not a current acceptance gate. Implementation and validation statements below describe that investigation. The [current parity tracker](parity-implementation-status.md) and [code-derived specifications](README.md) supersede its status summaries. No runtime checks were repeated for the documentation reconciliation.
+
 Investigation date: 8 November 2026 (Europe/Moscow). Target: installed TickTick 8.2.20, ARM64 slice of `/Applications/TickTick.app/Contents/MacOS/TickTick`. Universal executable SHA-256: `e76d6757e4a1e71fd16814443bb3b02d15d0d547ac69abb67306d8dfa3ee35af`.
 
 This investigation reads shipped application artifacts. No TickTick task database, account credentials, or private task contents were imported. Decompiled pseudocode is analysis evidence, not recovered original source. Taskovsky's implementation is independently written. The user's current request brings rich formatting into scope and supersedes its exclusion in older parity documents. Account/sync, Calendar, Focus, Habits, Matrix, and Countdown remain outside this task.
@@ -30,17 +32,17 @@ Rich editing has both content and presentation state: TickTick exposes separate 
 
 ## Artifact ledger
 
-Complete REA records are retained locally:
+The original investigation recorded these local artifact locations. They are not committed to this repository, and their continued availability was not checked during documentation reconciliation:
 
-- [Main metadata and English resources](rea-evidence/ticktick-main-bundle.json).
-- [Filter symbols and decompiled predicates](rea-evidence/ticktick-filter-bundle.json).
-- [Packaged Core Data model](rea-evidence/ticktick-model-bundle.json).
+- Main metadata and English resources (`rea-evidence/ticktick-main-bundle.json`, local artifact not committed).
+- Filter symbols and decompiled predicates (`rea-evidence/ticktick-filter-bundle.json`, local artifact not committed).
+- Packaged Core Data model (`rea-evidence/ticktick-model-bundle.json`, local artifact not committed).
 
 The `.mom` file was inspected as a keyed-archive reference graph, without deserializing executable classes. Entity/property names above were projected by following recorded UIDs in `NSEntityName` and `NSProperties.NS.keys`. REA labels unfamiliar archived classes `unknown-class`; that limits semantic decoding, not the recorded raw fields. Main native metadata has partial ivar coverage and does not recover all Swift declarations.
 
 The model archive has SHA-256 `76ae5ab4a2ba6dfdbef11cb4528036ddb8a5e9dc479af532236fcae39b460767`; all 1,470 object-table entries were returned (`truncated: false`). Code addresses in this report are static provider addresses, not live process/ASLR addresses. The task editor callbacks and model describe a Markdown/block-oriented editing surface, but the exact mapping among `content`, `dezcription`, `notionBlocks`, and `notionBlockString` remains unknown. Taskovsky deliberately keeps a plain searchable body plus its own Codable rich-text companion instead of assuming TickTick's private storage format.
 
-## Implementation checklist
+## Historical implementation checklist
 
 This ledger distinguishes implemented behavior from complete TickTick parity. Taskovsky uses its own models and policies.
 
@@ -86,9 +88,9 @@ Parent-tag navigation includes descendants, while filter tag selections match th
 
 The initial main-executable Hopper analysis took 2 minutes 9 seconds, exceeding REA's default 120-second bridge startup limit. Its retained MCP session could not authenticate cleanup even after the owned temporary document was manually closed. A separate investigation-only REA connection used a 450-second startup allowance without changing Codex configuration. It successfully decoded native metadata/resources/model and decompiled the smaller `TTFilterKit` framework; that connection was exported and closed. Hopper's demo disallows saving its analysis database. These facts do not invalidate the retained static Evidence, but complete main-executable decompilation and controlled runtime behavior remain unverified.
 
-## Validation
+## Historical validation
 
-The combined suite passes **370 tests: 336 XCTest and 34 Swift Testing checks**, with no failures or build warnings. The release build and local code-signature verification pass. See [test log](../build/verification/swift-test.log), [release build log](../build/verification/build-app.log), and [built app](../build/Taskovsky.app). Changes remain in the working tree; the pre-existing focus-effect changes in `App.swift` were preserved.
+The original report recorded **370 passing tests: 336 XCTest and 34 Swift Testing checks**, with no failures or build warnings, and a passing release build and local code-signature verification. See test log (`../build/verification/swift-test.log`, local artifact not committed), release build log (`../build/verification/build-app.log`, local artifact not committed), and built app (`../build/Taskovsky.app`, local artifact not committed). At the time of that report, changes remained in the working tree and the pre-existing focus-effect changes in `App.swift` were recorded as preserved.
 
 The tests cover legacy decoding, exact UTF-16 identity, rich-style roundtrips and stale-marker removal, native list input and marker geometry, empty-block Return, pending formatting, hierarchy cascades and reload-safe ledgers, edited-successor retention, tag merges, archive/reminder eligibility, filter intent and logic transforms, board projection, recurrence, duration endpoints and task-zone/DST behavior. List-event regressions include the selection refresh that previously stripped AppKit's native list metadata, using the same continuation policy as the production coordinator.
 
