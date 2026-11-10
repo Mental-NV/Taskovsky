@@ -1,0 +1,76 @@
+# Tasks and Calendar comparison — November 9, 2026
+
+This is a bounded reconciliation of public TickTick guides, installed **TickTick 8.2.20 (922), arm64**, and the local Taskovsky working tree. It does not establish complete parity. The Desktop implementation remains uncommitted on `codex/calendar-visual-parity`, based on `f85e2f6a9c538f36829961961a0749197f29c4e2`, preserving the earlier visual and boundary work. [Verification](spec/verification.md#calendar-source-follow-up) identifies the changed sources and executable independently of that base commit.
+
+Evidence classes: **D** public documentation read in the rendered official site; **O** current native observation; **S** Taskovsky source/model inspection; **U** unresolved or not exercised. Documentation supplies test leads; platform qualifications and actual installed Mac behavior take precedence over a generic guide or release note. No new binary decompilation or recovered source is claimed. REA/Hopper limitations from the earlier audit remain unchanged.
+
+Private records, screenshots and rendered article snapshots are in `/private/tmp/TaskovskyCalendarFilterAudit-1108-w4ksafbs`; these are temporary local evidence, not checked-in assets or hosted CI. Reference screenshots used for comparison were limited to disposable QA content where possible. One accidental All/Week capture containing unrelated reference content was deleted immediately; only a content-free observation note remains.
+
+## Confirmed behavior and corrections
+
+| Case | Installed Mac evidence (O) | Taskovsky result |
+| --- | --- | --- |
+| All | Clicking label or indicator selects All; repeating it leaves All active. Child source marks are empty in All mode. | Previously the label did not activate and stale tags could restrict a checked All. All is now an explicit, idempotent reset command. |
+| First source and combination | First list/tag/Inbox selection from All selects only that source. Lists, Inbox and tags are alternatives. A selected list's untagged QA task remains visible beside a selected tag; tag-only and Inbox-plus-tag were checked with owned probes. | `CalendarFilterSelection` defines the union for every projection and Arrange's All choice. Explicit Arrange list/Inbox selection remains a separate restricting chooser. |
+| Final deselection | Clearing the final list, tag or Inbox restores All. | Commands restore All after the last source is explicitly cleared. Saved empty or unavailable selections do not broaden on load. |
+| Group controls | Mixed checkbox selects all members; checked checkbox clears that group, preserving the other group. Group title/arrow expands rather than selecting. | Separate expansion/selection buttons, mixed state, full-row individual activation and stable accessible values. |
+| Year navigation | Enter Year from Day, click November 9 → Week. January title → Month, January 2026. | Date now opens Week; month titles now open Month. Geometry and heatmap quantity policy retained. |
+| Zone capacity | Moscow plus four draft additional zones accepted; Add then disappeared. Cancel and reopen showed Moscow alone. | Capacity increased from three to four additional rulers; existing validation, labels, order, visibility and primary-duplicate hiding retained. |
+
+Reference evidence includes `reference-year-date-single-click`, `reference-year-month-title-click`, `reference-four-additional-zones-draft` and `reference-zone-draft-cancel-restores-moscow-only`. Debug/native proof matrices and final release captures are listed in the verification ledger. Calendar source selection is distinct from saved task filters' AND-between-fields semantics.
+
+## Official Tasks guides reviewed
+
+The [Tasks root](https://help.ticktick.com/articles/7055782436621254656) was read with the relevant child guides below. This is a selected local-workflow review, not a claim to have exercised every link, FAQ disclosure, platform or capability. Taskovsky comparisons are source-derived unless explicitly marked O above.
+
+| Guide (D) | Relevant contract and Taskovsky comparison |
+| --- | --- |
+| [Add tasks](https://help.ticktick.com/articles/7055782422935240704) | Quick entry, description shortcut, templates, default date/list/priority and date recognition. Taskovsky has corresponding local paths; fresh comprehensive shortcut/recognition parity was not run. Voice, email and OS entry surfaces are outside this Desktop correction. |
+| [Task details](https://help.ticktick.com/articles/7055782408586526720) | Schedules, priority, move, formatting, checklists, progress and lifecycle actions. Taskovsky implements much of this local subset. Inline files, collapsible headings, detailed history and exact interaction parity need bounded follow-ups. Cloud attachments/collaboration are deferred. |
+| [Formatting](https://help.ticktick.com/articles/7507338582718152704) | Toolbar/slash/Markdown operations, inline marks, lists, quotes/code, links, collapsible headings and paste distinctions. Taskovsky's rich model/editor is present; this research does not certify every trigger, paste form or collapse behavior. Preserve unsupported rich data when building a mobile editor. |
+| [Reminders](https://help.ticktick.com/articles/7055782395743567872) | Multiple reminders, end reminders, popup/snooze and platform delivery. Local reminder data is distinct from OS delivery. Do not label stored reminders as delivered notifications; provider email/location integrations remain deferred. |
+| [Recurrence](https://help.ticktick.com/articles/7055782206349770752) | Due/completion/specific-date recurrence. Expanded FAQ describes editing only one recurrence from Calendar. Taskovsky's series scheduling and read-only forecasts do not supply an exception editor. This is a separate local backlog item. |
+| [Subtasks](https://help.ticktick.com/articles/7055782219767349248) | Independent multilevel tasks, sibling creation, linking/unlinking, dragging and collapse. Taskovsky has linked hierarchy plus distinct stored/body checklists. Exact nesting/drag/keyboard policies remain incompletely compared. |
+| [Task time zones](https://help.ticktick.com/articles/7082251620645339136) | Fixed instant versus floating wall time. Taskovsky timed values are absolute; all-day values preserve civil dates. Floating timed schedules require a deliberate model change, not just an extra ruler. |
+| [Lists](https://help.ticktick.com/articles/7055782283059396608) | Regular and smart lists, visibility, color/folder and Inbox protection. Taskovsky supplies local organization and smart visibility. Shared/assigned lists are excluded; mobile list backgrounds are not assumed to be a Mac defect. |
+| [Folders](https://help.ticktick.com/articles/7055782296019795968) | Grouping by drag or list editor; desktop ungroup. Taskovsky single-level folders preserve lists/tasks on ungroup. Fresh full reference lifecycle comparison remains open. |
+| [Tags](https://help.ticktick.com/articles/7055782255804809216) | Task assignment, nested tags, pin/edit/delete and reorder. Taskovsky has hierarchy/merge/lifecycle contracts; Calendar parent-tag union was tested, while complete tag-management parity was not rerun. |
+| [Filters](https://help.ticktick.com/articles/7055782240994721792) | Normal fields, advanced AND/OR statements and preview. Existing Taskovsky saved filters remain separate from the corrected Calendar source union. Reference expression/editor edge cases need direct tests. |
+| [Group and sort](https://help.ticktick.com/articles/7056594711640801280) | Sections, grouping and created/modified sorting. Taskovsky offers local sorts/groups/boards, but lacks arbitrary sections and modified sorting. Assignee/team behavior is deferred. |
+| [Select views](https://help.ticktick.com/articles/7055782381696843776) | List, Kanban and Timeline are distinct task-list views. Taskovsky has List/Board; task Timeline is a separate substantial local candidate, not the hourly Calendar. |
+| [List view](https://help.ticktick.com/articles/7055782365863346176) | Manual reorder, drag to subtask, pin and batch selection. Some swipe/device-view claims are platform specific. Taskovsky grip-based drag and multi-selection exist; complete equivalence was not measured here. |
+| [Kanban](https://help.ticktick.com/articles/7055782353376903168) | Section editing/reordering and task drops; boards can appear in several destinations. Taskovsky's board capabilities are narrower. The guide explicitly excludes section colors on Mac; do not turn that into a Mac parity defect. Collaboration is excluded. |
+| [Desktop shortcuts](https://help.ticktick.com/articles/7055780449171275776) | Shortcut customization and help. The documented command menu excludes Mac. Calendar numeric shortcuts were separately observed in the earlier native audit; Taskovsky does not yet implement those mode shortcuts. |
+
+## Official Calendar guides reviewed
+
+The [Calendar root](https://help.ticktick.com/articles/7055782166172532736) and relevant local children were read. External subscription articles were not treated as implementation scope.
+
+| Guide (D) | Installed Mac / Taskovsky reconciliation |
+| --- | --- |
+| [Week](https://help.ticktick.com/articles/7055782149730861056) | Creation, ranges, moves/resizes, Arrange and navigation; configurable all-day height, zoom and hidden hours are local candidates. Taskovsky has seven modes and scheduling, but no zoom/hidden-hours/all-day-height controls or drag auto-scroll. This pass did not rerun exhaustive gestures. |
+| [Month](https://help.ticktick.com/articles/7055782128335716352) | Multi-day creation/drop and completed/filter options. Taskovsky uses per-day fragments; continuous multiday bars and all-day resize remain differences. |
+| [Year](https://help.ticktick.com/articles/7399726920725692416) | Dedicated guide agrees with O date→Week and month-title→Month. Taskovsky now follows those transitions. Reference default/heatmap/quantity-scale equivalence remains unresolved; Taskovsky's persisted Heatmap default remains its own policy. |
+| [Calendar List](https://help.ticktick.com/articles/7055782110086299648) | Daily list/timeline descriptions span platforms. Taskovsky's local Agenda is not automatically equivalent to each mobile surface. |
+| [Agenda](https://help.ticktick.com/articles/7213444784319365120) | Desktop linear past/current/future browsing. Earlier Mac audit observed Show more with a six-month extension. Taskovsky remains a 30-day window without Show more. |
+| [View options](https://help.ticktick.com/articles/7055782085826445312) | Colors, styles, per-type icons, zones and repeated/checklist visibility. O confirms four additional rulers. Option temporary icon reveal is D only: the reference Task-icon toggle returned an unsupported accessibility action and remained on after one focused retry. No modifier behavior was verified or implemented from that probe. Bulk drag selection/postpone has Windows/Web qualifications. |
+| [Calendar FAQ](https://help.ticktick.com/articles/7063851189372190720) | Expanded checklist/future-cycle question directs users to matching visibility controls. Taskovsky has read-only projections and visibility controls. Not every FAQ was expanded. |
+| [General FAQ](https://help.ticktick.com/articles/7055792921664028672) | Expanded recurring-task question says future cycles cannot be modified until the current recurrence is handled. Thus read-only forecasts alone are not a parity defect. Current-instance-only rescheduling is a distinct recurrence exception capability. |
+| [What's New](https://help.ticktick.com/articles/7082552170989486080) | Generic Year preview announcement says dates can show tasks without changing view. Installed Mac 8.2.20 instead opened Week in a direct controlled test. Record the disagreement/version qualification; do not replace the observed Mac contract with a release-note assumption. |
+
+## Remaining local work and boundaries
+
+The immediate Desktop milestone corrects source filters and the two confirmed display discrepancies. The broader autonomous local parity goal remains open. Prioritize preservation and an isolated mobile vertical slice against the merged mobile specification; then review these local candidates in bounded changes:
+
+1. Recurrence exceptions for one current cycle; preserve read-only future forecasts and recurrence anchors.
+2. Agenda extension, Calendar shortcuts, hidden hours/zoom/all-day sizing, multiday rendering and safe gesture/Undo improvements.
+3. Rich editor triggers/paste/collapsible headings, local task sections, modified sorting and broader board destinations, after live platform evidence and explicit data contracts.
+4. Mobile touch, accessible reading/editing and persistence, with unsupported rich content preserved. This Desktop branch does not contain an iOS implementation.
+
+External accounts, sync, subscriptions, EventKit, external overlays, cloud attachments, team assignment/sharing and provider/OS delivery remain deliberately deferred in the [canonical parity table](parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026). No sign-in, integration, deployment, credential or signing-account changes were introduced.
+
+## Reference restoration and QA isolation
+
+The original archived **Taskovsky Calendar QA** list was temporarily unarchived, then re-archived and observed under Archived Lists. Its original three tasks were retained. Two newly created owned probes were removed using normal recoverable Delete and were absent from active results; Trash was not purged or independently inventoried. The four extra zones were draft-only and cancelled; Moscow-only was verified on reopening. Icon preferences remained on. Calendar returned to All, Day/Today November 9, sidebar hidden, with source groups collapsed and the original 1337×700 window retained. `reference-cleanup.json` records the bounded checks.
+
+A stale automation helper accidentally reopened the older private Taskovsky QA bundle without isolation arguments. That process read normal application data; it was closed before any intentional task command. Normal workspace/settings modification times both predated this audit, so no write during the incident was found. Both QA bundles now use launch guards that default to their own disposable workspace/settings; explicit app handles replaced the captured stale helper. A no-arguments launch was checked at process level. Do not interpret earlier isolation claims as covering this later incident. `qa-isolation-incident.json` retains details; no personal data is included here.

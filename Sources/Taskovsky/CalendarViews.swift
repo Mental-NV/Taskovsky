@@ -1,6 +1,15 @@
 import SwiftUI
 import TaskovskyCore
 
+private struct CalendarDayBoundary: View {
+    @Environment(\.displayScale) private var displayScale
+    var body: some View {
+        Rectangle().fill(Color.primary.opacity(0.06))
+            .frame(width: 1 / max(1, displayScale))
+            .allowsHitTesting(false).accessibilityHidden(true)
+    }
+}
+
 struct CalendarHourlyView: View {
     var days: [Date]
     var entries: [CalendarEntry]
@@ -11,31 +20,39 @@ struct CalendarHourlyView: View {
     var create: (Date, Date, Bool) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
-    private let hourHeight: CGFloat = 60
+    var selectDay: (Date) -> Void
+    private let hourHeight: CGFloat = 52
     private var zones: [CalendarTimeZone] { options.visibleTimeZones(primary: calendar.timeZone) }
-    private var gutter: CGFloat { 54 + CGFloat(zones.count) * 64 }
+    private var gutter: CGFloat { 56 + CGFloat(zones.count) * 54 }
 
     var body: some View {
         GeometryReader { geometry in
-            let columnWidth = max(118, (geometry.size.width - gutter) / CGFloat(max(1, days.count)))
+            let columnWidth = max(60, (geometry.size.width - gutter) / CGFloat(max(1, days.count)))
             ScrollView(.horizontal) {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
-                        HStack(spacing: 4) {
-                            ForEach(zones) { zone in
-                                Text(zone.title(at: days.first ?? Date())).lineLimit(1)
-                                    .help(zone.identifier + " · Ruler for " + CalendarText.date(days.first ?? Date(), "MMM d", calendar: calendar))
-                                    .accessibilityLabel("Time zone " + zone.title(at: days.first ?? Date()) + ", " + zone.identifier)
-                                    .frame(width: 60)
-                            }
-                            Text(calendar.timeZone.abbreviation(for: days.first ?? Date()) ?? calendar.timeZone.identifier)
-                                .help(calendar.timeZone.identifier).frame(maxWidth: .infinity)
-                        }.font(.system(size: 10)).foregroundStyle(.secondary).frame(width: gutter)
+                        Color.clear.frame(width: gutter, height: 32)
                         ForEach(days, id: \.self) { day in
-                            Text(CalendarText.date(day, "EEE d", calendar: calendar))
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(calendar.isDateInToday(day) ? Color.accentColor : .primary)
-                                .frame(width: columnWidth, height: 36)
+                            Text(CalendarText.date(day, "EEE", calendar: calendar))
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                                .frame(width: columnWidth, height: 32)
+                        }
+                    }
+                    HStack(spacing: 0) {
+                        Color.clear.frame(width: gutter, height: 28)
+                        ForEach(days, id: \.self) { day in
+                            Button { selectDay(day) } label: {
+                                Text("\(calendar.component(.day, from: day))")
+                                    .font(.system(size: 13))
+                                    .foregroundStyle(calendar.isDateInToday(day) ? Color.white : Color.primary)
+                                    .frame(width: 24, height: 24)
+                                    .background(calendar.isDateInToday(day) ? CalendarAppearance.accent : .clear, in: Circle())
+                                    .padding(.leading, 4)
+                                    .frame(width: columnWidth, height: 28, alignment: .bottomLeading)
+                                    .contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .overlay(alignment: .leading) { CalendarDayBoundary() }
+                                .accessibilityLabel("Show " + CalendarText.date(day, "EEEE d MMMM y", calendar: calendar) + " in Day view")
                         }
                     }
                     allDayStrip(columnWidth: columnWidth)
@@ -62,27 +79,22 @@ struct CalendarHourlyView: View {
             let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
             return entries.filter { $0.isAllDay && $0.start < end && $0.end > day }.count
         }.max() ?? 0
-        let stripHeight = min(125, max(35, CGFloat(maximum) * 26 + 22))
-        return HStack(alignment: .top, spacing: 0) {
-            Text("All day").font(.system(size: 10)).foregroundStyle(.secondary)
-                .frame(width: gutter, height: 35)
+        let stripHeight = min(125, max(26, CGFloat(maximum) * 18 + 8))
+        return HStack(alignment: .bottom, spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(zones) { zone in
+                    Text(zone.title(at: days.first ?? Date())).lineLimit(1).frame(width: 50)
+                        .help(zone.identifier + " · Ruler for " + CalendarText.date(days.first ?? Date(), "MMM d", calendar: calendar))
+                        .accessibilityLabel("Time zone " + zone.title(at: days.first ?? Date()) + ", " + zone.identifier)
+                }
+                Text(calendar.timeZone.abbreviation(for: days.first ?? Date()) ?? calendar.timeZone.identifier)
+                    .help(calendar.timeZone.identifier).frame(maxWidth: .infinity)
+            }.font(.system(size: 10)).foregroundStyle(.secondary).frame(width: gutter).padding(.bottom, 3)
             ForEach(days, id: \.self) { day in
                 let next = calendar.date(byAdding: .day, value: 1, to: day) ?? day
-                ScrollView(.vertical) { VStack(spacing: 3) {
-                    ForEach(entries.filter { $0.isAllDay && $0.start < next && $0.end > day }) { entry in
-                        CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showItemIcons, compact: true,
-                            open: open, complete: complete, edit: edit).calendarDraggable(entry)
-                    }
-                    Button { create(day, day, true) } label: { Image(systemName: "plus").font(.system(size: 9)).frame(maxWidth: .infinity) }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                        .accessibilityLabel("Add all-day task " + CalendarText.date(day, "MMM d", calendar: calendar))
-                }.padding(3) }.frame(width: columnWidth, height: stripHeight, alignment: .top)
-                    .contentShape(Rectangle())
-                    .overlay(alignment: .leading) { Divider() }
-                    .dropDestination(for: String.self) { values, _ in
-                        guard let id = values.compactMap(CalendarDrag.id).first else { return false }
-                        schedule(id, .move(start: day, allDay: true)); return true
-                    }
+                CalendarAllDayCell(day: day, entries: entries.filter { $0.isAllDay && $0.start < next && $0.end > day },
+                    calendar: calendar, options: options, width: columnWidth, height: stripHeight, open: open, complete: complete,
+                    create: create, schedule: schedule, edit: edit)
             }
         }.frame(height: stripHeight)
     }
@@ -95,7 +107,7 @@ struct CalendarHourlyView: View {
                         let _ = other.timeZone = TimeZone(identifier: ruler.identifier) ?? calendar.timeZone
                         let instant = CalendarDates.instant(on: days.first ?? Date(), minute: hour * 60, calendar: calendar)
                         Text(CalendarText.time(instant, calendar: other))
-                            .frame(width: 60, alignment: .trailing)
+                            .frame(width: 50, alignment: .trailing)
                             .help(ruler.identifier + " · " + CalendarText.date(instant, "EEE MMM d HHmm", calendar: other))
                             .foregroundStyle(.tertiary)
                     }
@@ -103,6 +115,47 @@ struct CalendarHourlyView: View {
                 }.font(.system(size: 10)).frame(width: gutter - 8, height: hourHeight, alignment: .topTrailing)
                     .padding(.trailing, 8).id(hour)
             }
+        }
+    }
+}
+
+private struct CalendarAllDayCell: View {
+    var day: Date
+    var entries: [CalendarEntry]
+    var calendar: Calendar
+    var options: TaskCalendarOptions
+    var width: CGFloat
+    var height: CGFloat
+    var open: (UUID) -> Void
+    var complete: (UUID) -> Void
+    var create: (Date, Date, Bool) -> Void
+    var schedule: (UUID, CalendarScheduleOperation) -> Void
+    var edit: (CalendarEntry) -> Void
+    @State private var hovered = false
+    @FocusState private var addFocused: Bool
+    var body: some View {
+        ScrollView(.vertical) {
+            VStack(spacing: 2) {
+                ForEach(entries) { entry in
+                    CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar,
+                        showItemIcons: options.showItemIcons, compact: true, open: open, complete: complete, edit: edit)
+                        .frame(height: 16).calendarDraggable(entry)
+                }
+            }.padding(.horizontal, 3).padding(.top, 6).padding(.bottom, 4)
+        }.frame(width: width, height: height)
+        .overlay(alignment: .bottomTrailing) {
+            Button { create(day, day, true) } label: {
+                Image(systemName: "plus").font(.system(size: 9)).frame(width: 18, height: 18)
+            }.buttonStyle(.plain).foregroundStyle(.secondary).focused($addFocused)
+                .opacity(hovered || addFocused ? 1 : 0)
+                .accessibilityLabel("Add all-day task " + CalendarText.date(day, "MMM d", calendar: calendar))
+        }
+        .contentShape(Rectangle()).onHover { hovered = $0 }
+        .overlay(alignment: .leading) { CalendarDayBoundary() }
+        .contextMenu { Button("Add all-day task") { create(day, day, true) } }
+        .dropDestination(for: String.self) { values, _ in
+            guard let id = values.compactMap(CalendarDrag.id).first else { return false }
+            schedule(id, .move(start: day, allDay: true)); return true
         }
     }
 }
@@ -138,13 +191,13 @@ private struct CalendarHourColumn: View {
                         create(instant(start), instant(min(1440, start + 30)), false)
                     })
                 ForEach(0..<24, id: \.self) { hour in
-                    Rectangle().fill(Color.primary.opacity(0.09)).frame(height: 0.5).offset(y: CGFloat(hour) * hourHeight)
-                    Rectangle().fill(Color.primary.opacity(0.035)).frame(height: 0.5).offset(y: CGFloat(hour) * hourHeight + hourHeight / 2)
+                    Rectangle().fill(Color.primary.opacity(0.06)).frame(height: 0.5).offset(y: CGFloat(hour) * hourHeight)
+                    Rectangle().fill(Color.primary.opacity(0.025)).frame(height: 0.5).offset(y: CGFloat(hour) * hourHeight + hourHeight / 2)
                 }.allowsHitTesting(false)
-                Rectangle().fill(Color.primary.opacity(0.09)).frame(width: 0.5).allowsHitTesting(false)
+                CalendarDayBoundary()
                 if let selection {
                     let start = min(selection.0, selection.1), end = max(start + 15, max(selection.0, selection.1))
-                    RoundedRectangle(cornerRadius: 4).fill(Color.accentColor.opacity(0.2))
+                    RoundedRectangle(cornerRadius: 4).fill(CalendarAppearance.accent.opacity(0.2))
                         .frame(width: geometry.size.width - 4, height: CGFloat(end - start) * scale)
                         .offset(x: 2, y: CGFloat(start) * scale).allowsHitTesting(false)
                 }
@@ -219,13 +272,13 @@ struct CalendarMonthView: View {
     var body: some View {
         GeometryReader { geometry in
             let width = max(96, geometry.size.width / 7)
-            let height = max(115, (geometry.size.height - 26) / CGFloat(max(1, days.count / 7)))
+            let height = max(90, (geometry.size.height - 32) / CGFloat(max(1, days.count / 7)))
             ScrollView([.horizontal, .vertical]) {
                 VStack(spacing: 0) {
                     HStack(spacing: 0) {
                         ForEach(0..<7, id: \.self) { index in
                             Text(calendar.shortStandaloneWeekdaySymbols[(calendar.firstWeekday - 1 + index) % 7])
-                                .font(.system(size: 11)).foregroundStyle(.secondary).frame(width: width, height: 26)
+                                .font(.system(size: 12)).foregroundStyle(.secondary).frame(width: width, height: 32)
                         }
                     }
                     LazyVGrid(columns: Array(repeating: GridItem(.fixed(width), spacing: 0), count: 7), spacing: 0) {
@@ -253,6 +306,8 @@ private struct CalendarMonthCell: View {
     var create: (Date) -> Void
     var move: (UUID, Date, Bool) -> Void
     @State private var more = false
+    @State private var hovered = false
+    @FocusState private var addFocused: Bool
     private var items: [CalendarEntry] {
         let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
         return entries.filter { $0.start < end && $0.end > day }
@@ -261,13 +316,20 @@ private struct CalendarMonthCell: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text("\(calendar.component(.day, from: day))").font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(calendar.isDateInToday(day) ? Color.white : .primary)
-                    .frame(width: 24, height: 24)
-                    .background(calendar.isDateInToday(day) ? Color.accentColor : .clear, in: Circle())
+                if calendar.component(.day, from: day) == 1 && !calendar.isDateInToday(day) {
+                    Text(CalendarText.date(day, "d MMM", calendar: calendar)).font(.system(size: 12))
+                        .foregroundStyle(calendar.isDate(day, equalTo: focus, toGranularity: .month) ? Color.primary : Color.secondary)
+                        .frame(height: 24).padding(.leading, 4)
+                } else {
+                    Text("\(calendar.component(.day, from: day))").font(.system(size: 12))
+                        .foregroundStyle(calendar.isDateInToday(day) ? Color.white : calendar.isDate(day, equalTo: focus, toGranularity: .month) ? Color.primary : Color.secondary)
+                        .frame(width: 24, height: 24)
+                        .background(calendar.isDateInToday(day) ? CalendarAppearance.accent : .clear, in: Circle())
+                }
                 Spacer(minLength: 0)
                 Button { create(day) } label: { Image(systemName: "plus").font(.system(size: 10)) }
                     .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .focused($addFocused).opacity(hovered || addFocused ? 1 : 0)
                     .accessibilityLabel("Add task " + CalendarText.date(day, "MMM d", calendar: calendar))
             }
             ForEach(Array(items.prefix(capacity))) { entry in card(entry) }
@@ -286,10 +348,10 @@ private struct CalendarMonthCell: View {
                     }
             }
             Spacer(minLength: 0)
-        }.padding(5).frame(maxWidth: .infinity).frame(height: height)
-            .background(calendar.isDate(day, equalTo: focus, toGranularity: .month) ? Color.clear : Color.primary.opacity(0.025))
+        }.padding(3).frame(maxWidth: .infinity).frame(height: height)
+            .background(calendar.isDateInToday(day) ? CalendarAppearance.accent.opacity(0.04) : Color.clear)
             .overlay { Rectangle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5).allowsHitTesting(false) }
-            .contentShape(Rectangle()).onTapGesture(count: 2) { create(day) }
+            .contentShape(Rectangle()).onHover { hovered = $0 }.onTapGesture(count: 2) { create(day) }
             .dropDestination(for: String.self) { values, _ in
                 guard let id = values.compactMap(CalendarDrag.id).first else { return false }
                 move(id, day, false); return true
@@ -306,24 +368,82 @@ struct CalendarYearView: View {
     var entries: [CalendarEntry]
     var calendar: Calendar
     var style: CalendarYearStyle
+    var selectMonth: (Date) -> Void
     var select: (Date) -> Void
     var body: some View {
-        let start = calendar.dateInterval(of: .year, for: focus)?.start ?? focus
-        let months = (0..<12).compactMap { calendar.date(byAdding: .month, value: $0, to: start) }
-        let days = CalendarDates.visibleDays(focus: focus, mode: .year, options: .init(), calendar: calendar)
-        let counts = CalendarDayCounts.count(entries, days: days, calendar: calendar)
-        ScrollView {
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 200, maximum: 290), spacing: 24, alignment: .top)], alignment: .leading, spacing: 26) {
-                ForEach(months, id: \.self) { month in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(CalendarText.date(month, "MMMM", calendar: calendar)).font(.system(size: 15, weight: .semibold))
-                        CalendarMiniMonth(month: month, counts: counts, heatmap: style == .heatmap, calendar: calendar, select: select)
+        GeometryReader { geometry in
+            let start = calendar.dateInterval(of: .year, for: focus)?.start ?? focus
+            let months = (0..<12).compactMap { calendar.date(byAdding: .month, value: $0, to: start) }
+            let days = CalendarDates.visibleDays(focus: focus, mode: .year, options: .init(), calendar: calendar)
+            let counts = CalendarDayCounts.count(entries, days: days, calendar: calendar)
+            let ideal = Int(sqrt(12 * geometry.size.width / max(1, geometry.size.height)).rounded())
+            let columns = max(1, min(4, ideal, max(1, Int(geometry.size.width / 150))))
+            let rows = (12 + columns - 1) / columns
+            let rowHeight = max(150, geometry.size.height / CGFloat(rows))
+            let outerPadding = geometry.size.width * 0.015
+            let width = (geometry.size.width - outerPadding * 2) / CGFloat(columns)
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: columns), spacing: 0) {
+                    ForEach(months, id: \.self) { month in
+                        CalendarYearMonth(month: month, counts: counts, calendar: calendar, style: style,
+                            width: width, height: rowHeight, selectMonth: selectMonth, select: select)
                     }
-                }
-            }.padding(24)
-            Text(style == .heatmap ? "Darker dates contain more visible items. Select a date to open it." : "Dots mark dates with visible items. Select a date to open it.")
-                .font(.caption).foregroundStyle(.secondary).padding(.bottom, 20)
+                }.padding(.horizontal, outerPadding)
+            }.accessibilityLabel(style == .heatmap ? "Year heatmap. Darker dates contain more visible items." : "Year calendar. Dots mark dates with visible items.")
         }
+    }
+}
+
+private struct CalendarYearMonth: View {
+    var month: Date
+    var counts: [Date: Int]
+    var calendar: Calendar
+    var style: CalendarYearStyle
+    var width: CGFloat
+    var height: CGFloat
+    var selectMonth: (Date) -> Void
+    var select: (Date) -> Void
+    private var days: [Date] {
+        CalendarDates.days(from: CalendarDates.weekStart(month, calendar: calendar), count: 42, calendar: calendar)
+    }
+    private var dateFont: CGFloat { max(9, min(14, height * 0.042)) }
+    var body: some View {
+        VStack(spacing: 0) {
+            Button { selectMonth(month) } label: { Text(CalendarText.date(month, "MMMM", calendar: calendar))
+                .font(.system(size: max(11, min(20, height * 0.06)), weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, width * 0.1)
+                .frame(height: height * 0.16).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel("Show " + CalendarText.date(month, "MMMM y", calendar: calendar) + " in Month view")
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { offset in
+                    Text(calendar.veryShortStandaloneWeekdaySymbols[(calendar.firstWeekday - 1 + offset) % 7])
+                        .font(.system(size: dateFont)).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                }
+            }.frame(height: height * 0.12).padding(.horizontal, width * 0.063)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 0) {
+                ForEach(days, id: \.self) { day in
+                    let today = calendar.isDateInToday(day)
+                    let count = counts[day, default: 0]
+                    Button { select(day) } label: {
+                        ZStack(alignment: .bottom) {
+                            Text("\(calendar.component(.day, from: day))").font(.system(size: dateFont))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            if style == .standard && count > 0 && !today {
+                                Circle().fill(CalendarAppearance.accent).frame(width: 3, height: 3).padding(.bottom, 1)
+                            }
+                        }.frame(height: height * 0.096)
+                            .foregroundStyle(today ? Color.white : calendar.isDate(day, equalTo: month, toGranularity: .month) ? Color.primary : Color.secondary.opacity(0.5))
+                            .background {
+                                if today { CalendarAppearance.accent }
+                                else if style == .heatmap && count > 0 { CalendarAppearance.accent.opacity(min(0.7, 0.1 + Double(count) * 0.1)) }
+                            }.contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .accessibilityLabel(CalendarText.date(day, "EEEE d MMMM y", calendar: calendar) + ", \(count) items")
+                }
+            }.padding(.horizontal, width * 0.063).padding(.top, height * 0.025)
+            Spacer(minLength: 0)
+        }.frame(height: height)
     }
 }
 
@@ -346,7 +466,7 @@ struct CalendarAgendaView: View {
                         VStack(alignment: .leading, spacing: 7) {
                             HStack {
                                 Text(CalendarText.date(day, "EEEE MMMM d", calendar: calendar)).font(.system(size: 14, weight: .semibold))
-                                    .foregroundStyle(calendar.isDateInToday(day) ? Color.accentColor : .primary)
+                                    .foregroundStyle(calendar.isDateInToday(day) ? CalendarAppearance.accent : .primary)
                                 Spacer()
                                 Button { create(day) } label: { Image(systemName: "plus") }
                                     .buttonStyle(.plain).accessibilityLabel("Add task " + CalendarText.date(day, "MMM d", calendar: calendar))

@@ -1,0 +1,11 @@
+# CAL-DISPLAY-002 — Verified Year navigation and zone capacity
+
+Status: Implemented; bounded verification passed November 9, 2026 under the user's autonomous local Tasks/Calendar parity request. See [evidence and limits](../spec/verification.md#calendar-source-follow-up). Desktop only; preserve CAL-FILTER-001 and all existing visual work. No external integration, publication or iOS changes here.
+
+Live TickTick 8.2.20 build 922 was checked using QA-only Calendar scope on November 9. A Year date single-click opens **Week**, even when Year was entered from Day. A month title opens **Month** at that month. This agrees with the dedicated [Year guide](https://help.ticktick.com/articles/7399726920725692416); a separate What's New preview claim does not override this installed Mac result. The starting Taskovsky build returns to its prior detailed mode and does not activate month titles.
+
+The staged Time Zone Settings editor accepted four additional rows (New York, Tokyo, London, Paris) beside Moscow and then removed Add. Cancel and reopen showed Moscow alone. This confirms the five-total/four-configurable limit in [Calendar View Options](https://help.ticktick.com/articles/7055782085826445312). The starting Taskovsky cap of three additional rows was a confirmed local display difference. The implementation increases it to four while retaining validation, deduplication, order/labels, independent visibility and primary-duplicate hiding.
+
+Keep Year geometry, fonts, colors and quantity policy unchanged. Month titles become plain buttons with localized Month-view accessibility labels; dates open Week. The existing contained zone sheet scrolls, and all Add/normalization bounds use the shared capacity constant. No task scheduling or recurrence data changes. Verify Year from Day → date → Week, Year → month title → Month; staged fourth-zone Save/Cancel/reload and disabled fifth Add; compact four-ruler rendering; existing regression suite, full tests, signed release and exact tree identity.
+
+Option icon reveal remains documentation-only: the reference Task icon toggle returned `AXError.notImplemented`, remained visibly on, and was not changed. No keyboard-modifier implementation is authorized by that failed probe alone; retain it as a candidate for further evidence in the autonomous parity backlog.

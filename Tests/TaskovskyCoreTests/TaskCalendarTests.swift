@@ -75,6 +75,8 @@ final class TaskCalendarTests: XCTestCase {
         task.listID = archive.id; data.tasks = [task]
         XCTAssertFalse(options.includes(task, data: data))
         task.listID = excluded.id; options.listIDs = []
+        XCTAssertTrue(options.includes(task, data: data)) // Selected tags are independent Calendar sources.
+        options.tagIDs = []
         XCTAssertFalse(options.includes(task, data: data))
         options.listIDs = [UUID()] // stale list selection never broadens to All
         XCTAssertFalse(options.includes(task, data: data))

@@ -100,10 +100,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     }
     public func includes(_ task: TaskItem, data: WorkspaceData) -> Bool {
         guard task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: data.lists) else { return false }
-        if let id = task.listID {
-            if let listIDs, !listIDs.contains(id) { return false }
-        } else if !includeInbox { return false }
-        return tagIDs.isEmpty || tagIDs.contains { SmartListEligibility.taskMatchesTag(task, tagID: $0, tags: data.tags) }
+        return matchesCalendarSources(task, data: data)
     }
 }
 
