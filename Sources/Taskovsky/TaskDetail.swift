@@ -22,6 +22,7 @@ final class DetailDrafts: ObservableObject {
 struct TaskDetail: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
+    let actions: TaskActionCenter
     @Environment(\.colorScheme) private var colorScheme
     let id: UUID
     let onTrash: () -> Void
@@ -50,6 +51,7 @@ struct TaskDetail: View {
     private var showTags: Binding<Bool> { drafts.flag(id, \.shownTags) }
     private var showTemplates: Binding<Bool> { drafts.flag(id, \.shownTemplates) }
     @StateObject private var richController = RichBodyController()
+    @State private var occurrenceSkip: TaskOccurrenceSkipRequest?
     @State private var bodyFocused = false
     @State private var bodyHeight: CGFloat = 0
     @FocusState private var stepFocused: Bool
@@ -73,6 +75,10 @@ struct TaskDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             detailHeader
+            if task.kind == .task {
+                TaskProgressControl(store: store, task: task, locked: locked)
+                    .padding(.horizontal, compact ? 16 : 24).padding(.bottom, 8)
+            }
             Divider()
             detailStatusBanner
             ScrollView {
@@ -93,6 +99,7 @@ struct TaskDetail: View {
             Divider()
             detailFooter
         }
+        .taskOccurrenceSkipPrompt($occurrenceSkip, store: store, actions: actions)
     }
 
     // Keep the original view sections separate so Swift can type-check each
@@ -148,12 +155,24 @@ struct TaskDetail: View {
         }
     }
 
+    @State private var showDescriptionReader = false
+
     @ViewBuilder
     private var richBodySection: some View {
         // Native rich-text body: toolbar plus an auto-growing AppKit
         // editor. The outer detail ScrollView scrolls; the editor
         // reports its content height so docked, drawer, and pop-up
         // layouts all size it without an inner scroller.
+        let preview = task.richBody.flatMap { rich in
+            rich.hasCodeBlocks || rich.blocks.contains { $0.validHeading != nil }
+                ? RichDescriptionPreview(body: task.body, rich: rich) : nil
+        }
+        if let preview, !preview.foldableHeadings.isEmpty || !preview.codeBlocks.isEmpty {
+            Button("Read Description", systemImage: "doc.text.magnifyingglass") { showDescriptionReader = true }
+                .sheet(isPresented: $showDescriptionReader) {
+                    RichBodyReader(documentID: task.id, preview: preview)
+                }
+        }
         if !locked {
             RichBodyToolbar(controller: richController, disabled: false)
         }
@@ -276,6 +295,9 @@ struct TaskDetail: View {
                     if task.completedAt == nil && task.wontDoAt == nil {
                         Button(task.isPinned ? "Unpin" : "Pin") { _ = store.setPinned(id: id, pinned: !task.isPinned) }
                     }
+                    if CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) {
+                        Button("Skip this occurrence…") { occurrenceSkip = TaskOccurrenceSkipRequest(task) }
+                    }
                     Button("Save as Template") { _ = store.saveTemplate(from: id) }
                     Menu("Apply Template") {
                         ForEach(store.data.templates) { template in
@@ -283,7 +305,10 @@ struct TaskDetail: View {
                         }
                     }
                     Button("Duplicate") { _ = store.duplicateTask(id: id) }
-                    Button(task.kind == .task ? "Convert to Note" : "Convert to Task") { var updated = task; updated.kind = task.kind == .task ? .note : .task; updated.completedAt = nil; updated.wontDoAt = nil; store.updateTask(updated) }
+                    let kind: TaskKind = task.kind == .task ? .note : .task
+                    Button(kind == .note ? "Convert to Note" : "Convert to Task") {
+                        if let updated = task.converted(to: kind) { store.updateTask(updated) }
+                    }
                     Divider()
                     Button("Move to Trash", role: .destructive, action: onTrash)
                 } else if archivedView {
@@ -466,6 +491,7 @@ struct EntitySheet: View {
                 Picker("View", selection: $viewMode) {
                     Text("List").tag(TaskListViewMode.list)
                     Text("Board").tag(TaskListViewMode.board)
+                    Text("Timeline").tag(TaskListViewMode.timeline)
                 }
                 .pickerStyle(.segmented)
                 .help("This list's center view: rows or a status-column Kanban board")

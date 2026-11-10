@@ -1,0 +1,229 @@
+import Foundation
+
+/// A render-only projection of the shared prefix-free rich description.
+public struct RichDescriptionPreview: Sendable {
+    public enum Marker: Equatable, Sendable {
+        case bullet, number(Int), checklist(checked: Bool)
+    }
+
+    public struct Paragraph: Equatable, Sendable {
+        public let range: NSRange
+        public let heading: Int?
+        public let quote: Bool
+        public let marker: Marker?
+        public let rule: Bool
+        public let codeBlockID: UUID?
+    }
+
+    public let text: String
+    public let inline: [RichInlineRun]
+    public let paragraphs: [Paragraph]
+
+    /// Bounds and text identity are checked before constructing any native
+    /// ranges. Malformed records can still show their authoritative plain text.
+    public init?(body: String, rich: RichBody) {
+        guard rich.valid(for: body) != nil else { return nil }
+        let units = Array(body.utf16)
+        func valid(_ location: Int, _ length: Int) -> Bool {
+            guard location >= 0, length > 0, location < units.count,
+                  length <= units.count - location else { return false }
+            let end = location + length
+            // A range may style a combining mark but must not split a
+            // surrogate pair, which would attach attributes to half a scalar.
+            func scalarBoundary(_ index: Int) -> Bool {
+                index == units.count || !(0xDC00...0xDFFF).contains(units[index])
+            }
+            return scalarBoundary(location) && scalarBoundary(end)
+        }
+        guard rich.runs.allSatisfy({ valid($0.location, $0.length) }),
+              rich.blocks.allSatisfy({
+                  valid($0.location, $0.length) && ($0.heading == nil || $0.validHeading != nil)
+              }) else { return nil }
+
+        text = body
+        inline = rich.runs.filter { !$0.isEmpty }.sorted { $0.location < $1.location }
+        let string = body as NSString
+        var blocks: [Int: RichBlockRun] = [:]
+        for block in rich.blocks.sorted(by: { $0.location < $1.location }) where !block.isEmpty {
+            let end = block.location + block.length
+            var paragraph = string.paragraphRange(for: NSRange(location: block.location, length: 1))
+            if block.codeBlockID != nil {
+                guard paragraph.location == block.location, paragraph.length == block.length,
+                      block.heading == nil, !block.quote, block.list == nil, block.checked == nil, !block.rule else { return nil }
+            }
+            while paragraph.location < end {
+                var combined = blocks[paragraph.location] ?? RichBlockRun(location: paragraph.location, length: paragraph.length)
+                guard combined.codeBlockID == nil, block.codeBlockID == nil || combined.isEmpty else { return nil }
+                if let heading = block.heading { combined.heading = heading }
+                combined.quote = combined.quote || block.quote
+                if let list = block.list {
+                    combined.list = list
+                    combined.checked = block.checked
+                }
+                combined.rule = combined.rule || block.rule
+                combined.codeBlockID = block.codeBlockID
+                blocks[paragraph.location] = combined
+                let next = NSMaxRange(paragraph)
+                if next >= end { break }
+                paragraph = string.paragraphRange(for: NSRange(location: next, length: 1))
+            }
+        }
+
+        var result: [Paragraph] = []
+        var offset = 0
+        var number = 0
+        while offset < string.length {
+            var end = 0
+            var contentEnd = 0
+            string.getParagraphStart(nil, end: &end, contentsEnd: &contentEnd, for: NSRange(location: offset, length: 1))
+            let block = blocks[offset]
+            let marker: Marker?
+            if block?.list == .numbered {
+                number += 1
+                marker = .number(number)
+            } else {
+                number = 0
+                switch block?.list {
+                case .bullet: marker = .bullet
+                case .checklist: marker = .checklist(checked: block?.checked ?? false)
+                default: marker = nil
+                }
+            }
+            result.append(Paragraph(range: NSRange(location: offset, length: end - offset),
+                                    heading: block?.heading, quote: block?.quote ?? false,
+                                    marker: marker, rule: block?.rule == true && offset == contentEnd,
+                                    codeBlockID: block?.codeBlockID))
+            offset = end
+        }
+        paragraphs = result
+    }
+
+    private init(text: String, inline: [RichInlineRun], paragraphs: [Paragraph]) {
+        self.text = text
+        self.inline = inline
+        self.paragraphs = paragraphs
+    }
+
+    public struct Heading: Identifiable, Equatable, Sendable {
+        public let id: Int
+        public let title: String
+        public let range: NSRange
+        fileprivate let hidden: NSRange
+    }
+
+    public struct ReadingView: Sendable {
+        public let preview: RichDescriptionPreview
+        public let headings: [Heading]
+    }
+
+    public struct CodeBlock: Identifiable, Sendable {
+        public let range: NSRange
+        public let text: String
+        public var id: Int { range.location }
+    }
+
+    public var codeBlocks: [CodeBlock] {
+        let source = text as NSString
+        var groups: [(key: UUID, range: NSRange)] = []
+        for paragraph in paragraphs {
+            guard let key = paragraph.codeBlockID else { continue }
+            if let last = groups.last, last.key == key, NSMaxRange(last.range) == paragraph.range.location {
+                groups[groups.count - 1].range.length += paragraph.range.length
+            } else {
+                groups.append((key, paragraph.range))
+            }
+        }
+        return groups.map { CodeBlock(range: $0.range, text: source.substring(with: $0.range)) }
+    }
+
+    /// The source offsets are stable while reading. Only headings with
+    /// content before the next heading at the same or a higher level fold.
+    public var foldableHeadings: [Heading] {
+        let source = text as NSString
+        var nextHeadings: [(offset: Int, level: Int)] = []
+        var headings: [Heading] = []
+        for paragraph in paragraphs.reversed() {
+            guard let level = paragraph.heading else { continue }
+            while let next = nextHeadings.last, next.level > level { nextHeadings.removeLast() }
+            let end = nextHeadings.last?.offset ?? source.length
+            let start = NSMaxRange(paragraph.range)
+            if start < end {
+                let title = source.substring(with: paragraph.range).trimmingCharacters(in: .whitespacesAndNewlines)
+                headings.append(.init(id: paragraph.range.location, title: title.isEmpty ? "Untitled heading" : title,
+                                      range: paragraph.range, hidden: NSRange(location: start, length: end - start)))
+            }
+            nextHeadings.append((paragraph.range.location, level))
+        }
+        return headings.reversed()
+    }
+
+    /// Build a separate selectable view of the visible text. UTF-16 ranges
+    /// are clipped and remapped here. The editor keeps the original body.
+    public func readingView(collapsed: Set<Int>) -> ReadingView {
+        let headings = foldableHeadings
+        let source = text as NSString
+        var kept: [NSRange] = []
+        var cursor = 0
+        for heading in headings where collapsed.contains(heading.id) {
+            let hidden = heading.hidden
+            if hidden.location > cursor {
+                kept.append(NSRange(location: cursor, length: hidden.location - cursor))
+            }
+            cursor = max(cursor, NSMaxRange(hidden))
+        }
+        guard cursor > 0 else { return ReadingView(preview: self, headings: headings) }
+        if cursor < source.length { kept.append(NSRange(location: cursor, length: source.length - cursor)) }
+
+        var visibleText = ""
+        var visibleInline: [RichInlineRun] = []
+        var visibleParagraphs: [Paragraph] = []
+        var visibleHeadings: [Heading] = []
+        var outputStart = 0
+        for range in kept {
+            let shift = outputStart - range.location
+            visibleText += source.substring(with: range)
+            outputStart += range.length
+            for var run in inline {
+                let overlap = NSIntersectionRange(range, NSRange(location: run.location, length: run.length))
+                guard overlap.length > 0 else { continue }
+                run.location = overlap.location + shift
+                run.length = overlap.length
+                visibleInline.append(run)
+            }
+            for paragraph in paragraphs where NSLocationInRange(paragraph.range.location, range) {
+                let adjusted = NSRange(location: paragraph.range.location + shift, length: paragraph.range.length)
+                visibleParagraphs.append(.init(range: adjusted, heading: paragraph.heading, quote: paragraph.quote,
+                                               marker: paragraph.marker, rule: paragraph.rule, codeBlockID: paragraph.codeBlockID))
+            }
+            for heading in headings where NSLocationInRange(heading.range.location, range) {
+                let adjusted = NSRange(location: heading.range.location + shift, length: heading.range.length)
+                visibleHeadings.append(.init(id: heading.id, title: heading.title, range: adjusted, hidden: heading.hidden))
+            }
+        }
+        return ReadingView(preview: .init(text: visibleText, inline: visibleInline, paragraphs: visibleParagraphs),
+                           headings: visibleHeadings)
+    }
+
+    /// A display-only companion for the native Mac reader. Never save this
+    /// projection back onto a record.
+    public var displayRichBody: RichBody {
+        let blocks = paragraphs.compactMap { paragraph -> RichBlockRun? in
+            var block = RichBlockRun(location: paragraph.range.location, length: paragraph.range.length,
+                                    heading: paragraph.heading, quote: paragraph.quote, rule: paragraph.rule,
+                                    codeBlockID: paragraph.codeBlockID)
+            switch paragraph.marker {
+            case .bullet: block.list = .bullet
+            case .number: block.list = .numbered
+            case .checklist(let checked): block.list = .checklist; block.checked = checked
+            case nil: break
+            }
+            return block.isEmpty ? nil : block
+        }
+        return RichBody(text: text, runs: inline, blocks: blocks)
+    }
+
+    public func matches(_ other: Self) -> Bool {
+        RichBody.sameCodeUnits(text, other.text) && inline == other.inline && paragraphs == other.paragraphs &&
+            zip(inline, other.inline).allSatisfy { RichBody.sameCodeUnits($0.link ?? "", $1.link ?? "") }
+    }
+}

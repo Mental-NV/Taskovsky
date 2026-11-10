@@ -1,3 +1,4 @@
+import TaskovskyDomain
 import AppKit
 import Foundation
 
@@ -10,7 +11,9 @@ import Foundation
 /// per character instead of smearing one font across the paragraph.
 public enum RichRender {
     public static let highlightKey = NSAttributedString.Key("TaskovskyHighlight")
+    public static let highlightColorKey = NSAttributedString.Key("TaskovskyHighlightColor")
     public static let codeKey = NSAttributedString.Key("TaskovskyCode")
+    public static let codeBlockKey = NSAttributedString.Key("TaskovskyCodeBlock")
     public static let headingKey = NSAttributedString.Key("TaskovskyHeading")
     /// Explicit bold marker, independent of the rendered font weight. A bold
     /// subsection inside a heading keeps this marker (the semibold heading
@@ -22,7 +25,17 @@ public enum RichRender {
     /// layout manager draws the line, so no text is ever inserted for it.
     public static let ruleKey = NSAttributedString.Key("TaskovskyRule")
 
-    public static var highlightWash: NSColor { NSColor.systemYellow.withAlphaComponent(0.28) }
+    public static var highlightWash: NSColor { highlightWash(for: .yellow) }
+    public static func highlightWash(for color: RichHighlightColor) -> NSColor {
+        let base: NSColor = switch color {
+        case .yellow: .systemYellow
+        case .green: .systemGreen
+        case .blue: .systemBlue
+        case .pink: .systemPink
+        case .purple: .systemPurple
+        }
+        return base.withAlphaComponent(0.28)
+    }
     public static var codeWash: NSColor { NSColor.quaternaryLabelColor.withAlphaComponent(0.35) }
 
     public static var baseFont: NSFont { NSFont.systemFont(ofSize: 14) }
@@ -63,6 +76,12 @@ public enum RichRender {
     public static func attributes(at location: Int, in view: NSTextView) -> [NSAttributedString.Key: Any] {
         guard let storage = view.textStorage, storage.length > 0 else { return baseAttributes }
         let string = storage.string as NSString
+        if location >= string.length, view.typingAttributes[codeBlockKey] != nil,
+           string.paragraphRange(for: NSRange(location: string.length, length: 0)).length == 0 {
+            // Code continuation always has a stored paragraph. An empty
+            // trailing caret has no code style, even after a snapshot redo.
+            return baseAttributes
+        }
         // Caret in the trailing empty paragraph (EOF past a final newline):
         // that paragraph has no characters, so storage has nothing to
         // inherit — the live typing attributes are authoritative. Clamping
@@ -96,16 +115,18 @@ public enum RichRender {
             }
             if run.underline { result.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
             if run.strikethrough { result.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
-            if run.highlight {
+            if let color = run.effectiveHighlight {
                 result.addAttribute(highlightKey, value: true, range: range)
-                result.addAttribute(.backgroundColor, value: highlightWash, range: range)
+                if color == .yellow { result.removeAttribute(highlightColorKey, range: range) }
+                else { result.addAttribute(highlightColorKey, value: color.rawValue, range: range) }
+                result.addAttribute(.backgroundColor, value: highlightWash(for: color), range: range)
             }
             if run.code {
                 result.addAttribute(codeKey, value: true, range: range)
                 // Code keeps a highlight only when it is not highlighted: the
                 // code wash must never hide an explicit highlight.
-                if !run.highlight {
-                    result.addAttribute(.backgroundColor, value: codeWash, range: range)
+                result.enumerateAttribute(highlightKey, in: range) { value, part, _ in
+                    if (value as? Bool) != true { result.addAttribute(.backgroundColor, value: codeWash, range: part) }
                 }
             }
             if let link = run.link, URL(string: link) != nil {
@@ -123,6 +144,19 @@ public enum RichRender {
             guard NSMaxRange(range) <= ns.length else { continue }
             let paragraphs = ns.paragraphRanges(intersecting: range)
             for para in paragraphs {
+                if let id = block.codeBlockID {
+                    let style = mutableParagraphStyle(in: result, at: para.location)
+                    style.headIndent = 10; style.firstLineHeadIndent = 10; style.tailIndent = -10
+                    result.addAttribute(.paragraphStyle, value: style, range: para)
+                    result.addAttribute(codeBlockKey, value: id.uuidString, range: para)
+                    result.enumerateAttributes(in: para, options: []) { attrs, part, _ in
+                        if (attrs[codeKey] as? Bool) != true {
+                            result.addAttribute(.font, value: codeFont(from: attrs[.font] as? NSFont ?? baseFont), range: part)
+                        }
+                        if attrs[.backgroundColor] == nil { result.addAttribute(.backgroundColor, value: codeWash, range: part) }
+                    }
+                    continue
+                }
                 if let level = block.validHeading {
                     // Compose per character: the heading upgrades size/weight
                     // but each character keeps its italic trait and code font,
@@ -238,6 +272,7 @@ public enum RichRender {
             let underline = (attrs[.underlineStyle] as? Int ?? 0) != 0
             let strike = (attrs[.strikethroughStyle] as? Int ?? 0) != 0
             let highlight = (attrs[highlightKey] as? Bool) ?? false
+            let highlightColor = (attrs[highlightColorKey] as? String).flatMap(RichHighlightColor.init(rawValue:))
             let code = (attrs[codeKey] as? Bool) ?? false
             let link: String? = {
                 if let url = attrs[.link] as? URL { return url.absoluteString }
@@ -252,11 +287,16 @@ public enum RichRender {
                 bold: (attrs[boldKey] as? Bool) ?? (fontTraits.contains(.boldFontMask) && !headed),
                 italic: fontTraits.contains(.italicFontMask),
                 underline: underline, strikethrough: strike,
-                highlight: highlight, code: code, link: link)
+                highlight: highlight, code: code, link: link, highlightColor: highlightColor)
             if !run.isEmpty { runs.append(run) }
         }
         var blocks: [RichBlockRun] = []
         for para in ns.allParagraphRanges() {
+            if let value = storage.attribute(codeBlockKey, at: para.location, effectiveRange: nil) as? String,
+               let id = UUID(uuidString: value) {
+                blocks.append(.init(location: para.location, length: para.length, codeBlockID: id))
+                continue
+            }
             // Marker and style travel together: a heading key on a uniformly
             // base-font paragraph (or a quote key without its indent) is
             // stale — e.g. an exited block whose key outlived a typing reset
@@ -430,18 +470,24 @@ public enum RichTyping {
     }
 
     public static func toggleHighlight(in attrs: inout [NSAttributedString.Key: Any]) {
-        if (attrs[RichRender.highlightKey] as? Bool) == true {
+        setHighlight((attrs[RichRender.highlightKey] as? Bool) == true ? nil : .yellow, in: &attrs)
+    }
+
+    public static func setHighlight(_ color: RichHighlightColor?, in attrs: inout [NSAttributedString.Key: Any]) {
+        attrs.removeValue(forKey: RichRender.highlightColorKey)
+        if let color {
+            attrs[RichRender.highlightKey] = true
+            if color != .yellow { attrs[RichRender.highlightColorKey] = color.rawValue }
+            attrs[.backgroundColor] = RichRender.highlightWash(for: color)
+        } else {
             attrs.removeValue(forKey: RichRender.highlightKey)
             // A surviving code marker keeps its wash; only a highlight-free
             // background clears.
-            if (attrs[RichRender.codeKey] as? Bool) == true {
+            if (attrs[RichRender.codeKey] as? Bool) == true || attrs[RichRender.codeBlockKey] != nil {
                 attrs[.backgroundColor] = RichRender.codeWash
             } else {
                 attrs.removeValue(forKey: .backgroundColor)
             }
-        } else {
-            attrs[RichRender.highlightKey] = true
-            attrs[.backgroundColor] = RichRender.highlightWash
         }
     }
 
@@ -639,18 +685,16 @@ public enum RichMutate {
         storage.enumerateAttribute(RichRender.highlightKey, in: range, options: []) { value, _, _ in
             if (value as? Bool) != true { allHave = false }
         }
-        if allHave {
-            storage.removeAttribute(RichRender.highlightKey, range: range)
-            storage.enumerateAttribute(RichRender.codeKey, in: range, options: []) { value, subrange, _ in
-                if (value as? Bool) == true {
-                    storage.addAttribute(.backgroundColor, value: RichRender.codeWash, range: subrange)
-                } else {
-                    storage.removeAttribute(.backgroundColor, range: subrange)
-                }
-            }
-        } else {
-            storage.addAttribute(RichRender.highlightKey, value: true, range: range)
-            storage.addAttribute(.backgroundColor, value: RichRender.highlightWash, range: range)
+        setHighlight(allHave ? nil : .yellow, in: storage, range: range)
+    }
+
+    public static func setHighlight(_ color: RichHighlightColor?, in storage: NSTextStorage, range: NSRange) {
+        let range = clamped(range, in: storage)
+        guard range.length > 0 else { return }
+        storage.enumerateAttributes(in: range) { attributes, part, _ in
+            var updated = attributes
+            RichTyping.setHighlight(color, in: &updated)
+            storage.setAttributes(updated, range: part)
         }
     }
 
@@ -705,6 +749,7 @@ public enum RichMutate {
         let range = clamped(range, in: storage)
         guard range.length > 0, let string = storage.string as NSString? else { return }
         for para in string.paragraphRanges(intersecting: range) {
+            removeCodeBlockStyle(in: storage, paragraph: para)
             if let level {
                 // Compose per attribute run (see render): italic and code
                 // survive. Full-run enumeration keeps marker boundaries, so a
@@ -752,6 +797,7 @@ public enum RichMutate {
         guard !paras.isEmpty else { return }
         let allQuoted = paras.allSatisfy { (storage.attribute(RichRender.quoteKey, at: $0.location, effectiveRange: nil) as? Bool) ?? false }
         for para in paras {
+            removeCodeBlockStyle(in: storage, paragraph: para)
             let style = RichRender.mutableParagraphStyle(in: storage, at: para.location)
             if allQuoted {
                 style.headIndent = 0
@@ -800,6 +846,7 @@ public enum RichMutate {
         }()
         let shared = RichRender.textList(for: listStyle, checked: checked ?? false)
         for para in paras {
+            removeCodeBlockStyle(in: storage, paragraph: para)
             let style = RichRender.mutableParagraphStyle(in: storage, at: para.location)
             if shouldApply {
                 style.textLists = [shared]
@@ -814,9 +861,34 @@ public enum RichMutate {
         }
     }
 
+    public static func setChecklistChecked(_ checked: Bool, in storage: NSTextStorage, paragraph: NSRange) {
+        guard paragraph.location >= 0, paragraph.location < storage.length,
+              paragraph.length > 0, paragraph.length <= storage.length - paragraph.location,
+              let (list, wasChecked) = paraListState(in: storage, at: paragraph.location),
+              list == .checklist, wasChecked != checked else { return }
+        let style = RichRender.mutableParagraphStyle(in: storage, at: paragraph.location)
+        style.textLists[0] = RichRender.textList(for: .checklist, checked: checked)
+        storage.addAttribute(.paragraphStyle, value: style, range: paragraph)
+    }
+
     private static func paraListState(in storage: NSTextStorage, at location: Int) -> (RichListStyle, Bool)? {
         let marker = (storage.attribute(.paragraphStyle, at: location, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first?.markerFormat
         return RichRender.listStyle(for: marker)
+    }
+
+    private static func removeCodeBlockStyle(in storage: NSTextStorage, paragraph: NSRange) {
+        guard storage.attribute(RichRender.codeBlockKey, at: paragraph.location, effectiveRange: nil) != nil else { return }
+        let style = RichRender.mutableParagraphStyle(in: storage, at: paragraph.location)
+        style.headIndent = 0; style.firstLineHeadIndent = 0; style.tailIndent = 0
+        storage.addAttribute(.paragraphStyle, value: style, range: paragraph)
+        storage.removeAttribute(RichRender.codeBlockKey, range: paragraph)
+        storage.enumerateAttributes(in: paragraph, options: []) { attrs, part, _ in
+            if (attrs[RichRender.codeKey] as? Bool) != true {
+                let font = attrs[.font] as? NSFont ?? RichRender.baseFont
+                storage.addAttribute(.font, value: RichRender.baseFontPreservingTraits(of: font), range: part)
+                if (attrs[RichRender.highlightKey] as? Bool) != true { storage.removeAttribute(.backgroundColor, range: part) }
+            }
+        }
     }
 
     public static func setLink(_ urlString: String, in storage: NSTextStorage, range: NSRange) {
@@ -839,11 +911,12 @@ public enum RichMutate {
         storage.enumerateAttribute(.font, in: range, options: []) { _, subrange, _ in
             storage.addAttribute(.font, value: RichRender.baseFont, range: subrange)
         }
-        for key: NSAttributedString.Key in [.underlineStyle, .strikethroughStyle, .link, RichRender.boldKey, RichRender.highlightKey, RichRender.codeKey, .backgroundColor] {
+        for key: NSAttributedString.Key in [.underlineStyle, .strikethroughStyle, .link, RichRender.boldKey, RichRender.highlightKey, RichRender.highlightColorKey, RichRender.codeKey, .backgroundColor] {
             storage.removeAttribute(key, range: range)
         }
         // Paragraph: drop heading/quote/list markers and restore indentation.
         for para in string.paragraphRanges(intersecting: range) {
+            removeCodeBlockStyle(in: storage, paragraph: para)
             let style = RichRender.mutableParagraphStyle(in: storage, at: para.location)
             style.textLists = []
             style.headIndent = 0

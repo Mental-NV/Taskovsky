@@ -33,6 +33,34 @@ final class NominalCadenceTests: XCTestCase {
         try XCTUnwrap(store.data.tasks.first { $0.id == id })
     }
 
+    @MainActor func testMacRefusesToRewriteProtectedOccurrenceWithAnUnknownField() throws {
+        let (store, dir) = makeStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let due = date(2026, 11, 9)
+        let id = store.createTask(title: "Weekly", dueDate: due)
+        var task = try fetch(store, id)
+        task.recurrence = .weekly
+        store.updateTask(task)
+        XCTAssertNotNil(store.scheduleOnCalendar(id: id, operation: .setPoint(date: date(2026, 11, 10), allDay: false),
+                                                 calendar: calendar, scope: .currentOccurrence))
+        let file = store.fileURL
+        XCTAssertFalse(TaskStore(fileURL: file, seed: false).needsRecovery)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+        var collection = try XCTUnwrap(object["tasks"] as? [String: Any])
+        var records = try XCTUnwrap(collection["records"] as? [[String: Any]])
+        var baseline = try XCTUnwrap(records.first?["originalOccurrenceSchedule"] as? [String: Any])
+        baseline["futurePolicy"] = ["retain": true]
+        records[0]["originalOccurrenceSchedule"] = baseline
+        collection["records"] = records
+        object["tasks"] = collection
+        let newer = try JSONSerialization.data(withJSONObject: object)
+        try newer.write(to: file, options: .atomic)
+        let guarded = TaskStore(fileURL: file, seed: false)
+        XCTAssertTrue(guarded.needsRecovery)
+        guarded.save()
+        XCTAssertEqual(try Data(contentsOf: file), newer)
+    }
+
     // MARK: - Engine: nominal stepping
 
     /// A single step from the March start: nominal May 31, displayed June 1.

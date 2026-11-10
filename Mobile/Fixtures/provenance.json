@@ -1,0 +1,12 @@
+{
+  "producer": "Mac TaskStore.save and settings didSet/saveSettings; seed false; explicit disposable URLs",
+  "base": "6ee96eeb8f88e74a105c518de2202233ea528efa",
+  "branch": "codex/mobile-local-prealpha",
+  "sourceIsUncommitted": true,
+  "files": {
+    "MobileQAWorkspace.json": "93aac4e8973e9a4ec6cdcb23ff25180648f514526391a5a6ac5811ce6a091968",
+    "MobileQASettings.json": "e7d62e0d24c6c15c8f697abc5d42b0430d72652c2e23babb83e5112c14f7fc7c"
+  },
+  "generator": "scripts/mobile-fixture-tool.swift plus Mobile/App/MobilePreviewFixture.swift compiled for Mac with DEBUG",
+  "scope": "Eight neutral records; no TickTick or user data"
+}

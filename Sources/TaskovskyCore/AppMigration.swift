@@ -1,3 +1,4 @@
+import TaskovskyDomain
 import Foundation
 
 /// Compatibility with releases that used the original misspelled app name.

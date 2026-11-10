@@ -75,6 +75,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
 }
 
 extension AppSettings {
+    public func isSmartListVisible(_ key: SmartListKey, count: @autoclosure () -> Int) -> Bool {
+        switch smartListVisibility[key] ?? .show {
+        case .show: true
+        case .hidden: false
+        case .showIfNotEmpty: count() > 0
+        }
+    }
+
     /// Canonical sidebar order. Sidebar group structure (documented boundary):
     /// top destinations `[all, today, tomorrow, week, inbox, summary]` render
     /// above the Lists/Filters/Tags sections; bottom system destinations
@@ -140,6 +148,50 @@ public enum TaskSortPolicy {
     public static func normalized(_ raw: String) -> String { raw == manualLegacyRaw ? manualRaw : raw }
     public static func isManual(_ raw: String) -> Bool { normalized(raw) == manualRaw }
     public static func canReorder(_ raw: String) -> Bool { isManual(raw) }
+}
+
+public enum TaskTimestampSort: String, CaseIterable, Sendable {
+    // The existing Mac Created preference sorts newest first.
+    case createdNewest = "Created"
+    case createdOldest = "CreatedOldest"
+    case modifiedNewest = "Modified"
+    case modifiedOldest = "ModifiedOldest"
+
+    public var title: String {
+        switch self {
+        case .createdNewest: "Created · Newest First"
+        case .createdOldest: "Created · Oldest First"
+        case .modifiedNewest: "Modified · Newest First"
+        case .modifiedOldest: "Modified · Oldest First"
+        }
+    }
+
+    public func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
+        switch self {
+        case .createdNewest: lhs.createdAt > rhs.createdAt
+        case .createdOldest: lhs.createdAt < rhs.createdAt
+        case .modifiedNewest: lhs.updatedAt > rhs.updatedAt
+        case .modifiedOldest: lhs.updatedAt < rhs.updatedAt
+        }
+    }
+}
+
+/// Creation groups preserve the incoming sort order within each civil day.
+public struct TaskCreationDayGroup: Identifiable, Sendable {
+    public let day: Date
+    public let tasks: [TaskItem]
+    public var id: Date { day }
+
+    public func title(calendar: Calendar) -> String {
+        day.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
+                                       calendar: calendar, timeZone: calendar.timeZone))
+    }
+
+    public static func group(_ tasks: [TaskItem], calendar: Calendar, sort: TaskTimestampSort?) -> [Self] {
+        let groups = Dictionary(grouping: tasks) { calendar.startOfDay(for: $0.createdAt) }
+        return groups.map { Self(day: $0.key, tasks: $0.value) }
+            .sorted { sort == .createdOldest ? $0.day < $1.day : $0.day > $1.day }
+    }
 }
 
 public enum FilterDateRule: String, Codable, CaseIterable, Sendable {

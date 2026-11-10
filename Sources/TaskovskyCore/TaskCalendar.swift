@@ -24,10 +24,41 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     public var showCompleted = true
     public var showRepeatCycles = true
     public var showChecklistItems = false
+    private var detailsOverride: Bool?
+    public var showDetails: Bool {
+        get { detailsOverride ?? false }
+        set { if newValue != showDetails { detailsOverride = newValue ? true : nil } }
+    }
     public var colorBy: CalendarColorMode = .list
     public var itemStyle: CalendarItemStyle = .filled
     public var yearStyle: CalendarYearStyle = .heatmap
     public var showItemIcons = true
+    public static let allDayRowRange = 1...12
+    private var allDayRowsOverride: Int?
+    /// Nil sizes the all-day area automatically.
+    public var allDayRows: Int? {
+        get { allDayRowsOverride }
+        set { allDayRowsOverride = newValue.map { min(Self.allDayRowRange.upperBound, max(Self.allDayRowRange.lowerBound, $0)) } }
+    }
+    private var foldedHoursOverride: CalendarFoldedHours?
+    public var foldedHours: CalendarFoldedHours {
+        get { foldedHoursOverride ?? .init() }
+        set { if newValue != foldedHours { foldedHoursOverride = newValue == .init() ? nil : newValue } }
+    }
+    // Missing per-kind preferences keep legacy files on the existing master switch.
+    private var taskIconsOverride: Bool?
+    private var noteIconsOverride: Bool?
+    public var showTaskIcons: Bool {
+        get { taskIconsOverride ?? true }
+        set { if newValue != showTaskIcons { taskIconsOverride = newValue ? nil : false } }
+    }
+    public var showNoteIcons: Bool {
+        get { noteIconsOverride ?? true }
+        set { if newValue != showNoteIcons { noteIconsOverride = newValue ? nil : false } }
+    }
+    public func showsIcon(for entry: CalendarEntry) -> Bool {
+        showItemIcons && (entry.isNote ? showNoteIcons : showTaskIcons)
+    }
     public var showAdditionalTimeZones = false
     public var additionalTimeZones: [CalendarTimeZone] = []
     /// Compatibility with the original single-ruler setting. New callers should
@@ -52,7 +83,8 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case mode, multiDayCount, multiWeekCount, showSidebar, showCompleted, showRepeatCycles,
              showChecklistItems, colorBy, itemStyle, additionalTimeZoneID, listIDs, includeInbox, tagIDs,
-             yearStyle, showItemIcons, showAdditionalTimeZones, additionalTimeZones
+             yearStyle, showItemIcons, showTaskIcons, showNoteIcons, showAdditionalTimeZones, additionalTimeZones,
+             foldedHours, allDayRows, showDetails
     }
     public init(from decoder: Decoder) throws {
         self.init()
@@ -64,10 +96,15 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         showCompleted = try c.decodeIfPresent(Bool.self, forKey: .showCompleted) ?? showCompleted
         showRepeatCycles = try c.decodeIfPresent(Bool.self, forKey: .showRepeatCycles) ?? showRepeatCycles
         showChecklistItems = try c.decodeIfPresent(Bool.self, forKey: .showChecklistItems) ?? showChecklistItems
+        detailsOverride = try c.decodeIfPresent(Bool.self, forKey: .showDetails)
         colorBy = (try? c.decode(CalendarColorMode.self, forKey: .colorBy)) ?? colorBy
         itemStyle = (try? c.decode(CalendarItemStyle.self, forKey: .itemStyle)) ?? itemStyle
         yearStyle = (try? c.decode(CalendarYearStyle.self, forKey: .yearStyle)) ?? yearStyle
         showItemIcons = try c.decodeIfPresent(Bool.self, forKey: .showItemIcons) ?? showItemIcons
+        taskIconsOverride = try c.decodeIfPresent(Bool.self, forKey: .showTaskIcons)
+        noteIconsOverride = try c.decodeIfPresent(Bool.self, forKey: .showNoteIcons)
+        foldedHoursOverride = try? c.decode(CalendarFoldedHours.self, forKey: .foldedHours)
+        allDayRows = try? c.decode(Int.self, forKey: .allDayRows)
         if c.contains(.additionalTimeZones) {
             additionalTimeZones = CalendarTimeZone.normalized((try? c.decode([CalendarTimeZone].self, forKey: .additionalTimeZones)) ?? [])
             showAdditionalTimeZones = try c.decodeIfPresent(Bool.self, forKey: .showAdditionalTimeZones) ?? !additionalTimeZones.isEmpty
@@ -87,10 +124,15 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         try c.encode(showCompleted, forKey: .showCompleted)
         try c.encode(showRepeatCycles, forKey: .showRepeatCycles)
         try c.encode(showChecklistItems, forKey: .showChecklistItems)
+        try c.encodeIfPresent(detailsOverride, forKey: .showDetails)
         try c.encode(colorBy, forKey: .colorBy)
         try c.encode(itemStyle, forKey: .itemStyle)
         try c.encode(yearStyle, forKey: .yearStyle)
         try c.encode(showItemIcons, forKey: .showItemIcons)
+        try c.encodeIfPresent(taskIconsOverride, forKey: .showTaskIcons)
+        try c.encodeIfPresent(noteIconsOverride, forKey: .showNoteIcons)
+        try c.encodeIfPresent(foldedHoursOverride, forKey: .foldedHours)
+        try c.encodeIfPresent(allDayRows, forKey: .allDayRows)
         try c.encode(showAdditionalTimeZones, forKey: .showAdditionalTimeZones)
         try c.encode(CalendarTimeZone.normalized(additionalTimeZones), forKey: .additionalTimeZones)
         try c.encodeIfPresent(additionalTimeZoneID, forKey: .additionalTimeZoneID)
@@ -100,10 +142,228 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     }
     public func includes(_ task: TaskItem, data: WorkspaceData) -> Bool {
         guard task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: data.lists) else { return false }
-        if let id = task.listID {
-            if let listIDs, !listIDs.contains(id) { return false }
-        } else if !includeInbox { return false }
-        return tagIDs.isEmpty || tagIDs.contains { SmartListEligibility.taskMatchesTag(task, tagID: $0, tags: data.tags) }
+        return matchesCalendarSources(task, data: data)
+    }
+}
+
+/// Temporary Agenda browsing state. Extending the view leaves the start
+/// and the workspace untouched. The end is an exclusive local day boundary.
+public struct CalendarAgendaWindow: Sendable {
+    static let initialDayCount = 30
+    private var extensions = 0
+
+    public init() {}
+
+    public var canExtend: Bool { extensions < 4 }
+
+    public mutating func extend() {
+        if canExtend { extensions += 1 }
+    }
+
+    func days(focus: Date, calendar: Calendar) -> [Date] {
+        let start = calendar.startOfDay(for: focus)
+        guard extensions > 0,
+              let initialEnd = calendar.date(byAdding: .day, value: Self.initialDayCount, to: start),
+              let end = calendar.date(byAdding: .month, value: extensions * 6, to: initialEnd),
+              let length = calendar.dateComponents([.day], from: start, to: end).day else {
+            return CalendarDates.days(from: start, count: Self.initialDayCount, calendar: calendar)
+        }
+        return CalendarDates.days(from: start, count: length, calendar: calendar)
+    }
+}
+
+public enum CalendarHourBand: String, CaseIterable, Hashable, Sendable {
+    case early, late
+
+    public var title: String { self == .early ? "Early hours" : "Late hours" }
+    public var cutoffTitle: String { self == .early ? "Early hours end" : "Late hours start" }
+}
+
+/// The civil-hour boundaries of the two folds. Each band and the middle
+/// timeline retain at least one hour, so the handles can never cross.
+public struct CalendarFoldedHours: Codable, Equatable, Sendable {
+    public let earlyEnd: Int
+    public let lateStart: Int
+
+    public init(earlyEnd: Int = 7, lateStart: Int = 21) {
+        self.lateStart = min(23, max(2, lateStart))
+        self.earlyEnd = min(self.lateStart - 1, max(1, earlyEnd))
+    }
+
+    private enum CodingKeys: String, CodingKey { case earlyEnd, lateStart }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(earlyEnd: try values.decode(Int.self, forKey: .earlyEnd),
+                  lateStart: try values.decode(Int.self, forKey: .lateStart))
+    }
+
+    public func cutoff(_ band: CalendarHourBand) -> Int { band == .early ? earlyEnd : lateStart }
+    public func range(for band: CalendarHourBand) -> ClosedRange<Int> {
+        band == .early ? 1...(lateStart - 1) : (earlyEnd + 1)...23
+    }
+    public func moving(_ band: CalendarHourBand, to hour: Int) -> Self {
+        let allowed = range(for: band)
+        let value = min(allowed.upperBound, max(allowed.lowerBound, hour))
+        return band == .early ? .init(earlyEnd: value, lateStart: lateStart) : .init(earlyEnd: earlyEnd, lateStart: value)
+    }
+    public func moving(_ band: CalendarHourBand, by offset: Double) -> Self {
+        guard offset.isFinite else { return self }
+        let delta = Int(min(24, max(-24, offset.rounded())))
+        return moving(band, to: cutoff(band) + delta)
+    }
+}
+
+/// The folded bands only change the visible timeline. Task schedules and
+/// wall-clock calculations still use the full local day.
+public struct CalendarHourlyWindow: Equatable, Sendable {
+    public static let full = Self(earlyExpanded: true, lateExpanded: true)
+    private var earlyExpanded: Bool
+    private var lateExpanded: Bool
+    private var foldedHours: CalendarFoldedHours
+
+    public init(earlyExpanded: Bool = false, lateExpanded: Bool = false, foldedHours: CalendarFoldedHours = .init()) {
+        self.earlyExpanded = earlyExpanded
+        self.lateExpanded = lateExpanded
+        self.foldedHours = foldedHours
+    }
+
+    public func using(_ foldedHours: CalendarFoldedHours) -> Self {
+        Self(earlyExpanded: earlyExpanded, lateExpanded: lateExpanded, foldedHours: foldedHours)
+    }
+    public var canAdjustFolds: Bool { earlyExpanded && lateExpanded }
+    public var hours: Range<Int> { (earlyExpanded ? 0 : foldedHours.earlyEnd)..<(lateExpanded ? 24 : foldedHours.lateStart) }
+    public var firstMinute: Int { hours.lowerBound * 60 }
+    public var endMinute: Int { hours.upperBound * 60 }
+
+    public func isExpanded(_ band: CalendarHourBand) -> Bool {
+        band == .early ? earlyExpanded : lateExpanded
+    }
+
+    public mutating func toggle(_ band: CalendarHourBand) {
+        switch band {
+        case .early: earlyExpanded.toggle()
+        case .late: lateExpanded.toggle()
+        }
+    }
+
+    public func minute(atOffset offset: Double) -> Int {
+        snappedMinute(Double(firstMinute) + offset)
+    }
+
+    public func snappedMinute(_ minute: Double) -> Int {
+        min(endMinute, max(firstMinute, CalendarDates.snappedMinute(minute)))
+    }
+
+    public func itemCount(in band: CalendarHourBand, entries: [CalendarEntry], days: [Date], calendar: Calendar) -> Int {
+        let bandHours = band == .early ? 0..<foldedHours.earlyEnd : foldedHours.lateStart..<24
+        let intervals = days.map { day in
+            (CalendarDates.instant(on: day, minute: bandHours.lowerBound * 60, calendar: calendar),
+             CalendarDates.instant(on: day, minute: bandHours.upperBound * 60, calendar: calendar))
+        }
+        return entries.filter { entry in
+            !entry.isAllDay && intervals.contains { entry.start < $0.1 && entry.end > $0.0 }
+        }.count
+    }
+}
+
+/// The phone's Month display scale. Zoomed ranges start on the focused
+/// week and can cross a month boundary while browsing.
+public struct CalendarTimelineScale: Equatable, Sendable {
+    public static let standard = Self(pointsPerHour: 52)
+    private static let limits: ClosedRange<Double> = 32...104
+    public let pointsPerHour: Double
+
+    private init(pointsPerHour: Double) {
+        self.pointsPerHour = pointsPerHour
+    }
+
+    public var percentage: Int { Int((pointsPerHour / Self.standard.pointsPerHour * 100).rounded()) }
+    public var canZoomIn: Bool { pointsPerHour < Self.limits.upperBound }
+    public var canZoomOut: Bool { pointsPerHour > Self.limits.lowerBound }
+
+    public func stepped(zoomingIn: Bool) -> Self {
+        bounded(pointsPerHour + (zoomingIn ? 8 : -8))
+    }
+
+    public func scaled(by factor: Double) -> Self {
+        guard factor.isFinite, factor > 0 else { return self }
+        return bounded(pointsPerHour * factor)
+    }
+
+    public func hour(at offset: Double) -> Double { offset / pointsPerHour }
+    public func offset(at hour: Double) -> Double { hour * pointsPerHour }
+
+    private func bounded(_ height: Double) -> Self {
+        Self(pointsPerHour: min(Self.limits.upperBound, max(Self.limits.lowerBound, height)))
+    }
+}
+
+public enum CalendarMonthZoom: Int, CaseIterable, Sendable {
+    case full, threeWeeks, twoWeeks, oneWeek
+
+    public var weekCount: Int? {
+        switch self {
+        case .full: nil
+        case .threeWeeks: 3
+        case .twoWeeks: 2
+        case .oneWeek: 1
+        }
+    }
+    public var itemLimit: Int {
+        switch self {
+        case .full: 2
+        case .threeWeeks: 4
+        case .twoWeeks: 6
+        case .oneWeek: 8
+        }
+    }
+    public var title: String {
+        guard let weekCount else { return "Full Month" }
+        return weekCount == 1 ? "1 Week" : "\(weekCount) Weeks"
+    }
+    public func adjusted(zoomingIn: Bool) -> Self {
+        Self(rawValue: rawValue + (zoomingIn ? 1 : -1)) ?? self
+    }
+    public func adjusted(magnification: Double) -> Self {
+        guard magnification.isFinite else { return self }
+        if magnification >= 1.2 { return adjusted(zoomingIn: true) }
+        if magnification <= 0.8 { return adjusted(zoomingIn: false) }
+        return self
+    }
+}
+
+/// A rolling projection range for a vertically scrolling Month grid.
+public struct CalendarMonthBrowseWindow: Hashable, Sendable {
+    private static let weeksBeforeAndAfter = 8
+    private static let leadingReserve = 2
+    // The top week reaches the forward threshold while later weeks are still visible.
+    private static let trailingReserve = 5
+    private let firstWeek: Date
+
+    public init(around date: Date, calendar: Calendar) {
+        let week = CalendarDates.weekStart(date, calendar: calendar)
+        firstWeek = calendar.date(byAdding: .day, value: -Self.weeksBeforeAndAfter * 7, to: week) ?? week
+    }
+
+    public func days(calendar: Calendar) -> [Date] {
+        CalendarDates.days(from: firstWeek, count: (Self.weeksBeforeAndAfter * 2 + 1) * 7, calendar: calendar)
+    }
+
+    public func keeping(_ week: Date, in calendar: Calendar) -> Self {
+        let offset = calendar.dateComponents([.day], from: firstWeek, to: week).day ?? 0
+        let interior = Self.leadingReserve...(Self.weeksBeforeAndAfter * 2 - Self.trailingReserve)
+        return interior.contains(offset / 7) ? self : Self(around: week, calendar: calendar)
+    }
+
+    public func contains(_ week: Date, calendar: Calendar) -> Bool {
+        guard let offset = calendar.dateComponents([.day], from: firstWeek, to: week).day else { return false }
+        return (0...Self.weeksBeforeAndAfter * 2 * 7).contains(offset) && offset.isMultiple(of: 7)
+    }
+
+    /// A week that contains a month boundary takes the new month as its label.
+    public static func focus(forWeek week: Date, calendar: Calendar) -> Date {
+        let end = calendar.date(byAdding: .day, value: 6, to: week) ?? week
+        return max(week, CalendarDates.monthStart(end, calendar: calendar))
     }
 }
 
@@ -119,14 +379,18 @@ public enum CalendarDates {
     public static func days(from start: Date, count: Int, calendar: Calendar) -> [Date] {
         (0..<max(0, count)).compactMap { calendar.date(byAdding: .day, value: $0, to: calendar.startOfDay(for: start)) }
     }
-    public static func visibleDays(focus: Date, mode: TaskCalendarMode, options: TaskCalendarOptions, calendar: Calendar) -> [Date] {
+    public static func visibleDays(focus: Date, mode: TaskCalendarMode, options: TaskCalendarOptions, calendar: Calendar,
+                                   agendaWindow: CalendarAgendaWindow = .init(), monthZoom: CalendarMonthZoom = .full) -> [Date] {
         switch mode {
         case .day: return days(from: focus, count: 1, calendar: calendar)
         case .week: return days(from: weekStart(focus, calendar: calendar), count: 7, calendar: calendar)
         case .multiDay: return days(from: focus, count: min(14, max(2, options.multiDayCount)), calendar: calendar)
         case .multiWeek: return days(from: weekStart(focus, calendar: calendar), count: min(6, max(2, options.multiWeekCount)) * 7, calendar: calendar)
-        case .agenda: return days(from: focus, count: 30, calendar: calendar)
+        case .agenda: return agendaWindow.days(focus: focus, calendar: calendar)
         case .month:
+            if let count = monthZoom.weekCount {
+                return days(from: weekStart(focus, calendar: calendar), count: count * 7, calendar: calendar)
+            }
             let month = monthStart(focus, calendar: calendar)
             let start = weekStart(month, calendar: calendar)
             let prefix = calendar.dateComponents([.day], from: start, to: month).day ?? 0
@@ -143,7 +407,12 @@ public enum CalendarDates {
               let end = calendar.date(byAdding: .day, value: 1, to: last) else { return nil }
         return DateInterval(start: first, end: end)
     }
-    public static func navigate(_ date: Date, direction: Int, mode: TaskCalendarMode, options: TaskCalendarOptions, calendar: Calendar) -> Date {
+    public static func navigate(_ date: Date, direction: Int, mode: TaskCalendarMode, options: TaskCalendarOptions, calendar: Calendar,
+                                monthZoom: CalendarMonthZoom = .full) -> Date {
+        if mode == .month, let count = monthZoom.weekCount {
+            return calendar.date(byAdding: .day, value: (direction < 0 ? -count : count) * 7,
+                                 to: weekStart(date, calendar: calendar)) ?? date
+        }
         let component: Calendar.Component
         let amount: Int
         switch mode {
@@ -151,7 +420,7 @@ public enum CalendarDates {
         case .week: component = .day; amount = 7
         case .multiDay: component = .day; amount = min(14, max(2, options.multiDayCount))
         case .multiWeek: component = .day; amount = min(6, max(2, options.multiWeekCount)) * 7
-        case .agenda: component = .day; amount = 30
+        case .agenda: component = .day; amount = CalendarAgendaWindow.initialDayCount
         case .month: component = .month; amount = 1
         case .year: component = .year; amount = 1
         }
@@ -176,6 +445,8 @@ public enum CalendarDates {
     }
 }
 
+public enum CalendarRangeEdge: Sendable { case start, end }
+
 public struct CalendarEntry: Identifiable, Equatable, Sendable {
     public var id: String
     public var taskID: UUID
@@ -193,10 +464,60 @@ public struct CalendarEntry: Identifiable, Equatable, Sendable {
     public var color: String
     public var listID: UUID?
     public var canSchedule: Bool { !isProjected && checklistID == nil }
+    public var canChangeCompletion: Bool { !isProjected && !isNote }
+    public var canResizeAllDayRange: Bool { isAllDay && hasDuration && canSchedule }
+
+    /// The projected end is exclusive. Gesture targets and stored all-day
+    /// deadlines are inclusive civil days in their respective calendars.
+    public func allDayResizeTarget(on day: Date, edge: CalendarRangeEdge = .end, calendar: Calendar) -> Date? {
+        guard canResizeAllDayRange,
+              let last = calendar.date(byAdding: .day, value: -1, to: end) else { return nil }
+        let first = calendar.startOfDay(for: start)
+        let proposed = calendar.startOfDay(for: day)
+        switch edge {
+        case .start:
+            let target = min(last, proposed)
+            return calendar.isDate(target, inSameDayAs: first) ? nil : target
+        case .end:
+            let target = max(first, proposed)
+            return calendar.isDate(target, inSameDayAs: last) ? nil : target
+        }
+    }
     public func overlaps(_ interval: DateInterval) -> Bool { start < interval.end && end > interval.start }
 }
 
 public struct CalendarProjectionResult: Sendable {
     public var entries: [CalendarEntry]
     public var truncatedTaskIDs: Set<UUID>
+}
+
+/// Presentation metadata derived from a projected entry, with no stored
+/// task changes. Time labels use the same zone as the displayed Calendar.
+public struct CalendarEntryDetails: Equatable, Sendable {
+    public let listName: String
+    public let schedule: String
+    public let compact: String
+    public var text: String { schedule + " · " + listName }
+
+    public init(entry: CalendarEntry, listNames: [UUID: String], calendar: Calendar, locale: Locale = .current) {
+        listName = entry.listID.map { listNames[$0] ?? "List unavailable" } ?? "Inbox"
+        if entry.isAllDay {
+            schedule = "All day"
+            compact = listName
+            return
+        }
+        let clock = Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
+                                     calendar: calendar, timeZone: calendar.timeZone)
+        let hasRange = entry.hasDuration && entry.start < entry.due
+        let parts = calendar.dateComponents([.hour, .minute], from: hasRange ? entry.start : entry.due)
+        compact = String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+        if hasRange {
+            let style = calendar.isDate(entry.start, inSameDayAs: entry.due) ? clock
+                : Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale,
+                                   calendar: calendar, timeZone: calendar.timeZone)
+            schedule = entry.start.formatted(style) + " – " + entry.due.formatted(style)
+        } else {
+            schedule = entry.due.formatted(clock)
+        }
+    }
 }

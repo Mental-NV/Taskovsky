@@ -75,6 +75,8 @@ final class TaskCalendarTests: XCTestCase {
         task.listID = archive.id; data.tasks = [task]
         XCTAssertFalse(options.includes(task, data: data))
         task.listID = excluded.id; options.listIDs = []
+        XCTAssertTrue(options.includes(task, data: data)) // Selected tags are independent Calendar sources.
+        options.tagIDs = []
         XCTAssertFalse(options.includes(task, data: data))
         options.listIDs = [UUID()] // stale list selection never broadens to All
         XCTAssertFalse(options.includes(task, data: data))
@@ -191,6 +193,33 @@ final class TaskCalendarTests: XCTestCase {
         let url = dir.appendingPathComponent("workspace.json")
         try JSONEncoder().encode(WorkspaceData(tasks: tasks, lists: lists)).write(to: url)
         return (TaskStore(fileURL: url, seed: false), dir)
+    }
+
+    @MainActor func testCalendarChecklistCompletionWritesOnlyTheSelectedItemAndRollsBackOnSaveFailure() throws {
+        var task = timed("Plan", start: date(2026, 11, 8, 9), end: date(2026, 11, 8, 10))
+        task.recurrence = .daily
+        task.reminderDates = [date(2026, 11, 8, 8, 45)]
+        task.checklist = [.init(title: "First"), .init(title: "Second")]
+        let item = task.checklist[0]
+        let (store, dir) = try store(tasks: [task])
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("workspace.json")
+
+        store.setChecklistItemCompleted(taskID: task.id, itemID: item.id, completed: true)
+        let saved = try XCTUnwrap(TaskStore(fileURL: url, seed: false).data.tasks.first)
+        XCTAssertEqual(saved.checklist.map(\.isCompleted), [true, false])
+        XCTAssertEqual(saved.checklist.map(\.id), task.checklist.map(\.id))
+        XCTAssertNil(saved.completedAt)
+        XCTAssertEqual(CalendarScheduleSnapshot(saved), CalendarScheduleSnapshot(task))
+        let bytes = try Data(contentsOf: url)
+        store.setChecklistItemCompleted(taskID: task.id, itemID: item.id, completed: true)
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        store.setChecklistItemCompleted(taskID: task.id, itemID: item.id, completed: false)
+        XCTAssertEqual(store.data.tasks.first?.checklist.map(\.isCompleted), [true, false])
+        XCTAssertNotNil(store.storageError)
     }
 
     @MainActor func testStoreMoveKeepsDurationAndManualReminderThenReloads() throws {

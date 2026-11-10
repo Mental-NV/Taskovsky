@@ -148,6 +148,38 @@ final class ListDecorationsTests: XCTestCase {
         XCTAssertGreaterThan(bar?.rect.height ?? 0, 0)
     }
 
+    func testCheckboxHitAndEditPreserveAdjacentTextAndFormatting() throws {
+        let (text, blocks, paragraphs) = qaFixture()
+        let target = paragraphs[6]
+        let rich = RichBody(text: text, runs: [.init(location: target.location, length: 5, bold: true)],
+                            blocks: blocks)
+        let (storage, layout, _) = laidOut(RichRender.attributedString(text: text, rich: rich), width: 140)
+        let origin = NSPoint(x: 13, y: 9)
+        let markers = layout.decorationsToDraw(forGlyphRange: NSRange(location: 0, length: layout.numberOfGlyphs), at: origin).markers
+        let checkbox = try XCTUnwrap(markers.first { $0.paragraph == target })
+        let hit = NSPoint(x: checkbox.rect.midX, y: checkbox.rect.midY)
+        XCTAssertEqual(layout.checklistMarker(at: hit, origin: origin), checkbox)
+        XCTAssertNil(layout.checklistMarker(at: NSPoint(x: checkbox.rect.maxX + 5, y: hit.y), origin: origin))
+        let bullet = try XCTUnwrap(markers.first { $0.kind == .bullet })
+        XCTAssertNil(layout.checklistMarker(at: NSPoint(x: bullet.rect.midX, y: bullet.rect.midY), origin: origin))
+
+        let originalStyle = storage.attribute(.paragraphStyle, at: target.location, effectiveRange: nil) as? NSParagraphStyle
+        RichMutate.setChecklistChecked(true, in: storage, paragraph: target)
+        XCTAssertEqual(layout.checklistMarker(at: hit, origin: origin)?.kind, .checkbox(checked: true))
+        let edited = RichRender.extract(text: storage.string, storage: storage)
+        XCTAssertEqual(edited.text, text)
+        XCTAssertEqual(edited.rich?.runs, rich.runs)
+        let changed = try XCTUnwrap(edited.rich?.blocks.first { $0.location == target.location })
+        XCTAssertEqual(changed.checked, true)
+        XCTAssertEqual(edited.rich?.blocks.filter { $0.location != target.location },
+                       rich.blocks.filter { $0.location != target.location })
+        let updatedStyle = storage.attribute(.paragraphStyle, at: target.location, effectiveRange: nil) as? NSParagraphStyle
+        XCTAssertEqual(originalStyle?.headIndent, updatedStyle?.headIndent)
+
+        RichMutate.setChecklistChecked(false, in: storage, paragraph: target)
+        XCTAssertEqual(layout.checklistMarker(at: hit, origin: origin)?.kind, .checkbox(checked: false))
+    }
+
     func testWrappedLinesRespectGutter() {
         let long = String(repeating: "wrapped text ", count: 20)
         let text = "short\n" + long

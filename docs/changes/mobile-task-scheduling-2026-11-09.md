@@ -1,0 +1,5 @@
+# Mobile task scheduling
+
+This change implements the IOS-007 schedule editor for existing tasks in the isolated iPhone worktree. Tasks and Calendar open the same detail sheet. The schedule editor stages date, time, duration, zone, reminders and repeat independently of the task detail. Done is the only write. Cancel and dismissal discard the staged values.
+
+Use the shared schedule shape and series policies. A day move preserves the timed interval or civil-day span. End editing changes only the end. Removing the schedule clears its fields only after Done. Date and zone changes regenerate automatic reminders and preserve manual reminder instants. An explicit zone change preserves the due time and duration endpoints as wall-clock values, and the last day of a simple repeat as a civil date. Existing custom rule values stay intact until explicitly edited. The device zone remains implicit until a task zone is chosen. An untouched save preserves the original bytes. Writes validate the task, revision, file compatibility and schedule before an atomic replacement. Record native tests and limits in the verification spec.

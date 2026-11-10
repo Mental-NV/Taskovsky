@@ -8,6 +8,7 @@ struct QuickEntry: View {
     @Binding var title: String
     @Binding var kind: TaskKind
     @Binding var focused: Bool
+    var showsWhenIdle = true
     var onTemplate: () -> Void
     var onSubmit: (String, Bool) -> Void
     @State private var description = ""
@@ -15,6 +16,8 @@ struct QuickEntry: View {
     @State private var ignoreDate = false
     @State private var suggestionsDismissed = false
     @FocusState private var descriptionFocused: Bool
+
+    private var isVisible: Bool { showsWhenIdle || focused || showDescription || !title.isEmpty }
 
     private var recognized: (date: Date, hasTime: Bool, range: Range<String.Index>)? {
         guard store.settings.dateRecognition, !ignoreDate else { return nil }
@@ -68,7 +71,13 @@ struct QuickEntry: View {
                     }
                 }.font(.system(size: 13)).padding(4).frame(maxWidth: 260).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8)).shadow(color: .black.opacity(0.12), radius: 8, y: 3).offset(y: 44)
             }
-        }.zIndex(10)
+        }
+        .padding(.bottom, isVisible ? 16 : 0)
+        .frame(height: isVisible ? nil : 0)
+        .opacity(isVisible ? 1 : 0)
+        .allowsHitTesting(isVisible)
+        .accessibilityHidden(!isVisible)
+        .zIndex(10)
         .onChange(of: title) { _, value in suggestionsDismissed = false; if value.isEmpty { ignoreDate = false; description = ""; showDescription = false } }
     }
     private func chooseTag(_ name: String) {

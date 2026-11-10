@@ -2,8 +2,8 @@ import Foundation
 
 /// Local display preferences only: rulers never change a task's time zone.
 public struct CalendarTimeZone: Codable, Equatable, Identifiable, Sendable {
-    /// A Taskovsky layout limit, not a measured TickTick limit.
-    public static let maximumCount = 3
+    /// Four configurable rulers beside the primary zone, verified in the Mac editor.
+    public static let maximumCount = 4
     public var identifier: String
     public var label: String
     public var id: String { identifier }

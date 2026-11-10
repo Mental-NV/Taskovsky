@@ -55,6 +55,36 @@ final class TaskStoreTests: XCTestCase {
         FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("workspace.json")
     }
 
+    @MainActor func testTaskProgressSaveRejectsStaleDraftAndKeepsMemoryOnDiskFailure() throws {
+        let url = temporaryURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        let store = TaskStore(fileURL: url, seed: false)
+        let id = store.createTask(title: "Track progress")
+        let original = try XCTUnwrap(store.data.tasks.first)
+        XCTAssertTrue(store.setTaskProgress(taskID: id, percent: 80, expected: nil))
+        let saved = try XCTUnwrap(TaskStore(fileURL: url, seed: false).data.tasks.first)
+        XCTAssertEqual(saved.manualProgress, 80)
+        var expected = original
+        expected.manualProgress = 80
+        expected.updatedAt = saved.updatedAt
+        XCTAssertEqual(saved, expected)
+        let bytes = try Data(contentsOf: url)
+        XCTAssertFalse(store.setTaskProgress(taskID: id, percent: 20, expected: nil))
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+        var earlierDraft = original
+        earlierDraft.title = "Updated title"
+        store.updateTask(earlierDraft)
+        let updated = try XCTUnwrap(store.data.tasks.first)
+        XCTAssertEqual(updated.title, "Updated title")
+        XCTAssertEqual(updated.manualProgress, 80)
+
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        XCTAssertFalse(store.setTaskProgress(taskID: id, percent: 0, expected: 80))
+        XCTAssertEqual(store.data.tasks.first, updated)
+        XCTAssertNotNil(store.storageError)
+    }
+
     @MainActor func testSettingsTemplatesFiltersAndLegacyWorkspace() throws {
         let url = temporaryURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
@@ -337,5 +367,29 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(march, date(2024, 3, 31))
         let nextYear = try XCTUnwrap(TaskStore.nextDate(after: date(2024, 2, 29), rule: .yearly, calendar: calendar))
         XCTAssertEqual(nextYear, date(2025, 2, 28))
+    }
+}
+
+extension TaskStoreTests {
+    @MainActor func testDesktopTaskBatchDoesNotPublishWhenDiskWriteFails() throws {
+        let url = temporaryURL()
+        let directory = url.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = TaskStore(fileURL: url, seed: false)
+        let first = store.createTask(title: "First")
+        let second = store.createTask(title: "Second")
+        let initial = store.data
+        let initialBytes = try Data(contentsOf: url)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        let change = TaskBatchEdit(ids: [first, second], action: .priority(.high))
+        XCTAssertFalse(try store.applyBatch(change))
+        XCTAssertEqual(store.data, initial)
+        try FileManager.default.removeItem(at: url)
+        try initialBytes.write(to: url)
+        XCTAssertTrue(try store.applyBatch(change))
+        let saved = try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: url))
+        XCTAssertEqual(saved, store.data)
+        XCTAssertTrue(saved.tasks.allSatisfy { $0.priority == .high })
     }
 }

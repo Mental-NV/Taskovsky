@@ -1,0 +1,11 @@
+# RICH-BLOCK-001 — Saved code blocks in descriptions
+
+The local Tasks and Calendar parity goal authorizes this Mac and iPhone change. It refines [BUS-005](../spec/business.md#bus-005), [UX-009](../spec/ui-ux.md#ux-009) and [TT-002](../parity-implementation-status.md#tt-002). TickTick documents code blocks and a whole-block Copy action. Taskovsky uses its own editor controls and display geometry. [TickTick formatting guide](https://help.ticktick.com/articles/7507338582718152704) · [TickTick changelog](https://ticktick.com/public/changelog/en.html).
+
+The paragraph editor can apply or remove Code Block formatting on existing paragraphs. Ordinary paste converts closed, nonempty blocks delimited by standalone lines of three backticks. Each delimiter must stand on its own in the destination. The complete contents between the lines, including whitespace, line endings and any final newline, become searchable body text. Other fence forms, unclosed fences and explicit plain-text paste retain literal characters. Inline Markdown shortcuts stay literal inside saved code paragraphs. [Typed fence creation](rich-typed-code-fence-2026-11-10.md) is covered by a later change. Language highlighting remains open.
+
+The rich companion marks whole UTF-16 paragraphs with a block ID. Adjacent paragraphs with the same ID form one block. Pasted blocks get their own IDs and a copy action uses only the block’s exact plain text. Clearing the style leaves those characters intact. Body and companion save together, and undo restores their prior state. Files containing styled code in a task or template use a protected task collection format so an older writer cannot silently remove the annotation. Legacy workspaces keep their current encoding until they contain a code block.
+
+Mac and iPhone render code paragraphs in monospace with a local background tint. The reader exposes one Copy button per visible block. Copy and paste use the existing QA pasteboard isolation in disposable tests. Verify formatting, copy bytes, ordinary and explicit plain paste, clear and Undo, relaunch, and older-writer protection with saved files and focused simulator tests.
+
+[Verification record](../spec/verification.md#rich-code-blocks).

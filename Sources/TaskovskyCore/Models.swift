@@ -4,6 +4,33 @@ public enum TaskPriority: String, Codable, CaseIterable, Sendable { case none, l
 public enum RepeatRule: String, Codable, CaseIterable, Sendable { case none, daily, weekdays, weekly, monthly, yearly }
 public enum TaskKind: String, Codable, CaseIterable, Sendable { case task, note }
 
+/// The series schedule beneath a rescheduled current occurrence. The task
+/// itself continues to carry the visible schedule for all ordinary readers.
+public struct OccurrenceSchedule: Codable, Equatable, Sendable {
+    public let due: Date
+    let timed: Bool
+    let window: TaskDurationRange?
+    let reminder: Date?
+    let additionalReminders: [Date]?
+    let followsSchedule: Bool?
+
+    init?(task: TaskItem) {
+        guard let due = task.dueDate else { return nil }
+        self.due = due; timed = task.hasDueTime; window = task.scheduledDuration
+        reminder = task.reminderDate; additionalReminders = task.additionalReminderDates
+        followsSchedule = task.reminderFollowsSchedule
+    }
+
+    func restoring(on task: TaskItem) -> TaskItem {
+        var task = task
+        task.dueDate = due; task.hasDueTime = timed; task.scheduledDuration = window
+        task.reminderDate = reminder; task.additionalReminderDates = additionalReminders
+        task.reminderFollowsSchedule = followsSchedule
+        task.originalOccurrenceSchedule = nil
+        return task
+    }
+}
+
 public struct ChecklistItem: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var title: String
@@ -17,7 +44,11 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID
     public var title: String
     public var body: String
-    public var listID: UUID?
+    public var listID: UUID? {
+        didSet { if listID != oldValue { sectionID = nil } }
+    }
+    /// A root's explicit assignment within its regular list.
+    public package(set) var sectionID: UUID? = nil
     public var tagIDs: [UUID]
     public var kind: TaskKind
     public var dueDate: Date?
@@ -37,6 +68,14 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     public var priority: TaskPriority
     public var recurrence: RepeatRule
     public var checklist: [ChecklistItem]
+    public package(set) var manualProgress: Int? = nil
+    public var progressPercent: Int {
+        guard !checklist.isEmpty else { return manualProgress ?? 0 }
+        return checklist.lazy.filter(\.isCompleted).count * 100 / checklist.count
+    }
+    public var canEditManualProgress: Bool {
+        kind == .task && checklist.isEmpty && completedAt == nil && wontDoAt == nil && deletedAt == nil
+    }
     public var completedAt: Date?
     public var deletedAt: Date?
     public var createdAt: Date
@@ -66,10 +105,26 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     /// transition) and for series that carry no nominal (completion anchor,
     /// no custom rule).
     public var recurrenceNominalDate: Date?
+    public var originalOccurrenceSchedule: OccurrenceSchedule? = nil
+
+    /// Use this only for series progression, including read-only forecasts.
+    var recurrenceSchedule: TaskItem { originalOccurrenceSchedule?.restoring(on: self) ?? self }
+
+    /// Copies start from their own displayed schedule. They do not inherit
+    /// a temporary exception or the original's hidden cadence anchors.
+    public mutating func discardOccurrenceBaselineForCopy() {
+        guard originalOccurrenceSchedule != nil else { return }
+        originalOccurrenceSchedule = nil
+        recurrenceNominalDate = isCustomRepeating ? dueDate : nil
+        recurrenceAnchorDay = nil
+        recurrenceAnchorMonth = nil
+    }
     /// Parent task for subtask nesting. Nil denotes a top-level task; unknown
     /// parents clear to top level on load and cycles are refused by the store,
     /// so orphaned subtasks always render as roots instead of vanishing.
-    public var parentID: UUID?
+    public var parentID: UUID? {
+        didSet { if parentID != nil { sectionID = nil } }
+    }
     /// Optional scheduled window (start/end, timed or all-day). The due date
     /// IS the window end and the shape decides `hasDueTime`; recurring
     /// successors carry it forward end-anchored at the next due date and
@@ -98,6 +153,15 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     public func repeatLabel(calendar: Calendar = .current) -> String {
         if let rule = customRecurrence, rule.isValid { return rule.shortLabel(calendar: calendar) }
         return recurrence == .none ? "Does not repeat" : recurrence.rawValue.capitalized
+    }
+
+    package func converted(to kind: TaskKind) -> TaskItem? {
+        guard self.kind != kind else { return nil }
+        var converted = self
+        converted.kind = kind
+        converted.completedAt = nil
+        converted.wontDoAt = nil
+        return converted
     }
 
     /// Restarts the custom series after a rule change: the position returns
@@ -157,7 +221,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
              additionalReminderDates, reminderFollowsSchedule, priority, recurrence, checklist,
              completedAt, deletedAt, createdAt, updatedAt, recurrenceAnchorDay, recurrenceAnchorMonth,
              recurrenceSourceID, recurrenceEndDate, wontDoAt, timeZoneID, customRecurrence, occurrenceIndex, parentID, scheduledDuration,
-             richBody, isPinned, recurrenceNominalDate
+             richBody, isPinned, recurrenceNominalDate, originalOccurrenceSchedule, sectionID, manualProgress
     }
 
     public init(from decoder: Decoder) throws {
@@ -166,6 +230,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         title = try c.decode(String.self, forKey: .title)
         body = try c.decode(String.self, forKey: .body)
         listID = try c.decodeIfPresent(UUID.self, forKey: .listID)
+        sectionID = try c.decodeIfPresent(UUID.self, forKey: .sectionID)
         tagIDs = try c.decode([UUID].self, forKey: .tagIDs)
         kind = try c.decode(TaskKind.self, forKey: .kind)
         dueDate = try c.decodeIfPresent(Date.self, forKey: .dueDate)
@@ -176,6 +241,11 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         priority = try c.decode(TaskPriority.self, forKey: .priority)
         recurrence = try c.decode(RepeatRule.self, forKey: .recurrence)
         checklist = try c.decode([ChecklistItem].self, forKey: .checklist)
+        manualProgress = try c.decodeIfPresent(Int.self, forKey: .manualProgress)
+        if let manualProgress, !(1...100).contains(manualProgress) {
+            throw DecodingError.dataCorruptedError(forKey: .manualProgress, in: c,
+                                                   debugDescription: "Invalid stored task progress.")
+        }
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -192,6 +262,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         occurrenceIndex = max(1, try c.decodeIfPresent(Int.self, forKey: .occurrenceIndex) ?? 1)
         // Pre-nominal files omit the anchor: nil falls back to the due date.
         recurrenceNominalDate = try c.decodeIfPresent(Date.self, forKey: .recurrenceNominalDate)
+        originalOccurrenceSchedule = try c.decodeIfPresent(OccurrenceSchedule.self, forKey: .originalOccurrenceSchedule)
         // Pre-hierarchy files omit the parent link; subtasks decode as roots.
         parentID = try c.decodeIfPresent(UUID.self, forKey: .parentID)
         // Pre-duration files omit the window; no planned block.
@@ -227,11 +298,10 @@ public struct ListFolder: Codable, Identifiable, Equatable, Sendable {
 
 /// Per-list center view. Stored on the list (legacy default List) so each
 /// list remembers its own mode across rename, edit, duplicate, and reload.
-/// The board is a status-column Kanban over the same filtered tasks; there
-/// are no custom sections or column editing.
+/// The view mode is independent of the list's section definitions.
 public enum TaskListViewMode: String, Codable, CaseIterable, Sendable {
-    case list, board
-    public var label: String { self == .board ? "Board" : "List" }
+    case list, board, timeline
+    public var label: String { rawValue.capitalized }
 }
 
 public struct TaskList: Codable, Identifiable, Equatable, Sendable {
@@ -243,6 +313,11 @@ public struct TaskList: Codable, Identifiable, Equatable, Sendable {
     /// Per-list center view mode (List default). Preserved by rename/edit
     /// (callers carry the record), duplicate, and reload.
     public var viewMode: TaskListViewMode
+    private var sectionRecords: [TaskSection]?
+    public package(set) var sections: [TaskSection] {
+        get { sectionRecords ?? [] }
+        set { sectionRecords = newValue.isEmpty ? nil : newValue }
+    }
     public var folderID: UUID?
     /// Trailing root placement: ungrouped lists with `true` render below all
     /// folders instead of above them. Defaults to false so legacy files keep
@@ -263,7 +338,10 @@ public struct TaskList: Codable, Identifiable, Equatable, Sendable {
         self.id = id; self.name = name; self.color = color; self.kind = kind; self.symbol = symbol; self.viewMode = viewMode; self.folderID = folderID; self.belowFolders = belowFolders
         self.isArchived = isArchived; self.showsInSmartLists = showsInSmartLists; self.isPinned = isPinned
     }
-    private enum CodingKeys: String, CodingKey { case id, name, color, kind, symbol, viewMode, folderID, belowFolders, isArchived, showsInSmartLists, isPinned }
+    private enum CodingKeys: String, CodingKey {
+        case id, name, color, kind, symbol, viewMode, folderID, belowFolders, isArchived, showsInSmartLists, isPinned
+        case sectionRecords = "sections"
+    }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(UUID.self, forKey: .id)
@@ -273,6 +351,11 @@ public struct TaskList: Codable, Identifiable, Equatable, Sendable {
         symbol = try c.decodeIfPresent(String.self, forKey: .symbol)
         // Pre-view-mode files decode as List.
         viewMode = try c.decodeIfPresent(TaskListViewMode.self, forKey: .viewMode) ?? .list
+        let decodedSections = try c.decodeIfPresent([TaskSection].self, forKey: .sectionRecords) ?? []
+        sectionRecords = decodedSections.isEmpty ? nil : decodedSections
+        guard Set(decodedSections.map(\.id)).count == decodedSections.count else {
+            throw DecodingError.dataCorruptedError(forKey: .sectionRecords, in: c, debugDescription: "Duplicate task section identifiers.")
+        }
         folderID = try c.decodeIfPresent(UUID.self, forKey: .folderID)
         belowFolders = try c.decodeIfPresent(Bool.self, forKey: .belowFolders) ?? false
         // Explicit legacy decoding: pre-archive files show everywhere.
@@ -363,9 +446,40 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
         self.completionCascades = completionCascades; self.trashCascades = trashCascades
     }
     private enum CodingKeys: String, CodingKey { case tasks, lists, tags, filters, templates, folders, completionCascades, trashCascades }
+    // Older writers require an array or a recognized envelope before saving.
+    private struct ProtectedTaskRecords: Codable {
+        enum Format: String, Codable { case occurrenceSchedulesV1, listSectionsV1, richCodeBlocksV1, richHighlightColorsV1, taskProgressV1 }
+        let format: Format
+        let records: [TaskItem]
+    }
+    private var protectedTaskFormat: ProtectedTaskRecords.Format? {
+        if tasks.contains(where: { $0.manualProgress != nil }) { return .taskProgressV1 }
+        if tasks.contains(where: { $0.richBody?.hasCustomHighlightColors == true }) ||
+            templates.contains(where: { $0.richBody?.hasCustomHighlightColors == true }) {
+            return .richHighlightColorsV1
+        }
+        if tasks.contains(where: { $0.richBody?.hasCodeBlocks == true }) ||
+            templates.contains(where: { $0.richBody?.hasCodeBlocks == true }) {
+            return .richCodeBlocksV1
+        }
+        if lists.contains(where: { !$0.sections.isEmpty }) || tasks.contains(where: { $0.sectionID != nil }) {
+            return .listSectionsV1
+        }
+        return tasks.contains(where: { $0.originalOccurrenceSchedule != nil }) ? .occurrenceSchedulesV1 : nil
+    }
+    package var requiresProtectedTaskCollection: Bool { protectedTaskFormat != nil }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        tasks = try c.decode([TaskItem].self, forKey: .tasks); lists = try c.decode([TaskList].self, forKey: .lists); tags = try c.decode([TaskTag].self, forKey: .tags)
+        let storedFormat: ProtectedTaskRecords.Format?
+        if (try? c.superDecoder(forKey: .tasks).unkeyedContainer()) != nil {
+            tasks = try c.decode([TaskItem].self, forKey: .tasks)
+            storedFormat = nil
+        } else {
+            let envelope = try c.decode(ProtectedTaskRecords.self, forKey: .tasks)
+            tasks = envelope.records
+            storedFormat = envelope.format
+        }
+        lists = try c.decode([TaskList].self, forKey: .lists); tags = try c.decode([TaskTag].self, forKey: .tags)
         filters = try c.decodeIfPresent([TaskFilter].self, forKey: .filters) ?? []; templates = try c.decodeIfPresent([TaskTemplate].self, forKey: .templates) ?? TaskTemplate.builtIns
         completionCascades = try c.decodeIfPresent([TaskCompletionCascade].self, forKey: .completionCascades) ?? []
         trashCascades = try c.decodeIfPresent([TaskTrashCascade].self, forKey: .trashCascades) ?? []
@@ -373,6 +487,9 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
         // a pre-folders file (defaults to empty), and a missing `folderID`
         // means an ungrouped list (defaults to nil, handled in TaskList).
         folders = try c.decodeIfPresent([ListFolder].self, forKey: .folders) ?? []
+        guard storedFormat == protectedTaskFormat else {
+            throw DecodingError.dataCorruptedError(forKey: .tasks, in: c, debugDescription: "Task data and its protection format disagree.")
+        }
         // Drop folder memberships that reference unknown folders (legacy or
         // hand-edited files): lists stay, tasks stay, membership clears.
         let known = Set(folders.map(\.id))
@@ -387,6 +504,30 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
         // hand-edited) clear to top level and cycles break, so orphaned
         // subtasks render as roots instead of vanishing.
         tasks = Self.sanitizedTaskParents(tasks)
+        let sectionsByList = Dictionary(lists.map { ($0.id, Set($0.sections.map(\.id))) },
+                                        uniquingKeysWith: { first, _ in first })
+        for index in tasks.indices {
+            guard let section = tasks[index].sectionID else { continue }
+            if tasks[index].parentID != nil || tasks[index].listID.flatMap({ sectionsByList[$0] })?.contains(section) != true {
+                tasks[index].sectionID = nil
+            }
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        if let format = protectedTaskFormat {
+            try c.encode(ProtectedTaskRecords(format: format, records: tasks), forKey: .tasks)
+        } else {
+            try c.encode(tasks, forKey: .tasks)
+        }
+        try c.encode(lists, forKey: .lists)
+        try c.encode(tags, forKey: .tags)
+        try c.encode(filters, forKey: .filters)
+        try c.encode(templates, forKey: .templates)
+        try c.encode(folders, forKey: .folders)
+        try c.encode(completionCascades, forKey: .completionCascades)
+        try c.encode(trashCascades, forKey: .trashCascades)
     }
 
     /// Clears unknown tag parents and breaks parent cycles. Pure so the
