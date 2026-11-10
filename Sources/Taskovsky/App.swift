@@ -178,7 +178,7 @@ extension TaskDestination {
         switch self {
         case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"
         case .inbox: "tray"; case .notes: "doc.text"; case .reminders: "bell"; case .completed: "checkmark.square"
-        case .trash: "trash"; case .list: "line.3.horizontal"; case .tag: "tag"; case .wontDo: "xmark.square"; case .summary: "doc.plaintext"; case .search: "magnifyingglass"; case .filter: "line.3.horizontal.decrease"
+        case .trash: "trash"; case .list: "line.3.horizontal"; case .folder: "folder"; case .tag: "tag"; case .wontDo: "xmark.square"; case .summary: "doc.plaintext"; case .search: "magnifyingglass"; case .filter: "line.3.horizontal.decrease"
         }
     }
     func title(_ data: WorkspaceData) -> String {
@@ -186,6 +186,7 @@ extension TaskDestination {
         case .all: "All"; case .today: "Today"; case .tomorrow: "Tomorrow"; case .week: "Next 7 Days"
         case .inbox: "Inbox"; case .notes: "Notes"; case .reminders: "Reminders"; case .completed: "Completed"; case .trash: "Trash"
         case .list(let id): data.lists.first { $0.id == id }?.name ?? "List"
+        case .folder(let id): data.folders.first { $0.id == id }?.name ?? "Folder"
         case .tag(let id): data.tags.first { $0.id == id }?.name ?? "Tag"
         case .filter(let id): data.filters.first { $0.id == id }?.name ?? "Filter"
         case .wontDo: "Won't Do"; case .summary: "Summary"; case .search: "Search"
@@ -238,23 +239,27 @@ struct WorkspaceView: View {
     }
     private var isPurgeAlertPresented: Binding<Bool> { Binding(get: { purgeCandidate != nil }, set: { if !$0 { purgeCandidate = nil } }) }
     @State private var recoveryAlert = false
-    /// Per-list center view, stored on the list record itself (List default)
-    /// so each list remembers its own mode across rename, edit, duplicate,
-    /// and reload. The segmented control below reads and writes the current
-    /// list; every other destination always renders rows.
-    private var listViewBinding: Binding<Bool> {
+    @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
+    private var timelineScope: TaskTimelineScope? {
+        TaskTimelineScope(destination: destination, data: store.data)
+    }
+    private var supportsScopedBoard: Bool { ScopedBoardProjection.supports(destination, in: store.data) }
+
+    private var listViewBinding: Binding<TaskListViewMode> {
         Binding(get: {
-            if case .list(let id) = destination, let list = store.data.lists.first(where: { $0.id == id }) { return list.viewMode == .board }
-            return false
-        }, set: { board in
-            if case .list(let id) = destination, var list = store.data.lists.first(where: { $0.id == id }) {
-                list.viewMode = board ? .board : .list
+            if let list = activeList {
+                return list.isArchived && list.viewMode == .timeline ? .list : list.viewMode
+            }
+            return alternateModes[destination] ?? .list
+        }, set: { mode in
+            if var list = activeList, list.viewMode != mode {
+                list.viewMode = mode
                 store.updateList(list)
+            } else if timelineScope != nil || supportsScopedBoard {
+                alternateModes[destination] = mode == .list ? nil : mode
             }
         })
     }
-    /// True when the current destination renders a Kanban board.
-    private var isBoardDestination: Bool { if case .list = destination { return true }; return false }
     /// The board's list scope. Separate from `activeList` (which resolves to
     /// nil for dangling destinations): a missing list must not silently fall
     /// back to Inbox scope.
@@ -526,8 +531,8 @@ struct WorkspaceView: View {
                         store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol, viewMode: viewMode, folderID: folderID, belowFolders: belowFolders, isArchived: stored?.isArchived ?? false, showsInSmartLists: showsInSmartLists, isPinned: stored?.isPinned ?? false))
                     } else {
                         let id = store.createList(name: name, color: color, kind: kind, symbol: symbol, folderID: folderID, showsInSmartLists: showsInSmartLists)
-                        if viewMode == .board, var list = store.data.lists.first(where: { $0.id == id }) {
-                            list.viewMode = .board
+                        if viewMode != .list, var list = store.data.lists.first(where: { $0.id == id }) {
+                            list.viewMode = viewMode
                             store.updateList(list)
                         }
                         destination = .list(id)
@@ -566,7 +571,7 @@ struct WorkspaceView: View {
                 templatePicker = false
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in guard !calendarActive else { return }; quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in guard !calendarActive else { return }; quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary || isFolderDestination { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in calendarActive = false; if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
         .onReceive(NotificationCenter.default.publisher(for: .newFolder)) { _ in folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
@@ -912,12 +917,26 @@ struct WorkspaceView: View {
         Button("Delete Filter", role: .destructive) { store.deleteFilter(id: filter.id); if destination == .filter(filter.id) { destination = .inbox } }
     }
     @ViewBuilder private func folderMenu(_ folder: ListFolder) -> some View {
+        Button("Open Folder") { openFolder(folder.id) }
         Button(folder.isPinned ? "Unpin" : "Pin") { _ = store.setFolderPinned(id: folder.id, pinned: !folder.isPinned) }
         Button("Add List") { editor = EntityEditor(isTag: false, folderID: folder.id) }
         Button("Rename…") { folderDraft = FolderSheetDraft(folderID: folder.id, initialName: folder.name) }
-        Button("Ungroup") { _ = store.ungroupFolder(id: folder.id) }
+        Button("Ungroup") {
+            if store.ungroupFolder(id: folder.id), destination == .folder(folder.id) { destination = .inbox }
+        }
         Text("Lists and tasks are kept")
     }
+    private var isFolderDestination: Bool {
+        if case .folder = destination { return true }
+        return false
+    }
+
+    private func openFolder(_ id: UUID) {
+        destination = .folder(id)
+        sidebarPopoverOpen = false
+        closeDrawer()
+    }
+
     /// Lists section with folders. The heading offers New List / New Folder
     /// and accepts list drops as the top-root affordance (always visible,
     /// never a zero-sized target). Folder rows offer Add List / Rename /
@@ -1008,9 +1027,8 @@ struct WorkspaceView: View {
                     Text("\(memberCount)").font(.system(size: 11)).foregroundStyle(.secondary).monospacedDigit()
                 }
                 .padding(.horizontal, 10).frame(height: 38).contentShape(Rectangle())
-                // Folders are disclosure containers, not navigable
-                // destinations, so rows never carry selection styling.
-                .background(Color.clear, in: RoundedRectangle(cornerRadius: 9))
+                .background(destination == .folder(folder.id) ? accent.opacity(0.10) : .clear,
+                            in: RoundedRectangle(cornerRadius: 9))
                 .onTapGesture {
                     var next = collapsedFolderIDs
                     if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
@@ -1020,6 +1038,7 @@ struct WorkspaceView: View {
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel((isCollapsed ? "Expand " : "Collapse ") + folder.name)
                 .accessibilityHint("Folder containing lists")
+                .accessibilityAction(named: Text("Open Folder")) { openFolder(folder.id) }
                 .accessibilityAction {
                     var next = collapsedFolderIDs
                     if next.contains(folder.id) { next.remove(folder.id) } else { next.insert(folder.id) }
@@ -1258,9 +1277,18 @@ struct WorkspaceView: View {
     private func isInArchivedList(_ task: TaskItem) -> Bool {
         task.listID.flatMap { id in store.data.lists.first { $0.id == id } }?.isArchived ?? false
     }
+    private var taskModePicker: some View {
+        Picker("Tasks view", selection: listViewBinding) {
+            Text("List").tag(TaskListViewMode.list)
+            if activeList != nil || supportsScopedBoard { Text("Board").tag(TaskListViewMode.board) }
+            if timelineScope != nil { Text("Timeline").tag(TaskListViewMode.timeline) }
+        }.labelsHidden().accessibilityIdentifier("taskDestinationViewMode")
+    }
+
     private func taskPane(now: Date, overlay: Bool, paneWidth: CGFloat) -> some View {
         let tasks = filteredTasks(now: now)
         let groups = grouped(tasks, now: now)
+        let mode = listViewBinding.wrappedValue
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Button(action: toggleSidebar) {
@@ -1275,16 +1303,23 @@ struct WorkspaceView: View {
                 Spacer(minLength: 8)
                     .contentShape(Rectangle())
                     .onTapGesture { closeDrawer() }
-                Menu {
-                    Picker("Sort by", selection: Binding(get: { TaskSortPolicy.normalized(sort) }, set: { sort = $0 })) {
-                        ForEach(["None", "Date", "Priority", "Title"], id: \.self) { Text($0).tag($0) }
-                        ForEach(TaskTimestampSort.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                if mode != .timeline && !(mode == .board && supportsScopedBoard) {
+                    Menu {
+                        Picker("Sort by", selection: Binding(get: { TaskSortPolicy.normalized(sort) }, set: { sort = $0 })) {
+                            ForEach(["None", "Date", "Priority", "Title"], id: \.self) { Text($0).tag($0) }
+                            ForEach(TaskTimestampSort.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                        }
+                        Text("None follows your drags and is saved.").font(.caption)
+                        if destination != .completed && destination != .trash && destination != .wontDo { Toggle("Show Completed & Won't Do", isOn: $showCompleted) }
+                    } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (None enables drag reordering)")
+                }
+                if activeList != nil || timelineScope != nil || supportsScopedBoard {
+                    if paneWidth < 420 {
+                        taskModePicker.pickerStyle(.menu).fixedSize()
+                    } else {
+                        taskModePicker.pickerStyle(.segmented)
+                            .frame(width: (activeList != nil || supportsScopedBoard) && timelineScope != nil ? 182 : 130)
                     }
-                    Text("None follows your drags and is saved.").font(.caption)
-                    if destination != .completed && destination != .trash && destination != .wontDo { Toggle("Show Completed & Won't Do", isOn: $showCompleted) }
-                } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (None enables drag reordering)")
-                if isBoardDestination {
-                    Picker("View", selection: listViewBinding) { Text("List").tag(false); Text("Board").tag(true) }.pickerStyle(.segmented).frame(width: 130).help("List or Kanban board").accessibilityLabel("List or board view")
                 }
                 Menu {
                     if destination != .completed && destination != .trash && destination != .wontDo && destination != .summary {
@@ -1301,7 +1336,7 @@ struct WorkspaceView: View {
                 } label: { HoverIcon { Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("More actions")
             }.padding(.horizontal, 20).frame(height: 58)
             if destination == .summary { Text("Updated in the last 7 days").font(.caption).foregroundStyle(.secondary).padding(.horizontal, 20).padding(.bottom, 12) }
-            if destination != .trash && destination != .completed && destination != .wontDo && destination != .summary && !isArchivedView {
+            if destination != .trash && destination != .completed && destination != .wontDo && destination != .summary && !isArchivedView && !isFolderDestination {
                 if let sectionCaptureID {
                     HStack {
                         Text(activeList?.sections.first(where: { $0.id == sectionCaptureID }).map { "Adding to " + $0.name } ?? "Section unavailable")
@@ -1316,13 +1351,15 @@ struct WorkspaceView: View {
             if destination == .reminders { Text("Check due and upcoming reminders here. New items are set for one hour from now.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if destination == .trash { Text("Deleted items stay here until you restore them.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if isArchivedView { Text("Archived lists are read-only. Unarchive the list from the sidebar to edit, or use a row's Move to for a deliberate move.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
-            if let list = activeList, !list.sections.isEmpty {
-                if listViewBinding.wrappedValue {
+            if let scope = timelineScope, mode == .timeline {
+                DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask).id(scope)
+            } else if let list = activeList, !list.sections.isEmpty {
+                if mode == .board {
                     sectionBoard(list, overlay: overlay, now: now)
                 } else {
                     sectionList(list, tasks: tasks, overlay: overlay, now: now, paneWidth: paneWidth)
                 }
-            } else if listViewBinding.wrappedValue && isBoardDestination, let boardListID {
+            } else if mode == .board, let boardListID {
                 // Status board: every non-deleted status in this list (see
                 // BoardProjection), independent of the rows' Show Completed
                 // toggle — a completed drop stays visible and an
@@ -1331,6 +1368,9 @@ struct WorkspaceView: View {
                 // like the row checkbox); notes refuse status columns with a
                 // message. Hierarchy renders flat here.
                 kanbanBoard(tasks: BoardProjection.tasks(forList: boardListID, in: store.data), overlay: overlay, now: now)
+            } else if mode == .board, supportsScopedBoard {
+                DesktopScopedBoard(store: store, destination: destination, selection: $detailState.selection,
+                                   now: now, open: selectTask, toggle: complete).id(destination)
             } else if tasks.isEmpty {
                 VStack(spacing: 12) { Spacer(); Image(systemName: destination == .trash ? "trash" : "checkmark.circle").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(accent.opacity(0.5)); Text(destination == .trash ? "Trash is empty" : "All clear").font(.system(size: 17, weight: .medium)); Text(destination == .today ? "Enjoy the space. Add something for today." : "Your \(destination == .notes ? "notes" : "tasks") will appear here.").font(.system(size: 12)).foregroundStyle(.secondary); Spacer(); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
@@ -1760,7 +1800,7 @@ private extension WorkspaceView {
     /// are ignored; notes refuse status columns with a message instead of
     /// silently doing nothing.
     func applyKanbanDrop(_ ids: [UUID], to column: KanbanColumn, boardIDs: Set<UUID>) {
-        guard isBoardDestination else { return }
+        guard boardListID != nil else { return }
         guard !isArchivedView else { actions.notice("Archived lists are read-only."); return }
         for id in ids {
             guard boardIDs.contains(id),
@@ -1805,6 +1845,104 @@ enum KanbanColumn: Hashable {
     }
 }
 
+private struct DesktopScopedBoard: View {
+    @ObservedObject var store: TaskStore
+    let destination: TaskDestination
+    @Binding var selection: UUID?
+    let now: Date
+    let open: (UUID) -> Void
+    let toggle: (UUID) -> Void
+    @State private var grouping: ScopedBoardGrouping
+    @State private var notice: String?
+    @State private var undo: CalendarScheduleUndo?
+    @State private var pending: PendingSchedule?
+
+    private struct PendingSchedule {
+        let taskID: UUID
+        let before: CalendarScheduleSnapshot
+        let column: ScopedBoardColumn.ID
+    }
+
+    init(store: TaskStore, destination: TaskDestination, selection: Binding<UUID?>, now: Date,
+         open: @escaping (UUID) -> Void, toggle: @escaping (UUID) -> Void) {
+        self.store = store
+        self.destination = destination
+        self._selection = selection
+        self.now = now
+        self.open = open
+        self.toggle = toggle
+        _grouping = State(initialValue: ScopedBoardProjection.defaultGrouping(for: destination))
+    }
+
+    private var projection: ScopedBoardProjection {
+        ScopedBoardProjection(destination: destination, grouping: grouping, in: store.data,
+                              now: now, calendar: store.settings.calendar)
+    }
+
+    var body: some View {
+        let board = projection
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Picker("Group board by", selection: $grouping) {
+                    ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
+                }.pickerStyle(.segmented).fixedSize().accessibilityIdentifier("scopedBoardGrouping")
+                if let notice { Text(notice).font(.caption).accessibilityIdentifier("scopedBoardNotice") }
+                if let undo {
+                    Button("Undo") {
+                        notice = store.undoCalendarSchedule(undo) ? "Schedule restored" : "Schedule changed. Undo was skipped."
+                        self.undo = nil
+                    }
+                }
+                Spacer()
+            }.padding(.horizontal, 16)
+            ScrollView([.horizontal, .vertical]) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(board.columns) { column in
+                        KanbanColumnView(title: column.title, items: column.tasks, readOnly: false, store: store,
+                                         selection: $selection, now: now, onSelect: open, onToggle: toggle,
+                                         onDrop: { ids in
+                            if ids.count == 1, let id = ids.first { move(id, to: column.id) }
+                        }, scopedMove: (board, move))
+                    }
+                }.padding(.horizontal, 16).padding(.bottom, 24)
+            }
+        }
+        .confirmationDialog("Apply schedule change to", isPresented: Binding(get: { pending != nil }, set: {
+            if !$0 { pending = nil }
+        }), titleVisibility: .visible, presenting: pending) { change in
+            Button("This occurrence") { save(change, scope: .currentOccurrence) }
+            Button("Series") { save(change, scope: .series) }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func move(_ id: UUID, to target: ScopedBoardColumn.ID) {
+        guard let operation = projection.move(id, to: target),
+              let task = store.data.tasks.first(where: { $0.id == id }) else { return }
+        switch operation {
+        case .list(let list):
+            notice = store.moveTasksToList(ids: [id], listID: list) ? "Moved to list" : "Could not move this task."
+        case .schedule:
+            let change = PendingSchedule(taskID: id, before: CalendarScheduleSnapshot(task), column: target)
+            if CalendarScheduling.canRescheduleCurrentOccurrence(task, in: store.data.tasks) { pending = change }
+            else { save(change, scope: .series) }
+        }
+    }
+
+    private func save(_ change: PendingSchedule, scope: CalendarScheduleScope) {
+        pending = nil
+        guard let task = store.data.tasks.first(where: { $0.id == change.taskID }),
+              CalendarScheduleSnapshot(task) == change.before,
+              case .schedule(let operation) = projection.move(change.taskID, to: change.column),
+              let token = store.scheduleOnCalendar(id: change.taskID, operation: operation, scope: scope) else {
+            notice = "The schedule could not be changed."
+            return
+        }
+        undo = token
+        notice = "Schedule updated"
+    }
+}
+
 private struct KanbanColumnView: View {
     let title: String
     let items: [TaskItem]
@@ -1817,6 +1955,7 @@ private struct KanbanColumnView: View {
     let onDrop: ([UUID]) -> Void
     var sectionList: TaskList?
     var addTask: (() -> Void)?
+    var scopedMove: (board: ScopedBoardProjection, action: (UUID, ScopedBoardColumn.ID) -> Void)?
     @State private var targeted = false
 
     var body: some View {
@@ -1833,6 +1972,18 @@ private struct KanbanColumnView: View {
             ForEach(items) { task in
                 KanbanCard(store: store, id: task.id, selected: selection == task.id, now: now, readOnly: readOnly, onSelect: { onSelect(task.id) }, onToggle: { onToggle(task.id) })
                     .contextMenu {
+                        if let scopedMove, !readOnly {
+                            let targets = scopedMove.board.columns.filter {
+                                scopedMove.board.move(task.id, to: $0.id) != nil
+                            }
+                            if !targets.isEmpty {
+                                Menu("Move to") {
+                                    ForEach(targets) { target in
+                                        Button(target.title) { scopedMove.action(task.id, target.id) }
+                                    }
+                                }
+                            }
+                        }
                         if let sectionList, !readOnly, task.parentID == nil {
                             TaskSectionMoveMenu(sections: sectionList.sections, current: task.sectionID) { target in
                                 _ = store.applySectionChange(.init(listID: sectionList.id, operation: .assign(taskID: task.id, sectionID: target)))

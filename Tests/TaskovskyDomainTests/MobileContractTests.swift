@@ -11,6 +11,72 @@ final class MobileContractTests: XCTestCase {
     private var now: Date { date("2026-11-09T12:00:00Z") }
     private func ids(_ tasks: [TaskItem]) -> [UUID] { tasks.map(\.id) }
 
+    func testScopedBoardWeekDateMovePreservesInclusiveSpanAndTimedDueClock() throws {
+        let days = CalendarDates.days(from: now, count: 7, calendar: calendar)
+        let range = TaskItem(title: "Workshop", dueDate: days[2],
+                             scheduledDuration: .init(start: days[0], end: days[2], isAllDay: true))
+        let overdue = TaskItem(title: "Past", dueDate: days[0].addingTimeInterval(-86_400))
+        let timedDue = days[1].addingTimeInterval(14 * 3_600 + 7 * 60)
+        let timed = TaskItem(title: "Review", dueDate: timedDue, hasDueTime: true,
+                             scheduledDuration: .init(start: timedDue.addingTimeInterval(-3_600), end: timedDue, isAllDay: false))
+        let done = TaskItem(title: "Finished", dueDate: days[0], completedAt: now)
+        let note = TaskItem(title: "Notes", kind: .note, dueDate: days[0])
+        let board = ScopedBoardProjection(destination: .week, grouping: .date,
+                                          in: WorkspaceData(tasks: [range, overdue, timed, done, note]),
+                                          now: now, calendar: calendar)
+        XCTAssertEqual(board.columns.map(\.id), [.overdue] + days.map(ScopedBoardColumn.ID.date))
+        XCTAssertEqual(board.columns[0].tasks.map(\.id), [overdue.id])
+        XCTAssertEqual(board.columns[3].tasks.map(\.id), [range.id])
+        XCTAssertNil(board.move(range.id, to: .overdue))
+        XCTAssertNil(board.move(done.id, to: .date(days[3])))
+        XCTAssertNil(board.move(note.id, to: .date(days[3])))
+        guard case .schedule(let rangeMove) = board.move(range.id, to: .date(days[3])),
+              case .schedule(let timedMove) = board.move(timed.id, to: .date(days[3])) else {
+            return XCTFail("Expected calendar moves")
+        }
+        let movedRange = try XCTUnwrap(CalendarScheduling.applying(rangeMove, to: range, displayCalendar: calendar))
+        XCTAssertEqual(movedRange.dueDate, days[3])
+        XCTAssertEqual(movedRange.scheduledDuration?.start, days[1])
+        XCTAssertEqual(movedRange.scheduledDuration?.end, days[3])
+        XCTAssertEqual(movedRange.scheduledDuration?.isAllDay, true)
+        let movedTimed = try XCTUnwrap(CalendarScheduling.applying(timedMove, to: timed, displayCalendar: calendar))
+        let expectedDue = days[3].addingTimeInterval(14 * 3_600 + 7 * 60)
+        XCTAssertEqual(movedTimed.dueDate, expectedDue)
+        XCTAssertEqual(movedTimed.scheduledDuration?.start, expectedDue.addingTimeInterval(-3_600))
+    }
+
+    func testScopedBoardFolderAndTagListMovesStayWithinAvailableColumns() {
+        let folder = ListFolder(name: "Projects")
+        let tag = TaskTag(name: "Design", color: "#334455")
+        let work = TaskList(name: "Work", color: "#334455", folderID: folder.id)
+        let upcoming = TaskList(name: "Upcoming", color: "#334455", folderID: folder.id, showsInSmartLists: false)
+        let archive = TaskList(name: "Old", color: "#334455", folderID: folder.id, isArchived: true)
+        let personal = TaskList(name: "Personal", color: "#334455")
+        let source = TaskItem(title: "Sketch", listID: work.id, tagIDs: [tag.id])
+        let old = TaskItem(title: "Old sketch", listID: archive.id, tagIDs: [tag.id])
+        let other = TaskItem(title: "Other", listID: personal.id)
+        let data = WorkspaceData(tasks: [source, old, other], lists: [work, upcoming, archive, personal],
+                                 tags: [tag], folders: [folder])
+        let folderBoard = ScopedBoardProjection(destination: .folder(folder.id), grouping: .list, in: data,
+                                                now: now, calendar: calendar)
+        XCTAssertEqual(folderBoard.columns.map(\.id), [.list(work.id), .list(upcoming.id)])
+        XCTAssertEqual(folderBoard.columns.flatMap(\.tasks).map(\.id), [source.id])
+        XCTAssertNil(folderBoard.move(source.id, to: .list(personal.id)))
+        guard case .list(let target) = folderBoard.move(source.id, to: .list(upcoming.id)) else {
+            return XCTFail("Expected a list move")
+        }
+        XCTAssertEqual(target, upcoming.id)
+        let tagBoard = ScopedBoardProjection(destination: .tag(tag.id), grouping: .list, in: data,
+                                             now: now, calendar: calendar)
+        XCTAssertEqual(tagBoard.columns.map(\.id), [.list(nil), .list(work.id), .list(upcoming.id), .list(personal.id)])
+        XCTAssertEqual(tagBoard.columns.flatMap(\.tasks).map(\.id), [source.id])
+        XCTAssertNil(tagBoard.move(old.id, to: .list(work.id)))
+        guard case .list(let inbox) = tagBoard.move(source.id, to: .list(nil)) else {
+            return XCTFail("Expected an Inbox move")
+        }
+        XCTAssertNil(inbox)
+    }
+
     func testTaskSectionsRetainOrderedGroupsAndKeepTasksWhenRemoved() throws {
         let list = TaskList(name: "Reading", color: "#334455")
         let parent = TaskItem(title: "Novel", listID: list.id)
@@ -117,6 +183,206 @@ final class MobileContractTests: XCTestCase {
         XCTAssertThrowsError(try decoder.decode(WorkspaceData.self, from: unprotected))
         XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .remove(section.id)).apply(to: &data, now: now), true)
         XCTAssertTrue(try encoded()["tasks"] is [Any])
+    }
+
+    func testTaskTimelineScopesKeepUndatedTasksAndExcludeArchivedLists() throws {
+        let folder = ListFolder(name: "Project")
+        let list = TaskList(name: "Plan", color: "#334455", folderID: folder.id)
+        let other = TaskList(name: "Review", color: "#556677", folderID: folder.id)
+        let archived = TaskList(name: "Archived", color: "#333333", folderID: folder.id, isArchived: true)
+        let outside = TaskList(name: "Elsewhere", color: "#111111")
+        let anchor = calendar.startOfDay(for: now)
+        let next = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: anchor))
+        let far = try XCTUnwrap(calendar.date(byAdding: .day, value: 30, to: anchor))
+        let point = TaskItem(title: "Milestone", listID: list.id, dueDate: anchor)
+        let range = TaskItem(title: "Delivery", listID: other.id, dueDate: next,
+                             scheduledDuration: .init(start: anchor, end: next, isAllDay: true))
+        let undated = TaskItem(title: "Arrange", listID: list.id)
+        let history = TaskItem(title: "Old undated", listID: list.id, completedAt: now)
+        let hidden = TaskItem(title: "Archived date", listID: archived.id, dueDate: anchor)
+        let unrelated = TaskItem(title: "Unrelated date", listID: outside.id, dueDate: next)
+        let later = TaskItem(title: "Future", listID: list.id, dueDate: far)
+        let filter = TaskFilter(name: "Review", listIDs: [other.id, archived.id])
+        let data = WorkspaceData(tasks: [point, range, undated, history, hidden, unrelated, later],
+                                 lists: [list, other, archived, outside], filters: [filter], folders: [folder])
+        let window = TaskTimelineScale.day.window(focus: now, calendar: calendar)
+        let regular = TaskTimelineProjection(scope: .list(list.id), data: data, window: window, now: now)
+        XCTAssertEqual(regular.rows.map(\.id), [point.id])
+        XCTAssertEqual(regular.undated.map(\.id), [undated.id])
+        XCTAssertTrue(try XCTUnwrap(regular.rows.first).isPoint)
+        let grouped = TaskTimelineProjection(scope: .folder(folder.id), data: data, window: window, now: now)
+        XCTAssertEqual(Set(grouped.rows.map(\.id)), [point.id, range.id])
+        XCTAssertEqual(grouped.undated.map(\.id), [undated.id])
+        let filtered = TaskTimelineProjection(scope: .filter(filter.id), data: data, window: window, now: now)
+        let bar = try XCTUnwrap(filtered.rows.first)
+        XCTAssertEqual(filtered.rows.map(\.id), [range.id])
+        XCTAssertEqual(bar.start, 0)
+        XCTAssertEqual(bar.end, 2)
+        XCTAssertFalse(bar.isPoint)
+        XCTAssertTrue(TaskTimelineProjection(scope: .folder(UUID()), data: data, window: window, now: now).rows.isEmpty)
+    }
+
+    func testTimelineZoomKeepsFractionalDayUnderViewportAnchor() {
+        let standard = TaskTimelineZoom.standard
+        let zoom = standard.scaled(by: 1.5)
+        XCTAssertEqual(zoom.percent, 150)
+        XCTAssertEqual(zoom.scaled(by: 100).percent, 300)
+        XCTAssertFalse(zoom.scaled(by: 100).canZoomIn)
+        XCTAssertEqual(zoom.scaled(by: 0.001).percent, 75)
+        XCTAssertFalse(zoom.scaled(by: 0.001).canZoomOut)
+        XCTAssertEqual(zoom.scaled(by: .infinity), zoom)
+        let anchor = TaskTimelineZoomAnchor(contentX: 233, dayWidth: 18, viewportX: 91)
+        let scaledOrigin = anchor.viewportOrigin(contentStart: 12, dayWidth: 27)
+        XCTAssertEqual((scaledOrigin + 91 - 12) / 27, 233.0 / 18.0, accuracy: 0.000001)
+    }
+
+    func testTimelineColorOptionsKeepMembershipAndSchedule() throws {
+        let list = TaskList(name: "Work", color: "#314159")
+        let tag = TaskTag(name: "Review", color: "#209080")
+        let date = calendar.startOfDay(for: now)
+        let task = TaskItem(title: "Draft", listID: list.id, tagIDs: [tag.id], dueDate: date, priority: .high)
+        let untagged = TaskItem(title: "Decide", listID: list.id, dueDate: date)
+        let data = WorkspaceData(tasks: [task, untagged], lists: [list], tags: [tag])
+        let window = TaskTimelineScale.day.window(focus: date, calendar: calendar)
+        let projected = CalendarColorMode.allCases.map {
+            TaskTimelineProjection(scope: .list(list.id), data: data, window: window, now: now, colorBy: $0)
+        }
+        let marked = try projected.map { projection in try XCTUnwrap(projection.rows.first { $0.id == task.id }) }
+        XCTAssertEqual(marked.map { $0.entry.color }, ["#314159", "#209080", "#E65757"])
+        XCTAssertTrue(marked.allSatisfy { $0.start == 0 && $0.isPoint })
+        XCTAssertEqual(projected[1].rows.first { $0.id == untagged.id }?.entry.color, "#314159")
+    }
+
+    func testTimelineArrangeUsesCivilDatesAndSnapsTimeAcrossDST() throws {
+        var local = Calendar(identifier: .gregorian)
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let day = try XCTUnwrap(local.date(from: DateComponents(year: 2026, month: 3, day: 8)))
+        let window = TaskTimelineScale.day.window(focus: day, calendar: local)
+        let task = TaskItem(title: "Undated")
+        let next = try XCTUnwrap(local.date(byAdding: .day, value: 1, to: day))
+        let week = try XCTUnwrap(window.arrange(at: 1.4, scale: .week))
+        let allDay = try XCTUnwrap(CalendarScheduling.applying(week, to: task, displayCalendar: local))
+        XCTAssertEqual(allDay.dueDate, next)
+        XCTAssertFalse(allDay.hasDueTime)
+        XCTAssertNil(allDay.scheduledDuration)
+        let quarter = try XCTUnwrap(local.date(bySettingHour: 15, minute: 15, second: 0, of: day))
+        let x = window.offset(of: quarter.addingTimeInterval(240))
+        let precise = try XCTUnwrap(window.arrange(at: x, scale: .day))
+        let timed = try XCTUnwrap(CalendarScheduling.applying(precise, to: task, displayCalendar: local))
+        XCTAssertEqual(timed.dueDate, quarter)
+        XCTAssertTrue(timed.hasDueTime)
+        XCTAssertNil(timed.scheduledDuration)
+        XCTAssertNil(window.arrange(at: Double(window.dates.count), scale: .week))
+        XCTAssertNil(window.arrange(at: -0.01, scale: .day))
+    }
+
+    func testTimelineGroupsByListAndInheritsSectionsFromHiddenParents() throws {
+        let folder = ListFolder(name: "Launch")
+        let build = TaskSection(name: "Build")
+        let review = TaskSection(name: "Review")
+        let first = TaskList(name: "Production", color: "#334455", folderID: folder.id)
+        let second = TaskList(name: "Coordination", color: "#334455", folderID: folder.id)
+        let date = calendar.startOfDay(for: now)
+        let parent = TaskItem(title: "Hidden parent", listID: first.id)
+        let child = TaskItem(title: "Visible child", listID: first.id, dueDate: date, parentID: parent.id)
+        let buildTask = TaskItem(title: "Visible build", listID: first.id, dueDate: date)
+        let unassigned = TaskItem(title: "Visible unassigned", listID: first.id, dueDate: date)
+        let coordinator = TaskItem(title: "Visible coordination", listID: second.id, dueDate: date)
+        let inbox = TaskItem(title: "Visible inbox", dueDate: date)
+        let filter = TaskFilter(name: "Visible", keyword: "Visible")
+        var data = WorkspaceData(tasks: [child, parent, buildTask, unassigned, coordinator, inbox], lists: [second, first],
+                                 filters: [filter], folders: [folder])
+        let changes: [TaskSectionChange.Operation] = [
+            .create(build), .create(review), .assign(taskID: parent.id, sectionID: review.id),
+            .assign(taskID: buildTask.id, sectionID: build.id)
+        ]
+        for change in changes {
+            XCTAssertEqual(TaskSectionChange(listID: first.id, operation: change).apply(to: &data, now: now), true)
+        }
+        let window = TaskTimelineScale.day.window(focus: date, calendar: calendar)
+        let scoped = TaskTimelineProjection(scope: .list(first.id), data: data, window: window, now: now)
+        XCTAssertEqual(scoped.groups.compactMap(\.title), ["No Section", "Build", "Review"])
+        XCTAssertEqual(scoped.groups.flatMap(\.rows).map(\.id), [unassigned.id, buildTask.id, child.id])
+        let folderProjection = TaskTimelineProjection(scope: .folder(folder.id), data: data, window: window, now: now)
+        XCTAssertEqual(folderProjection.groups.compactMap(\.title),
+                       ["Coordination", "Production · No Section", "Production · Build", "Production · Review"])
+        let filtered = TaskTimelineProjection(scope: .filter(filter.id), data: data, window: window, now: now)
+        XCTAssertEqual(filtered.groups.first?.rows.map(\.id), [inbox.id])
+        XCTAssertEqual(filtered.groups.last?.rows.map(\.id), [child.id])
+    }
+
+    func testTimelineDragPreservesCivilSpanAndSnapsTimedDayEdits() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let start = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 3, day: 7)))
+        let end = try XCTUnwrap(calendar.date(byAdding: .day, value: 2, to: start))
+        let list = TaskList(name: "Workshop", color: "#314159")
+        let span = TaskItem(title: "Three days", listID: list.id, dueDate: end,
+                            scheduledDuration: .init(start: start, end: end, isAllDay: true))
+        let timedStart = try XCTUnwrap(calendar.date(bySettingHour: 9, minute: 0, second: 0, of: end))
+        let timedEnd = timedStart.addingTimeInterval(3_600)
+        var timed = TaskItem(title: "One hour", listID: list.id, dueDate: timedEnd,
+                             scheduledDuration: .init(start: timedStart, end: timedEnd))
+        timed.hasDueTime = true
+        var data = WorkspaceData(); data.lists = [list]; data.tasks = [span, timed]
+        let window = TaskTimelineScale.day.window(focus: start, calendar: calendar)
+        let rows = TaskTimelineProjection(scope: .list(list.id), data: data, window: window, now: start).rows
+        let spanRow = try XCTUnwrap(rows.first { $0.id == span.id })
+        let timedRow = try XCTUnwrap(rows.first { $0.id == timed.id })
+
+        XCTAssertEqual(window.captureDay(at: 1.99), calendar.date(byAdding: .day, value: 1, to: start))
+        XCTAssertNil(window.captureDay(at: Double(window.dates.count)))
+        XCTAssertNil(window.adjust(.move, entry: spanRow.entry, by: 0.49, scale: .week))
+        XCTAssertNil(window.adjust(.move, entry: spanRow.entry, by: -1, scale: .week))
+        let move = try XCTUnwrap(window.adjust(.move, entry: spanRow.entry, by: 1, scale: .week))
+        let moved = try XCTUnwrap(CalendarScheduling.applying(move.operation, to: span, displayCalendar: calendar))
+        XCTAssertEqual(moved.scheduledDuration?.start, calendar.date(byAdding: .day, value: 1, to: start))
+        XCTAssertEqual(moved.dueDate, calendar.date(byAdding: .day, value: 1, to: end))
+        let resize = try XCTUnwrap(window.adjust(.resizeEnd, entry: spanRow.entry, by: -2, scale: .week))
+        let resized = try XCTUnwrap(CalendarScheduling.applying(resize.operation, to: span, displayCalendar: calendar))
+        XCTAssertEqual(resized.dueDate, start)
+        XCTAssertEqual(resized.scheduledDuration?.start, start)
+
+        let timedMove = try XCTUnwrap(window.adjust(.move, entry: timedRow.entry, by: 0.022, scale: .day))
+        XCTAssertEqual(timedMove.date, timedStart.addingTimeInterval(1_800))
+        let movedTime = try XCTUnwrap(CalendarScheduling.applying(timedMove.operation, to: timed, displayCalendar: calendar))
+        XCTAssertEqual(movedTime.scheduledDuration?.end, timedEnd.addingTimeInterval(1_800))
+        let coarseResize = try XCTUnwrap(window.adjust(.resizeEnd, entry: timedRow.entry, by: 1, scale: .week))
+        XCTAssertEqual(calendar.component(.hour, from: coarseResize.date), 10)
+        XCTAssertEqual(calendar.component(.day, from: coarseResize.date), 10)
+    }
+
+    func testTaskTimelineTicksAndFractionsFollowCivilDaysAcrossDST() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let focus = date("2026-03-07T17:00:00Z")
+        let window = TaskTimelineScale.day.window(focus: focus, calendar: local)
+        let days = window.dates
+        XCTAssertEqual(window.marks, days)
+        XCTAssertEqual(window.offset(of: days[2]), 2)
+        XCTAssertEqual(days[2].timeIntervalSince(days[1]), 23 * 3600)
+        XCTAssertEqual(window.offset(of: days[1].addingTimeInterval(11.5 * 3600)), 1.5, accuracy: 0.0001)
+        let interval = try XCTUnwrap(window.interval)
+        XCTAssertEqual(window.offset(of: interval.end), 14)
+        XCTAssertEqual(window.date(at: 1.5), days[1].addingTimeInterval(11.5 * 3600))
+        XCTAssertEqual(window.date(at: 14), interval.end)
+        XCTAssertNil(window.date(at: -1))
+        XCTAssertNil(window.date(at: .infinity))
+        let task = TaskItem(title: "Spans window", listID: nil, dueDate: days[3],
+                            scheduledDuration: .init(start: days[0].addingTimeInterval(-3_600), end: days[3], isAllDay: false))
+        let filter = TaskFilter(name: "Everything", status: .all)
+        let data = WorkspaceData(tasks: [task], filters: [filter])
+        let row = try XCTUnwrap(TaskTimelineProjection(scope: .filter(filter.id), data: data, window: window, now: focus).rows.first)
+        XCTAssertEqual(row.start, 0)
+        XCTAssertEqual(row.end, 3)
+        XCTAssertTrue(row.continuesBefore)
+        XCTAssertFalse(row.continuesAfter)
+        let weeks = TaskTimelineScale.week.window(focus: focus, calendar: local)
+        XCTAssertEqual(weeks.marks.count, 8)
+        XCTAssertTrue(weeks.marks.allSatisfy { local.component(.weekday, from: $0) == local.firstWeekday })
+        let months = TaskTimelineScale.month.window(focus: focus, calendar: local)
+        XCTAssertEqual(months.marks.map { local.component(.month, from: $0) }, [3, 4, 5, 6, 7, 8])
+        XCTAssertTrue(months.marks.allSatisfy { local.component(.day, from: $0) == 1 })
     }
 
     func testAllDayResizeUsesInclusiveDisplayDateAndPreservesCivilStart() throws {

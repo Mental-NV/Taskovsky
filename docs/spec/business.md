@@ -190,7 +190,7 @@ Taskovsky stores these reminders and exposes in-app reminder information. There 
 
 ### BUS-015 — Lists and folders
 
-**Current rule.** Lists have name, color/symbol, task/note kind, optional folder, list/board mode, smart-list inclusion, archive and pin state. Folders group lists one level deep. List/folder names are validated in their editors; a store operation is not a substitute for UI validation. Ungroup preserves lists and tasks. Deleting a list moves its records to Inbox rather than deleting them, and keeps saved-filter references to the now-unavailable list instead of broadening that filter. List moves/reorders preserve task membership except when the operation explicitly moves tasks.
+**Current rule.** Lists have name, color/symbol, task/note kind, optional folder, List/Board/Timeline mode, smart-list inclusion, archive and pin state. Folders group lists one level deep. List/folder names are validated in their editors; a store operation is not a substitute for UI validation. Ungroup preserves lists and tasks. Deleting a list moves its records to Inbox rather than deleting them, and keeps saved-filter references to the now-unavailable list instead of broadening that filter. List moves/reorders preserve task membership except when the operation explicitly moves tasks.
 
 The phone manager uses staged list and folder edits. It shares deletion, duplication, ungrouping and reorder operations with Desktop. [Phone verification](verification.md#mobile-list-organization).
 
@@ -253,6 +253,8 @@ The phone uses the shared visibility and ordering rules for its drawer. It saves
 ### BUS-020 — Status board
 
 **Current rule.** List/Board is persisted per list and copied by list duplication. The board projects all non-deleted records of its list regardless of the list-row Show Completed toggle, with fixed Open, Completed and Won't Do columns when the list has no named sections. Cards are flat rather than nested. UI status drops reuse shared task actions and refuse terminal-state drops for notes; archive remains read-only. Regular lists can own ordered named sections. List and Board group by section, with a No Section group for unassigned tasks. Root assignments apply to their descendants. Removing a section clears its assignments and keeps the tasks. Copying a list remaps section identifiers. [Section change contract](../changes/task-list-sections-2026-11-09.md). The projection splits stored status flags. The iPhone status tabs and card menu use the shared lifecycle. Undo after completing from Won’t Do restores the previous Won’t Do timestamp and removes an untouched successor. A view-mode edit changes only the selected list.
+
+**Grouped destinations.** All, Today, Tomorrow, Next 7 Days, Inbox, folders, and tags can also show a Board. Date columns use due dates, with all-day dates interpreted in the task’s civil zone. List columns reflect eligible lists in the destination. Archive is excluded. A date move keeps a range’s length and lands its due date in the selected column. An undated task moved to a date gets an all-day due date. The existing schedule policy handles recurrence, reminders, and Undo. List moves use the existing hierarchy and section rules. Grouped Board presentation is session state and writes no preference. [Grouped Board change contract](../changes/scoped-boards-2026-11-09.md).
 
 **Acceptance.** Use a list containing only completed tasks and verify the board still shows them. Complete/drop a recurring task and inspect the shared successor behavior. Switch another list's mode and confirm the first list's preference is unchanged. Attempt a note completion drop and inspect refusal.
 
@@ -380,3 +382,8 @@ Year Standard displays item dots; Heatmap uses visible-entry count shading and r
 
 **Evidence.** [CalendarTimeZones](../../Sources/TaskovskyCore/CalendarTimeZones.swift); [TaskCalendarOptions](../../Sources/TaskovskyCore/TaskCalendar.swift); [CalendarTimeZoneSettings](../../Sources/Taskovsky/CalendarTimeZoneSettings.swift); [CalendarDisplayOptionsTests](../../Tests/TaskovskyCoreTests/CalendarDisplayOptionsTests.swift); [display verification](verification.md#calendar-display-follow-up); [Calendar evidence and limits](../ticktick-spec/calendar.md); [deferred integrations](../parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026); [iPhone proposal](iphone.md).
 
+
+
+### BUS-031 — Tasks Timeline
+
+The local [Tasks Timeline](../changes/task-timeline-2026-11-09.md) projects the current task schedule in an active list, folder, or saved filter. It keeps undated open tasks available to arrange, excludes archived lists and follows saved filter rules. Its view choice is stored per list and stays in the session for folders and filters. Schedule changes use the existing precise editor or the chart drag controls, with the same recurrence, reminder and Undo policy. Date-axis capture stages an all-day task before the user confirms creation. An Arrange drop schedules an existing undated task as an all-day date or a timed point and preserves its organization. Scheduled Timeline rows use saved section order and inherited parent membership, even when the parent is outside the visible scope.

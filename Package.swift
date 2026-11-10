@@ -16,6 +16,7 @@ let domainSources = [
     "CustomRecurrence.swift",
     "TaskCalendar.swift",
     "TaskCalendarProjection.swift",
+    "TaskTimeline.swift",
     "CalendarTimeZones.swift",
     "CalendarFilterSelection.swift",
     "CalendarScheduling.swift",

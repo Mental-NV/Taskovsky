@@ -287,8 +287,8 @@ public struct ListFolder: Codable, Identifiable, Equatable, Sendable {
 /// list remembers its own mode across rename, edit, duplicate, and reload.
 /// The view mode is independent of the list's section definitions.
 public enum TaskListViewMode: String, Codable, CaseIterable, Sendable {
-    case list, board
-    public var label: String { self == .board ? "Board" : "List" }
+    case list, board, timeline
+    public var label: String { rawValue.capitalized }
 }
 
 public struct TaskList: Codable, Identifiable, Equatable, Sendable {

@@ -40,6 +40,7 @@
         "A5F903CA011000000000001F",
         "A5F903CA0110000000000015",
         "D6E7BA091100000000000001",
+        "D6E7BA091100000000000003",
         "A5F903CA0110000000000013",
         "958468F042788401D618E34F",
         "B8FD48B691B49BCDE6CC3EAB",
@@ -146,6 +147,7 @@
         "A5F903CA0110000000000020",
         "A5F903CA0110000000000016",
         "D6E7BA091100000000000002",
+        "D6E7BA091100000000000004",
         "A5F903CA0110000000000014",
         "A00000000000000000000002",
       );
@@ -615,6 +617,16 @@
     "D6E7BA091100000000000002" = {
       "isa" = "PBXBuildFile";
       "fileRef" = "D6E7BA091100000000000001";
+    };
+    "D6E7BA091100000000000003" = {
+      "path" = "../Sources/Taskovsky/TaskTimelineView.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "D6E7BA091100000000000004" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "D6E7BA091100000000000003";
     };
     "A5F903CA0110000000000016" = {
       "isa" = "PBXBuildFile";

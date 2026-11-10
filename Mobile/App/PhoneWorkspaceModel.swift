@@ -2,7 +2,7 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private enum PhoneQACase: String { case known, taskSort = "task-sort", lifecycle, arrange, occurrence, agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, taskSort = "task-sort", lifecycle, arrange, occurrence, agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
@@ -241,6 +241,35 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[2].completedAt = MobilePreviewFixture.now.addingTimeInterval(-3_600)
                 data.tasks[4].listID = data.lists[0].id
                 data.tasks[4].kind = .note
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && (qaCase == .timeline || qaCase == .timelineArrange) {
+                var data = initial.workspace
+                guard data.lists.count == 2, data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
+                let folder = ListFolder(name: "Launch projects")
+                let archive = TaskList(name: "Old projects", color: "#4E64D8", folderID: folder.id, isArchived: true)
+                data.folders.append(folder)
+                data.lists[0].folderID = folder.id
+                if qaCase == .timeline {
+                    let build = TaskSection(name: "Build")
+                    let review = TaskSection(name: "Review")
+                    let work = data.lists[0].id
+                    data.tasks[0].listID = work
+                    let operations: [TaskSectionChange.Operation] = [
+                        .create(build), .create(review), .assign(taskID: data.tasks[0].id, sectionID: build.id),
+                        .assign(taskID: data.tasks[1].id, sectionID: review.id)
+                    ]
+                    for operation in operations {
+                        guard TaskSectionChange(listID: work, operation: operation).apply(to: &data, now: now) == true else {
+                            throw CocoaError(.fileReadCorruptFile)
+                        }
+                    }
+                }
+                data.lists.append(archive)
+                data.tasks[4].listID = archive.id
+                data.tasks[5].listID = data.lists[1].id
+                data.tasks[7].dueDate = nil
+                data.filters = [TaskFilter(name: "Work and Personal", listIDs: [data.lists[0].id, data.lists[1].id, archive.id])]
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && qaCase == .tagOrganization {
@@ -860,7 +889,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             (captureDraft?.preparedTask != nil || (!staleCapture && capturePreview?.title.isEmpty == false))
     }
     func beginCapture(destination: TaskDestination, calendarDate: Date?, sectionID: UUID? = nil,
-                      calendarRange: ClosedRange<Date>? = nil) async {
+                      calendarRange: ClosedRange<Date>? = nil, useExactDate: Bool = false) async {
         guard canBeginCapture, let document else { return }
         var input = TaskCaptureInput.start(destination: destination, calendarDate: calendarDate, workspace: document.snapshot.workspace,
                                            settings: document.snapshot.settings, now: now, calendar: calendar)
@@ -871,6 +900,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             input.sectionID = sectionID
         }
         if let calendarRange { input.chooseCalendarRange(calendarRange, calendar: calendar) }
+        else if useExactDate, let calendarDate { input.chooseDate(calendar.startOfDay(for: calendarDate)) }
         await stageCapture(input, in: document)
     }
 

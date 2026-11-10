@@ -793,7 +793,7 @@ The uncommitted archive is `taskovsky-checkpoints/MobileLocalSettings-2026-11-09
 - The Mac suite passed 610 tests and the signed local release passed strict verification. The shared test covered inclusive dates across the New York daylight-saving transition in a Tokyo Calendar, the one-day minimum, no-op releases, and projected occurrences.
 - In the guarded Mac app, Week extended November 9–11 to November 9–12 and shortened it to November 9. The one-day range kept its end handle. In Month, the final segment moved from November 17 to November 15. The continuing segment had no resize handle, and clicking the final handle opened the precise editor. Undo restored both schedules. The fixture bytes and prior guarded bundle were restored after exit.
 - Seven focused iPhone tests passed without runtime warnings. Week resize, Undo and reload preserved the one-day range and its handle. Month resized across week rows. The saved starts and unrelated tasks were preserved, and the expected settings matched. The run also checked all-day scrolling, range drag and Undo, Month continuation and capture recovery. The disposable simulator was removed.
-- The preceding sealed Month source passed the full 220-test regression. A 226-test regression is running on the integrated source with range capture, all-day resize, and span Undo and relaunch.
+- The preceding sealed Month source passed the full 220-test regression. The separately sealed range capture and resize source passed the [full 226-test regression](#calendar-all-day-resize-full-regression).
 
 <a id="calendar-week-edge-paging"></a>
 
@@ -804,3 +804,85 @@ The uncommitted archive is `taskovsky-checkpoints/MobileLocalSettings-2026-11-09
 - Four focused iPhone tests passed without runtime warnings. A quick edge release kept the same week. A dwell on the right advanced one week, a dwell on the left retreated one week, and ordinary horizontal scrolling still reached the last visible day. Paging preserved workspace and settings bytes. The disposable simulator was removed.
 - The same build passed range drop, Undo and relaunch, the recurring drop scope and persisted exception, and all-day end resize and Undo. XCTest used separate touch sequences for edge paging and scheduling drops. A single continuous edge hover followed by a drop on the newly visible week remains unverified.
 - The prior 610-test Mac result covers the unchanged Mac source. The separate 226-test regression uses the all-day resize source sealed before this change.
+
+<a id="task-timeline"></a>
+
+### TASK-TIMELINE-001 — Local Tasks Timeline
+
+[Change contract](../changes/task-timeline-2026-11-09.md). The isolated source manifest has SHA-256 `593aeebcd1911679b2ddb3b0690e2de8b1edbeffbdd70784569357bf85309a91`. The original Desktop worktree matched all 98 sealed inputs.
+
+- The Mac suite passed 612 tests and the signed local release passed strict verification. The shared checks cover list, folder and saved filter membership, undated tasks, archiving and civil-day positions across daylight saving time.
+- Native Mac checks exercised the list, folder and saved filter views, point and duration rendering, horizontal axis scrolling, scale and period changes, and schedule Cancel, Save and Undo. The guarded build used a disposable workspace and restored the fixture, prior guarded bundle and scoped QA preferences.
+- Three focused iPhone tests passed without runtime warnings. The Timeline test verified scoped rows, scale and period changes, undated schedule Cancel and Undo, and per-list persistence across relaunch. Board mode and folder organization also passed. The file audit verified the restored schedule, preserved unrelated workspace fields and identical settings. The disposable simulator was removed.
+- Direct creation on the date axis, drag to move and resize, continuous zoom and section grouping remain open.
+
+<a id="task-timeline-direct-scheduling"></a>
+
+### TASK-TIMELINE-002 — Direct Timeline scheduling
+
+[Change contract](../changes/task-timeline-2026-11-09.md#direct-schedule-editing). The isolated source manifest has SHA-256 `e13bd9789cb3d78103ea1ff176c25a43bd82ee93586ce039bce844429a31a11d`. All 98 sealed inputs in the original Desktop worktree matched.
+
+- The Mac suite passed 613 tests and the signed local release passed strict verification. The shared regression covered an inclusive three-day span crossing daylight saving time, ignored a sub-day all-day drag and an out-of-window move, enforced the one-day resize minimum, and checked quarter-hour snapping and coarse timed resize.
+- On Mac, a bar move shifted November 9–11 to November 11–13. Resizing kept November 9 and extended the end to November 13. Undo restored the original dates after each gesture. A blank-axis click staged November 11. Cancel closed the draft, and submitting the next draft created one all-day point on November 11 while keeping “tomorrow” in its title. The folder picker offered the two active task lists. The disposable fixture, prior guarded bundle and scoped QA preferences were restored.
+- Three focused iPhone checks passed without runtime warnings. The native Timeline test exercised a short no-op drag, moving both endpoints, resizing the end, both Undo paths, long-press capture and Cancel. The file audit confirmed one all-day point in the intended list, restoration of the original schedule and preservation of unrelated tasks and settings. The prior Timeline scope test and the Calendar recurring drag scope test also passed. The disposable simulator was removed.
+- Dragging from Arrange, continuous zoom, and project section grouping remain open.
+
+<a id="calendar-all-day-resize-full-regression"></a>
+
+### CAL-ALL-DAY-RESIZE-002 — Full iPhone regression
+
+The full simulator regression used the sealed range capture and all-day resize source, SHA-256 `b53888c1d3e9eb584fb6d488c647868a0d68f856ad2989f3c22c72e3e9bd054a`. It passed 226 tests with no failures, skips or runtime warnings. The follow-up file audits passed 80 cases, with 79 Mac reopens that made no writes. They confirmed span movement and Undo after relaunch, saved section order, one recovered range capture, write-free Multi-Week capture cancellation, and Week and Month all-day end resizing. The disposable simulator was removed. Week edge paging and the Tasks Timeline have separate focused results above.
+
+<a id="task-timeline-section-grouping"></a>
+
+### TASK-TIMELINE-003 — Timeline section grouping
+
+[Change contract](../changes/task-timeline-2026-11-09.md#project-grouping). The isolated source manifest has SHA-256 `db460d8b0aceecf7a744a2c74b825d2311161da701db6db2fa9242fca9ad84ad`. All 98 sealed inputs in the original Desktop worktree matched.
+
+- The Mac suite passed 614 tests. The signed release passed strict verification. The shared test verified saved section order, the No Section group, list headings, Inbox, and a visible subtask inheriting the section of a parent outside the filter.
+- The guarded Mac build displayed Build then Review, with the expected bar or point aligned to each task label. Folder and saved-filter views showed qualified section headings and excluded the archived list. Browsing preserved the protected workspace and settings byte-for-byte. The prior guarded bundle, fixture and scoped preferences were restored.
+- Three focused iPhone tests passed without warnings. The grouping check verified section and task order and filter list headings. The direct move, resize, and capture check and the scope, mode, and Undo check also passed. The disposable simulator was removed.
+- Dragging from Arrange and continuous zoom remain open.
+
+<a id="task-timeline-arrange-drag"></a>
+
+### TASK-TIMELINE-004 — Drag from Arrange to Timeline
+
+[Change contract](../changes/task-timeline-2026-11-09.md#arrange-by-dragging). The isolated source manifest has SHA-256 `39a10a108c058c191345208ae079f1604dd218758319903864ef6267b1bd9ae9`. All 98 sealed inputs in the original Desktop worktree matched.
+
+- The Mac suite passed 615 tests, and the signed release passed strict verification. The shared regression covered all-day and timed points, quarter-hour snapping across daylight saving time, and refusal outside the date window. The final iPhone package adds a drag type declaration. Mac source and the checked release binary are identical to the guarded run.
+- The guarded Mac build left the task undated after a release outside the chart. A Week drop scheduled November 11 and Undo restored the undated row. A Day drop set November 10 at noon. The file audit found only the intended scheduling change. The prior guarded bundle, fixture and scoped preferences were restored.
+- Three focused iPhone tests passed without runtime warnings. The Arrange test exercised an outside release, Week drop and Undo, and Day drop and relaunch. The file audit confirmed the exact noon point, its default reminder, unchanged settings and unrelated records. The other tests covered direct move, resize and capture, and the earlier scope and editing flows. The disposable simulator was removed.
+- The initial Mac native drop probe was replaced with an in-window gesture after the QA window stopped responding. That probe preserved both fixture files. The iPhone retained its native drag-and-drop path. The earlier iPhone runs passed the tests and each recorded three warnings for the missing drag type declaration. The final package exports the type.
+
+<a id="task-timeline-colors"></a>
+
+### TASK-TIMELINE-005 — Timeline task colors
+
+[Change contract](../changes/task-timeline-2026-11-09.md#task-colors). The isolated source manifest has SHA-256 `1583284b3fadf7623a04b0784953e60ccdd04a17f30de88b718586e08645075c`. All 98 sealed inputs in the original Desktop worktree matched.
+
+- The Mac suite passed 616 tests, and the signed release passed strict verification. The shared test verified all three color rules, list fallback for an untagged task, and unchanged schedule coordinates and membership.
+- The guarded Mac check used the compact palette to switch list, tag and priority colors in Timeline. The final iPhone popover leaves the guarded Mac implementation byte-for-byte equivalent. Both fixture files remained byte-identical. The prior guarded app, fixture and scoped preferences were restored.
+- The focused iPhone test passed without warnings. It selected Tag and Priority and checked that the task's displayed schedule remained the same. The file audit found only the deliberate List-to-Timeline mode change and preserved settings byte-for-byte. The disposable simulator was removed. The earlier iPhone menu tests passed with a UIKit view-hierarchy warning. The final iPhone selector uses the app’s SwiftUI popover pattern.
+- The palette choice is scoped to the current Timeline view. Continuous zoom and exact reference geometry remain open.
+
+<a id="task-timeline-zoom"></a>
+
+### TASK-TIMELINE-006 — Anchored Timeline zoom
+
+[Change contract](../changes/task-timeline-2026-11-09.md#zoom). The isolated source manifest has SHA-256 `e0de184aa078c859ae59d5e127ac4212add828c34d24566e5dbae4b98ae39106`. All 98 sealed inputs in the original Desktop worktree matched.
+
+- The Mac suite passed 617 tests, and the signed release passed strict verification. The shared test checked the fractional-day anchor and the 75% to 300% bounds.
+- The guarded Mac check verified the date-axis midpoint at 125%, reset to 100%, zoom out to 80%, and reset on switching to Day. The scheduled dates and workspace and settings files stayed unchanged. The prior guarded bundle, fixture and scoped preferences were restored. The Mac trackpad pinch and Control-scroll routes were reviewed in source and were outside the native Mac check.
+- Four focused iPhone tests passed without warnings. The native pinch kept a date mark near the gesture center. The period stayed fixed, and the buttons and scale reset passed. The saved-file audit found only the deliberate List-to-Timeline mode choice and identical settings. Arrange drop, direct capture, move and resize, scope, and Undo also passed. The disposable simulator was removed.
+- A separate full regression is running on the sealed Timeline Colors source with Week paging and the integrated Timeline flows. Its manifest is distinct from this zoom checkpoint.
+
+<a id="scoped-boards"></a>
+
+### TASK-BOARD-003 — Date and list Boards in grouped destinations
+
+[Change contract](../changes/scoped-boards-2026-11-09.md). The isolated source manifest has SHA-256 `a9b6d320121e1386e295bee0475db56dfb7f7ac617f986f7fb83b0c385e2766b`. All 98 sealed inputs in the original Desktop worktree matched.
+
+- The Mac suite passed 619 tests, and the signed release passed strict verification. The shared checks covered Next 7 Days columns, overdue and archive boundaries, due clock and range length, and valid folder and tag list targets.
+- The guarded Mac fixture confirmed date and list moves via the card’s Move to menu. Undo restored the date range. The saved-file audit found only the deliberate list and section change and the expected timestamps. The settings, restored fixture, prior guarded bundle and scoped preferences matched. The first guarded drag trial left the fixture unchanged. Native drag remains unverified.
+- Four focused iPhone tests passed without runtime warnings. They covered the Next 7 Days date move and Undo, folder scope, tag Board list move, a saved regular-list Board, and the Timeline path. The saved-file audits confirmed the restored range and the intended list and section change. Settings were byte-identical in both new flows. The tests used the Move menu. The first run found a test selector mismatch on the tag drawer, which the second run corrected. Both disposable simulators were removed.
