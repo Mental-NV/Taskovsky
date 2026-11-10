@@ -16,6 +16,8 @@ The later local [Calendar visual follow-up](changes/calendar-visual-parity-2026-
 
 The subsequent [Tasks/Calendar comparison](tasks-calendar-comparison-2026-11-09.md) reconciles official guides with installed Mac behavior. Local source selection, Year navigation and four additional rulers are corrected on that same preserved working tree. [Latest verification](spec/verification.md#calendar-source-follow-up): 485 passing tests, signed release and bounded native checks; no commit/push or mobile implementation in this Desktop checkout.
 
+The isolated mobile follow-up is based on merged PR #4 at `6ee96ee`, with the verified Desktop Calendar implementation explicitly integrated and preserved by hash record. [Mobile foundation](changes/mobile-foundation-2026-11-09.md) and [read-only preview](changes/mobile-preview-2026-11-09.md) are partial implementations; [local field editing](changes/mobile-local-editing-2026-11-09.md) now connects persistent app-container files, protected title/plain-body edits and resumable scratch drafts. [Local capture](changes/mobile-capture-2026-11-09.md) adds task/note creation and saved-template instantiation with durable retry and recovery. The phone now shares Mac lifecycle rules for status, pinning, movement and Trash. [Local scheduling](changes/mobile-task-scheduling-2026-11-09.md) adds staged schedule editing from Tasks and Calendar with shared duration, reminder and recurrence rules. The verification ledger separates Mac, simulator and file checks from open Calendar gestures, organization, accessibility and device work. [Current mobile evidence](spec/verification.md#mobile-task-scheduling). The original dirty Desktop checkout remains untouched.
+
 ## Read by purpose
 
 | Purpose | Canonical document | Status |
@@ -23,9 +25,9 @@ The subsequent [Tasks/Calendar comparison](tasks-calendar-comparison-2026-11-09.
 | Understand business behavior and rules | [Business specification](spec/business.md) | Source baseline |
 | Reproduce macOS appearance and interactions | [macOS UI and UX](spec/ui-ux.md) | Source baseline, visual verification outstanding |
 | Track progress against TickTick | [Feature parity tracker](parity-implementation-status.md) | One current comparison ledger |
-| Prepare shared code for a second native interface | [Shared engine architecture](architecture/shared-engine.md) | Proposal, not an extraction already made |
+| Prepare shared code for a second native interface | [Shared engine architecture](architecture/shared-engine.md) | Partial Domain/Workspace extraction; remaining command/editor seams proposed |
 | Develop and test a component independently | [Component contracts](architecture/components.md) | Current boundaries plus proposed extraction |
-| Design the iPhone interface | [iPhone proposal](spec/iphone.md) | Proposal, no iOS app implemented |
+| Design and implement the iPhone interface | [iPhone specification](spec/iphone.md) | Local creation, field editing, lifecycle, task schedules and Calendar views. Direct Calendar gestures and other capability gates remain open. |
 | Ask an AI agent to implement a feature | [Workflow](spec/workflow.md) and [change template](spec/change-template.md) | Working process |
 | Run hosted macOS testing | [macOS CI](spec/ci-cd.md) | Implemented on this PR branch; tests/build/package checks, no deployment |
 | Check evidence and known deviations | [Verification ledger](spec/verification.md) | Static evidence and open verification |

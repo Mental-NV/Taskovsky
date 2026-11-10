@@ -127,4 +127,9 @@ public struct CalendarScheduleUndo: Sendable {
     public var after: CalendarScheduleSnapshot
     public var completedAt: Date?
     public var wontDoAt: Date?
+    public init(taskID: UUID, before: CalendarScheduleSnapshot, after: CalendarScheduleSnapshot,
+                completedAt: Date? = nil, wontDoAt: Date? = nil) {
+        self.taskID = taskID; self.before = before; self.after = after
+        self.completedAt = completedAt; self.wontDoAt = wontDoAt
+    }
 }

@@ -4,7 +4,7 @@
 
 This document describes the behavior implemented in source baseline `cfdec454acff91285ac00beaa20c0cf0f0961ee1` (main), reviewed on 2026-11-08. Executable source takes precedence over old reports and source comments. These are current-behavior requirements, not a claim of complete TickTick equivalence or a promise that every path is correct.
 
-Each stable `BUS-###` identifier names one behavior area. Acceptance cases below are review scenarios, not blanket pass claims. The follow-up CI implementation runs existing automated tests and release packaging on a hosted Mac; exact revisions, outcomes and limits are in the verification ledger. No new native macOS interaction or TickTick experiment was performed for this refresh. See the [verification ledger](verification.md), [UI/UX specification](ui-ux.md), and separate [TickTick parity tracker](../parity-implementation-status.md). The [iPhone scope](iphone.md) and [component proposals](../architecture/components.md) describe future work, not current functionality.
+Each stable `BUS-###` identifier names one behavior area. Acceptance cases below are review scenarios, not blanket pass claims. The follow-up CI implementation runs existing automated tests and release packaging on a hosted Mac; exact revisions, outcomes and limits are in the verification ledger. No new native macOS interaction or TickTick experiment was performed for this refresh. See the [verification ledger](verification.md), [UI/UX specification](ui-ux.md), and separate [TickTick parity tracker](../parity-implementation-status.md). The [iPhone scope](iphone.md) and [component proposals](../architecture/components.md) distinguish the original proposals from the November 9 partial implementation and remaining gates.
 
 The Calendar display follow-up in [PR #3](https://github.com/Mental-NV/Taskovsky/pull/3), source head `13a3a486153fc1217f6228cb8e6cd8266dffb366`, adds named secondary rulers, Year styles and item-icon visibility to this baseline while retaining main `b4216dec6ee2d95471038cf41ca6f92efcb94039` documentation, CI and the TaskDetail refactor. Prior local results and pending final integration CI are distinguished in the verification ledger. See [Calendar display verification](verification.md#calendar-display-follow-up).
 
@@ -12,9 +12,9 @@ The Calendar display follow-up in [PR #3](https://github.com/Mental-NV/Taskovsky
 
 <a id="bus-001"></a>
 
-### BUS-001 — Local macOS product
+### BUS-001 — Local product
 
-**Current rule.** Taskovsky is a local task/note application. The package declares macOS 14+, an executable application and a Core target. A workspace contains tasks, lists, folders, tags, saved filters, templates, and lifecycle ledgers. No account, server sync, team permissions, or iPhone application is implemented in this package. The local Calendar workspace projects and schedules those same tasks; it adds no separate event database or external calendar integration (BUS-027–030).
+**Current rule.** Taskovsky is a local task/note application. The package declares macOS 14+/iOS 17+, a macOS executable, a Foundation-only Domain library, immutable Workspace read sessions and a Core compatibility facade for macOS services/editor code. A workspace contains tasks, lists, folders, tags, saved filters, templates, and lifecycle ledgers. No account, server sync or team permissions are implemented. A separate iPhone Xcode target uses app-container JSON storage and explicit title/plain-description edits for fully known documents. Styled descriptions are protected; unknown/unsupported data locks rewriting. Dirty edits have explicit Done/Cancel and separate versioned scratch recovery; recovery never submits automatically and stale revisions are not rebased. Normal launches start empty; samples require validated Debug QA isolation. The phone supports local task/note creation, saved-template instantiation and shared lifecycle actions. Broader phone editors remain incomplete. Notifications are not implemented. See [MOB-EDIT-001](../changes/mobile-local-editing-2026-11-09.md) and [exact verification](verification.md#mobile-local-editing). The local Calendar workspace projects and schedules those same tasks; it adds no separate event database or external calendar integration (BUS-027–030).
 
 **Acceptance.** Open an isolated workspace, create and edit a task, then reopen the same workspace and inspect its stored content. This is a persistence scenario, not a sync scenario. Proposed iPhone capability differences must be evaluated against the future iPhone scope rather than recorded as current macOS defects.
 
@@ -39,6 +39,8 @@ The UI presents notes without the task completion checkbox. List kind supplies a
 **Current rule.** Main quick entry rejects a whitespace-only title and passes context plus user defaults to task creation. Defaults cover list, tag, priority, date, top/bottom position, reminders and timed duration. Explicit list context wins; an archived creation target falls back to Inbox. A tag destination adds that tag to the new record. Subtask creation is a separate path: it inherits the parent's list and creates an open task rather than applying the complete quick-entry default pipeline.
 
 Date recognition is a limited English parser: today, tomorrow, day after tomorrow, next week, `in N days`, and weekday names, with supported times before/after the date phrase. A weekday matching today means the following week. `next week` means the next configured calendar-week boundary. Recognized dates can override the contextual date when requested by quick entry. Removal of recognized date text is optional. `#tag` and `#"multi word"` tokens reuse case-insensitive tag names or create a tag; removal from the title is optional. Ignoring a recognition suggestion leaves that entry's date text unparsed.
+
+**Phone follow-up.** [TaskCreation](../../Sources/TaskovskyCore/TaskCreation.swift) supplies both platforms' creation policies, including date parsing, list resolution, templates and reminder/duration defaults. The phone previews contextual/default list and date, accepts explicit Inbox, and only recognizes existing tag IDs. Ignoring a tag candidate keeps its token; no implicit tag creation on phone. Capture is staged with a stable ID and separate recovery until explicit Add. Its known-format repository writes exactly one task; a repeated ID returns the same durable outcome or a conflict, with no extra record. An explicit missing/archived target or a stale revision is refused. See [MOB-CAPTURE-001](../changes/mobile-capture-2026-11-09.md) and [exact verification](verification.md#mobile-local-capture).
 
 **Acceptance.** Create from Inbox with a default list configured and verify the explicit Inbox choice is retained. Try a recognized date, ignore it, and inspect the saved title/date. Create using a quoted tag name twice and verify one tag identity is reused. Test archived defaults and invalid time tokens separately.
 
@@ -78,7 +80,7 @@ Bulk list moves validate the entire explicit batch before writing: empty, duplic
 
 **Acceptance.** Move a parent with a grandchild, then move only the child to a different list; verify list membership and parent links. Reject a cycle without saving it. Filter to a child alone and verify it remains visible. Reject one invalid ID mixed into an otherwise valid move.
 
-**Evidence.** [TaskStore parenting/moves](../../Sources/TaskovskyCore/TaskStore.swift); [TaskHierarchy](../../Sources/TaskovskyCore/Organization.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [ReorderTests](../../Tests/TaskovskyCoreTests/ReorderTests.swift).
+**Evidence.** [TaskStore parenting](../../Sources/TaskovskyCore/TaskStore.swift); [Shared list movement](../../Sources/TaskovskyCore/TaskLifecycle.swift); [TaskHierarchy](../../Sources/TaskovskyCore/Organization.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [ReorderTests](../../Tests/TaskovskyCoreTests/ReorderTests.swift).
 
 <a id="bus-007"></a>
 
@@ -86,9 +88,11 @@ Bulk list moves validate the entire explicit batch before writing: empty, duplic
 
 **Current rule.** Completion clears Won't Do on the root and completes its active, non-trashed descendants at one timestamp. Descendants already completed or Won't Do retain their prior stamps. A persisted cascade ledger records which descendants changed. Reopening the parent reopens only ledger entries whose completion stamps still match; independent earlier completions and later edits remain. Marking Won't Do changes that record only and does not run the completion recurrence path. Main task rows, search, top-level detail and board actions use shared completion/Undo feedback. The detail child-completion control calls the store directly and does not use that shared feedback path. Archived completion/status changes are refused by the store.
 
+The phone submits one revision-checked command from a row or detail. It offers completion only for tasks. Completion and Trash return an Undo token for the saved revision. A conflicting revision requires reviewing the current state. [Phone verification](verification.md#mobile-task-lifecycle).
+
 **Acceptance.** Complete a parent with one open, one completed and one Won't Do child, reload, then reopen it. Only the untouched cascaded child should reopen. Reopen one child before parent Undo and confirm the later parent action does not overwrite it. A child reopen does not itself consume the parent's ledger entry; the later parent action skips the changed stamp.
 
-**Evidence.** [TaskStore.completeSubtree/undoCompletion/markWontDo](../../Sources/TaskovskyCore/TaskStore.swift); [DetailState](../../Sources/TaskovskyCore/DetailState.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [DetailStateTests](../../Tests/TaskovskyCoreTests/DetailStateTests.swift).
+**Evidence.** [Shared completion and reopening](../../Sources/TaskovskyCore/TaskLifecycle.swift); [DetailState](../../Sources/TaskovskyCore/DetailState.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [DetailStateTests](../../Tests/TaskovskyCoreTests/DetailStateTests.swift).
 
 <a id="bus-008"></a>
 
@@ -102,7 +106,7 @@ Undo removes a spawned record only when it can prove that record is unchanged fr
 
 **Reminder preservation.** All-day descendant reminders shift by calendar days without midnight normalization, preserving wall-clock times and relative days in the task zone. [DEV-002](verification.md#known-deviations) is fixed in merged PR #2; [CloneReminderTests](../../Tests/TaskovskyCoreTests/CloneReminderTests.swift) cover multiple times, previous-day reminders, DST and reload.
 
-**Evidence.** [TaskStore.spawnSuccessor/cloneSubtreeIntoSuccessor/removePristineSpawns](../../Sources/TaskovskyCore/TaskStore.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
+**Evidence.** [Shared successor and pristine snapshot rules](../../Sources/TaskovskyCore/TaskLifecycle.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
 
 <a id="bus-009"></a>
 
@@ -112,7 +116,7 @@ Undo removes a spawned record only when it can prove that record is unchanged fr
 
 **Acceptance.** Trash a parent whose child was already trashed, restore the parent after reload, and verify the independently trashed child stays in Trash. Cancel Delete Forever without changes. Exercise purge only in disposable test data and confirm survivors have no dangling parent. Verify toast Undo is consumed once.
 
-**Evidence.** [TaskStore.trashTask/restoreTask/purgeTask](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [App actions](../../Sources/Taskovsky/App.swift); [TrashTests](../../Tests/TaskovskyCoreTests/TrashTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
+**Evidence.** [Shared Trash, restore and purge](../../Sources/TaskovskyCore/TaskLifecycle.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [App actions](../../Sources/Taskovsky/App.swift); [TrashTests](../../Tests/TaskovskyCoreTests/TrashTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
 
 <a id="bus-010"></a>
 
@@ -350,7 +354,7 @@ Schedule changes go through `scheduleOnCalendar`; automatic reminders are recomp
 <a id="bus-030"></a>
 ### BUS-030 — Local Calendar boundaries
 
-**Current rule.** Calendar has no external account, EventKit access, subscription/feed, import/export, sync, sharing or external-event overlay. Additional time-zone display uses Foundation's installed data. Habit/focus/countdown overlays, repeating-series exceptions, independent checklist scheduling and all-day resize handles are absent. Multi-day fragments, Year Standard dots/Heatmap scaling and gesture policies are Taskovsky choices rather than recovered TickTick algorithms. Calendar's macOS implementation does not add an iPhone target or expand the iPhone proposal's scope.
+**Current rule.** Calendar has no external account, EventKit access, subscription/feed, import/export, sync, sharing or external-event overlay. Additional time-zone display uses Foundation's installed data. Habit/focus/countdown overlays, repeating-series exceptions, independent checklist scheduling and all-day resize handles are absent. Multi-day fragments, Year Standard dots/Heatmap scaling and gesture policies are Taskovsky choices rather than recovered TickTick algorithms. The separate mobile preview reuses the domain projections; it does not yet implement the full iPhone Calendar interaction/settings contract.
 
 **Display preferences.** Up to four additional time-zone rows store a valid Foundation time-zone identifier and an optional trimmed label of at most 32 characters. Normalization removes invalid IDs and duplicate identical IDs, preserves order and keeps the first four valid distinct rows. Equal current offsets do not collapse distinct IDs. Visibility is independent of the saved rows. A row matching the primary zone stays configured but its duplicate ruler is hidden. The primary zone and task schedules are unchanged. Named rulers apply to Day, Week and Multi-Day; their wall-hour conversions and blank-label abbreviations use the first displayed date, not independent per-column offsets across later DST transitions.
 

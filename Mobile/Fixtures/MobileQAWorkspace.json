@@ -1,0 +1,263 @@
+{
+  "completionCascades" : [
+
+  ],
+  "filters" : [
+    {
+      "dateRule" : "all",
+      "dateRules" : [
+
+      ],
+      "id" : "00000000-0000-0000-0000-000000000300",
+      "isPinned" : false,
+      "keyword" : "",
+      "kinds" : [
+
+      ],
+      "listIDs" : [
+
+      ],
+      "name" : "Planning",
+      "priorities" : [
+
+      ],
+      "priority" : null,
+      "status" : "active",
+      "tagIDs" : [
+        "00000000-0000-0000-0000-000000000200"
+      ],
+      "tagMode" : "any"
+    }
+  ],
+  "folders" : [
+
+  ],
+  "lists" : [
+    {
+      "belowFolders" : false,
+      "color" : "#4670FA",
+      "id" : "00000000-0000-0000-0000-000000000100",
+      "isArchived" : false,
+      "isPinned" : false,
+      "kind" : "task",
+      "name" : "Work",
+      "showsInSmartLists" : true,
+      "viewMode" : "list"
+    },
+    {
+      "belowFolders" : false,
+      "color" : "#30A77A",
+      "id" : "00000000-0000-0000-0000-000000000101",
+      "isArchived" : false,
+      "isPinned" : false,
+      "kind" : "task",
+      "name" : "Personal",
+      "showsInSmartLists" : true,
+      "viewMode" : "list"
+    }
+  ],
+  "tags" : [
+    {
+      "color" : "#E6A53A",
+      "id" : "00000000-0000-0000-0000-000000000200",
+      "isCollapsed" : false,
+      "isPinned" : false,
+      "name" : "Planning"
+    }
+  ],
+  "tasks" : [
+    {
+      "body" : "Project overview\nKeep the key decisions together.\nA composed é and an emoji 🧩 remain unchanged.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815900400,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000001",
+      "isPinned" : false,
+      "kind" : "task",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "richBody" : {
+        "blocks" : [
+
+        ],
+        "runs" : [
+          {
+            "bold" : true,
+            "code" : false,
+            "highlight" : false,
+            "italic" : false,
+            "length" : 16,
+            "location" : 0,
+            "strikethrough" : false,
+            "underline" : false
+          }
+        ],
+        "text" : "Project overview\nKeep the key decisions together.\nA composed é and an emoji 🧩 remain unchanged."
+      },
+      "tagIDs" : [
+
+      ],
+      "title" : "Review the project outline",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815914800,
+      "hasDueTime" : true,
+      "id" : "00000000-0000-0000-0000-000000000002",
+      "isPinned" : false,
+      "kind" : "task",
+      "listID" : "00000000-0000-0000-0000-000000000100",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "scheduledDuration" : {
+        "end" : 815914800,
+        "isAllDay" : false,
+        "start" : 815911200
+      },
+      "tagIDs" : [
+        "00000000-0000-0000-0000-000000000200"
+      ],
+      "title" : "Prepare the weekly plan",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000003",
+      "isPinned" : false,
+      "kind" : "task",
+      "listID" : "00000000-0000-0000-0000-000000000101",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "tagIDs" : [
+
+      ],
+      "title" : "Read a chapter",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815911200,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000004",
+      "isPinned" : false,
+      "kind" : "task",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "tagIDs" : [
+
+      ],
+      "title" : "Arrange the studio",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815914800,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000005",
+      "isPinned" : false,
+      "kind" : "task",
+      "listID" : "00000000-0000-0000-0000-000000000101",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "tagIDs" : [
+
+      ],
+      "title" : "Collect design references",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815918400,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000006",
+      "isPinned" : false,
+      "kind" : "task",
+      "listID" : "00000000-0000-0000-0000-000000000100",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "tagIDs" : [
+
+      ],
+      "title" : "Write meeting notes",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815922000,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000007",
+      "isPinned" : false,
+      "kind" : "task",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "tagIDs" : [
+
+      ],
+      "title" : "Book time for a walk",
+      "updatedAt" : 815821200
+    },
+    {
+      "body" : "A neutral sample description.",
+      "checklist" : [
+
+      ],
+      "createdAt" : 815821200,
+      "dueDate" : 815925600,
+      "hasDueTime" : false,
+      "id" : "00000000-0000-0000-0000-000000000008",
+      "isPinned" : false,
+      "kind" : "task",
+      "listID" : "00000000-0000-0000-0000-000000000100",
+      "occurrenceIndex" : 1,
+      "priority" : "none",
+      "recurrence" : "none",
+      "tagIDs" : [
+
+      ],
+      "title" : "Review the draft",
+      "updatedAt" : 815821200
+    }
+  ],
+  "templates" : [
+
+  ],
+  "trashCascades" : [
+
+  ]
+}

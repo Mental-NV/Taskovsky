@@ -171,8 +171,9 @@ extension TaskItem {
     }
 }
 
-enum Destination: Hashable {
-    case all, today, tomorrow, week, inbox, notes, reminders, completed, wontDo, summary, search, trash, list(UUID), tag(UUID), filter(UUID)
+typealias Destination = TaskDestination
+
+extension TaskDestination {
     var symbol: String {
         switch self {
         case .all: "tray.full"; case .today: "calendar"; case .tomorrow: "sun.horizon"; case .week: "calendar.badge.clock"
@@ -190,42 +191,7 @@ enum Destination: Hashable {
         case .wontDo: "Won't Do"; case .summary: "Summary"; case .search: "Search"
         }
     }
-    func includes(_ task: TaskItem, data: WorkspaceData, now: Date = Date()) -> Bool {
-        if self == .trash { return task.deletedAt != nil }
-        guard task.deletedAt == nil else { return false }
-        if self == .wontDo { return task.wontDoAt != nil }
-        if self == .summary {
-            // Summary is a history view, but archived or opted-out lists stay
-            // hidden there like in every other smart destination.
-            guard !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists) else { return false }
-            return task.updatedAt >= Calendar.current.date(byAdding: .day, value: -7, to: now)!
-        }
-        if self == .completed { return task.completedAt != nil }
-        guard task.completedAt == nil && task.wontDoAt == nil else { return false }
-        let cal = task.scheduleCalendar
-        let day = cal.startOfDay(for: now)
-        switch self {
-        case .all, .today, .tomorrow, .week, .notes:
-            guard !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists) else { return false }
-        case .reminders:
-            guard !SmartListEligibility.isArchived(task, lists: data.lists) else { return false }
-        case .inbox, .list, .tag, .completed, .trash, .wontDo, .summary, .search, .filter:
-            break
-        }
-        switch self {
-        case .all: return true
-        case .today: return task.dueDate.map { $0 < cal.date(byAdding: .day, value: 1, to: day)! } == true
-        case .tomorrow: return task.dueDate.map { cal.isDate($0, inSameDayAs: cal.date(byAdding: .day, value: 1, to: day)!) } == true
-        case .week: return task.dueDate.map { $0 < cal.date(byAdding: .day, value: 7, to: day)! } == true
-        case .inbox: return task.listID == nil
-        case .notes: return task.kind == .note
-        case .reminders: return task.reminderDate != nil
-        case .list(let id): return task.listID == id
-        case .tag(let id):
-            return SmartListEligibility.taskMatchesTag(task, tagID: id, tags: data.tags)
-        case .completed, .trash, .wontDo, .summary, .search, .filter: return false
-        }
-    }
+
     var smartKey: SmartListKey? {
         switch self { case .all: .all; case .today: .today; case .tomorrow: .tomorrow; case .week: .week; case .inbox: .inbox; case .summary: .summary; case .completed: .completed; case .wontDo: .wontDo; case .trash: .trash; default: nil }
     }
@@ -1462,12 +1428,8 @@ struct WorkspaceView: View {
         var order: [UUID: Int] = [:]
         for (offset, task) in store.data.tasks.enumerated() { order[task.id] = offset }
         let normalizedSort = TaskSortPolicy.normalized(sort)
-        return store.data.tasks.filter { task in
-            if case .filter(let id) = destination { return store.data.filters.first { $0.id == id }?.matches(task, lists: store.data.lists, now: now, calendar: store.settings.calendar) ?? false }
-            if destination.includes(task, data: store.data, now: now) { return true }
-            if showCompleted && destination != .completed && destination != .trash && destination != .wontDo && (task.completedAt != nil || task.wontDoAt != nil) && task.deletedAt == nil { var copy = task; copy.completedAt = nil; copy.wontDoAt = nil; return destination.includes(copy, data: store.data, now: now) }
-            return false
-        }.sorted { a, b in
+        return destination.matchingTasks(in: store.data, showHistory: showCompleted, now: now,
+                                         calendar: store.settings.calendar).sorted { a, b in
             let aActive = a.completedAt == nil && a.wontDoAt == nil
             let bActive = b.completedAt == nil && b.wontDoAt == nil
             if aActive != bActive { return aActive }

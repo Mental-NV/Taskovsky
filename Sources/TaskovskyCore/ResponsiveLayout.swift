@@ -1,3 +1,4 @@
+import TaskovskyDomain
 /// Geometry policy for the three-panel workspace.
 ///
 /// The rail is fixed at 62pt. The navigation sidebar is user-resizable in
