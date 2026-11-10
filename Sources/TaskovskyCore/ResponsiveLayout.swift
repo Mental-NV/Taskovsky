@@ -42,6 +42,12 @@ public enum ResponsiveLayout {
     /// wide, anchored under the header toggle (measured about x77 y56),
     /// with native rounded corners and shadow. Not a full-height drawer.
     public static let sidebarPopoverWidth: Double = 220
+    public static let calendarSplitMin: Double = 600
+
+    public static func canShowTasksWithCalendar(availableWidth: Double) -> Bool {
+        // Leave room for the native split view divider as well as both panes.
+        availableWidth >= listMin + calendarSplitMin + 12
+    }
 
     /// Width the navigation sidebar occupies, or zero when manually collapsed.
     public static func navWidth(sidebarWidth: Double, collapsed: Bool) -> Double {

@@ -2,6 +2,7 @@ import Foundation
 
 public enum CalendarScheduleOperation: Sendable {
     case move(start: Date, allDay: Bool)
+    case resizeStart(Date)
     case resizeEnd(Date)
     case setRange(TaskDurationRange)
     case setPoint(date: Date, allDay: Bool)
@@ -12,6 +13,10 @@ public enum CalendarScheduleOperation: Sendable {
 public enum CalendarScheduleScope: Hashable, Sendable { case series, currentOccurrence }
 
 public enum CalendarScheduling {
+    static func timedResizeStart(_ target: Date, start: Date, end: Date) -> Date {
+        target == start ? start : min(target, end.addingTimeInterval(-900))
+    }
+
     public static func canRescheduleCurrentOccurrence(_ task: TaskItem, in tasks: [TaskItem] = []) -> Bool {
         task.kind == .task && task.isRepeating && task.dueDate != nil &&
             task.deletedAt == nil && task.completedAt == nil && task.wontDoAt == nil &&
@@ -40,11 +45,16 @@ public enum CalendarScheduling {
         task.dueDate = shape.dueDate
         task.hasDueTime = shape.hasDueTime
         task.scheduledDuration = shape.window
-        if TaskSchedulePolicy.usesDefaultReminder(original, settings: settings, calendar: policyCalendar) {
-            task.reminderDates = original.reminderDates
-            task.reminderFollowsSchedule = true
+        switch operation {
+        case .resizeStart:
+            break // The deadline and its reminder policy are unchanged.
+        default:
+            if TaskSchedulePolicy.usesDefaultReminder(original, settings: settings, calendar: policyCalendar) {
+                task.reminderDates = original.reminderDates
+                task.reminderFollowsSchedule = true
+            }
+            TaskSchedulePolicy.reconcileReminders(of: &task, from: original, settings: settings, calendar: policyCalendar)
         }
-        TaskSchedulePolicy.reconcileReminders(of: &task, from: original, settings: settings, calendar: policyCalendar)
         if scope == .currentOccurrence {
             task.originalOccurrenceSchedule = original.originalOccurrenceSchedule ?? OccurrenceSchedule(task: original)
         } else {
@@ -123,6 +133,14 @@ public enum CalendarScheduling {
             }
             guard let valid = range.validated(in: local) else { return nil }
             task.scheduledDuration = valid; task.dueDate = valid.end; task.hasDueTime = !valid.isAllDay
+        case .resizeStart(let target):
+            guard let range = oldWindow, original.hasDueTime != range.isAllDay, original.dueDate == range.end,
+                  target.timeIntervalSinceReferenceDate.isFinite else { return nil }
+            let start = range.isAllDay
+                ? min(range.end, CalendarDates.civilDay(target, from: displayCalendar, to: local))
+                : timedResizeStart(target, start: range.start, end: range.end)
+            task.scheduledDuration = TaskDurationRange(start: start, end: range.end, isAllDay: range.isAllDay)
+            return task
         case .resizeEnd(let target):
             guard let due = original.dueDate, target.timeIntervalSinceReferenceDate.isFinite else { return nil }
             let start = oldWindow?.start ?? due

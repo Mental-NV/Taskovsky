@@ -27,9 +27,37 @@ struct PhoneCalendarControls {
     let drag: (CalendarEntry) -> PhoneCalendarDrag?
     let edit: (CalendarEntry, PhoneCalendarEditMode) -> Void
     let drop: (PhoneCalendarDrag, PhoneCalendarDropTarget) -> Bool
-    let resize: (PhoneCalendarDrag, Date) -> Void
+    let resize: (PhoneCalendarDrag, CalendarScheduleOperation) -> Void
     let saveFoldedHours: (CalendarFoldedHours) -> Void
     let createRange: ((ClosedRange<Date>) -> Void)?
+}
+
+struct PhoneCalendarDateJump: View {
+    @Environment(\.dismiss) private var dismiss
+    @State var date: Date
+    let calendar: Calendar
+    let go: (Date) -> Void
+
+    var body: some View {
+        NavigationStack {
+            DatePicker("Date", selection: $date, displayedComponents: .date)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .padding(.top, 12)
+                .navigationTitle("Jump to Date")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Go") { go(calendar.startOfDay(for: date)); dismiss() }
+                    }
+                }
+        }
+        .environment(\.calendar, calendar)
+        .environment(\.timeZone, calendar.timeZone)
+        .presentationDetents([.medium, .large])
+    }
 }
 
 struct MobileCalendarPreview: View {
@@ -120,22 +148,33 @@ private struct MobileCalendarContent: View {
             }
     }
     private func card(_ entry: CalendarEntry, fillsHeight: Bool = false,
+                      resizeStartDay: ((DragGesture.Value) -> Date?)? = nil,
+                      compactResize: Bool = false,
                       resizeDay: ((DragGesture.Value) -> Date?)? = nil) -> some View {
         let payload = controls.drag(entry)
         let color = cardColor(entry.color)
+        let usesCompactGrips = compactResize && entry.canResizeAllDayRange && (resizeStartDay != nil || resizeDay != nil)
         return HStack(alignment: .top, spacing: 0) {
-            cardButton(entry, color: color, canEdit: payload != nil, fillsHeight: fillsHeight)
+            if let payload, let resizeStartDay, entry.canResizeAllDayRange {
+                PhoneAllDayResizeHandle(entry: entry, edge: .start, calendar: calendar, dateAt: resizeStartDay,
+                                        width: usesCompactGrips ? 12 : 15,
+                                        save: { controls.resize(payload, .resizeStart($0)) },
+                                        edit: { controls.edit(entry, .resizeStart) })
+            }
+            cardButton(entry, color: color, canEdit: payload != nil, fillsHeight: fillsHeight, compact: usesCompactGrips)
             if let payload {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: fillsHeight ? 11 : 8, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: fillsHeight ? 28 : 16, height: fillsHeight ? 28 : 17)
+                    .frame(width: fillsHeight ? 28 : usesCompactGrips ? 12 : 16,
+                           height: fillsHeight ? 28 : 17)
                     .contentShape(Rectangle())
                     .accessibilityLabel("Drag " + entry.title)
                     .draggable(payload)
                 if let resizeDay, entry.canResizeAllDayRange {
-                    PhoneAllDayResizeHandle(entry: entry, calendar: calendar, dateAt: resizeDay,
-                                            save: { controls.resize(payload, $0) },
+                    PhoneAllDayResizeHandle(entry: entry, edge: .end, calendar: calendar, dateAt: resizeDay,
+                                            width: usesCompactGrips ? 12 : 18,
+                                            save: { controls.resize(payload, .resizeEnd($0)) },
                                             edit: { controls.edit(entry, .resize) })
                 }
             }
@@ -156,7 +195,8 @@ private struct MobileCalendarContent: View {
         return Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
     }
 
-    @ViewBuilder private func cardButton(_ entry: CalendarEntry, color: Color, canEdit: Bool, fillsHeight: Bool) -> some View {
+    @ViewBuilder private func cardButton(_ entry: CalendarEntry, color: Color, canEdit: Bool,
+                                         fillsHeight: Bool, compact: Bool) -> some View {
         let button = Button { open(entry.taskID) } label: {
             HStack(spacing: 3) {
                 Rectangle().fill(color).frame(width: 2)
@@ -168,7 +208,11 @@ private struct MobileCalendarContent: View {
                 Text(entry.title).font(.caption2).lineLimit(1).foregroundStyle(.primary)
                     .strikethrough(entry.isCompleted)
                 Spacer(minLength: 0)
-            }.frame(minHeight: 17, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading).contentShape(Rectangle())
+            }
+            .frame(minWidth: compact ? 0 : nil, maxWidth: compact ? .infinity : nil, minHeight: 17,
+                   maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
+            .clipped()
+            .contentShape(Rectangle())
         }
         .accessibilityLabel(entry.title + (entry.isProjected ? ", recurring preview" : ""))
         if canEdit {
@@ -176,11 +220,21 @@ private struct MobileCalendarContent: View {
                 .contextMenu {
                     Button("Edit Calendar Schedule", systemImage: "calendar") { controls.edit(entry, .schedule) }
                     Button("Move Schedule", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { controls.edit(entry, .move) }
+                    if entry.hasDuration {
+                        Button("Resize Start", systemImage: entry.isAllDay ? "arrow.left.to.line" : "arrow.up.to.line") {
+                            controls.edit(entry, .resizeStart)
+                        }
+                    }
                     Button("Resize Schedule", systemImage: "arrow.up.and.down") { controls.edit(entry, .resize) }
                 }
                 .accessibilityAction(named: Text("Edit Calendar Schedule")) { controls.edit(entry, .schedule) }
                 .accessibilityAction(named: Text("Move Schedule")) { controls.edit(entry, .move) }
                 .accessibilityAction(named: Text("Resize Schedule")) { controls.edit(entry, .resize) }
+                .accessibilityActions {
+                    if entry.hasDuration {
+                        Button("Resize Start") { controls.edit(entry, .resizeStart) }
+                    }
+                }
         } else { button }
     }
 
@@ -230,11 +284,11 @@ private struct MobileCalendarContent: View {
                         }
                     }
                 } else {
-                    ForEach(days, id: \.self) { day in
+                    ForEach(Array(days.enumerated()), id: \.element) { index, day in
                         VStack(spacing: 0) {
                             hourlyDayHeader(day)
                             allDayCards((byDay[day] ?? []).filter(\.isAllDay),
-                                        resizeDay: days.firstIndex(of: day).flatMap { hourlyResizeDay($0, width: columnWidth) })
+                                        index: index, columnWidth: columnWidth)
                                 .frame(height: allDayHeight, alignment: .top)
                                 .frame(maxWidth: .infinity)
                                 .background(Color(uiColor: .systemBackground))
@@ -296,8 +350,12 @@ private struct MobileCalendarContent: View {
                 }
             }
             ForEach(placements) { placement in
-                card(placement.entry, resizeDay: placement.continuesAfter ? nil :
-                    hourlyResizeDay(placement.firstDay + placement.dayCount - 1, width: columnWidth))
+                card(placement.entry,
+                     resizeStartDay: placement.continuesBefore ? nil :
+                        hourlyResizeDay(placement.firstDay, width: columnWidth, edge: .start),
+                     compactResize: placement.dayCount == 1,
+                     resizeDay: placement.continuesAfter ? nil :
+                        hourlyResizeDay(placement.firstDay + placement.dayCount - 1, width: columnWidth))
                     .frame(width: columnWidth * CGFloat(placement.dayCount) - 2, height: allDayRowHeight)
                     .offset(x: columnWidth * CGFloat(placement.firstDay) + 1, y: CGFloat(placement.lane) * pitch)
             }
@@ -318,18 +376,23 @@ private struct MobileCalendarContent: View {
         }
     }
 
-    private func hourlyResizeDay(_ index: Int, width: CGFloat) -> ((DragGesture.Value) -> Date?)? {
+    private func hourlyResizeDay(_ index: Int, width: CGFloat,
+                                 edge: CalendarRangeEdge = .end) -> ((DragGesture.Value) -> Date?)? {
         guard days.count > 1 else { return nil }
+        let gripCenter: CGFloat = edge == .start ? 8 : width - 10
         return { value in
-            let column = index + Int(floor((value.translation.width + width - 10) / width))
+            let column = index + Int(floor((value.translation.width + gripCenter) / width))
             return days.indices.contains(column) ? days[column] : nil
         }
     }
 
-    @ViewBuilder private func allDayCards(_ entries: [CalendarEntry],
-                                        resizeDay: ((DragGesture.Value) -> Date?)?) -> some View {
+    @ViewBuilder private func allDayCards(_ entries: [CalendarEntry], index: Int, columnWidth: CGFloat) -> some View {
         let cards = VStack(spacing: 2) {
-            ForEach(entries) { card($0, resizeDay: resizeDay).frame(height: allDayRowHeight) }
+            ForEach(entries) {
+                card($0, resizeStartDay: hourlyResizeDay(index, width: columnWidth, edge: .start),
+                     compactResize: true, resizeDay: hourlyResizeDay(index, width: columnWidth))
+                    .frame(height: allDayRowHeight)
+            }
         }
         if let rows = options.allDayRows, entries.count > rows {
             ScrollView { cards }
@@ -418,12 +481,13 @@ private struct MobileCalendarContent: View {
             }
             ForEach(CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar, window: hourWindow)) { placement in
                 let lane = width / CGFloat(placement.columnCount)
+                let cardWidth = max(1, lane - 2)
                 PhoneCalendarTimedSegment(placement: placement, day: day, calendar: calendar, scale: scale,
-                                          hourWindow: hourWindow,
-                                          payload: placement.endIsVisible ? controls.drag(placement.entry) : nil,
-                                          resize: controls.resize, edit: { controls.edit(placement.entry, .resize) },
+                                          hourWindow: hourWindow, width: cardWidth,
+                                          payload: controls.drag(placement.entry), resize: controls.resize,
+                                          edit: { controls.edit(placement.entry, $0) },
                                           content: card(placement.entry, fillsHeight: true))
-                    .frame(width: max(1, lane - 2))
+                    .frame(width: cardWidth)
                     .offset(x: CGFloat(placement.column) * lane + 1, y: (placement.startMinute - Double(hourWindow.firstMinute)) * scale)
             }
         }
@@ -498,7 +562,10 @@ private struct MobileCalendarContent: View {
                 let width = (geometry.size.width - 6) / 7
                 let pitch = width + 1
                 ForEach(layout.spans) { placement in
-                    card(placement.entry, resizeDay: placement.continuesAfter ? nil : monthResizeDay)
+                    card(placement.entry,
+                         resizeStartDay: placement.continuesBefore ? nil : monthResizeDay,
+                         compactResize: placement.dayCount == 1,
+                         resizeDay: placement.continuesAfter ? nil : monthResizeDay)
                         .frame(width: pitch * CGFloat(placement.dayCount) - 7, height: allDayRowHeight)
                         .contentShape(Rectangle())
                         .dropDestination(for: PhoneCalendarDrag.self) { values, point in
@@ -519,7 +586,8 @@ private struct MobileCalendarContent: View {
                 .frame(height: monthDateHeight).padding(.bottom, 3)
             ForEach(layout.slots.indices, id: \.self) { index in
                 if let entry = layout.slots[index] {
-                    card(entry, resizeDay: monthResizeDay).frame(height: allDayRowHeight)
+                    card(entry, resizeStartDay: monthResizeDay, compactResize: true, resizeDay: monthResizeDay)
+                        .frame(height: allDayRowHeight)
                 } else {
                     Color.clear.frame(height: allDayRowHeight).allowsHitTesting(false)
                 }
@@ -780,33 +848,38 @@ private struct PhoneCalendarWeekEdgeTarget: UIViewRepresentable {
 
 private struct PhoneAllDayResizeHandle: View {
     let entry: CalendarEntry
+    let edge: CalendarRangeEdge
     let calendar: Calendar
     let dateAt: (DragGesture.Value) -> Date?
+    let width: CGFloat
     let save: (Date) -> Void
     let edit: () -> Void
     @GestureState private var preview: Date?
+    private var endpoint: String { edge == .start ? "start" : "end" }
 
     var body: some View {
         Button(action: edit) {
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-                .frame(width: 18, height: 17)
+                .frame(width: width, height: 17)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Resize end of " + entry.title)
-        .accessibilityIdentifier("calendarAllDayEndHandle-" + entry.taskID.uuidString)
+        .accessibilityLabel("Resize " + endpoint + " of " + entry.title)
+        .accessibilityIdentifier("calendarAllDay" + endpoint.capitalized + "Handle-" + entry.taskID.uuidString)
         .highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .global)
-            .updating($preview) { value, state, _ in state = dateAt(value) }
+            .updating($preview) { value, state, _ in
+                state = dateAt(value).flatMap { entry.allDayResizeTarget(on: $0, edge: edge, calendar: calendar) }
+            }
             .onEnded { value in
                 guard let day = dateAt(value),
-                      let end = entry.allDayResizeTarget(on: day, calendar: calendar) else { return }
-                save(end)
+                      let target = entry.allDayResizeTarget(on: day, edge: edge, calendar: calendar) else { return }
+                save(target)
             })
         .overlay(alignment: .topTrailing) {
             if let preview {
-                Text(max(entry.start, preview).formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)))
+                Text(preview.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)))
                     .font(.caption2).fixedSize().padding(3).background(.regularMaterial, in: Capsule())
                     .offset(y: -19).allowsHitTesting(false).accessibilityHidden(true)
             }
@@ -820,11 +893,13 @@ private struct PhoneCalendarTimedSegment<Content: View>: View {
     let calendar: Calendar
     let scale: Double
     let hourWindow: CalendarHourlyWindow
+    let width: CGFloat
     let payload: PhoneCalendarDrag?
-    let resize: (PhoneCalendarDrag, Date) -> Void
-    let edit: () -> Void
+    let resize: (PhoneCalendarDrag, CalendarScheduleOperation) -> Void
+    let edit: (PhoneCalendarEditMode) -> Void
     let content: Content
     @GestureState private var delta: CGFloat = 0
+    @GestureState private var startPreview: Date?
 
     private var height: CGFloat { max(18, (placement.endMinute - placement.startMinute) * scale) }
 
@@ -832,8 +907,8 @@ private struct PhoneCalendarTimedSegment<Content: View>: View {
         let available = (Double(hourWindow.endMinute) - placement.startMinute) * scale
         content.frame(height: min(available, max(18, height + delta)), alignment: .top).clipped()
             .overlay(alignment: .bottom) {
-                if let payload, height >= 44, placement.entry.hasDuration {
-                    Button(action: edit) {
+                if let payload, height >= 44, placement.entry.hasDuration, placement.endIsVisible {
+                    Button { edit(.resize) } label: {
                         Capsule().fill(Color.blue.opacity(0.75)).frame(width: 22, height: 3)
                             .frame(maxWidth: .infinity).frame(height: 22).contentShape(Rectangle())
                     }
@@ -847,9 +922,42 @@ private struct PhoneCalendarTimedSegment<Content: View>: View {
                             .onEnded { value in
                                 let minute = hourWindow.snappedMinute(placement.resizeMinute + value.translation.height / scale)
                                 let end = CalendarDates.instant(on: day, minute: minute, calendar: calendar)
-                                resize(payload, end)
+                                resize(payload, .resizeEnd(end))
                             })
                 }
             }
+            .overlay(alignment: .topLeading) {
+                if let payload, height >= 44, placement.entry.hasDuration, placement.startIsVisible {
+                    startGrip(for: payload)
+                }
+            }
+    }
+
+    private func startGrip(for payload: PhoneCalendarDrag) -> some View {
+        func target(_ delta: CGFloat) -> Date {
+            placement.startResizeTarget(deltaMinutes: delta / scale, day: day, calendar: calendar, window: hourWindow)
+        }
+        return Button { edit(.resizeStart) } label: {
+            Capsule().fill(Color.blue.opacity(0.75)).frame(width: 22, height: 3)
+                .frame(width: min(44, max(1, width - 28)), height: 22).clipped().contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Resize start of " + placement.entry.title)
+        .accessibilityIdentifier("calendarResizeStartHandle-" + placement.entry.taskID.uuidString)
+        .highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .global)
+            .updating($startPreview) { value, preview, _ in preview = target(value.translation.height) }
+            .onEnded { value in
+                let date = target(value.translation.height)
+                guard date != placement.entry.start else { return }
+                resize(payload, .resizeStart(date))
+            })
+        .overlay(alignment: .topLeading) {
+            if let startPreview {
+                Text(startPreview.formatted(Date.FormatStyle(date: .omitted, time: .shortened,
+                                                             calendar: calendar, timeZone: calendar.timeZone)))
+                    .font(.caption2).fixedSize().padding(3).background(.regularMaterial, in: Capsule())
+                    .offset(y: -20).allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
     }
 }

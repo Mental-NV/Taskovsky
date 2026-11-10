@@ -2,24 +2,29 @@ import SwiftUI
 import TaskovskyCore
 
 enum CalendarDrag {
-    static func payload(_ id: UUID) -> String { "taskovsky-calendar:\(id.uuidString)" }
-    static func id(_ value: String) -> UUID? {
-        guard value.hasPrefix("taskovsky-calendar:") else { return nil }
-        return UUID(uuidString: String(value.dropFirst("taskovsky-calendar:".count)))
+    static func id(_ payloads: [TaskDragPayload]) -> UUID? {
+        guard payloads.count == 1, let ids = payloads.first?.ids, ids.count == 1 else { return nil }
+        return ids.first
     }
 }
 extension View {
     @ViewBuilder func calendarDraggable(_ entry: CalendarEntry) -> some View {
-        if entry.canSchedule { self.draggable(CalendarDrag.payload(entry.taskID)) } else { self }
+        if entry.canSchedule { self.draggable(TaskDragPayload(ids: [entry.taskID])) } else { self }
     }
 }
 
+extension EnvironmentValues {
+    @Entry var calendarTemporarilyShowsIcons = false
+}
+
 struct CalendarEntryView: View {
+    @Environment(\.calendarTemporarilyShowsIcons) private var temporarilyShowsIcons
     var entry: CalendarEntry
     var style: CalendarItemStyle
     var calendar: Calendar
     var showItemIcons = true
     var compact = false
+    var trailingInset: CGFloat = 0
     var open: (UUID) -> Void
     var complete: (UUID) -> Void
     var edit: (CalendarEntry) -> Void
@@ -31,7 +36,7 @@ struct CalendarEntryView: View {
     }
     var body: some View {
         HStack(alignment: .top, spacing: 5) {
-            if showItemIcons {
+            if showItemIcons || temporarilyShowsIcons {
                 if entry.isProjected {
                     Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(tint)
                         .accessibilityLabel("Future repeat preview")
@@ -56,6 +61,7 @@ struct CalendarEntryView: View {
         }
         .font(.system(size: compact ? 11 : 12))
         .padding(.horizontal, 4).padding(.vertical, compact ? 1 : 4)
+        .padding(.trailing, trailingInset)
         .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
         .background(style == .filled ? tint.opacity(entry.isCompleted ? 0.06 : 0.15) : Color.clear)
         .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 2) }
@@ -323,7 +329,7 @@ struct CalendarArrangePanel: View {
                                 HStack(spacing: 5) {
                                     Image(systemName: "line.3.horizontal")
                                         .frame(width: 12, height: 22).contentShape(Rectangle())
-                                        .draggable(CalendarDrag.payload(task.id))
+                                        .draggable(TaskDragPayload(ids: [task.id]))
                                         .foregroundStyle(.secondary).help("Drag to schedule")
                                         .accessibilityLabel("Drag " + task.title + " to schedule")
                                     Button { open(task.id) } label: {
@@ -336,7 +342,7 @@ struct CalendarArrangePanel: View {
                                     .background(Color(hex: TaskCalendarProjection.color(for: task, data: store.data, by: grouping)).opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
                                     .contentShape(Rectangle())
                                     .contextMenu { Button("Schedule…") { schedule(task) }; Button("Open task") { open(task.id) } }
-                                    .draggable(CalendarDrag.payload(task.id))
+                                    .draggable(TaskDragPayload(ids: [task.id]))
                             }
                         }
                     }

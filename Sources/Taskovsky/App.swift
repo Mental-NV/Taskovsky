@@ -50,6 +50,7 @@ struct TaskovskyApp: App {
     @StateObject private var store: TaskStore
     @StateObject private var drafts = DetailDrafts()
     @StateObject private var actions = TaskActionCenter()
+    @StateObject private var calendarShortcuts = CalendarShortcutBindings()
     init() {
         if LaunchIsolation.isIsolated {
             // Explicit file, no migration side effects on real storage. A
@@ -77,6 +78,7 @@ struct TaskovskyApp: App {
             .defaultSize(width: 1280, height: 740)
             .windowStyle(.hiddenTitleBar)
             .commands {
+                CalendarNavigationCommands(shortcuts: calendarShortcuts)
                 CommandGroup(replacing: .newItem) {
                     Button("New Task") { NotificationCenter.default.post(name: .newTask, object: nil) }.keyboardShortcut("n")
                     Button("New Note") { NotificationCenter.default.post(name: .newNote, object: nil) }.keyboardShortcut("n", modifiers: [.command, .shift])
@@ -94,7 +96,8 @@ struct TaskovskyApp: App {
                     #endif
                 }
             }
-        Settings { SettingsView(store: store) }.defaultSize(width: 800, height: 680).windowStyle(.hiddenTitleBar)
+        Settings { SettingsView(store: store, calendarShortcuts: calendarShortcuts) }
+            .defaultSize(width: 800, height: 680).windowStyle(.hiddenTitleBar)
         WindowGroup("Task Details", for: UUID.self) { $id in
             if let id { TaskDetailWindow(store: store, drafts: drafts, actions: actions, id: id) }
         }.defaultSize(width: 464, height: 630)
@@ -313,6 +316,7 @@ struct WorkspaceView: View {
     private var listFillerHeight: CGFloat { max(0, listViewportHeight - listContentHeight) }
     @AppStorage("Taskovsky.showDetailsPreview", store: IsolatedDefaults.store) private var showDetailsPreview = false
     @AppStorage("Taskovsky.calendarActive", store: IsolatedDefaults.store) private var calendarActive = false
+    @AppStorage("Taskovsky.calendarBesideTasks", store: IsolatedDefaults.store) private var calendarBesideTasks = false
     @AppStorage("Taskovsky.showChecklistItems", store: IsolatedDefaults.store) private var showChecklistItems = false
     @AppStorage("Taskovsky.detailLayout", store: IsolatedDefaults.store) private var detailLayout = "sidePeek"
     @AppStorage("Taskovsky.taskPaneCustomized", store: IsolatedDefaults.store) private var taskPaneCustomized = false
@@ -353,10 +357,12 @@ struct WorkspaceView: View {
                 // Frozen during divider drags so the gesture can never flap
                 // either pane across a snapping boundary mid-drag.
                 let showSidebar = frozenShowSidebar ?? computedShowSidebar
-                let dockDetail = frozenDockDetail ?? computedDockDetail
                 let autoCollapsed = ResponsiveLayout.shouldAutoCollapseSidebar(totalWidth: geometry.size.width, sidebarWidth: sidebarWidth)
                 let navWidth = showSidebar ? expandedNavWidth : 0
                 let available = geometry.size.width - ResponsiveLayout.railWidth - navWidth - (showSidebar ? ResponsiveLayout.dividerWidth : 0)
+                let splitCalendar = !calendarActive && calendarBesideTasks && destination != .search && destination != .summary &&
+                    ResponsiveLayout.canShowTasksWithCalendar(availableWidth: available)
+                let dockDetail = !splitCalendar && (frozenDockDetail ?? computedDockDetail)
                 // Pristine installs default to a 300pt detail with the remaining width
                 // for the center; existing stored fractions are never overwritten. The
                 // preference is only written once the user drags the divider.
@@ -388,6 +394,16 @@ struct WorkspaceView: View {
                         .accessibilityHidden(!showSidebar)
                         if destination == .summary {
                             SummaryView(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if splitCalendar {
+                            HSplitView {
+                                GeometryReader { taskGeometry in
+                                    tasksWithDetailOverlay(now: timeline.date, width: taskGeometry.size.width)
+                                }
+                                .frame(minWidth: ResponsiveLayout.listMin, idealWidth: available * 0.38)
+                                TaskCalendarWorkspace(store: store, onOpenTask: openPopup, onComplete: complete, embeddedInTasks: true)
+                                    .frame(minWidth: ResponsiveLayout.calendarSplitMin, maxWidth: .infinity, maxHeight: .infinity)
+                            }
+                            .accessibilityIdentifier("tasksCalendarSplit")
                         } else if dockDetail {
                             // Full search keeps its query/filter/results here; selecting a
                             // result docks its detail beside them. Closing the detail
@@ -400,19 +416,7 @@ struct WorkspaceView: View {
                             PanelDivider { x, ended in onPaneDrag(x: x, ended: ended, listWidth: storedListWidth, available: available) }
                             detailDock.frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
-                            ZStack(alignment: .trailing) {
-                                Group {
-                                    if destination == .search {
-                                        SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                                    } else { taskPane(now: timeline.date, overlay: true, paneWidth: CGFloat(available)) }
-                                }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                                // Overlay drawer: right-aligned, fixed 300pt, no scrim, soft
-                                // shadow on its leading edge. It never reflows the list.
-                                // Only rendered while open, so a closed drawer leaves no
-                                // invisible focusable or hittable content behind.
-                                if let task = selectedTask, detailState.drawerOpen { drawer(task: task) }
-                            }.frame(maxWidth: .infinity, maxHeight: .infinity)
-                                .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
+                            tasksWithDetailOverlay(now: timeline.date, width: available)
                         }
                     }
                 }
@@ -687,6 +691,18 @@ struct WorkspaceView: View {
     private func removeEscapeMonitor() {
         if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor); escapeMonitor = nil }
     }
+    private func tasksWithDetailOverlay(now: Date, width: CGFloat) -> some View {
+        ZStack(alignment: .trailing) {
+            Group {
+                if destination == .search {
+                    SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
+                } else { taskPane(now: now, overlay: true, paneWidth: width) }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The drawer stays inside the Tasks pane and never reflows it.
+            if let task = selectedTask, detailState.drawerOpen { drawer(task: task) }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
+    }
     private var detailDock: some View {
         Group {
             if let task = selectedTask {
@@ -725,12 +741,26 @@ struct WorkspaceView: View {
         VStack(spacing: 26) {
             Spacer().frame(height: 12)
             RailButton(title: "Tasks", active: !calendarActive && destination != .search, symbol: "checkmark", selectedTile: true) { calendarActive = false; destination = .today; closeDrawer() }
+                .contextMenu {
+                    Button(calendarBesideTasks ? "Hide Calendar" : "Show with Calendar", action: toggleCalendarBesideTasks)
+                }
+                .accessibilityAction(named: Text(calendarBesideTasks ? "Hide Calendar" : "Show with Calendar")) {
+                    toggleCalendarBesideTasks()
+                }
             RailButton(title: "Calendar", active: calendarActive, symbol: "calendar", selectedTile: true) { calendarActive = true; sidebarPopoverOpen = false; closeDrawer() }
             RailButton(title: "Search", active: !calendarActive && destination == .search, symbol: "magnifyingglass", selectedTile: false) { calendarActive = false; searchDialog = true }
             Spacer()
             SettingsLink { HoverIcon { Image(systemName: "gearshape").font(.system(size: 22)).foregroundStyle(.secondary).padding(8) } }.buttonStyle(.plain).help("Settings · ⌘,").accessibilityLabel("Settings")
             Spacer().frame(height: 18)
         }.frame(width: ResponsiveLayout.railWidth).background(railBackground)
+            .focusedSceneValue(\.calendarSplitToggle, toggleCalendarBesideTasks)
+    }
+    private func toggleCalendarBesideTasks() {
+        calendarBesideTasks.toggle()
+        guard calendarBesideTasks else { return }
+        calendarActive = false
+        if destination == .search || destination == .summary { destination = .today }
+        closeDrawer()
     }
     private func sidebar(now: Date, registrationActive: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1856,6 +1886,16 @@ private struct DesktopScopedBoard: View {
     @State private var notice: String?
     @State private var undo: CalendarScheduleUndo?
     @State private var pending: PendingSchedule?
+    @State private var frames: [ScopedBoardColumn.ID: CGRect] = [:]
+    @State private var drag: CardDrag?
+    @State private var dragCancelled = false
+
+    private struct CardDrag {
+        let taskID: UUID
+        let title: String
+        let source: ScopedBoardColumn.ID
+        var location: CGPoint
+    }
 
     private struct PendingSchedule {
         let taskID: UUID
@@ -1895,17 +1935,49 @@ private struct DesktopScopedBoard: View {
                 }
                 Spacer()
             }.padding(.horizontal, 16)
-            ScrollView([.horizontal, .vertical]) {
-                HStack(alignment: .top, spacing: 12) {
-                    ForEach(board.columns) { column in
-                        KanbanColumnView(title: column.title, items: column.tasks, readOnly: false, store: store,
-                                         selection: $selection, now: now, onSelect: open, onToggle: toggle,
-                                         onDrop: { ids in
-                            if ids.count == 1, let id = ids.first { move(id, to: column.id) }
-                        }, scopedMove: (board, move))
+            GeometryReader { geometry in
+                let viewport = CGRect(origin: .zero, size: geometry.size)
+                let target = drag.flatMap { destinationColumn(for: $0, in: viewport, board: board) }
+                ScrollView([.horizontal, .vertical]) {
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(board.columns) { column in
+                            KanbanColumnView(title: column.title, items: column.tasks, readOnly: false, store: store,
+                                             selection: $selection, now: now, onSelect: open, onToggle: toggle,
+                                             onDrop: { ids in
+                                if ids.count == 1, let id = ids.first { move(id, to: column.id) }
+                            }, scoped: ScopedBoardColumnInteraction(
+                                board: board, move: move,
+                                minimumHeight: max(0, viewport.height - 24), targeted: target == column.id,
+                                grip: { task in dragGrip(for: task, from: column.id, viewport: viewport, board: board) }
+                            ))
+                            .background {
+                                GeometryReader { columnGeometry in
+                                    Color.clear.preference(key: ScopedBoardDragFrames.self,
+                                                           value: [column.id: columnGeometry.frame(in: .named(ScopedBoardDragFrames.space))])
+                                }
+                            }
+                        }
+                    }.padding(.horizontal, 16).padding(.bottom, 24)
+                }
+                .overlay(alignment: .topLeading) {
+                    if let drag, viewport.contains(drag.location) {
+                        CompactDragPreview(title: drag.title, count: 1)
+                            .fixedSize()
+                            .position(x: drag.location.x + 12, y: drag.location.y + 19)
+                            .allowsHitTesting(false).accessibilityHidden(true)
                     }
-                }.padding(.horizontal, 16).padding(.bottom, 24)
+                }
+                .clipped()
+                .coordinateSpace(name: ScopedBoardDragFrames.space)
+                .onPreferenceChange(ScopedBoardDragFrames.self) { frames = $0 }
             }
+        }
+        .onChange(of: grouping) { _, _ in cancelDrag() }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in cancelDrag() }
+        .onKeyPress(.escape) {
+            guard drag != nil else { return .ignored }
+            cancelDrag()
+            return .handled
         }
         .confirmationDialog("Apply schedule change to", isPresented: Binding(get: { pending != nil }, set: {
             if !$0 { pending = nil }
@@ -1914,6 +1986,45 @@ private struct DesktopScopedBoard: View {
             Button("Series") { save(change, scope: .series) }
             Button("Cancel", role: .cancel) {}
         }
+    }
+
+    private func dragGrip(for task: TaskItem, from column: ScopedBoardColumn.ID, viewport: CGRect,
+                          board: ScopedBoardProjection) -> ScopedBoardDragGrip? {
+        guard board.columns.contains(where: { board.move(task.id, to: $0.id) != nil }) else { return nil }
+        let title = task.title.isEmpty ? "Untitled" : task.title
+        return ScopedBoardDragGrip(title: title) { location in
+            guard !dragCancelled else { return }
+            drag = CardDrag(taskID: task.id, title: title, source: column, location: location)
+        } onEnd: { location in
+            defer { clearDrag() }
+            guard var session = drag, session.taskID == task.id else { return }
+            session.location = location
+            if let target = destinationColumn(for: session, in: viewport, board: projection) {
+                move(session.taskID, to: target)
+            }
+        } onReset: {
+            clearDrag()
+        }
+    }
+
+    private func destinationColumn(for session: CardDrag, in viewport: CGRect,
+                                   board: ScopedBoardProjection) -> ScopedBoardColumn.ID? {
+        guard viewport.contains(session.location),
+              board.columns.contains(where: { $0.id == session.source && $0.tasks.contains { $0.id == session.taskID } }),
+              let target = frames.first(where: { $0.value.contains(session.location) })?.key,
+              board.move(session.taskID, to: target) != nil else { return nil }
+        return target
+    }
+
+    private func cancelDrag() {
+        guard drag != nil else { return }
+        dragCancelled = true
+        drag = nil
+    }
+
+    private func clearDrag() {
+        drag = nil
+        dragCancelled = false
     }
 
     private func move(_ id: UUID, to target: ScopedBoardColumn.ID) {
@@ -1943,6 +2054,46 @@ private struct DesktopScopedBoard: View {
     }
 }
 
+private struct ScopedBoardDragFrames: PreferenceKey {
+    static let space = "scopedBoardDrag"
+    static let defaultValue: [ScopedBoardColumn.ID: CGRect] = [:]
+
+    static func reduce(value: inout [ScopedBoardColumn.ID: CGRect], nextValue: () -> [ScopedBoardColumn.ID: CGRect]) {
+        value.merge(nextValue()) { _, frame in frame }
+    }
+}
+
+private struct ScopedBoardDragGrip: View {
+    let title: String
+    let onUpdate: (CGPoint) -> Void
+    let onEnd: (CGPoint) -> Void
+    let onReset: () -> Void
+    @GestureState private var tracking = false
+
+    var body: some View {
+        Image(systemName: "line.3.horizontal")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(.secondary)
+            .frame(width: 24, height: 24)
+            .contentShape(Rectangle())
+            .help("Drag " + title + " to another column")
+            .accessibilityLabel("Drag " + title)
+            .highPriorityGesture(DragGesture(minimumDistance: 6, coordinateSpace: .named(ScopedBoardDragFrames.space))
+                .updating($tracking) { _, active, _ in active = true }
+                .onChanged { onUpdate($0.location) }
+                .onEnded { onEnd($0.location) })
+            .onChange(of: tracking) { _, active in if !active { onReset() } }
+    }
+}
+
+private struct ScopedBoardColumnInteraction {
+    let board: ScopedBoardProjection
+    let move: (UUID, ScopedBoardColumn.ID) -> Void
+    let minimumHeight: CGFloat
+    let targeted: Bool
+    let grip: (TaskItem) -> ScopedBoardDragGrip?
+}
+
 private struct KanbanColumnView: View {
     let title: String
     let items: [TaskItem]
@@ -1955,7 +2106,7 @@ private struct KanbanColumnView: View {
     let onDrop: ([UUID]) -> Void
     var sectionList: TaskList?
     var addTask: (() -> Void)?
-    var scopedMove: (board: ScopedBoardProjection, action: (UUID, ScopedBoardColumn.ID) -> Void)?
+    var scoped: ScopedBoardColumnInteraction?
     @State private var targeted = false
 
     var body: some View {
@@ -1970,16 +2121,17 @@ private struct KanbanColumnView: View {
                 }
             }.padding(.vertical, 6)
             ForEach(items) { task in
-                KanbanCard(store: store, id: task.id, selected: selection == task.id, now: now, readOnly: readOnly, onSelect: { onSelect(task.id) }, onToggle: { onToggle(task.id) })
+                KanbanCard(store: store, id: task.id, selected: selection == task.id, now: now, readOnly: readOnly,
+                           onSelect: { onSelect(task.id) }, onToggle: { onToggle(task.id) }, scopedGrip: scoped?.grip(task))
                     .contextMenu {
-                        if let scopedMove, !readOnly {
-                            let targets = scopedMove.board.columns.filter {
-                                scopedMove.board.move(task.id, to: $0.id) != nil
+                        if let scoped, !readOnly {
+                            let targets = scoped.board.columns.filter {
+                                scoped.board.move(task.id, to: $0.id) != nil
                             }
                             if !targets.isEmpty {
                                 Menu("Move to") {
                                     ForEach(targets) { target in
-                                        Button(target.title) { scopedMove.action(task.id, target.id) }
+                                        Button(target.title) { scoped.move(task.id, target.id) }
                                     }
                                 }
                             }
@@ -1994,14 +2146,17 @@ private struct KanbanColumnView: View {
         }
         .padding(8)
         .frame(width: 250, alignment: .top)
-        .background(targeted ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
-        .overlay { if targeted { RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor.opacity(0.4), lineWidth: 1) } }
+        .frame(minHeight: scoped?.minimumHeight, alignment: .top)
+        .background(isTargeted ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
+        .overlay { if isTargeted { RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor.opacity(0.4), lineWidth: 1) } }
         .onDrop(of: [.taskovskyTask], delegate: KanbanColumnDropDelegate(
             enabled: !readOnly,
             onHover: { targeted = $0 },
             onDrop: onDrop
         ))
     }
+
+    private var isTargeted: Bool { targeted || scoped?.targeted == true }
 }
 
 private struct KanbanColumnDropDelegate: DropDelegate {
@@ -2058,6 +2213,7 @@ private struct KanbanCard: View {
     var readOnly = false
     let onSelect: () -> Void
     let onToggle: () -> Void
+    var scopedGrip: ScopedBoardDragGrip?
     @Environment(\.colorScheme) private var colorScheme
     private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
     private var finished: Bool { task.completedAt != nil || task.wontDoAt != nil }
@@ -2075,6 +2231,9 @@ private struct KanbanCard: View {
         }
         .accessibilityElement(children: .combine).accessibilityLabel(task.title.isEmpty ? "Untitled" : task.title)
         .accessibilityAddTraits(.isButton).accessibilityAction { onSelect() }
+        .overlay(alignment: .topTrailing) {
+            if let scopedGrip { scopedGrip.padding(4) }
+        }
     }
 
     private var cardContent: some View {
@@ -2090,6 +2249,7 @@ private struct KanbanCard: View {
                 }
                 Text(task.title.isEmpty ? "Untitled" : task.title).font(.system(size: 13)).lineLimit(3)
                     .foregroundStyle(finished ? (colorScheme == .dark ? Color(nsColor: .tertiaryLabelColor) : Color(hex: "#A0A0A0")) : Color.primary)
+                if scopedGrip != nil { Spacer(minLength: 22) }
             }
             HStack(spacing: 6) {
                 if let due = task.dueDate {

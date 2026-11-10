@@ -25,8 +25,147 @@ final class RuleDrawingLayoutManager: ListLayoutManager {
 /// history without clearing undo for the title field or other views.
 /// Typing and formatting undo/redo keep working within one document.
 final class RichBodyTextView: NSTextView {
+    fileprivate private(set) var handlingTextKey = false
     private let ownedUndo = UndoManager()
+    private static let fragmentType = NSPasteboard.PasteboardType(RichBodyClipboard.typeIdentifier)
+    private static let qaClipboard: NSPasteboard? = {
+        let arguments = ProcessInfo.processInfo.arguments
+        guard Bundle.main.bundleIdentifier == "local.taskovsky.native-qa",
+              arguments.contains("--workspace") else { return nil }
+        let pasteboard = NSPasteboard.withUniqueName()
+        if let fixture = arguments.firstIndex(of: "--qa-plain-clipboard"), arguments.indices.contains(fixture + 1) {
+            pasteboard.setString(arguments[fixture + 1], forType: .string)
+        }
+        return pasteboard
+    }()
+
     override var undoManager: UndoManager? { ownedUndo }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if handleHistoryKey(event) || handleQAClipboardKey(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if handleHistoryKey(event) || handleQAClipboardKey(event) { return }
+        if event.characters == "/", !event.isARepeat,
+           event.modifierFlags.intersection([.command, .control]).isEmpty,
+           (delegate as? RichBodyEditor.Coordinator)?.showSlashMenu(in: self) == true { return }
+        handlingTextKey = event.modifierFlags.intersection([.command, .control]).isEmpty
+        // Keep the second leading hyphen literal so the third can form a
+        // divider. Prose and the system's Smart Dashes preference are untouched.
+        let keepsDividerPrefix = isAutomaticDashSubstitutionEnabled && handlingTextKey &&
+            event.characters == "-" && !hasMarkedText() && isSecondDividerHyphen
+        if keepsDividerPrefix { isAutomaticDashSubstitutionEnabled = false }
+        defer {
+            if keepsDividerPrefix { isAutomaticDashSubstitutionEnabled = true }
+            handlingTextKey = false
+        }
+        super.keyDown(with: event)
+    }
+
+    private var isSecondDividerHyphen: Bool {
+        let caret = selectedRange()
+        let text = string as NSString
+        guard selectedRanges.count == 1, caret.length == 0, caret.location > 0, caret.location <= text.length,
+              text.character(at: caret.location - 1) == 45 else { return false }
+        var start = 0, end = 0
+        text.getParagraphStart(&start, end: nil, contentsEnd: &end, for: caret)
+        return caret.location == start + 1 && caret.location == end
+    }
+
+    override func copy(_ sender: Any?) {
+        guard !hasMarkedText(), selectedRanges.count == 1, selectedRange().length > 0 else {
+            if Self.qaClipboard == nil { super.copy(sender) }
+            return
+        }
+        let selection = selectedRange()
+        let extracted = RichRender.extract(from: self)
+        let text = (extracted.text as NSString).substring(with: selection)
+        let body = extracted.rich ?? RichBody(text: extracted.text)
+        let bytes = RichBodyClipboard.fragment(from: body, selection: selection)
+            .flatMap(RichBodyClipboard.encode)
+        guard bytes != nil || Self.qaClipboard != nil else { super.copy(sender); return }
+        let item = NSPasteboardItem()
+        item.setString(text, forType: .string)
+        if let rtf = rtf(from: selection) { item.setData(rtf, forType: .rtf) }
+        if let bytes { item.setData(bytes, forType: Self.fragmentType) }
+        let board = Self.qaClipboard ?? .general
+        board.clearContents()
+        board.writeObjects([item])
+    }
+
+    override func cut(_ sender: Any?) {
+        if Self.qaClipboard == nil { super.cut(sender) }
+    }
+
+    override func pasteAsPlainText(_ sender: Any?) {
+        guard let board = Self.qaClipboard else { super.pasteAsPlainText(sender); return }
+        if let text = board.string(forType: .string) {
+            (delegate as? RichBodyEditor.Coordinator)?
+                .pasteClipboard(.replace(selectedRange(), with: text, style: .plain), into: self, length: text.utf16.count)
+        }
+    }
+
+    override func paste(_ sender: Any?) {
+        guard isEditable, !hasMarkedText() else { return }
+        if selectedRanges.count != 1 {
+            if Self.qaClipboard == nil { super.paste(sender) }
+            return
+        }
+        let board = Self.qaClipboard ?? .general
+        let coordinator = delegate as? RichBodyEditor.Coordinator
+        let data = board.data(forType: Self.fragmentType)
+        if let text = board.string(forType: .string) {
+            if let data, let fragment = RichBodyClipboard.decode(data, matching: text) {
+                coordinator?.pasteClipboard(.paste(selectedRange(), fragment: fragment), into: self,
+                                            length: fragment.text.utf16.count)
+                return
+            }
+            if data == nil, board.availableType(from: [.rtfd, .rtf, .html, .string]) == .string,
+               let fragment = RichBodyClipboard.formattedPlainText(text, replacing: selectedRange(), in: string),
+               coordinator?.pasteClipboard(.paste(selectedRange(), fragment: fragment), into: self,
+                                            length: fragment.text.utf16.count) == true {
+                return
+            }
+            if Self.qaClipboard != nil {
+                coordinator?.pasteClipboard(.replace(selectedRange(), with: text, style: .plain), into: self,
+                                            length: text.utf16.count)
+            }
+        }
+        if Self.qaClipboard == nil { super.paste(sender) }
+    }
+
+    private func handleQAClipboardKey(_ event: NSEvent) -> Bool {
+        guard Self.qaClipboard != nil, window?.firstResponder === self else { return false }
+        let modifiers = event.modifierFlags.intersection([.command, .shift, .control, .option])
+        if modifiers == [.command, .shift, .option], event.charactersIgnoringModifiers?.lowercased() == "v" {
+            pasteAsPlainText(nil)
+            return true
+        }
+        guard modifiers == .command else { return false }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "c": copy(nil)
+        case "v": paste(nil)
+        default: return false
+        }
+        return true
+    }
+
+    private func handleHistoryKey(_ event: NSEvent) -> Bool {
+        guard window?.firstResponder === self, isEditable, !hasMarkedText(),
+              event.charactersIgnoringModifiers?.lowercased() == "z" else { return false }
+        let flags = event.modifierFlags.intersection([.command, .shift, .control, .option])
+        switch flags {
+        case [.command]:
+            if ownedUndo.canUndo { ownedUndo.undo() }
+        case [.command, .shift]:
+            if ownedUndo.canRedo { ownedUndo.redo() }
+        default:
+            return false
+        }
+        return true
+    }
 }
 
 struct RichBodyEditor: NSViewRepresentable {
@@ -102,6 +241,8 @@ struct RichBodyEditor: NSViewRepresentable {
         /// True while applying a programmatic storage rebuild; delegate
         /// callbacks during it must not echo back into the model.
         var applying = false
+        private var slashSelection: RichSlashFormat?
+        private var markdownArm: RichMarkdownTyping.ArmedParagraph?
 
         init(_ host: RichBodyEditor) {
             self.host = host
@@ -147,6 +288,7 @@ struct RichBodyEditor: NSViewRepresentable {
                let committedText, RichBody.sameCodeUnits(committedText, host.text),
                committedRich == host.rich, RichBody.sameCodeUnits(view.string, host.text) { return }
             let selection = view.selectedRange()
+            markdownArm = nil
             applying = true
             let storage = RichRender.attributedString(text: host.text, rich: host.rich)
             view.textStorage?.setAttributedString(storage)
@@ -184,6 +326,10 @@ struct RichBodyEditor: NSViewRepresentable {
             updateToolbarState(view)
         }
 
+        func undoManager(for view: NSTextView) -> UndoManager? {
+            (view as? RichBodyTextView)?.undoManager
+        }
+
         func textDidChange(_ notification: Notification) {
             guard !applying, let view = notification.object as? NSTextView else { return }
             host.controller.applyPendingListArm(view)
@@ -202,6 +348,7 @@ struct RichBodyEditor: NSViewRepresentable {
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard !applying, let view = notification.object as? NSTextView else { return }
+            if let arm = markdownArm, arm.caret != view.selectedRange() { markdownArm = nil }
             // The assignment below strips AppKit-derived textLists from
             // typing, dropping list continuation the native Return just
             // derived. Repair re-arms exactly what was lost (never invents:
@@ -212,12 +359,85 @@ struct RichBodyEditor: NSViewRepresentable {
             updateToolbarState(view)
         }
 
+        @discardableResult
+        func pasteClipboard(_ command: RichBodyEdit, into view: NSTextView, length: Int) -> Bool {
+            guard !applying, view.isEditable, !view.hasMarkedText() else { return false }
+            markdownArm = nil
+            let original = RichRender.extract(from: view)
+            guard let body = try? RichBodyEdit.applying([command], to: original.text, rich: original.rich) else { return false }
+            let caret = view.selectedRange().location + length
+            host.controller.replaceEditorBody(body, caret: caret, label: "Paste Description")
+            return true
+        }
+
+        // The key reaches this path before AppKit inserts a character. A
+        // formatting choice uses the toolbar's edit and undo transaction. If
+        // dismissed, AppKit gets the original key and inserts the literal slash.
+        func showSlashMenu(in view: NSTextView) -> Bool {
+            guard !applying, view.isEditable, !view.hasMarkedText(), let window = view.window,
+                  window.firstResponder === view else { return false }
+            let selection = view.selectedRange()
+            let text = view.string as NSString
+            guard selection.length == 0, selection.location <= text.length else { return false }
+            if selection.location > 0 {
+                guard let previous = UnicodeScalar(text.character(at: selection.location - 1)),
+                      CharacterSet.whitespacesAndNewlines.contains(previous) else { return false }
+            }
+            let document = host.documentID
+            let menu = NSMenu(title: "Format description")
+            menu.autoenablesItems = false
+            for (index, group) in RichSlashFormat.groups.enumerated() {
+                if index > 0 { menu.addItem(.separator()) }
+                for format in group {
+                    let item = NSMenuItem(title: format.title, action: #selector(chooseSlashFormat(_:)), keyEquivalent: "")
+                    item.target = self
+                    item.representedObject = format
+                    menu.addItem(item)
+                }
+            }
+            let caret = view.firstRect(forCharacterRange: selection, actualRange: nil)
+            let anchor = caret.height > 0
+                ? view.convert(window.convertPoint(fromScreen: caret.origin), from: nil)
+                : CGPoint(x: view.textContainerInset.width, y: view.textContainerInset.height + 16)
+            slashSelection = nil
+            menu.popUp(positioning: nil, at: anchor, in: view)
+            let format = slashSelection
+            slashSelection = nil
+            guard host.documentID == document, view.window === window, window.firstResponder === view,
+                  view.isEditable, !view.hasMarkedText(), view.selectedRange() == selection else { return true }
+            guard let format else { return false }
+            format.apply(to: host.controller)
+            return true
+        }
+
+        @objc private func chooseSlashFormat(_ item: NSMenuItem) {
+            slashSelection = item.representedObject as? RichSlashFormat
+        }
+
         func textView(_ textView: NSTextView, shouldChangeTextInRanges affectedRanges: [NSValue], replacementStrings: [String]?) -> Bool {
-            guard !applying, affectedRanges.count == 1, replacementStrings == ["\n"] else { return true }
+            guard !applying, affectedRanges.count == 1, let range = affectedRanges.first?.rangeValue,
+                  let replacementStrings, replacementStrings.count == 1, let text = replacementStrings.first else { return true }
+            if let view = textView as? RichBodyTextView, view.handlingTextKey, !view.hasMarkedText(),
+               view.selectedRanges.count == 1, range == view.selectedRange(), range.length == 0, text.count == 1,
+               applyMarkdown(text, at: range, in: view) { return false }
+            markdownArm = nil
+            guard text == "\n" else { return true }
             // Return in an empty list item, heading, or quote exits the block
             // instead of inserting a newline. Shared with the command path
             // below so real key dispatch and programmatic "\n" agree.
             return !host.controller.handleReturn()
+        }
+
+        private func applyMarkdown(_ text: String, at range: NSRange, in view: NSTextView) -> Bool {
+            guard markdownArm != nil || text == " " || text == "-" else { return false }
+            let original = RichRender.extract(from: view)
+            let prior = original.rich ?? RichBody(text: original.text)
+            let change = markdownArm?.inserting(text, at: range, in: prior)
+                ?? RichMarkdownTyping.change(for: text, at: range, in: prior)
+            guard let change, let body = try? RichBodyEdit.applying([change.edit], to: prior.text, rich: prior) else { return false }
+            host.controller.replaceEditorBody(body, caret: change.caret.location, label: "Format Markdown", undoSelection: true)
+            markdownArm = change.armedParagraph
+            return true
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -225,6 +445,7 @@ struct RichBodyEditor: NSViewRepresentable {
             // never reach shouldChangeTextInRanges — intercept the command
             // itself with the same shared policy.
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                markdownArm = nil
                 return host.controller.handleReturn()
             }
             return false
@@ -327,6 +548,52 @@ struct RichBodyEditor: NSViewRepresentable {
 
         func updateToolbarState(_ view: NSTextView) {
             host.controller.active = host.controller.toolbarWithPending(for: view.selectedRange(), in: view)
+        }
+    }
+}
+
+private enum RichSlashFormat {
+    case heading(Int)
+    case quote, bullet, numbered, checklist, rule
+    case bold, italic, underline, strikethrough, highlight, code
+
+    static let groups: [[Self]] = [
+        (1...6).map(Self.heading),
+        [.quote, .bullet, .numbered, .checklist, .rule],
+        [.bold, .italic, .underline, .strikethrough, .highlight, .code]
+    ]
+
+    var title: String {
+        switch self {
+        case .heading(let level): "Heading \(level)"
+        case .quote: "Quote"
+        case .bullet: "Bulleted List"
+        case .numbered: "Numbered List"
+        case .checklist: "Checklist"
+        case .rule: "Horizontal Rule"
+        case .bold: "Bold"
+        case .italic: "Italic"
+        case .underline: "Underline"
+        case .strikethrough: "Strikethrough"
+        case .highlight: "Highlight"
+        case .code: "Inline Code"
+        }
+    }
+
+    func apply(to controller: RichBodyController) {
+        switch self {
+        case .heading(let level): controller.setHeading(level)
+        case .quote: controller.toggleQuote()
+        case .bullet: controller.toggleList(.bullet)
+        case .numbered: controller.toggleList(.numbered)
+        case .checklist: controller.toggleList(.checklist)
+        case .rule: controller.insertRule()
+        case .bold: controller.toggleTrait(.boldFontMask)
+        case .italic: controller.toggleTrait(.italicFontMask)
+        case .underline: controller.toggleUnderline()
+        case .strikethrough: controller.toggleStrikethrough()
+        case .highlight: controller.toggleHighlight()
+        case .code: controller.toggleCode()
         }
     }
 }
@@ -435,16 +702,18 @@ final class RichBodyController: ObservableObject {
     /// Applies a toolbar mutation with explicit undo. Full snapshots are used
     /// because bodies are small and attribute runs make range math fragile;
     /// each undo registers its own inverse so redo chains correctly.
-    private func edit(label: String, _ apply: (NSTextStorage) -> Void) {
+    private func edit(label: String, undoSelection: Bool = false, _ apply: (NSTextStorage) -> Void) {
         guard let view = textView, let storage = view.textStorage, view.isEditable else { return }
         let before = NSAttributedString(attributedString: storage)
+        let beforeSelection = undoSelection ? view.selectedRange() : nil
         view.undoManager?.beginUndoGrouping()
         view.undoManager?.setActionName(label)
         apply(storage)
         let after = NSAttributedString(attributedString: storage)
+        let afterSelection = undoSelection ? view.selectedRange() : nil
         if let undo = view.undoManager {
             undo.registerUndo(withTarget: self) { target in
-                target.restore(snapshot: before, inverse: after, label: label)
+                target.restore(snapshot: before, inverse: after, label: label, selection: beforeSelection, inverseSelection: afterSelection)
             }
             undo.endUndoGrouping()
         }
@@ -457,18 +726,29 @@ final class RichBodyController: ObservableObject {
         (view.delegate as? RichBodyEditor.Coordinator)?.commit(view)
     }
 
-    private func restore(snapshot: NSAttributedString, inverse: NSAttributedString, label: String) {
+    func replaceEditorBody(_ body: RichBody, caret: Int, label: String, undoSelection: Bool = false) {
+        guard let view = textView, view.isEditable else { return }
+        view.breakUndoCoalescing()
+        edit(label: label, undoSelection: undoSelection) { storage in
+            storage.setAttributedString(RichRender.attributedString(text: body.text, rich: body))
+            view.setSelectedRange(NSRange(location: caret, length: 0))
+        }
+    }
+
+    private func restore(snapshot: NSAttributedString, inverse: NSAttributedString, label: String,
+                         selection: NSRange?, inverseSelection: NSRange?) {
         guard let view = textView, let storage = view.textStorage else { return }
         view.undoManager?.beginUndoGrouping()
         view.undoManager?.setActionName(label)
         storage.setAttributedString(snapshot)
+        if let selection { view.setSelectedRange(selection) }
         clampSelection(view)
         // Undo/redo swaps storage wholesale without touching typing; re-arm
         // from the restored paragraph so continuation survives the swap.
         repairContinuation(beforeTyping: nil)
         if let undo = view.undoManager {
             undo.registerUndo(withTarget: self) { target in
-                target.restore(snapshot: inverse, inverse: snapshot, label: label)
+                target.restore(snapshot: inverse, inverse: snapshot, label: label, selection: inverseSelection, inverseSelection: selection)
             }
             undo.endUndoGrouping()
         }

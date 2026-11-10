@@ -13,4 +13,37 @@
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>NSHumanReadableCopyright</key><string>Taskovsky — local task planning.</string>
+<key>UTExportedTypeDeclarations</key>
+<array>
+    <dict>
+        <key>UTTypeIdentifier</key><string>com.taskovsky.task</string>
+        <key>UTTypeDescription</key><string>Taskovsky Task Drag</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+    <dict>
+        <key>UTTypeIdentifier</key><string>com.taskovsky.list</string>
+        <key>UTTypeDescription</key><string>Taskovsky List Drag</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+    <dict>
+        <key>UTTypeIdentifier</key><string>com.taskovsky.folder</string>
+        <key>UTTypeDescription</key><string>Taskovsky Folder Drag</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+    <dict>
+        <key>UTTypeIdentifier</key><string>com.taskovsky.smart</string>
+        <key>UTTypeDescription</key><string>Taskovsky Smart list Drag</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+    <dict>
+        <key>UTTypeIdentifier</key><string>com.taskovsky.tag</string>
+        <key>UTTypeDescription</key><string>Taskovsky Tag Drag</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+    <dict>
+        <key>UTTypeIdentifier</key><string>local.taskovsky.rich-description</string>
+        <key>UTTypeDescription</key><string>Taskovsky Rich Description</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+</array>
 </dict></plist>

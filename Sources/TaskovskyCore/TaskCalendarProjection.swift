@@ -262,9 +262,17 @@ public struct CalendarTimedPlacement: Identifiable, Equatable, Sendable {
     public var endMinute: Double
     public var column: Int
     public var columnCount: Int
+    public var startIsVisible: Bool
     public var endIsVisible: Bool
     public var resizeMinute: Double
     public var id: String { entry.id }
+
+    public func startResizeTarget(deltaMinutes: Double, day: Date, calendar: Calendar, window: CalendarHourlyWindow) -> Date {
+        guard deltaMinutes != 0 else { return entry.start }
+        let minute = window.snappedMinute(startMinute + deltaMinutes)
+        let proposed = CalendarDates.instant(on: day, minute: minute, calendar: calendar)
+        return CalendarScheduling.timedResizeStart(proposed, start: entry.start, end: entry.due)
+    }
 }
 public enum CalendarTimedLayout {
     /// Interval coloring per connected overlap cluster. Adjacent events can
@@ -301,7 +309,8 @@ public enum CalendarTimedLayout {
             let lane = laneEnds.firstIndex { $0 <= a } ?? laneEnds.count
             if lane == laneEnds.count { laneEnds.append(b) } else { laneEnds[lane] = b }
             cluster.append(CalendarTimedPlacement(entry: entry, startMinute: a, endMinute: b, column: lane,
-                                                  columnCount: 1, endIsVisible: entry.end <= visibleEnd,
+                                                  columnCount: 1, startIsVisible: entry.start >= visibleStart,
+                                                  endIsVisible: entry.end <= visibleEnd,
                                                   resizeMinute: entry.hasDuration ? rawEnd : b))
             clusterEnd = max(clusterEnd, b)
         }

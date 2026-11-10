@@ -1,15 +1,22 @@
 import TaskovskyDomain
 import Foundation
 import CoreGraphics
+import CoreTransferable
+import UniformTypeIdentifiers
 
 /// Typed, distinguishable drag payloads shared by the workspace view and its
 /// tests. Task moves carry one or more task IDs; list reordering carries
 /// exactly one list ID. Validation (existence, deleted records, self-drops,
 /// group membership) happens in the store and in the drop delegates; the
 /// helpers below only decode and aggregate raw provider data.
-public struct TaskDragPayload: Codable, Hashable, Sendable {
+public struct TaskDragPayload: Codable, Hashable, Sendable, Transferable {
+    public static let contentType = UTType(exportedAs: "com.taskovsky.task")
     public var ids: [UUID]
     public init(ids: [UUID]) { self.ids = ids }
+
+    public static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: contentType).visibility(.ownProcess)
+    }
 }
 
 public struct ListDragPayload: Codable, Hashable, Sendable {

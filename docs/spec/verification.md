@@ -875,7 +875,7 @@ The full simulator regression used the sealed range capture and all-day resize s
 - The Mac suite passed 617 tests, and the signed release passed strict verification. The shared test checked the fractional-day anchor and the 75% to 300% bounds.
 - The guarded Mac check verified the date-axis midpoint at 125%, reset to 100%, zoom out to 80%, and reset on switching to Day. The scheduled dates and workspace and settings files stayed unchanged. The prior guarded bundle, fixture and scoped preferences were restored. The Mac trackpad pinch and Control-scroll routes were reviewed in source and were outside the native Mac check.
 - Four focused iPhone tests passed without warnings. The native pinch kept a date mark near the gesture center. The period stayed fixed, and the buttons and scale reset passed. The saved-file audit found only the deliberate List-to-Timeline mode choice and identical settings. Arrange drop, direct capture, move and resize, scope, and Undo also passed. The disposable simulator was removed.
-- A separate full regression is running on the sealed Timeline Colors source with Week paging and the integrated Timeline flows. Its manifest is distinct from this zoom checkpoint.
+- The separately sealed Timeline Colors source has a [full iPhone regression record](#task-timeline-colors-full-regression).
 
 <a id="scoped-boards"></a>
 
@@ -886,3 +886,205 @@ The full simulator regression used the sealed range capture and all-day resize s
 - The Mac suite passed 619 tests, and the signed release passed strict verification. The shared checks covered Next 7 Days columns, overdue and archive boundaries, due clock and range length, and valid folder and tag list targets.
 - The guarded Mac fixture confirmed date and list moves via the card’s Move to menu. Undo restored the date range. The saved-file audit found only the deliberate list and section change and the expected timestamps. The settings, restored fixture, prior guarded bundle and scoped preferences matched. The first guarded drag trial left the fixture unchanged. Native drag remains unverified.
 - Four focused iPhone tests passed without runtime warnings. They covered the Next 7 Days date move and Undo, folder scope, tag Board list move, a saved regular-list Board, and the Timeline path. The saved-file audits confirmed the restored range and the intended list and section change. Settings were byte-identical in both new flows. The tests used the Move menu. The first run found a test selector mismatch on the tag drawer, which the second run corrected. Both disposable simulators were removed.
+
+<a id="mobile-subtask-and-board-qa"></a>
+
+### MOB-QA-002 — Subtask navigation and grouped Board drag
+
+The sealed Timeline Colors run read the old parent title before the child transition completed. The same assertion failed in two of three standalone repetitions. Both reached the child’s parent-link step after the early assertion. The revised test waits for the expected title after each tap. This change affects only the iPhone test source.
+
+On the isolated grouped Board source with this test change, SHA-256 `247bf1eed47fa5de338c4435628750b0868ed17249ab552d6c3724cd28b9411f`, all three runs each of child navigation, cross-list hierarchy navigation, and native tag Board drag passed without runtime warnings. The Board drag moved the card from Work to Personal through the drag grip and verified the destination count. The simulator was removed. The grouped Board checkpoint still records the separate Mac and iPhone menu and saved-file audits.
+
+<a id="mac-board-drag-declaration"></a>
+
+### TASK-BOARD-004 — Mac task drag type declaration
+
+The guarded Mac package reported a missing declaration for the native task drag type. The revised package declares the five task navigation drag identifiers used in the drop validator as data types. The existing task provider remains restricted to the current process. The Mac source manifest SHA-256 is `789173207a4bb26bad6a20147cee0286b6a58bd44e5a70d5e3218ffc300bcff5`. Its 619 tests and strict release signature check passed.
+
+The revised guarded run showed zero drag-type declaration warnings and completed the Move to Personal command. Its fixture audit found the expected list, section and timestamp changes and unchanged schedule and settings. Computer Use drag attempts left the cards in place, so a direct Mac drag remains unverified. The fixture, scoped preferences and prior guarded bundle were restored. Native iPhone tag Board drag has its own verification above.
+
+The combined isolated input manifest SHA-256 is `391ce518718a3399ade019556daffdd50101742d9ff127cac5c0ce00fe9b46bf`. The Mac package used the unchanged application source, and the separately verified phone change affects only its UI tests.
+
+<a id="task-timeline-colors-full-regression"></a>
+
+### TASK-TIMELINE-007 — Full iPhone regression on Timeline Colors
+
+The full regression used the sealed Timeline Colors source, SHA-256 `1583284b3fadf7623a04b0784953e60ccdd04a17f30de88b718586e08645075c`. It recorded 237 passes, 1 failures, 0 skips, and 0 runtime warnings. The recorded failures were `testLinkedSubtaskCreationAndIndependentCompletionPersist()`. The [subtask diagnostic](#mobile-subtask-and-board-qa) records the standalone reproduction and the later test-only timing correction. The full result retains the original test outcome.
+
+The saved-file checks passed 80 baseline cases with 79 Mac reopens that made no writes. Six additional audits verified Week edge paging, Timeline movement and resize with Undo, range-aware capture, saved section grouping, undated arrangement, and task colors. The disposable full-run simulator was removed. Zoom and grouped Boards have separate native records on their own source manifests.
+
+<a id="mac-grouped-board-grip"></a>
+
+### TASK-BOARD-005 — Mac grouped Board grip
+
+The Mac grouped Board has a dedicated grip and visible destination highlight. The grip checks the source card and release position against the visible Board before applying a move. The existing card menu and native card drag path remain available.
+
+The isolated source manifest SHA-256 is `77ab56cda2638b3a85a2ced2cdefd43d013ac95b3849994773def35e79d460f6`. All 619 Mac tests and strict release signature verification passed. In the guarded macOS 27.0.1 app, Computer Use dragged an all-day workshop from the Tuesday column into the open area of the Wednesday column and Undo restored the original dates. The file audit confirmed that the inclusive span moved from November 8–10 to November 9–11. Another drag moved a card from Work to Personal, clearing its former section. Releasing outside the Board left both files byte-identical. The saved settings, restored fixture, scoped preferences and prior guarded bundle matched. The original Desktop seal still matched all 98 inputs.
+
+The combined iPhone regression used the preceding source manifest and is recorded separately. [Full iPhone regression](#combined-iphone-full-regression)
+
+<a id="mac-rich-slash"></a>
+
+### RICH-SLASH-001 — Mac description formatting shortcuts
+
+[Change contract](../changes/mac-rich-slash-2026-11-09.md). The isolated Mac source manifest SHA-256 is `f7773763f10ec9083ec14ec2afa9659e1739bc17aa932db59237d4de26cd0763`. All 619 tests passed and the release passed strict signature verification.
+
+In the guarded macOS 27.0.1 detached task window, the native slash menu opened at the caret. Heading 2 changed the rich companion while keeping the exact body. Keyboard Undo removed the heading and Redo restored it. Escape from the slash menu entered a literal slash, and a slash typed after a word stayed in the text without opening the menu. Undo removed both literal edits. The saved-file checks found only the deliberate body or heading changes and the expected timestamp. The final body text, other records, saved settings, restored fixture, scoped preferences and prior guarded bundle matched their expected state.
+
+The first native trial verified formatting and cancellation but did not dispatch the keyboard undo through the detached editor. The revised editor routes the focused keyboard shortcuts to its own history. The combined iPhone regression uses the preceding checkpoint and the same iPhone source inputs.
+
+<a id="combined-iphone-full-regression"></a>
+
+### MOB-QA-003 — Full combined local Tasks and Calendar regression
+
+The full simulator suite used the sealed pre-clipboard iPhone checkpoint, SHA-256 `391ce518718a3399ade019556daffdd50101742d9ff127cac5c0ce00fe9b46bf`. It recorded 245 passes, 0 failures, 0 skips and 0 runtime warnings. The run includes the subtask timing correction, Week paging, Timeline zoom and the three grouped Board flows.
+
+The baseline file audit passed 80 cases with 79 Mac reopens that made no writes. The additional Week, Timeline, zoom and grouped Board audits passed. The disposable simulator was removed. Rich clipboard checks have their own focused record.
+
+<a id="rich-description-clipboard"></a>
+
+### RICH-CLIPBOARD-001 — Copy and paste supported description formatting
+
+[Change contract](../changes/rich-description-clipboard-2026-11-09.md). The Mac source manifest SHA-256 is `afa2aa08dad13faab1bfaa49925af354143f84ee1a46b8c7dea48fe6994f9a12`. The combined source manifest SHA-256 is `f0a31627b5122800c6d6583493a2dac08e78711b48ffb02f12c1c35ca2ff50e0` and includes the final iPhone toolbar and verification changes. All 622 Mac tests passed, including clipped UTF-16 selections, checked checklist state, rich-paste replay and paragraph boundary checks. The release passed strict signature verification.
+
+The guarded Mac test used its unique private pasteboard and synthetic descriptions. It verified copy, paste, Undo and Redo across separate task editors. Saved files retained the exact Unicode, heading, checklist, rule and link, along with unrelated records and settings. The fixture, scoped preferences and prior guarded app were restored.
+
+Three focused iPhone tests used the disposable simulator and session-named pasteboards. They covered rich copy and paste across tasks, draft Undo/Redo and recovery, the visible Paste as Plain Text control over an identical selection, and the existing link-editing path. The plain-paste fixture seeded only its own named pasteboard with the synthetic first word. A native double-tap selected the bold word before paste, leaving the full description text identical. The cross-description test exercised native Copy and Paste. The saved file retained the copied formatting and exact code units. Settings were byte-identical. The first simulator run exposed a focus change during a SwiftUI update. The revised editor defers changes that may resign the text responder until after that update. The disposable clipboard simulators were removed.
+
+The clipboard checks exercised synthetic content on private pasteboards. The production general clipboard path and conversion of foreign rich formats were outside these native checks.
+
+<a id="rich-description-markdown-paste"></a>
+
+### RICH-CLIPBOARD-002 — Recognize supported Markdown on ordinary plain-text paste
+
+[Change contract](../changes/rich-description-markdown-paste-2026-11-10.md). The Mac source manifest SHA-256 is `e936543fcc148ce88eef6cb00c9c59ee85461369f7a981f6ebda6b470367ba23`. The iPhone source manifest SHA-256 is `439102aca1648789edec442b6b9e1611ce3350d1d3e931253dece1f36bb8d47e`. All 625 Mac tests passed and the release passed strict signature verification. New model tests checked exact Unicode and line endings, literal same-app copy, fenced and inline code preservation, and safe paragraph boundaries.
+
+In the guarded Mac app, ordinary Paste on a synthetic description recognized Heading 2, bullets, numbered items, a quote, bold and a link. Paste as Plain Text kept the complete source string. Keyboard Undo restored the prior body and Redo restored the styles. The file checks compared the exact UTF-16 ranges and all unaffected records/settings. The scoped preferences, disposable fixture and prior guarded app were restored.
+
+Five focused iPhone tests passed without runtime warnings. The Markdown case verified ordinary and literal paste from the same named QA pasteboard, draft Undo/Redo and the saved description. The saved file retained the expected block and inline styles, exact text and unrelated records/settings. The earlier runs exposed a test destination outside the opening list and an undispatched keyboard Paste after text selection. The final test uses two visible synthetic descriptions and the native Paste menu. An isolated action trace confirmed the named board, selection, text recognition and successful edit. The other tests covered rich copy between tasks, the existing literal-style removal and link-editing flows, and Summary with its own named QA pasteboard. The disposable focused simulators were removed.
+
+Clipboard QA used synthetic inputs and named pasteboards. The production general pasteboard and physical-device behavior are outside this record. The full iPhone regression on the preceding rich-clipboard source and Summary QA isolation has a separate source manifest.
+
+<a id="calendar-timed-move-grip"></a>
+
+### CAL-HOURLY-MOVE-001 — Dedicated Mac timed Calendar move grip
+
+[Change contract](../changes/calendar-timed-move-grip-2026-11-10.md). All 625 Mac tests passed and the release passed strict signature verification. The Mac source manifest SHA-256 is `60e659f21a6be447d6fc3f088b93c8d34e3091d18fa233a69fcf1b29375e445a`. The combined manifest is `9df23f0822dec6cde0881c66f3dc337b519c14ca7e27a8f9b2cf33147dc41e36`. The original Desktop seal matched all 98 inputs.
+
+The guarded baseline run on the preceding build reproduced unchanged body drags on a five-minute and resized card. The separate resize handle worked and Undo restored the original range. A drag below the title opened a creation draft that was canceled. An earlier coordinate calibration changed the disposable all-day row setting. The baseline fixture and scoped settings were restored.
+
+The revised guarded Mac Week grid moved a 300-second range to Wednesday at 11:00 and Undo restored its original start, end and reminder. After scrolling, a 323-second range moved to Thursday at 14:30 and retained its duration. A point moved within Wednesday to 10:30 and stayed a point. Both saved moves survived relaunch. The reminder offsets shifted with the moves. Releasing above the visible hourly grid and canceling Schedule left the files byte-identical. At 115 percent zoom the separate end handle resized the five-minute task to 09:45 and Undo restored it. Both guarded trials restored their fixtures, scoped preferences and prior app.
+
+Two focused iPhone tests passed on the existing touch paths, with no skips or runtime warnings. The Day grid moved a 323-second range one hour, restored its original position with Undo, moved it again, and showed the saved position after relaunch. The file audit verified the exact duration and reminder shift and unchanged unrelated records. The first run used an absolute screen position that shifted with feedback. The final test uses the hour ruler as a reference. Both disposable simulators were removed.
+
+The Mac native move checks used Week at the tested viewport. Day and Multi-Day use the same Mac grid, and the iPhone native checks used Day. Other viewport widths, VoiceOver and reference gesture equivalence remain open.
+
+<a id="calendar-arrange-hourly-native"></a>
+
+### CAL-ARRANGE-004 — Mac Arrange drop into an hourly slot
+
+The guarded Mac Week grid used the same signed release as the [timed move grip](#calendar-timed-move-grip), manifest SHA-256 `60e659f21a6be447d6fc3f088b93c8d34e3091d18fa233a69fcf1b29375e445a`. The undated synthetic task was dragged from its Arrange grip to Wednesday November 11 at 11:00. An endpoint click completed the native drag in Computer Use. The saved range was 11:00–11:30, with the fixture's automatic reminder at the due time. Undo returned the task to Arrange and removed both the schedule and reminder. The audit checked the full workspace and byte-identical settings. The guarded app was closed and its fixture, preferences and prior bundle were restored.
+
+<a id="clipboard-iphone-full-regression"></a>
+
+### MOB-QA-004 — Full iPhone regression after rich clipboard support
+
+The full suite used the sealed rich clipboard and Summary QA source, SHA-256 `377a39f5158621133d49220c873b365d4631e04d3a0238a45857eec749622bba`. It recorded 249 passes, 0 failures, 0 skips and 0 runtime warnings. Rich description and Summary clipboard actions used only named pasteboards with synthetic data. The separate [Markdown paste verification](#rich-description-markdown-paste) covers the later source.
+
+The file audit passed 80 baseline cases with 79 Mac reopens that made no writes. The additional Week, Timeline, zoom, Board and rich clipboard file audits passed. The disposable simulator was removed.
+
+<a id="calendar-timed-start-resize"></a>
+
+### CAL-HOURLY-RESIZE-002 — Timed Calendar start resize
+
+[Change contract](../changes/calendar-timed-start-resize-2026-11-10.md). The Mac source manifest SHA-256 is `eeda5a895c9f972f5bf196dcbddd7974e05f50b0b89d67fcc2993228be8f072f`. The focused iPhone manifest is `c2973ab7973ec2bcec28c26464d9b4a236b60b022a9089a19f9e9a3205083911`, with identical iPhone build inputs. All 627 Mac tests passed and the release passed strict signature verification. The shared tests verify no-op short and zero ranges, the 15-minute clamp, fixed reminder provenance, clipped endpoints and restoring the baseline of a recurring occurrence.
+
+The compact grip marks were aligned to the card edges after the initial native check. The final guarded Mac Week grid exposed the folded task's start handle only after expanding Early hours. Its point task had only the existing end control. Dragging the five-minute task's start to 08:30 kept the due time at 09:12, and Undo restored 09:07. Dragging the 323-second range's start beyond its end clamped it to exactly 15 minutes, retaining the fractional due time and manual reminder. Relaunch preserved the saved schedule. File checks found only the intended start and timestamps, with byte-identical settings. The prior guarded app, scoped preferences and disposable fixture were restored.
+
+Five focused iPhone tests passed without runtime warnings on the disposable simulator. They covered the shared rules, a native Day start drag, Undo and relaunch, staged Cancel, a compact card's Resize Start menu, and the existing move and end drag. File checks confirmed the new start and unchanged due time, reminders and unrelated records. The initial build failed because the test referenced an internal property. The final test verifies recurrence restoration through the public command. Both disposable simulators were removed.
+
+Native checks used Mac Week and iPhone Day. The other hourly modes share their respective grid. All-day start adjustment and exact TickTick gesture equivalence remain open.
+
+<a id="calendar-all-day-start-resize"></a>
+
+### CAL-ALLDAY-RESIZE-002 — All-day Calendar start resize
+
+[Change contract](../changes/calendar-all-day-start-resize-2026-11-10.md). Mac source manifest SHA-256 is `28e94261650c8b5fe5c28243596c00aedc173311a3ec397e5561817b58b1c641`. The iPhone source manifest SHA-256 is `45a762a94993f76fa3280a619cded0078956bfae3c63d1b1ff49492aaad4ad78`. The two differing files are the iPhone Calendar view and its UI test. The Mac build inputs are identical. All 628 Mac tests passed and the release passed strict signature verification. The new shared regression covers civil-date conversion between Tokyo and New York across the March daylight-saving transition, the one-day clamp, no-op and projected rows. The first Mac run exposed an obsolete assertion that rejected all-day input to the shared start command. The rerun removed that expectation and retained the timed point and invalid-date assertions.
+
+The guarded Mac Week trial verified the leading and trailing handles on an editable range, the trailing-only handle on a continuation, and the separate controls on a one-day duration. Clicking the start handle opened Schedule and Escape dismissed it. A drag extended the start one day, Undo restored it, and a drag beyond the end clamped the range to its due day. Relaunch preserved the exact bytes. File checks confirmed the fixed due day, reminders, unrelated tasks and settings. The prior guarded app, scoped preferences and fixture were restored.
+
+Six focused iPhone simulator tests passed with zero failures, skips or runtime warnings. They cover Week start drag, one-day clamp, staged Cancel, Undo and relaunch, Month start drag across a week row, and the existing Week and Month end handles. The Week and Month file audits confirmed that only the start, its update timestamp and the intentional Calendar view setting could change. The first two iPhone runs exposed a narrow Week card whose content pushed the handles outside their date column. The final layout uses compact grips and constrains the title area. The test measures both handle boundaries and the saved-file audit verifies exact dates. The disposable simulator was removed.
+
+Direct drag was verified in Mac Week and iPhone Week and Month. Multi-Day and Multi-Week reuse their corresponding grids. Exact TickTick all-day drag geometry, physical iPhone and broader accessibility verification remain open.
+
+<a id="calendar-date-jump"></a>
+
+### CAL-NAV-001 — Calendar date jump
+
+[Change contract](../changes/calendar-date-jump-2026-11-10.md). Mac and iPhone used source manifest SHA-256 `9d013fd4e87b493a6bcc9ebd6a93788562a038d84597a8f3710bf3d2dc372ba8`. All 628 Mac tests passed and the release passed strict signature verification.
+
+The guarded Mac Calendar verified Shift-Command-J, direct date entry, month grid selection, Cancel and Escape. The shortcut stayed outside the schedule editor and Tasks. Both date-entry routes retained Week. Relaunch restored the starting focus. Workspace and settings bytes matched the fixture and the prior guarded app and scoped preferences were restored.
+
+Three focused iPhone simulator tests passed with zero failures, skips or runtime warnings. The new test stages March 2027, cancels, confirms the distant date on the second attempt, retains Week and checks the session focus reset after relaunch. The other tests cover the seven modes and Agenda Show more. The file audit found byte-identical workspace and settings. The disposable simulator was removed.
+
+TickTick documents a configurable date-picker shortcut. Taskovsky's default is Shift-Command-J on Mac and its iPhone picker is available from the month header. Exact installed TickTick behavior and physical iPhone interaction remain open. [TickTick changelog](https://ticktick.com/public/changelog/en.html).
+
+<a id="rich-description-markdown-typing"></a>
+
+### RICH-TYPING-001 — Typed Markdown in rich descriptions
+
+[Change contract](../changes/rich-description-markdown-typing-2026-11-10.md). Mac used source manifest SHA-256 `2eacf197b0154f82d3d5123a14865a2742f111747017e1e4db86712752ff86bd`. iPhone used `b81c87ccf0c099574d5835db5979134499f194ac4abd14958290306fac66f7f2`. Only the Mac editor file differs. All 630 Mac tests passed and the release passed strict signature verification.
+
+The first guarded Mac trial verified native heading, bold, Undo/Redo and checklist input. Smart Dashes turned the first two leading hyphens into an em dash. The revised editor keeps the second leading hyphen literal for that keystroke. The final guarded trial verified the same formatting flows and the third-hyphen divider. Relaunch preserved the exact description and companion. The file audit confirmed bold, Heading 2, an unchecked checklist and the divider with byte-identical settings and no unrelated workspace edits. The prior guarded app, scoped preferences and fixture were restored.
+
+Five focused iPhone tests passed with zero failures, skips or runtime warnings. They covered shared Unicode and paragraph edits, typed heading and bold, Undo/Redo, checklist and divider, ordinary versus literal paste, and draft recovery. The saved-file audit verified exact text, formatting and unrelated fields. Both disposable simulators were removed. The shared tests cover italic, highlight, strikethrough, numbered lists, quotes, CRLF, nested/escaped markers and fenced-code protection. Native marked-text composition and physical iPhone behavior remain open.
+
+TickTick documents these typing triggers. Taskovsky stores supported styles in its existing rich companion. Fenced code blocks still need a paragraph representation. [TickTick formatting guide](https://help.ticktick.com/articles/7507338582718152704).
+
+<a id="start-edge-iphone-full-regression"></a>
+
+### MOB-QA-005 — Full iPhone regression through timed start resize
+
+The full suite used the sealed Markdown paste and Calendar timed start source, SHA-256 `eeda5a895c9f972f5bf196dcbddd7974e05f50b0b89d67fcc2993228be8f072f`. It recorded 257 passes, 0 failures, 0 skips and 0 runtime warnings. Rich description and Summary clipboard actions used only named pasteboards with synthetic data. The native Mac and focused iPhone [start-resize verification](#calendar-timed-start-resize) has separate results.
+
+The file audit passed 80 baseline cases with 79 Mac reopens that made no writes. The additional Week, Timeline, zoom, Board, rich clipboard, Markdown paste, short timed move and start-resize file audits passed. The disposable simulator was removed.
+
+<a id="calendar-tasks-split"></a>
+
+### CAL-SPLIT-001 — Tasks beside Calendar
+
+[Change contract](../changes/calendar-tasks-split-2026-11-10.md). The Mac source manifest SHA-256 is `417810243512d99fc7aa93ca33dd494e608ebe75d1ca11fb3eb07f1c2d7a8581`. All 631 Mac tests passed and the release passed strict signature verification. The width test covers the minimum available width, a regular window with a docked task sidebar, and a narrow window. The change affects Mac workspace files only.
+
+The guarded Mac app showed Tasks and Week in one window after choosing Show with Calendar from the Tasks context menu. The detail overlay stayed inside Tasks. The divider responded to an accessible resize, the split preference survived relaunch, and the full Calendar and Hide Calendar commands worked. The same-source guarded debug build used the existing QA window sizing commands. At 1060 points the window returned to Tasks and at 1280 points the split returned.
+
+The first trial displayed both panes but did not complete a list-to-Calendar drop with a secondary text representation. The final build uses the existing private task type for both drag sources and Calendar destinations. The guarded task dropped into the timed grid at the intended snapped time, Undo restored its undated state, and a second drop produced a date-only point. The standalone Calendar grip moved that point and Undo restored it. Relaunch retained the date. Exact file checks found unchanged unrelated records and settings. The prior guarded app, test fixture and preferences were restored.
+
+The reference evidence is the installed TickTick 8.2.20 build 922 English resource keys and the vendor’s June 2024 changelog. Exact reference split sizing and shortcut customization remain open. [TickTick changelog](https://ticktick.com/public/changelog/en.html).
+
+<a id="calendar-month-span-width-regression"></a>
+
+### iPhone Month span width regression check
+
+The broader iPhone run through typed Markdown recorded a failure in the older Month continuation test. Its leading segment's title button measured 122.67 points, below the 125-point test threshold. The start handle occupies its own space in the same all-day bar. The revised test measures each complete segment through the title and its visible drag and resize controls. Both original width thresholds, vertical separation, horizontal continuation, overflow and Multi-Week checks remain in place.
+
+Four focused iPhone tests passed on source manifest `2f8e3fcaf4a2baa995258cc736d24e72a4906d53d18c7aa685ba4742190b4a8b` with zero failures, skips or runtime warnings. Only the iPhone UI test differs from the preceding checkpoint. The saved-file audits found byte-identical workspace files after browsing Month and Multi-Week and verified the intentional date changes from Week and Month resize. The simulator was removed. The broader run retains its original failure record.
+
+<a id="calendar-custom-shortcuts"></a>
+
+### CAL-NAV-002 — Configurable Mac Calendar shortcuts
+
+[Change contract](../changes/calendar-custom-shortcuts-2026-11-10.md). Mac source manifest SHA-256 is `86747ea492d6c4bc79351750af19315ddedb389b83e2e992004730fe70411237`. All 631 Mac tests passed and the release passed strict signature verification. The change affects Mac app sources only.
+
+The first build saved both chords but refreshed the menu bindings only after relaunch. The verified build shares binding state between Settings and the View menu, and recreates each command when its chord changes. The guarded Mac Settings recorder showed the default date shortcut and an unassigned split. It rejected a duplicate date chord and the existing New Note shortcut. Escape left the binding unassigned. Option-Command-J opened Jump to Date immediately after recording and the old shortcut ceased to open it. Shift-Command-K toggled the split from Tasks. The date jump stayed inactive in ordinary Tasks. Relaunch kept both recorded bindings. Clear disabled the split chord and Restore Defaults returned the date jump to Shift-Command-J. The file audit found byte-identical workspace and settings. The guarded app and scoped preferences were restored.
+
+The vendor changelog documents both configurable shortcuts. Taskovsky's recorder accepts a Command-based letter chord with an additional modifier. Exact installed TickTick defaults and recording UI remain open. [TickTick changelog](https://ticktick.com/public/changelog/en.html).
+
+<a id="calendar-option-icons"></a>
+
+### CAL-DISPLAY-006 — Hold Option to reveal Calendar icons on Mac
+
+[Change contract](../changes/calendar-option-icons-2026-11-10.md). Mac source manifest SHA-256 is `5e35a14d18bedac8e110697210a89c0732974b54b03e683c12506c7c26ed828e`. All 631 Mac tests passed and the release passed strict signature verification. The two changed inputs are Mac app sources.
+
+With the saved master and both per-kind switches off, standalone Calendar initially hid the task and note icons. Option-click on the leading task target completed and reopened the task. Option-click on the note’s leading target stayed in Calendar, while a plain click at the same point opened the note detail. In split view, Option-click on the Calendar checkbox completed the same task. Undo restored it and the checkbox stayed hidden after release. The default date jump still worked from split Calendar. Ordinary Tasks kept its checkbox and did not open Calendar on the Option probe. The file audit found byte-identical Calendar settings and only the test task’s modification timestamp changed. The fixture, guarded app and scoped preferences were restored.
+
+The original Calendar view-options guide documents the temporary reveal on Mac. The app keeps the input within the key Calendar workspace window and uses existing entry controls. [TickTick Calendar View Options](https://help.ticktick.com/articles/7055782085826445312).

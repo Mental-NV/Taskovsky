@@ -28,6 +28,11 @@
             <key>UTTypeConformsTo</key>
             <array><string>public.data</string></array>
         </dict>
-    </array>
+        <dict>
+        <key>UTTypeIdentifier</key><string>local.taskovsky.rich-description</string>
+        <key>UTTypeDescription</key><string>Taskovsky Rich Description</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+</array>
 </dict>
 </plist>

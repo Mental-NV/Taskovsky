@@ -20,6 +20,8 @@ struct PhoneRichFieldEditor: View {
         _selection = State(initialValue: NSRange(location: initialText.utf16.count, length: 0))
     }
 
+    private var clipboardSession: String? { model.isQA ? model.directory?.lastPathComponent : nil }
+
     private var state: RichFieldState? {
         guard model.activeDraft?.id == draftID else { return nil }
         return model.activeDraft?.richState
@@ -36,6 +38,7 @@ struct PhoneRichFieldEditor: View {
                                    composing: Binding(get: { model.activeDraft?.id == draftID && model.isComposing },
                                                       set: { if model.activeDraft?.id == draftID { model.isComposing = $0 } }),
                                    editable: !model.isBusy,
+                                   qaPasteboardName: clipboardSession,
                                    read: { self.state?.content }, apply: apply)
                     .frame(minHeight: 220, alignment: .topLeading)
             }
@@ -76,6 +79,10 @@ struct PhoneRichFieldEditor: View {
             Label("Redo", systemImage: "arrow.uturn.forward").labelStyle(.iconOnly)
                 .frame(minWidth: 24, minHeight: 28)
         }.disabled(redo.isEmpty).accessibilityIdentifier("richRedo")
+        Button(action: pasteAsPlainText) {
+            Label("Paste as Plain Text", systemImage: "clipboard").labelStyle(.iconOnly)
+                .frame(minWidth: 24, minHeight: 28)
+        }.accessibilityIdentifier("richPastePlain")
     }
 
     @ViewBuilder private func formatMenus(hasText: Bool) -> some View {
@@ -115,6 +122,12 @@ struct PhoneRichFieldEditor: View {
 
     private func paragraph(_ edit: RichParagraphEdit) { apply(.paragraph(edit, selection)) }
 
+    private func pasteAsPlainText() {
+        guard let text = RichEditorTextView.pasteboard(for: clipboardSession)?.string,
+              selection.length > 0 || !text.isEmpty else { return }
+        if apply(.replace(selection, with: text, style: .plain)) { clampSelection() }
+    }
+
     private func undo() {
         guard let state, let last = state.edits.last,
               model.restoreRichEdits(Array(state.edits.dropLast()), editorID: draftID) else { return }
@@ -141,6 +154,7 @@ struct PhoneRichTextInput: UIViewRepresentable {
     @Binding var selection: NSRange
     @Binding var composing: Bool
     let editable: Bool
+    var qaPasteboardName: String? = nil
     let read: () -> RichBody?
     let apply: (RichBodyEdit) -> Bool
     @ScaledMetric(relativeTo: .body) private var pointSize: CGFloat = 17
@@ -156,9 +170,14 @@ struct PhoneRichTextInput: UIViewRepresentable {
         layout.addTextContainer(container)
         storage.addLayoutManager(layout)
         let view = RichEditorTextView(frame: .zero, textContainer: container)
+        view.isEditable = editable
         view.delegate = context.coordinator
-        view.pastePlainText = { [weak coordinator = context.coordinator] view, text in
-            coordinator?.paste(text, in: view)
+        view.qaPasteboardName = qaPasteboardName
+        view.pasteContent = { [weak coordinator = context.coordinator] view, text, fragment, recognizesPlainText in
+            coordinator?.paste(text, fragment: fragment, recognizesPlainText: recognizesPlainText, in: view)
+        }
+        view.copyContent = { [weak coordinator = context.coordinator] view in
+            coordinator?.copy(from: view)
         }
         view.backgroundColor = .clear
         view.isScrollEnabled = false
@@ -176,13 +195,13 @@ struct PhoneRichTextInput: UIViewRepresentable {
     func updateUIView(_ view: RichEditorTextView, context: Context) {
         context.coordinator.parent = self
         if view.isEditable != editable {
-            view.isEditable = editable
-            view.isSelectable = true
+            context.coordinator.updateEditability(of: view)
         }
         guard view.markedTextRange == nil else { return }
         guard let preview = RichDescriptionPreview(body: content.text, rich: content),
               view.rendered?.matches(preview) != true || view.renderedPointSize != pointSize ||
               !RichBody.sameCodeUnits(view.text, content.text) else { return }
+        context.coordinator.discardStaleMarkdownArm(in: content, selection: view.selectedRange)
         // Native typing can update the caret after the text-change callback.
         // Re-render at the live selection instead of replaying a stale binding.
         context.coordinator.render(content, in: view, selection: view.selectedRange)
@@ -199,15 +218,47 @@ struct PhoneRichTextInput: UIViewRepresentable {
         private var rendering = false
         private var proposedRange: NSRange?
         private var compositionRange: NSRange?
+        private var markdownArm: RichMarkdownTyping.ArmedParagraph?
 
         init(_ parent: PhoneRichTextInput) { self.parent = parent }
 
+        func updateEditability(of view: RichEditorTextView) {
+            // UIKit may resign first responder when disabling a text view.
+            // Do that after SwiftUI's representable update has finished.
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view, view.window != nil, view.isEditable != parent.editable else { return }
+                view.isEditable = parent.editable
+                view.isSelectable = true
+            }
+        }
+
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            guard parent.editable else { return false }
             if !rendering, textView.markedTextRange == nil, let prior = parent.read(),
                RichBody.sameCodeUnits(textView.text, prior.text) {
+                if !parent.composing, let view = textView as? RichEditorTextView, range == view.selectedRange,
+                   applyMarkdown(text, at: range, in: view, prior: prior) { return false }
+                markdownArm = nil
                 proposedRange = range
             }
             return true
+        }
+
+        private func applyMarkdown(_ text: String, at range: NSRange, in view: RichEditorTextView, prior: RichBody) -> Bool {
+            let change = markdownArm?.inserting(text, at: range, in: prior)
+                ?? RichMarkdownTyping.change(for: text, at: range, in: prior)
+            guard let change,
+                  (try? RichBodyEdit.applying([change.edit], to: prior.text, rich: prior)) != nil,
+                  parent.apply(change.edit), let updated = parent.read() else { return false }
+            proposedRange = nil
+            render(updated, in: view, selection: change.caret)
+            markdownArm = change.armedParagraph
+            updateSelection(view)
+            return true
+        }
+
+        func discardStaleMarkdownArm(in body: RichBody, selection: NSRange) {
+            if let arm = markdownArm, !arm.accepts(selection, in: body) { markdownArm = nil }
         }
 
         func textViewDidChange(_ textView: UITextView) { publish(textView) }
@@ -215,17 +266,39 @@ struct PhoneRichTextInput: UIViewRepresentable {
             guard !rendering else { return }
             if textView.markedTextRange != nil || parent.composing { publish(textView) }
             else if let prior = parent.read(), RichBody.sameCodeUnits(textView.text, prior.text) {
+                discardStaleMarkdownArm(in: prior, selection: textView.selectedRange)
                 updateSelection(textView)
             }
         }
         func textViewDidEndEditing(_ textView: UITextView) { publish(textView) }
 
-        func paste(_ text: String, in view: RichEditorTextView) {
+        func copy(from view: RichEditorTextView) -> RichBody? {
+            guard !rendering, view.markedTextRange == nil, let prior = parent.read(),
+                  RichBody.sameCodeUnits(view.text, prior.text) else { return nil }
+            return RichBodyClipboard.fragment(from: prior, selection: view.selectedRange)
+        }
+
+        func paste(_ text: String, fragment: RichBody?, recognizesPlainText: Bool, in view: RichEditorTextView) {
             let range = view.selectedRange
-            guard !rendering, view.isEditable, view.markedTextRange == nil, let prior = parent.read(),
-                  RichBody.sameCodeUnits(view.text, prior.text), range.length > 0 || !text.isEmpty,
-                  parent.apply(.replace(range, with: text, style: .plain)), let updated = parent.read() else { return }
-            let cursor = NSRange(location: range.location + text.utf16.count, length: 0)
+            guard !rendering, parent.editable, view.isEditable, view.markedTextRange == nil, let prior = parent.read(),
+                  RichBody.sameCodeUnits(view.text, prior.text), range.length > 0 || !text.isEmpty else { return }
+            markdownArm = nil
+            let edit: RichBodyEdit
+            let insertedLength: Int
+            if let fragment {
+                edit = .paste(range, fragment: fragment)
+                insertedLength = fragment.text.utf16.count
+            } else if recognizesPlainText,
+                      let formatted = RichBodyClipboard.formattedPlainText(text, replacing: range, in: prior.text),
+                      (try? RichBodyEdit.applying([.paste(range, fragment: formatted)], to: prior.text, rich: prior)) != nil {
+                edit = .paste(range, fragment: formatted)
+                insertedLength = formatted.text.utf16.count
+            } else {
+                edit = .replace(range, with: text, style: .plain)
+                insertedLength = text.utf16.count
+            }
+            guard parent.apply(edit), let updated = parent.read() else { return }
+            let cursor = NSRange(location: range.location + insertedLength, length: 0)
             render(updated, in: view, selection: cursor)
             updateSelection(view)
         }
@@ -254,6 +327,7 @@ struct PhoneRichTextInput: UIViewRepresentable {
         private func publish(_ textView: UITextView) {
             guard !rendering, let view = textView as? RichEditorTextView, let prior = parent.read() else { return }
             if view.markedTextRange != nil {
+                markdownArm = nil
                 if compositionRange == nil { compositionRange = proposedRange ?? parent.selection }
                 proposedRange = nil
                 if !parent.composing { parent.composing = true }
@@ -280,7 +354,9 @@ struct PhoneRichTextInput: UIViewRepresentable {
 final class RichEditorTextView: UITextView {
     var rendered: RichDescriptionPreview?
     var renderedPointSize: CGFloat = 0
-    var pastePlainText: ((RichEditorTextView, String) -> Void)?
+    var pasteContent: ((RichEditorTextView, String, RichBody?, Bool) -> Void)?
+    var copyContent: ((RichEditorTextView) -> RichBody?)?
+    var qaPasteboardName: String?
     private var didFocus = false
 
     override var undoManager: UndoManager? { nil }
@@ -293,8 +369,54 @@ final class RichEditorTextView: UITextView {
         }
     }
 
+    static func pasteboard(for session: String?) -> UIPasteboard? {
+        guard let session else { return .general }
+        let name = UIPasteboard.Name(rawValue: "local.taskovsky.qa.rich-description." + session)
+        return UIPasteboard(name: name, create: true)
+    }
+
+    private var clipboard: UIPasteboard? { Self.pasteboard(for: qaPasteboardName) }
+    private var canPasteDescription: Bool { isEditable && markedTextRange == nil && clipboard?.hasStrings == true }
+
+    override var keyCommands: [UIKeyCommand]? {
+        guard qaPasteboardName != nil else { return super.keyCommands }
+        let copy = UIKeyCommand(input: "c", modifierFlags: .command, action: #selector(copy(_:)))
+        let paste = UIKeyCommand(input: "v", modifierFlags: .command, action: #selector(paste(_:)))
+        copy.wantsPriorityOverSystemBehavior = true
+        paste.wantsPriorityOverSystemBehavior = true
+        return [copy, paste] + (super.keyCommands ?? [])
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)) {
+            return canPasteDescription
+        }
+        if qaPasteboardName != nil && action == #selector(cut(_:)) { return false }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func copy(_ sender: Any?) {
+        guard let board = clipboard else { return }
+        guard let fragment = copyContent?(self) else {
+            if qaPasteboardName == nil { super.copy(sender) }
+            return
+        }
+        var item: [String: Any] = [UTType.utf8PlainText.identifier: fragment.text]
+        item[RichBodyClipboard.typeIdentifier] = RichBodyClipboard.encode(fragment) ?? Data()
+        board.setItems([item], options: [.localOnly: true])
+    }
+
+    override func cut(_ sender: Any?) {
+        if qaPasteboardName == nil { super.cut(sender) }
+    }
+
     override func paste(_ sender: Any?) {
-        guard isEditable, markedTextRange == nil, let text = UIPasteboard.general.string else { return }
-        pastePlainText?(self, text)
+        guard canPasteDescription, let board = clipboard, let text = board.string else { return }
+        let data = board.data(forPasteboardType: RichBodyClipboard.typeIdentifier)
+        let fragment = data.flatMap { RichBodyClipboard.decode($0, matching: text) }
+        let recognizesPlainText = data == nil && !board.contains(pasteboardTypes: [
+            UTType.rtf.identifier, UTType.rtfd.identifier, UTType.html.identifier,
+        ])
+        pasteContent?(self, text, fragment, recognizesPlainText)
     }
 }

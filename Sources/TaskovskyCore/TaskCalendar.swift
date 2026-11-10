@@ -403,6 +403,8 @@ public enum CalendarDates {
     }
 }
 
+public enum CalendarRangeEdge: Sendable { case start, end }
+
 public struct CalendarEntry: Identifiable, Equatable, Sendable {
     public var id: String
     public var taskID: UUID
@@ -424,11 +426,19 @@ public struct CalendarEntry: Identifiable, Equatable, Sendable {
 
     /// The projected end is exclusive. Gesture targets and stored all-day
     /// deadlines are inclusive civil days in their respective calendars.
-    public func allDayResizeTarget(on day: Date, calendar: Calendar) -> Date? {
+    public func allDayResizeTarget(on day: Date, edge: CalendarRangeEdge = .end, calendar: Calendar) -> Date? {
         guard canResizeAllDayRange,
-              let current = calendar.date(byAdding: .day, value: -1, to: end) else { return nil }
-        let target = max(calendar.startOfDay(for: start), calendar.startOfDay(for: day))
-        return calendar.isDate(target, inSameDayAs: current) ? nil : target
+              let last = calendar.date(byAdding: .day, value: -1, to: end) else { return nil }
+        let first = calendar.startOfDay(for: start)
+        let proposed = calendar.startOfDay(for: day)
+        switch edge {
+        case .start:
+            let target = min(last, proposed)
+            return calendar.isDate(target, inSameDayAs: first) ? nil : target
+        case .end:
+            let target = max(first, proposed)
+            return calendar.isDate(target, inSameDayAs: last) ? nil : target
+        }
     }
     public func overlaps(_ interval: DateInterval) -> Bool { start < interval.end && end > interval.start }
 }

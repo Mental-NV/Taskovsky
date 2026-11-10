@@ -164,14 +164,20 @@ import TaskovskyWorkspace
             }
             if ["verify-rich-inline-edit", "verify-rich-plain-paste"].contains(args[1]) {
                 let source = try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: root.appendingPathComponent("initial-workspace.json")))
-                let remaining = RichInlineRun(location: 7, length: 9, bold: true)
-                let expected: [RichInlineRun] = args[1] == "verify-rich-inline-edit"
-                    ? [.init(location: 0, length: 7, bold: true, italic: true, link: "https://example.test/project"), remaining]
-                    : [remaining]
                 guard let original = source.tasks.first, let task = store.data.tasks.first, task.id == original.id,
-                      RichBody.sameCodeUnits(task.body, original.body), let rich = task.richBody,
-                      RichDescriptionPreview(body: task.body, rich: rich)?.inline == expected
+                      RichBody.sameCodeUnits(task.body, original.body)
                 else { throw CocoaError(.fileReadCorruptFile) }
+                if args[1] == "verify-rich-plain-paste" {
+                    guard task.richBody == nil else { throw CocoaError(.fileReadCorruptFile) }
+                } else {
+                    let expected: [RichInlineRun] = [
+                        .init(location: 0, length: 7, bold: true, italic: true, link: "https://example.test/project"),
+                        .init(location: 7, length: 9, bold: true),
+                    ]
+                    guard let rich = task.richBody,
+                          RichDescriptionPreview(body: task.body, rich: rich)?.inline == expected
+                    else { throw CocoaError(.fileReadCorruptFile) }
+                }
             }
             if args[1] == "verify-summary-note" {
                 guard let note = store.data.tasks.first, note.title.hasPrefix("Summary "), note.body.contains("Edited locally"),

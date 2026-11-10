@@ -2,7 +2,7 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private enum PhoneQACase: String { case known, taskSort = "task-sort", lifecycle, arrange, occurrence, agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, taskSort = "task-sort", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
@@ -344,6 +344,19 @@ final class PhoneWorkspaceModel: ObservableObject {
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             #if DEBUG
+            if isQA && qaCase == .shortCalendarMove {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                let start = MobilePreviewFixture.now.addingTimeInterval(-8_100)
+                let end = start.addingTimeInterval(323)
+                data.tasks[0].scheduledDuration = TaskDurationRange(start: start, end: end, isAllDay: false)
+                data.tasks[0].dueDate = end
+                data.tasks[0].hasDueTime = true
+                data.tasks[0].reminderDate = start.addingTimeInterval(-600)
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            #endif
+            #if DEBUG
             if isQA && (qaCase == .richPreview || qaCase == .malformedRich) {
                 var data = initial.workspace
                 guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
@@ -359,6 +372,28 @@ final class PhoneWorkspaceModel: ObservableObject {
                     data.tasks[0].richBody = rich
                 }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .richPlainPaste {
+                var data = initial.workspace
+                guard let task = data.tasks.first, let word = task.body.split(separator: " ").first,
+                      let pasteboard = RichEditorTextView.pasteboard(for: directory.lastPathComponent) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                data.tasks[0].richBody = RichBody(text: task.body, runs: [.init(location: 0, length: word.utf16.count, bold: true)])
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+                pasteboard.string = String(word)
+            }
+            if isQA && qaCase == .richMarkdownPaste {
+                var data = initial.workspace
+                guard data.tasks.count > 1,
+                      let pasteboard = RichEditorTextView.pasteboard(for: directory.lastPathComponent) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                data.tasks[0].body = "Prior"
+                data.tasks[0].richBody = nil
+                data.tasks[1].body = "Prior"
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+                pasteboard.string = "## Plan **e\u{301} 🧩**\n- First\n1. Open\n2. Review\n> Reference\nhttps://example.test/task *literal*"
             }
             #endif
             let wasNew = !FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspace.json").path) &&
