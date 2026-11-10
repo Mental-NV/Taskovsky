@@ -59,7 +59,11 @@ For documentation-only requests, replace the implementation/verification instruc
 
 ## Hosted macOS verification
 
-The [macOS CI workflow](../../.github/workflows/macos-ci.yml) runs tests, release packaging, signature checks and archive integrity checks for PR events, including drafts and docs-only updates. Pushes to main run after integration; manual dispatch becomes available only once the workflow exists on the default branch. The [CI specification](ci-cd.md) describes exact stages, triggers, diagnostics and limits.
+**Temporarily paused on this branch, November 10, 2026.** The workflow has a `.disabled` suffix. Do not wait for remote CI or treat an absent check as a pass. Continue applicable local tests/builds and record their exact revision and outcome. This does not change main or other branches until integration or explicit adoption. Restore the original filename through a reviewed change when the pause ends. See [CI-006](ci-cd.md#temporary-pause-ci-006) for scope, restoration and the separate docs-filter PR.
+
+The following describes the preserved workflow after restoration.
+
+The [macOS CI workflow](../../.github/workflows/macos-ci.yml.disabled) runs tests, release packaging, signature checks and archive integrity checks for PR events, including drafts and docs-only updates. Pushes to main run after integration; manual dispatch becomes available only once the workflow exists on the default branch. The [CI specification](ci-cd.md) describes exact stages, triggers, diagnostics and limits.
 
 For each feature, inspect the latest run for its exact PR head and actual synthetic merge checkout. Download the diagnostics and app artifacts if needed before their 14-day expiry. A failed, skipped or cancelled required stage is not a pass. CI does not replace affected native UI acceptance, macOS 14 testing or Intel testing. Branch-protection enforcement and deployment are not configured by this work.
 

@@ -20,7 +20,7 @@ Start with the [documentation index](docs/README.md).
 - [TickTick feature parity](docs/parity-implementation-status.md): the dedicated implementation-progress and comparison tracker.
 - [Shared engine](docs/architecture/shared-engine.md) and [component boundaries](docs/architecture/components.md): proposed reuse for macOS and iPhone, including independently developed rich editors.
 - [iPhone UI proposal](docs/spec/iphone.md): native phone presentation and explicitly limited editor capabilities.
-- [macOS CI](docs/spec/ci-cd.md): implemented hosted test/build/signature/archive checks and operational limits; no deployment.
+- [macOS CI](docs/spec/ci-cd.md): temporarily paused on this branch; the hosted test/build/signature/archive workflow is preserved for restoration. Local verification remains applicable; no deployment.
 - [Spec-driven workflow](docs/spec/workflow.md), [change template](docs/spec/change-template.md) and [verification ledger](docs/spec/verification.md): how to specify, implement and verify future work.
 
 The current specifications were reconciled against source commit `cfdec454acff91285ac00beaa20c0cf0f0961ee1`. They describe implementation, not a fresh runtime certification. The baseline includes merged [Calendar PR #2](https://github.com/Mental-NV/Taskovsky/pull/2) and its scheduling/editor corrections. The verification ledger retains their resolution evidence and remaining live-check limits, plus fresh CI results and the subsequently authorized compiler-only `TaskDetail` refactor. Future approved specifications describe a delta from this baseline, not a license to overwrite existing behavior.
@@ -46,6 +46,6 @@ open build/Taskovsky.app --args --workspace /tmp/TaskovskyQA/workspace.json
 
 The fixture is disposable. `--workspace` isolates workspace/settings files and layout preferences that use `IsolatedDefaults`; see [IsolatedLaunch.swift](Sources/TaskovskyCore/IsolatedLaunch.swift). Quick-search history still uses `UserDefaults.standard` in [SearchView.swift](Sources/Taskovsky/SearchView.swift), so full preference isolation is not guaranteed. Never point destructive or experimental QA at the user's normal workspace. The fixture currently uses runtime dates and some random IDs, so it is not a deterministic screenshot baseline.
 
-The initial documentation-only reconciliation ran no tests. Its authorized follow-up implements [macOS CI](.github/workflows/macos-ci.yml), with fresh hosted test/build/signature/archive results in the [verification ledger](docs/spec/verification.md). Prior local UI evidence remains distinct: CI does not verify native gestures or visual behavior. Calendar-specific disposable data can be generated with [seed-calendar-qa.py](scripts/seed-calendar-qa.py).
+The initial documentation-only reconciliation ran no tests. Its authorized follow-up implements [macOS CI](.github/workflows/macos-ci.yml.disabled), with fresh hosted test/build/signature/archive results in the [verification ledger](docs/spec/verification.md). Prior local UI evidence remains distinct: CI does not verify native gestures or visual behavior. Calendar-specific disposable data can be generated with [seed-calendar-qa.py](scripts/seed-calendar-qa.py).
 
 

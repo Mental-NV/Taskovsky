@@ -23,7 +23,7 @@ For future work, an explicitly approved change specification defines the intende
 | Develop and test a component independently | [Component contracts](architecture/components.md) | Current boundaries plus proposed extraction |
 | Design the iPhone interface | [iPhone proposal](spec/iphone.md) | Proposal, no iOS app implemented |
 | Ask an AI agent to implement a feature | [Workflow](spec/workflow.md) and [change template](spec/change-template.md) | Working process |
-| Run hosted macOS testing | [macOS CI](spec/ci-cd.md) | Implemented on this PR branch; tests/build/package checks, no deployment |
+| Run hosted macOS testing | [macOS CI](spec/ci-cd.md) | Temporarily paused on this branch; workflow preserved for restoration, local verification remains applicable |
 | Check evidence and known deviations | [Verification ledger](spec/verification.md) | Static evidence and open verification |
 | Understand reference observations | [TickTick research](ticktick-spec/README.md) | Dated evidence, not Taskovsky requirements |
 | Find older research and status narratives | [Archive](archive/README.md) | Historical, non-authoritative |

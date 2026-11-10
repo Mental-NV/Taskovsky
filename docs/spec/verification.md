@@ -95,3 +95,15 @@ This documentation-only change reconciles [the canonical iPhone specification](i
 - All proposed acceptance scenarios are not run. No iPhone target, portable engine extraction, migration, sync or notification implementation is added. No simulator/device/native UI, API-floor audit, Personal Team signing or local-notification smoke test was performed by this publication task.
 - macOS tests and builds were not run locally for this documentation-only update. Any hosted PR CI is separate, pending exact-head evidence; historical green checks do not validate this specification or its future iPhone implementation.
 - User decisions and documentation approval do not mark implementation verified. Publication does not authorize merging, App Store submission, TestFlight or deployment.
+
+
+<a id="remote-ci-pause-2026-11-10"></a>
+## Remote CI pause: November 10, 2026
+
+[CHG-CI-PAUSE](../changes/pause-remote-ci.md) is based on remote main `6ee96eeb8f88e74a105c518de2202233ea528efa`, on the isolated branch `ci/pause-remote-actions-2026-11-10`. No desktop checkout was changed.
+
+- Static checks: the only workflow is renamed from `macos-ci.yml` to `macos-ci.yml.disabled`, retaining Git blob `3d0189f7169ee5149eaf9466cefc177bd75e6a4b` and file mode `100644`. The proposed tree contains no `.yml`/`.yaml` workflow. All application, test, dependency and build-script blobs are unchanged. Relative documentation targets and diff scope are checked.
+- Current branch metadata reports main unprotected with no required checks; the repository ruleset list is empty. Detailed branch-protection access returned HTTP 403 for the integration. No repository settings are changed.
+- Not run: Swift tests, macOS build/signature/archive checks, native UI checks, and a hosted execution or restoration probe. This is a workflow-filename and documentation change, not fresh runtime verification.
+- Exact published commit, PR URL and observed check/run status are recorded in the PR. An empty run list is a point-in-time observation, not a passing test result or proof that all other branches are paused.
+- Main and the separate [docs-filter PR #5](https://github.com/Mental-NV/Taskovsky/pull/5) remain unchanged. Integration, cancellation of existing runs and restoration were not performed.

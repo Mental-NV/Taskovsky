@@ -1,8 +1,20 @@
 # macOS continuous integration
 
+## Temporary pause: CI-006
+
+Remote CI is temporarily paused in this branch at the user's request on November 10, 2026. The workflow is preserved byte-for-byte as [`macos-ci.yml.disabled`](../../.github/workflows/macos-ci.yml.disabled). GitHub discovers workflow files only with a `.yml` or `.yaml` extension, so this branch has no executable Actions workflow.
+
+This is a branch-local file change, not a repository-wide Actions setting. Main and existing branches remain unchanged until this change is integrated or explicitly adopted there. Existing workflow runs are not cancelled. Manual dispatch is unavailable for the disabled file. Local verification remains required where applicable; lack of a remote check is not a test pass.
+
+To restore the previous workflow, rename `.github/workflows/macos-ci.yml.disabled` back to `.github/workflows/macos-ci.yml` in a reviewed change. Preserve the contents, reconcile any other CI changes, and verify the restored workflow on its exact revision. [PR #5](https://github.com/Mental-NV/Taskovsky/pull/5) separately proposes docs-only path filtering and remains unchanged; merging it must not inadvertently recreate an active workflow while this pause is intended.
+
+No required-check or repository-security settings are changed. At inspection, main reported protection disabled and no required checks, and the ruleset list was empty. The detailed protection endpoint was unavailable to this integration. Recheck requirements before integration; a required check that no longer runs can leave a PR waiting.
+
+The sections below preserve the prior workflow configuration and historical implementation evidence. Their execution instructions apply after restoration. See [CHG-CI-PAUSE](../changes/pause-remote-ci.md) and the [pause verification record](verification.md#remote-ci-pause-2026-11-10).
+
 ## Status and purpose
 
-**Implemented on PR #1's branch**, in [`.github/workflows/macos-ci.yml`](../../.github/workflows/macos-ci.yml), after the user requested implementation and verification on November 8, 2026. This replaces the earlier proposal. Tests, release build, signature and restored-archive checks have passed on the recorded hosted run. Main remains `cfdec454acff91285ac00beaa20c0cf0f0961ee1` until an authorized merge. The [verification ledger](verification.md#hosted-macos-ci) records actual runs, tested revisions and limits.
+**Implemented on PR #1's branch**, in [`.github/workflows/macos-ci.yml`](../../.github/workflows/macos-ci.yml.disabled), after the user requested implementation and verification on November 8, 2026. This replaces the earlier proposal. Tests, release build, signature and restored-archive checks have passed on the recorded hosted run. Main remains `cfdec454acff91285ac00beaa20c0cf0f0961ee1` until an authorized merge. The [verification ledger](verification.md#hosted-macos-ci) records actual runs, tested revisions and limits.
 
 The workflow runs the existing Swift tests and release-app packaging on a GitHub-hosted Mac regardless of a developer's local OS. It is CI plus downloadable build artifacts, **not continuous deployment, Developer ID signing or notarization**. There is no native UI-test target. Architecture extraction and the iPhone app remain proposals.
 
