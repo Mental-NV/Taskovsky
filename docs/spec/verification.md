@@ -1455,3 +1455,18 @@ The feature-only Git branch was independently verified from the same main revisi
 | iPhone 13 Pro simulator, iOS 26.3.1 | **4 passed.** Covered enabling and cancelling the setting, toggling a date separately from detail navigation, relaunch behavior, ordinary Settings saves and row swipe actions, and shared deadline math. The countdown-only test left both fixture files byte-identical. The disposable simulator was removed after inspection. |
 
 The shared unit test covers recalculation with a shifted clock, civil-day counting across daylight saving, a timed deadline across midnight and overdue display. The native pass used the Tasks list accessibility tree. Option-key precedence was checked in source. Other native destinations, VoiceOver and dynamic type were outside this pass.
+
+<a id="rich-list-continuation"></a>
+
+## Saved rich description lists — November 10, 2026
+
+[Change contract](../changes/rich-list-continuation-2026-11-10.md). The feature-only branch starts from merged `main` at `36a9e17ad1fac20e7d0c32eb5507f7d22b69b4b8`. The 167-file source manifest has SHA-256 `b26a87c4ffc487d8d1ad6fb86c18aae939f6c1819b4550461b2c2032da0cd198`.
+
+| Evidence | Result |
+| --- | --- |
+| macOS 27.0.1, Xcode 27.0 | **672 passed.** The shared regression covers bullets, numbering, checked state, exact Unicode and CRLF, first typing into a blank terminal item and exiting a blank item. Release build and strict signature verification passed. |
+| Guarded native Mac | **Passed.** Return split a loaded numbered item, rendered 1–3 and preserved the bold span. In a separate saved checklist, Undo and Redo restored the checked original and the new unchecked item. Two Returns exited the list before plain prose. The guarded bundle and settings were restored. |
+| iPhone 13 Pro simulator, iOS 26.3.1 | **5 passed.** The test saved a checked item, relaunched, continued it with an unchecked item and exited into plain prose. Existing checklist toggle, typed Markdown and code fence workflows passed. The disposable simulator was removed. |
+| Saved fixture audit | Both platforms wrote the exact expected description text and rich ranges. Other records were semantically equal after accounting for decoded default fields. Both settings files were byte-identical. |
+
+The first test pass exposed an end-of-document boundary guard that rejected Return at the last saved character. The recorded results use the corrected source. Native iPhone verification covered the end-of-list continuation, and the Mac pass covered the split within a numbered item. Physical iPhone and VoiceOver checks remain open.

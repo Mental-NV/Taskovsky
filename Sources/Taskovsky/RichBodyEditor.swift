@@ -496,13 +496,20 @@ struct RichBodyEditor: NSViewRepresentable {
         }
 
         private func applyMarkdown(_ text: String, at range: NSRange, in view: NSTextView) -> Bool {
-            guard markdownArm != nil || text == " " || text == "-" || text == "\n" else { return false }
+            let remaining = (view.textStorage?.length ?? 0) - range.location
+            let mayFillList = (1...2).contains(remaining) &&
+                (view.textStorage?.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle)?.textLists.first != nil
+            guard markdownArm != nil || text == " " || text == "-" || text == "\n" || mayFillList else { return false }
             let original = RichRender.extract(from: view)
             let prior = original.rich ?? RichBody(text: original.text)
-            let change = markdownArm?.inserting(text, at: range, in: prior)
+            let markdown = markdownArm?.inserting(text, at: range, in: prior)
                 ?? RichMarkdownTyping.change(for: text, at: range, in: prior)
-            guard let change, let body = try? RichBodyEdit.applying([change.edit], to: prior.text, rich: prior) else { return false }
-            host.controller.replaceEditorBody(body, caret: change.caret.location, label: "Format Markdown", undoSelection: true)
+            let list = markdown == nil ? RichMarkdownTyping.listContinuation(for: text, at: range, in: prior) : nil
+            guard let change = markdown ?? list,
+                  let body = try? RichBodyEdit.applying([change.edit], to: prior.text, rich: prior) else { return false }
+            host.controller.replaceEditorBody(body, caret: change.caret.location,
+                                              label: list == nil ? "Format Markdown" : "Continue List",
+                                              undoSelection: true, storedListChange: list != nil)
             markdownArm = change.armedParagraph
             return true
         }
@@ -774,7 +781,8 @@ final class RichBodyController: ObservableObject {
     /// Applies a toolbar mutation with explicit undo. Full snapshots are used
     /// because bodies are small and attribute runs make range math fragile;
     /// each undo registers its own inverse so redo chains correctly.
-    private func edit(label: String, undoSelection: Bool = false, _ apply: (NSTextStorage) -> Void) {
+    private func edit(label: String, undoSelection: Bool = false, storedListChange: Bool = false,
+                      _ apply: (NSTextStorage) -> Void) {
         guard let view = textView, let storage = view.textStorage, view.isEditable else { return }
         let before = NSAttributedString(attributedString: storage)
         let beforeSelection = undoSelection ? view.selectedRange() : nil
@@ -785,7 +793,8 @@ final class RichBodyController: ObservableObject {
         let afterSelection = undoSelection ? view.selectedRange() : nil
         if let undo = view.undoManager {
             undo.registerUndo(withTarget: self) { target in
-                target.restore(snapshot: before, inverse: after, label: label, selection: beforeSelection, inverseSelection: afterSelection)
+                target.restore(snapshot: before, inverse: after, label: label, selection: beforeSelection,
+                               inverseSelection: afterSelection, storedListChange: storedListChange)
             }
             undo.endUndoGrouping()
         }
@@ -793,15 +802,15 @@ final class RichBodyController: ObservableObject {
         // The assignment strips AppKit-derived textLists; the caret
         // paragraph's stored style is authoritative here (the edit already
         // removed what the user removed), so re-arm from storage.
-        view.typingAttributes = RichRender.attributes(at: view.selectedRange().location, in: view)
-        repairContinuation(beforeTyping: nil)
+        refreshTyping(in: view, storedListChange: storedListChange)
         (view.delegate as? RichBodyEditor.Coordinator)?.commit(view)
     }
 
-    func replaceEditorBody(_ body: RichBody, caret: Int, label: String, undoSelection: Bool = false) {
+    func replaceEditorBody(_ body: RichBody, caret: Int, label: String, undoSelection: Bool = false,
+                           storedListChange: Bool = false) {
         guard let view = textView, view.isEditable else { return }
         view.breakUndoCoalescing()
-        edit(label: label, undoSelection: undoSelection) { storage in
+        edit(label: label, undoSelection: undoSelection, storedListChange: storedListChange) { storage in
             storage.setAttributedString(RichRender.attributedString(text: body.text, rich: body))
             view.setSelectedRange(NSRange(location: caret, length: 0))
             if body.hasCodeBlocks, caret == storage.length, !body.isInCodeParagraph(at: caret) {
@@ -825,7 +834,7 @@ final class RichBodyController: ObservableObject {
     }
 
     private func restore(snapshot: NSAttributedString, inverse: NSAttributedString, label: String,
-                         selection: NSRange?, inverseSelection: NSRange?) {
+                         selection: NSRange?, inverseSelection: NSRange?, storedListChange: Bool) {
         guard let view = textView, let storage = view.textStorage else { return }
         view.undoManager?.beginUndoGrouping()
         view.undoManager?.setActionName(label)
@@ -833,20 +842,35 @@ final class RichBodyController: ObservableObject {
         if let selection { view.setSelectedRange(selection) }
         clampSelection(view)
         let caret = view.selectedRange().location
-        if view.typingAttributes[RichRender.codeBlockKey] != nil ||
-            (caret < storage.length && storage.attribute(RichRender.codeBlockKey, at: caret, effectiveRange: nil) != nil) {
+        if storedListChange {
+            refreshTyping(in: view, storedListChange: true)
+        } else if view.typingAttributes[RichRender.codeBlockKey] != nil ||
+                    (caret < storage.length && storage.attribute(RichRender.codeBlockKey, at: caret, effectiveRange: nil) != nil) {
             view.typingAttributes = RichRender.attributes(at: caret, in: view)
         }
         // Undo/redo swaps storage wholesale without touching typing; re-arm
         // from the restored paragraph so continuation survives the swap.
-        repairContinuation(beforeTyping: nil)
+        if !storedListChange { repairContinuation(beforeTyping: nil) }
         if let undo = view.undoManager {
             undo.registerUndo(withTarget: self) { target in
-                target.restore(snapshot: inverse, inverse: snapshot, label: label, selection: inverseSelection, inverseSelection: selection)
+                target.restore(snapshot: inverse, inverse: snapshot, label: label, selection: inverseSelection,
+                               inverseSelection: selection, storedListChange: storedListChange)
             }
             undo.endUndoGrouping()
         }
         (view.delegate as? RichBodyEditor.Coordinator)?.commit(view)
+    }
+
+    private func refreshTyping(in view: NSTextView, storedListChange: Bool) {
+        if storedListChange { pendingListArm = nil }
+        if storedListChange && isCaretInTrailingEmptyParagraph {
+            // Exiting the stored blank item leaves an unstyled caret at EOF.
+            view.typingAttributes = RichRender.baseAttributes
+        } else {
+            view.typingAttributes = RichRender.attributes(at: view.selectedRange().location, in: view)
+            repairContinuation(beforeTyping: nil)
+        }
+        refreshState()
     }
 
     /// Keeps the caret inside the storage after an undo swap changes length.

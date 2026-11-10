@@ -480,6 +480,40 @@ public enum RichMarkdownTyping {
         return change
     }
 
+    public static func listContinuation(for inserted: String, at range: NSRange, in body: RichBody) -> Change? {
+        let isReturn = inserted == "\n" || inserted == "\r" || inserted == "\r\n"
+        let source = body.text as NSString
+        guard range.length == 0, range.location <= source.length,
+              isReturn || (source.length - range.location <= 2 && !inserted.isEmpty &&
+                           !inserted.unicodeScalars.contains(where: CharacterSet.newlines.contains)),
+              (try? RichBodyEdit.validate(range, in: body.text)) != nil else { return nil }
+        var start = 0, end = 0, contentEnd = 0
+        source.getParagraphStart(&start, end: &end, contentsEnd: &contentEnd, for: range)
+        let paragraph = NSRange(location: start, length: end - start)
+        guard range.location <= contentEnd,
+              var block = body.blocks.first(where: { $0.location == start && $0.length == paragraph.length }),
+              block.list != nil, !block.rule else { return nil }
+
+        if start == contentEnd {
+            if end == source.length {
+                // Give the blank marker a real range until the first input or exit.
+                if isReturn {
+                    return Change(edit: .paste(paragraph, fragment: RichBody(text: "")), caret: range, armedParagraph: nil)
+                }
+                block.location = 0
+                return styledParagraph(inserted, replacing: paragraph, block: block, caret: start + inserted.utf16.count)
+            }
+            guard isReturn else { return nil }
+            return Change(edit: .paragraph(.clear, paragraph), caret: range, armedParagraph: nil)
+        }
+
+        guard isReturn else { return nil }
+        let lineBreak = contentEnd == end ? inserted : source.substring(with: NSRange(location: contentEnd, length: end - contentEnd))
+        let replacement = range.location == source.length ? lineBreak + lineBreak : lineBreak
+        return Change(edit: .replace(range, with: replacement, style: .plain),
+                      caret: NSRange(location: range.location + lineBreak.utf16.count, length: 0), armedParagraph: nil)
+    }
+
     private static func codeReturn(_ inserted: String, at range: NSRange, paragraph: NSRange,
                                    contentEnd: Int, in body: RichBody) -> Change? {
         let source = body.text as NSString

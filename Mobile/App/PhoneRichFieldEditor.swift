@@ -282,6 +282,7 @@ struct PhoneRichTextInput: UIViewRepresentable {
         private func applyMarkdown(_ text: String, at range: NSRange, in view: RichEditorTextView, prior: RichBody) -> Bool {
             let change = markdownArm?.inserting(text, at: range, in: prior)
                 ?? RichMarkdownTyping.change(for: text, at: range, in: prior)
+                ?? RichMarkdownTyping.listContinuation(for: text, at: range, in: prior)
             guard let change,
                   (try? RichBodyEdit.applying([change.edit], to: prior.text, rich: prior)) != nil,
                   parent.apply(change.edit), let updated = parent.read() else { return false }
@@ -356,8 +357,9 @@ struct PhoneRichTextInput: UIViewRepresentable {
             layout?.pointSize = size
             layout?.markerIndent = indent
             let attributed = attributedDescription(preview, pointSize: size, markerIndent: indent)
-            if content.hasCodeBlocks || view.rendered?.paragraphs.contains(where: { $0.codeBlockID != nil }) == true {
-                // Keep the text input session while a Return changes a code
+            if content.hasCodeBlocks || view.rendered?.paragraphs.contains(where: { $0.codeBlockID != nil || $0.marker != nil }) == true ||
+                preview.paragraphs.contains(where: { $0.marker != nil }) {
+                // Keep the text input session while an edit changes a formatted
                 // paragraph and moves the caret before the next keystroke.
                 view.textStorage.setAttributedString(attributed)
             } else {
