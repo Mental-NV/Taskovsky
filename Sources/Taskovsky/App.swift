@@ -1087,20 +1087,11 @@ struct WorkspaceView: View {
     }
 
     private func batchSheet(_ request: BatchRequest) -> some View {
-        TaskBatchSheet(scope: request.scope, tasks: request.tasks, lists: request.data.lists,
-                       tags: request.data.tags, calendar: request.settings.calendar, today: request.now) { edit in
-            guard store.data == request.data, store.settings == request.settings else {
-                return "The workspace changed. Close this sheet and select tasks again."
-            }
-            do {
-                guard try store.applyBatch(edit) else { return store.storageError ?? "Could not save the batch change." }
-                actions.notice("Batch change applied.")
-                return nil
-            } catch let reason as TaskBatchRefusal {
-                return reason.batchMessage
-            } catch {
-                return "The selected tasks could not be changed."
-            }
+        TaskBatchSheet(scope: request.scope, tasks: request.tasks, data: request.data,
+                       calendar: request.settings.calendar, today: request.now) { edit in
+            let error = saveDesktopTaskBatch(edit, to: store, expected: request.data, settings: request.settings)
+            if error == nil { actions.notice(edit.action.kind.completionMessage) }
+            return error
         }
     }
     @State private var listsHeadingHovered = false

@@ -19,6 +19,7 @@ private struct PhoneBatchRequest: Identifiable {
     let scope: String
     let tasks: [TaskItem]
     let document: WorkspaceDocument
+    var onlyAction: TaskBatchEdit.Kind? = nil
 }
 enum PhoneStyle {
     static let accent = Color(red: 70/255, green: 112/255, blue: 250/255)
@@ -178,6 +179,13 @@ struct MobileRootView: View {
                                     calendarAction("Arrange Tasks", symbol: "calendar.badge.plus") {
                                         showArrange = true
                                     }
+                                    let candidates = TaskBatchEdit.calendarPostponeCandidates(in: snapshot.workspace, options: options)
+                                    calendarAction("Postpone Tasks", symbol: "clock.arrow.circlepath") {
+                                        guard let document = model.document else { return }
+                                        batchNotice = nil
+                                        batchRequest = PhoneBatchRequest(scope: "Calendar sources", tasks: candidates,
+                                                                         document: document, onlyAction: .postpone)
+                                    }.disabled(!model.canBeginEditing || candidates.isEmpty)
                                 }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
                             }
                     } else {
@@ -212,6 +220,10 @@ struct MobileRootView: View {
                     }
                     taskDestination(snapshot.workspace)
                 case .calendar:
+                    if let batchNotice {
+                        Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("batchNotice")
+                    }
                     if let preferenceNotice {
                         Text(preferenceNotice).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("calendarPreferenceNotice").padding(.horizontal, 16)
@@ -380,10 +392,10 @@ struct MobileRootView: View {
 
     private func taskBatchSheet(_ request: PhoneBatchRequest) -> some View {
         let data = request.document.snapshot.workspace
-        return TaskBatchSheet(scope: request.scope, tasks: request.tasks, lists: data.lists,
-                              tags: data.tags, calendar: calendar, today: model.now) { edit in
+        return TaskBatchSheet(scope: request.scope, tasks: request.tasks, data: data,
+                              calendar: calendar, today: model.now, onlyAction: request.onlyAction) { edit in
             let error = await model.saveBatch(edit, expected: request.document.revision)
-            if error == nil { batchNotice = "Batch change applied." }
+            if error == nil { batchNotice = edit.action.kind.completionMessage }
             return error
         }
     }
@@ -869,7 +881,7 @@ struct MobileRootView: View {
             } : nil
         )
         let holdsMonthPosition = model.isBusy || calendarEdit != nil || occurrenceChange != nil
-            || capturePresented || model.captureDraft != nil || selectedTask != nil
+            || capturePresented || model.captureDraft != nil || selectedTask != nil || batchRequest != nil
         return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
                                      options: options, monthInteractionActive: holdsMonthPosition, controls: controls,
                                      select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }

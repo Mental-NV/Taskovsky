@@ -6,26 +6,30 @@ public enum TaskBatchRefusal: Error, Equatable, Sendable {
 
 public struct TaskBatchEdit: Sendable {
     public enum Kind: CaseIterable, Hashable, Sendable {
-        case schedule, priority, tags, move, complete, trash
+        case schedule, postpone, priority, tags, move, complete, trash
 
-        public func isAvailable(for tasks: [TaskItem], lists: [TaskList]) -> Bool {
+        public func isAvailable(for tasks: [TaskItem], in data: WorkspaceData) -> Bool {
             guard !tasks.isEmpty, tasks.allSatisfy({ $0.deletedAt == nil }) else { return false }
             if self == .move { return true }
-            guard tasks.allSatisfy({ !SmartListEligibility.isArchived($0, lists: lists) }) else { return false }
+            guard tasks.allSatisfy({ !SmartListEligibility.isArchived($0, lists: data.lists) }) else { return false }
             switch self {
             case .schedule, .priority, .complete: return tasks.allSatisfy { $0.kind == .task }
+            case .postpone:
+                let predecessors = Set(data.tasks.compactMap(\.recurrenceSourceID))
+                return tasks.allSatisfy { TaskBatchEdit.postponeOperation(for: $0, predecessors: predecessors) != nil }
             case .tags, .move, .trash: return true
             }
         }
     }
 
     public enum Action: Sendable {
-        case schedule(Date?), priority(TaskPriority), tags([UUID], remove: Bool)
+        case schedule(Date?), postpone, priority(TaskPriority), tags([UUID], remove: Bool)
         case move(UUID?), complete, trash
 
         public var kind: Kind {
             switch self {
             case .schedule: .schedule
+            case .postpone: .postpone
             case .priority: .priority
             case .tags: .tags
             case .move: .move
@@ -33,6 +37,32 @@ public struct TaskBatchEdit: Sendable {
             case .trash: .trash
             }
         }
+    }
+
+    public static func calendarPostponeCandidates(in data: WorkspaceData, options: TaskCalendarOptions) -> [TaskItem] {
+        let predecessors = Set(data.tasks.compactMap(\.recurrenceSourceID))
+        return data.tasks.filter {
+            options.includes($0, data: data) && postponeOperation(for: $0, predecessors: predecessors) != nil
+        }.sorted { ($0.dueDate ?? .distantFuture) < ($1.dueDate ?? .distantFuture) }
+    }
+
+    private static func postponeOperation(for task: TaskItem, predecessors: Set<UUID>) -> CalendarScheduleOperation? {
+        guard task.kind == .task, task.hasDueTime, task.deletedAt == nil,
+              task.completedAt == nil, task.wontDoAt == nil,
+              let due = task.dueDate, due.timeIntervalSinceReferenceDate.isFinite,
+              task.timeZoneID.map({ TimeZone(identifier: $0) != nil }) ?? true,
+              task.customRecurrence?.isValid != false,
+              !task.isRepeating || !predecessors.contains(task.id) else { return nil }
+        let newDue = due.addingTimeInterval(3_600)
+        guard newDue > due, newDue.timeIntervalSinceReferenceDate.isFinite else { return nil }
+        if let range = task.scheduledDuration {
+            guard !range.isAllDay, range.end == due, range.start <= due,
+                  range.start.timeIntervalSinceReferenceDate.isFinite else { return nil }
+            let start = range.start.addingTimeInterval(3_600)
+            guard start > range.start, start.timeIntervalSinceReferenceDate.isFinite else { return nil }
+            return .setRange(TaskDurationRange(start: start, end: newDue))
+        }
+        return .setPoint(date: newDue, allDay: false)
     }
 
     public let ids: [UUID]
@@ -54,7 +84,7 @@ public struct TaskBatchEdit: Sendable {
         let indices = data.tasks.indices.filter { selectedIDs.contains(data.tasks[$0].id) }
         guard indices.count == ids.count else { throw TaskBatchRefusal.invalidSelection }
         let selected = indices.map { data.tasks[$0] }
-        guard action.kind.isAvailable(for: selected, lists: data.lists) else { throw TaskBatchRefusal.readOnlyRecord }
+        guard action.kind.isAvailable(for: selected, in: data) else { throw TaskBatchRefusal.readOnlyRecord }
 
         switch action {
         case .move(let list):
@@ -65,7 +95,7 @@ public struct TaskBatchEdit: Sendable {
             return changed ? staged : nil
         case .complete, .trash:
             return try applyingLifecycle(to: current, selected: selected, now: now, calendar: calendar)
-        case .schedule, .priority, .tags:
+        case .schedule, .postpone, .priority, .tags:
             if case .tags(let tags, _) = action {
                 let known = Set(data.tags.map(\.id))
                 guard !tags.isEmpty, Set(tags).count == tags.count, tags.allSatisfy(known.contains) else {
@@ -74,8 +104,10 @@ public struct TaskBatchEdit: Sendable {
             }
             var staged = data
             var changed = false
+            let predecessors = action.kind == .postpone ? Set(data.tasks.compactMap(\.recurrenceSourceID)) : []
             for index in indices {
-                if var task = try updated(data.tasks[index], in: data, settings: settings, calendar: calendar) {
+                if var task = try updated(data.tasks[index], in: data, settings: settings, calendar: calendar,
+                                          predecessors: predecessors) {
                     task.updatedAt = now
                     staged.tasks[index] = task
                     changed = true
@@ -118,7 +150,7 @@ public struct TaskBatchEdit: Sendable {
     }
 
     private func updated(_ task: TaskItem, in data: WorkspaceData, settings: AppSettings,
-                         calendar: Calendar) throws -> TaskItem? {
+                         calendar: Calendar, predecessors: Set<UUID>) throws -> TaskItem? {
         switch action {
         case .priority(let value):
             return try TaskMetadataChange.priority(value).applying(to: task, availableTags: data.tags)
@@ -140,11 +172,22 @@ public struct TaskBatchEdit: Sendable {
             } else {
                 operation = .unschedule
             }
-            guard let updated = CalendarScheduling.prepared(operation, to: task, displayCalendar: calendar,
-                    settings: settings, policyCalendar: calendar, in: data.tasks) else { throw TaskBatchRefusal.invalidSchedule }
-            return CalendarScheduleSnapshot(updated) == CalendarScheduleSnapshot(task) ? nil : updated
+            return try scheduled(task, operation: operation, scope: .series, in: data, settings: settings, calendar: calendar)
+        case .postpone:
+            guard let operation = Self.postponeOperation(for: task, predecessors: predecessors) else {
+                throw TaskBatchRefusal.invalidSchedule
+            }
+            return try scheduled(task, operation: operation, scope: task.isRepeating ? .currentOccurrence : .series,
+                                 in: data, settings: settings, calendar: calendar)
         case .move, .complete, .trash:
             return nil
         }
+    }
+
+    private func scheduled(_ task: TaskItem, operation: CalendarScheduleOperation, scope: CalendarScheduleScope,
+                           in data: WorkspaceData, settings: AppSettings, calendar: Calendar) throws -> TaskItem? {
+        guard let updated = CalendarScheduling.prepared(operation, to: task, displayCalendar: calendar,
+                settings: settings, policyCalendar: calendar, scope: scope, in: data.tasks) else { throw TaskBatchRefusal.invalidSchedule }
+        return CalendarScheduleSnapshot(updated) == CalendarScheduleSnapshot(task) ? nil : updated
     }
 }

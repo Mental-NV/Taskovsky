@@ -1830,6 +1830,93 @@ extension MobileContractTests {
         XCTAssertEqual(engine.data, data)
     }
 
+    func testBatchPostponePreservesTimedShapesRemindersAndFutureCadenceAcrossClockChange() throws {
+        let zone = "America/New_York"
+        let due = date("2026-11-01T05:30:15Z") + 0.25
+        let start = due - 2_700
+        let originalReminder = due - 600
+        var range = TaskItem(title: "Repeating range", body: "Keep this body", dueDate: due, hasDueTime: true,
+                             reminderDate: originalReminder, recurrence: .daily, timeZoneID: zone,
+                             scheduledDuration: .init(start: start, end: due))
+        range.reminderFollowsSchedule = false
+        let pointDue = due + 300
+        var point = TaskItem(title: "Point", dueDate: pointDue, hasDueTime: true)
+        point.reminderFollowsSchedule = true
+        let untouched = TaskItem(title: "All day", dueDate: due)
+        let data = WorkspaceData(tasks: [point, range, untouched])
+        let settings = AppSettings()
+        let edit = TaskBatchEdit(ids: [range.id, point.id], action: .postpone)
+        let lifecycle = TaskLifecycle(data: data)
+        let changed = try XCTUnwrap(edit.applying(to: lifecycle, settings: settings, now: now, calendar: calendar))
+        let postponedRange = changed.data.tasks[1]
+        XCTAssertEqual(postponedRange.dueDate, due + 3_600)
+        XCTAssertEqual(postponedRange.scheduledDuration, .init(start: start + 3_600, end: due + 3_600))
+        XCTAssertEqual(postponedRange.reminderDates, [originalReminder + 3_600])
+        XCTAssertEqual(postponedRange.reminderFollowsSchedule, false)
+        XCTAssertEqual(postponedRange.originalOccurrenceSchedule?.due, due)
+        XCTAssertEqual(postponedRange.recurrence, .daily)
+        XCTAssertEqual(postponedRange.timeZoneID, zone)
+        XCTAssertEqual(postponedRange.body, range.body)
+        let local = TaskCalendarProjection.taskCalendar(range, fallback: calendar)
+        let window = DateInterval(start: due + 12 * 3_600, duration: 24 * 3_600)
+        var options = TaskCalendarOptions()
+        options.showRepeatCycles = true
+        let before = TaskCalendarProjection.project(data: data, range: window, options: options, calendar: local)
+        let after = TaskCalendarProjection.project(data: changed.data, range: window, options: options, calendar: local)
+        XCTAssertFalse(before.entries.isEmpty)
+        XCTAssertEqual(after.entries, before.entries)
+        XCTAssertEqual(changed.data.tasks[0].dueDate, pointDue + 3_600)
+        XCTAssertNil(changed.data.tasks[0].scheduledDuration)
+        XCTAssertEqual(changed.data.tasks[0].reminderDates, TaskSchedulePolicy.defaultReminderDates(
+            due: pointDue + 3_600, hasTime: true, settings: settings, calendar: calendar))
+        XCTAssertEqual(changed.data.tasks[0].reminderFollowsSchedule, true)
+        XCTAssertEqual(changed.data.tasks[2], untouched)
+        XCTAssertEqual(changed.data.tasks.count, data.tasks.count)
+        let repeated = try XCTUnwrap(edit.applying(to: changed, settings: settings, now: now + 1, calendar: calendar))
+        XCTAssertEqual(repeated.data.tasks[1].dueDate, due + 7_200)
+        XCTAssertEqual(repeated.data.tasks[1].originalOccurrenceSchedule, postponedRange.originalOccurrenceSchedule)
+    }
+
+    func testBatchPostponeRejectsIneligibleMembersAndUsesSavedCalendarSources() throws {
+        let work = TaskList(name: "Work", color: "#445566")
+        let home = TaskList(name: "Home", color: "#556677")
+        let archived = TaskList(name: "Archived", color: "#667788", isArchived: true)
+        let timed = TaskItem(title: "Timed", listID: work.id, dueDate: now, hasDueTime: true)
+        let excluded = TaskItem(title: "Excluded source", listID: home.id, dueDate: now, hasDueTime: true)
+        let allDay = TaskItem(title: "All-day", listID: work.id, dueDate: now)
+        let undated = TaskItem(title: "Undated", listID: work.id)
+        let note = TaskItem(title: "Note", listID: work.id, kind: .note, dueDate: now, hasDueTime: true)
+        let invalidRange = TaskItem(title: "Invalid range", listID: work.id, dueDate: now, hasDueTime: true,
+                                    scheduledDuration: .init(start: now - 600, end: now + 600))
+        let invalidZone = TaskItem(title: "Invalid zone", listID: work.id, dueDate: now, hasDueTime: true,
+                                   timeZoneID: "Not/AZone")
+        let locked = TaskItem(title: "Archived", listID: archived.id, dueDate: now, hasDueTime: true)
+        let predecessor = TaskItem(title: "Reopened", listID: work.id, dueDate: now, hasDueTime: true, recurrence: .daily)
+        var successor = TaskItem(title: "Successor", listID: home.id, dueDate: now + 86_400, hasDueTime: true, recurrence: .daily)
+        successor.recurrenceSourceID = predecessor.id
+        var history = timed
+        history.id = UUID()
+        history.completedAt = now
+        var removed = timed
+        removed.id = UUID()
+        removed.deletedAt = now
+        var wontDo = timed
+        wontDo.id = UUID()
+        wontDo.wontDoAt = now
+        let incompatible = [allDay, undated, note, invalidRange, invalidZone, locked, predecessor, history, removed, wontDo]
+        let data = WorkspaceData(tasks: [timed, excluded, successor] + incompatible, lists: [work, home, archived])
+        let lifecycle = TaskLifecycle(data: data)
+        for task in incompatible {
+            XCTAssertFalse(TaskBatchEdit.Kind.postpone.isAvailable(for: [timed, task], in: data), task.title)
+            let edit = TaskBatchEdit(ids: [timed.id, task.id], action: .postpone)
+            XCTAssertThrowsError(try edit.applying(to: lifecycle, settings: AppSettings(), now: now, calendar: calendar), task.title)
+        }
+        var options = TaskCalendarOptions()
+        options.selectOnlyList(work.id)
+        XCTAssertEqual(TaskBatchEdit.calendarPostponeCandidates(in: data, options: options).map(\.id), [timed.id])
+        XCTAssertEqual(lifecycle.data, data)
+    }
+
     func testBatchLifecycleOrdersParentBeforeSelectedChildAndDoesNotSpawnTwice() throws {
         let parent = TaskItem(title: "Parent", dueDate: now, recurrence: .daily)
         var child = TaskItem(title: "Child", dueDate: now, recurrence: .daily)

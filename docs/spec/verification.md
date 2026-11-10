@@ -1400,3 +1400,14 @@ The reference documents the right-click command. Taskovsky adds the named confir
 Mac native ordinary paste rendered a heading, quote, bullet and numbered list, and a three-paragraph code block with indentation and a blank line. Undo restored the old body, Redo restored the imported formatting and the formatted description reopened after relaunch without writing the files. Paste as Plain Text kept the same characters without styles. The iPhone workflow verified the two paste paths, Undo, Redo, Done and relaunch. Saved-file audits on both platforms confirmed exact text and paragraph ranges, the shared code block identity, the italic run, unrelated fields and byte-identical settings. Mac QA files, the prior guarded bundle and QA preferences were restored. Both disposable iPhone simulators were removed.
 
 The iPhone simulator screenshot showed a replacement glyph for the heading emoji. The saved UTF-16 text was exact, and the Mac native capture rendered the emoji. Physical iPhone and VoiceOver were outside this check. The reference guide describes supported rich paste and editor formats. The semantic HTML mapping is a Taskovsky choice.
+
+
+<a id="task-batch-postpone"></a>
+
+### TASK-BATCH-002 — Postpone selected timed tasks
+
+[Change contract](../changes/task-batch-postpone-2026-11-10.md). The tested source manifest SHA-256 is `37b01972ed034de5158a3d71a3f23acfb212e00a6c08963ea8005c0b8d815740`. All 671 Mac tests passed, including the new clock-change and source-filter cases. The Mac release passed strict signature verification. Five focused iPhone 13 Pro simulator tests on iOS 26.3 passed with zero failures, skips or runtime warnings.
+
+On Mac, the Tasks selector reached the review stage and Cancel left the workspace and settings byte-identical. The Calendar selector showed two eligible Work tasks across different days and excluded the all-day Work task and timed Personal task. After Apply, the range moved from 13:00–14:00 to 14:00–15:00. The recurring task moved from 12:30 to 13:30, while its future Calendar previews stayed at 12:30. The iPhone tests covered the same source filter, the absence of Postpone for a mixed Tasks selection, Cancel, Apply and reopen. Neighboring batch metadata, Trash and Month navigation tests passed.
+
+The saved-file audits confirmed the exact 3,600-second shifts, preserved range length, moved manual reminder, recalculated automatic reminder, preserved original recurrence schedule, unchanged unrelated fields and byte-identical settings. The prior Mac QA bundle and preferences were restored and the simulator was removed. The reference documents the action on Windows and web. The native selector and recurrence rules are Taskovsky choices.
