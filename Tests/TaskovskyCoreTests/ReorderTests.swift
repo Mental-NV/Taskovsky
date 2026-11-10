@@ -167,6 +167,18 @@ final class ReorderTests: XCTestCase {
         XCTAssertEqual(store.data.tasks.firstIndex { $0.id == a }, before.firstIndex(of: "A"))
     }
 
+    func testOrderRefusesDuplicateStoredIDsWithoutDroppingRecords() {
+        let original = TaskItem(title: "One")
+        var duplicate = original
+        duplicate.title = "Duplicate record"
+        let other = TaskItem(title: "Two")
+        let records = [original, other, duplicate]
+        var data = WorkspaceData(tasks: records)
+        XCTAssertFalse(data.reorderTasks(moving: [original.id], before: other.id))
+        XCTAssertFalse(data.reorderTasks(moving: [other.id], before: original.id))
+        XCTAssertEqual(data.tasks, records)
+    }
+
     @MainActor func testReorderListsPersistsAcrossReload() throws {
         let url = tempURL()
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }

@@ -43,6 +43,40 @@ final class ReadOnlyWorkspaceTests: XCTestCase {
 private enum FixtureWriteError: Error { case denied }
 
 extension ReadOnlyWorkspaceTests {
+    func testTaskOrderPreservesRecordsAndSettingsAndRefusesStaleOrOutOfGroupMoves() async throws {
+        let a = TaskItem(title: "First")
+        var b = TaskItem(title: "Second", body: "Body 🧩", dueDate: Date(timeIntervalSinceReferenceDate: 500))
+        b.richBody = RichBody(text: b.body, runs: [.init(location: 0, length: 4, bold: true)])
+        let hidden = TaskItem(title: "Other row")
+        var pinned = TaskItem(title: "Pinned")
+        pinned.isPinned = true
+        var child = TaskItem(title: "Child")
+        child.parentID = a.id
+        var done = TaskItem(title: "Completed")
+        done.completedAt = Date(timeIntervalSinceReferenceDate: 100)
+        let files = try fixture(WorkspaceData(tasks: [a, hidden, b, pinned, child, done]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        for target in [b.id, pinned.id, child.id, done.id] {
+            let id = target == b.id ? b.id : a.id
+            guard case .refused = await repo.reorderTask(id, relativeTo: target, after: false, expected: initial.revision)
+            else { return XCTFail("Expected an invalid move to be refused.") }
+        }
+        let before = try await repo.load()
+        XCTAssertEqual(before.snapshot.workspaceBytes, initial.snapshot.workspaceBytes)
+        guard case .saved(let moved) = await repo.reorderTask(b.id, relativeTo: a.id, after: false, expected: initial.revision)
+        else { return XCTFail("Expected a saved reorder.") }
+        XCTAssertEqual(moved.snapshot.workspace.tasks, [b, a, hidden, pinned, child, done])
+        XCTAssertEqual(moved.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        guard case .unchanged = await repo.reorderTask(b.id, relativeTo: a.id, after: false, expected: moved.revision),
+              case .refused(.stale) = await repo.reorderTask(a.id, relativeTo: b.id, after: false, expected: initial.revision)
+        else { return XCTFail("Expected an unchanged move and stale refusal.") }
+        let reopened = try await repository(files).load()
+        XCTAssertEqual(reopened.snapshot.workspaceBytes, moved.snapshot.workspaceBytes)
+        XCTAssertEqual(reopened.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+    }
+
     func testCurrentOccurrenceFileProtectsItsBaselineFromOlderWritersAndUndoPreservesTitle() async throws {
         struct LegacyTaskCollection: Decodable { let tasks: [TaskItem] }
         var calendar = Calendar(identifier: .gregorian)

@@ -1529,3 +1529,18 @@ The change touches only the Mac Calendar view. This pass covers the recorded key
 | Saved fixture audit | The timed task saved November 10 at 07:30–08:00 Europe/Moscow with its existing list and priority. The recurring record saved November 10 and retained its November 8 baseline. Day settings stayed byte-identical. Both date-grid Undo operations restored the undated task with only its modification timestamp advanced. The only date-grid settings change was the selected mode. Unrelated workspace records matched in all three audits. The disposable simulators were removed. |
 
 The tests exercise drag from Arrange in Day, Month and Multi-Week. Week and Multi-Day reuse the hourly drop path. Physical-device and VoiceOver gestures remain outside this run.
+
+<a id="iphone-manual-task-order"></a>
+
+## iPhone manual task order — November 10, 2026
+
+[Change contract](../changes/iphone-manual-task-order-2026-11-10.md). The isolated branch `codex/iphone-manual-task-order` starts at `3c1204a14eccef61c2ff80c523a8fc53e1f4e558`. The final 170-file build-input manifest has SHA-256 `ff457eeb89020594a3bd91dfcc3b21432bc2ccae2e993a7fa005986fd1996200`. The earlier manifest, SHA-256 `970c9d1f42c328644c12dda6678cf7c20ea1817820334468e68bda8f45e7fc8a`, differs only in the later iPhone section test.
+
+| Evidence | Result |
+| --- | --- |
+| iPhone 13 Pro simulator, iOS 26.5, Xcode 27.0 | **Five workflows passed across two runs.** A drop before a Work row reordered it, a pinned-boundary drop preserved order, and switching to a computed sort hid the reorder grips. Returning to Default Order and relaunching both restored the saved order. In a sectioned list, the lower drop half moved a row after its sibling, a cross-section row drop preserved membership, and creation grouping suspended manual reorder. Existing timestamp sorting, creation grouping and Board section moves passed. The section test’s initial layout assertion assumed named sections preceded No Section. The rerun compared each row to the actual section heading. |
+| Saved iPhone fixtures | Both fixtures changed only array order. Tasks, rich descriptions, timestamps, pin and section fields and unrelated records matched their controls. The section comparison matched the generated section IDs between sessions. Settings were byte-identical. |
+| macOS 27.0.1, Xcode 27.0 | **680 tests passed**, including existing Mac batch reorder, duplicate stored ID refusal, and the workspace test for pinned, history, sibling and stale boundaries. The release build passed strict signature verification. |
+| Guarded Mac smoke check | The release opened the Work fixture and exposed the manual reorder grip. Pointer drag attempts left order unchanged. The fixture workspace and settings were byte-identical, and the prior guarded app and its preferences were restored. Native Mac drop behavior remains unconfirmed in this run. |
+
+The simulator checks cover the named fixtures and touch workflows. The Move earlier and Move later accessibility actions still need a VoiceOver interaction check.

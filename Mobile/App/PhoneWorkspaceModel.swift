@@ -754,6 +754,27 @@ final class PhoneWorkspaceModel: ObservableObject {
         }
     }
 
+    func saveTaskOrder(_ id: UUID, relativeTo target: UUID, after: Bool, expected: WorkspaceRevision) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.reorderTask(id, relativeTo: target, after: after, expected: expected) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Try moving the task again."
+        case .refused(.compatibility):
+            return "This workspace contains data this build cannot safely rewrite."
+        case .refused:
+            return "These tasks cannot be reordered together."
+        case .persistenceFailed:
+            return "Could not save the task order. You can retry."
+        }
+    }
+
     func saveSection(_ change: TaskSectionChange) async -> String? {
         guard canBeginEditing, let repository, let revision = document?.revision
         else { return "Editing is currently unavailable." }

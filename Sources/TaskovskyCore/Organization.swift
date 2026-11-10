@@ -252,3 +252,21 @@ public enum TagHierarchy {
         return result
     }
 }
+
+public extension WorkspaceData {
+    /// Moves the supplied records as an ordered batch. All validation precedes the reorder.
+    @discardableResult mutating func reorderTasks(moving: [UUID], before target: UUID, afterTarget: Bool = false) -> Bool {
+        let movingIDs = Set(moving)
+        guard !movingIDs.isEmpty, movingIDs.count == moving.count, !movingIDs.contains(target) else { return false }
+        var byID: [UUID: TaskItem] = [:]
+        for task in tasks where movingIDs.contains(task.id) || task.id == target {
+            guard task.deletedAt == nil, byID.updateValue(task, forKey: task.id) == nil else { return false }
+        }
+        guard byID.count == moving.count + 1 else { return false }
+        var reordered = tasks.filter { !movingIDs.contains($0.id) }
+        guard let targetIndex = reordered.firstIndex(where: { $0.id == target }) else { return false }
+        reordered.insert(contentsOf: moving.compactMap { byID[$0] }, at: afterTarget ? targetIndex + 1 : targetIndex)
+        tasks = reordered
+        return true
+    }
+}

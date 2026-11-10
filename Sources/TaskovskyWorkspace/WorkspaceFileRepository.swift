@@ -416,6 +416,23 @@ public actor WorkspaceFileRepository {
         editKnownWorkspace(expected: expected) { data, _ in command.apply(to: &data, now: now) }
     }
 
+    public func reorderTask(_ id: UUID, relativeTo target: UUID, after: Bool,
+                            expected: WorkspaceRevision) -> WorkspaceWriteOutcome {
+        editKnownWorkspace(expected: expected) { data, _ in
+            guard id != target,
+                  let moving = data.tasks.first(where: { $0.id == id }),
+                  let anchor = data.tasks.first(where: { $0.id == target }),
+                  moving.parentID == anchor.parentID, moving.isPinned == anchor.isPinned,
+                  [moving, anchor].allSatisfy({
+                      $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt == nil &&
+                      !SmartListEligibility.isArchived($0, lists: data.lists)
+                  }) else { return nil }
+            let order = data.tasks.map(\.id)
+            guard data.reorderTasks(moving: [id], before: target, afterTarget: after) else { return nil }
+            return data.tasks.map(\.id) != order
+        }
+    }
+
     public func apply(_ change: TaskSectionChange, expected: WorkspaceRevision,
                       now: Date = Date()) -> WorkspaceWriteOutcome {
         editKnownWorkspace(expected: expected) { data, _ in change.apply(to: &data, now: now) }
