@@ -7,6 +7,20 @@ extension TaskList {
     var phoneListColor: Color { PhoneEntityColor.read(color) }
 }
 
+struct PhoneListIcon: View {
+    let symbol: String?
+    var fallback = "list.bullet"
+    @ScaledMetric(relativeTo: .body) private var glyphWidth = 20.0
+
+    var body: some View {
+        Group {
+            if let symbol, symbol.count == 1 { Text(verbatim: symbol).fixedSize().frame(width: glyphWidth).clipped() }
+            else if let symbol, UIImage(systemName: symbol) != nil { Image(systemName: symbol) }
+            else { Image(systemName: fallback) }
+        }.accessibilityHidden(true)
+    }
+}
+
 enum PhoneEntityColor {
     static func read(_ value: String) -> Color {
         let raw = value.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
@@ -91,7 +105,7 @@ struct PhoneListOrganization: View {
         if !lists.isEmpty {
             Section(title) {
                 ForEach(Array(lists.enumerated()), id: \.element.id) { index, list in
-                    row(name: list.name, symbol: list.symbol ?? "list.bullet", id: list.id, index: index,
+                    row(name: list.name, symbol: list.symbol ?? (list.kind == .note ? "doc.text" : "list.bullet"), id: list.id, index: index,
                         ids: movable ? lists.map(\.id) : [], folder: false) { open(list: list) }
                 }
             }
@@ -100,9 +114,10 @@ struct PhoneListOrganization: View {
 
     private func row(name: String, symbol: String, id: UUID, index: Int, ids: [UUID], folder: Bool,
                      open: @escaping () -> Void) -> some View {
-        HStack {
+        let label = Label { Text(name) } icon: { PhoneListIcon(symbol: symbol) }
+        return HStack {
             if reordering {
-                Label(name, systemImage: symbol)
+                label
                 Spacer()
                 if !ids.isEmpty {
                     reorderButton(name, id: id, neighbor: index > 0 ? ids[index - 1] : nil, down: false, folder: folder)
@@ -111,7 +126,7 @@ struct PhoneListOrganization: View {
             } else {
                 Button(action: open) {
                     HStack {
-                        Label(name, systemImage: symbol)
+                        label
                         Spacer()
                         Image(systemName: "chevron.forward").font(.caption).foregroundStyle(.secondary)
                     }.frame(minHeight: 44).contentShape(Rectangle())
@@ -143,6 +158,8 @@ struct PhoneListOrganization: View {
 }
 
 private struct PhoneListEditor: View {
+    private enum IconChoice: Hashable { case defaultIcon, symbol(String), emoji }
+
     private enum Confirmation: String, Identifiable {
         case discard, delete, duplicate, ungroup
         var id: Self { self }
@@ -160,6 +177,8 @@ private struct PhoneListEditor: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let request: ListEditorRequest
     @State private var list: TaskList
+    @State private var iconChoice: IconChoice
+    @State private var emojiText: String
     @State private var folder: ListFolder
     @State private var placement: ListPlacement
     @State private var composing = false
@@ -172,7 +191,10 @@ private struct PhoneListEditor: View {
         self.model = model
         self.request = request
         let list = request.list ?? TaskList(name: "", color: "#4E64D8")
+        let emoji = list.symbol.flatMap { ListIcon.emoji($0) == $0 ? $0 : nil }
         _list = State(initialValue: list)
+        _iconChoice = State(initialValue: emoji != nil ? .emoji : list.symbol.map(IconChoice.symbol) ?? .defaultIcon)
+        _emojiText = State(initialValue: emoji ?? "")
         _placement = State(initialValue: ListPlacement(list))
         _folder = State(initialValue: request.folder ?? ListFolder(name: ""))
     }
@@ -180,10 +202,22 @@ private struct PhoneListEditor: View {
     private var isList: Bool { request.list != nil }
     private var entityName: String { isList ? list.name : folder.name }
     private var fieldLabel: String { isList ? "List name" : "Folder name" }
+    private var selectedSymbol: String? {
+        switch iconChoice {
+        case .defaultIcon: nil
+        case .symbol(let name): name
+        case .emoji: ListIcon.emoji(emojiText)
+        }
+    }
+    private var invalidIcon: Bool { isList && iconChoice == .emoji && selectedSymbol == nil }
+    private var listIdentity: (name: String, symbol: String?) {
+        ListIcon.resolvingName(list.name, symbol: selectedSymbol, previousName: request.creating ? nil : request.list?.name)
+    }
     private var hasChanges: Bool {
         if composing { return true }
         if let original = request.list {
-            return list != original || !RichBody.sameCodeUnits(list.name, original.name) || placement != ListPlacement(original)
+            return list != original || !RichBody.sameCodeUnits(list.name, original.name) ||
+                placement != ListPlacement(original) || selectedSymbol != original.symbol || invalidIcon
         }
         if let original = request.folder {
             return folder != original || !RichBody.sameCodeUnits(folder.name, original.name)
@@ -249,7 +283,7 @@ private struct PhoneListEditor: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: save)
-                        .disabled(model.isBusy || composing || entityName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(model.isBusy || composing || invalidIcon || entityName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("organizationSave")
                 }
             }
@@ -266,9 +300,22 @@ private struct PhoneListEditor: View {
             }
             ColorPicker("Color", selection: Binding(get: { list.phoneListColor }, set: { list.color = PhoneEntityColor.encode($0) ?? list.color }),
                         supportsOpacity: false)
-            Picker("Icon", selection: $list.symbol) {
-                Text("Default").tag(String?.none)
-                ForEach(symbols, id: \.self) { name in Label(name, systemImage: name).tag(Optional(name)) }
+            Picker(selection: $iconChoice) {
+                Text("Default").tag(IconChoice.defaultIcon)
+                ForEach(symbols, id: \.self) { name in
+                    Label { Text(name) } icon: { PhoneListIcon(symbol: name) }.tag(IconChoice.symbol(name))
+                }
+                Label("Custom Emoji", systemImage: "face.smiling").tag(IconChoice.emoji)
+            } label: {
+                Label { Text("Icon") } icon: {
+                    PhoneListIcon(symbol: listIdentity.symbol, fallback: list.kind == .note ? "doc.text" : "list.bullet")
+                }
+            }.accessibilityIdentifier("organizationIcon")
+            if iconChoice == .emoji {
+                TextField("Custom emoji", text: $emojiText)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .accessibilityIdentifier("organizationCustomEmoji")
+                if invalidIcon { Text("Enter one emoji.").font(.caption).foregroundStyle(.secondary) }
             }
             Picker("Placement", selection: $placement) {
                 Text("Above folders").tag(ListPlacement.aboveFolders)
@@ -287,7 +334,7 @@ private struct PhoneListEditor: View {
 
     private var symbols: [String] {
         let options = ["list.bullet", "star", "briefcase", "house", "book", "heart", "cart", "graduationcap"]
-        guard let existing = list.symbol, !options.contains(existing) else { return options }
+        guard let existing = list.symbol, !options.contains(existing), ListIcon.emoji(existing) != existing else { return options }
         return [existing] + options
     }
 
@@ -310,7 +357,11 @@ private struct PhoneListEditor: View {
 
     private func save() {
         if isList {
+            guard !invalidIcon else { return }
             var edited = list
+            let identity = listIdentity
+            edited.name = identity.name
+            edited.symbol = identity.symbol
             if request.creating || placement != ListPlacement(list) { placement.apply(to: &edited) }
             submit(.saveList(edited, creating: request.creating))
         } else {

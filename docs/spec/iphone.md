@@ -379,6 +379,8 @@ List/tag create and rename use native sheets with explicit Save/Cancel and share
 
 List deletion moves its records to Inbox and retains unavailable filter references. If offered, confirmation must say so. Tag deletion removes its memberships and promotes children while preserving unavailable filter criteria; merge/reparent must follow the implemented desktop command semantics when ported. Existing advanced filters remain executable/readable and cannot be converted to a simpler filter merely to expose an editor.
 
+Manage Lists → Icon → Custom Emoji uses the native keyboard or paste. The editor previews the glyph, and the drawer and manager display the saved list icon. A leading emoji in a new or changed name can also supply the default icon. Done saves the choice, while Cancel can discard it. [List emoji contract](../changes/list-emoji-icons-2026-11-10.md).
+
 Manage Filters in the drawer toolbar creates, edits, pins and deletes saved filters. A mode selector stays near the name. Advanced condition rows show their type and value. Tinted AND, OR and NOT headers and short guides distinguish groups. Structural edits use contextual action sheets. The keyword keyboard has a Done key. The native editor shows the match count, preserves unavailable selections and asks before replacing an advanced tree with Normal criteria. [Filter verification](verification.md#nested-filter-layout).
 
 Manage Tags in the drawer toolbar creates and edits tags with staged name, color, parent and pin changes. Sibling reorder and branch disclosure persist on each accepted action. Merge and delete require confirmation and use the shared reference rules. [Tag verification](verification.md#mobile-tag-management).

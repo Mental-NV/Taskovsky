@@ -873,7 +873,7 @@ struct MobileRootView: View {
         return Button { destination = item; section = .tasks; drawer = false } label: {
             HStack {
                 if case .list(let id) = item, let list = data.lists.first(where: { $0.id == id }) {
-                    Image(systemName: list.symbol ?? (list.kind == .note ? "doc.text" : "list.bullet"))
+                    PhoneListIcon(symbol: list.symbol, fallback: list.kind == .note ? "doc.text" : "list.bullet")
                         .foregroundStyle(list.phoneListColor).accessibilityHidden(true)
                 }
                 if case .tag(let id) = item, let tag = data.tags.first(where: { $0.id == id }) {

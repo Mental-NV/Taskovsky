@@ -134,6 +134,8 @@ Navigation rows are height 38, horizontal padding 10, radius 9, HStack spacing 1
 
 The calendar symbol has a radius-3 1.3-point outline, 1.1-point horizontal divider with top padding 4, and 7-point semibold text. `ListSymbol` renders text if the string is not a recognized SF Symbol; default font size is 16 with a `(size + 4)` square frame.
 
+On Mac, the list editor accepts a custom icon in its emoji field. With the default icon selected, Save or Create can promote an initial emoji from the name into the icon. [List emoji contract](../changes/list-emoji-icons-2026-11-10.md).
+
 Fresh visibility defaults: All, Tomorrow, Summary hidden; Today, Next 7 Days, Inbox, Tags, Filters, Completed, Trash shown; Won't Do shown if nonempty. Top/bottom smart groups reorder separately. Smart context actions are Edit, Show if not empty, Hide. Edit opens/retargets Settings → Smart Lists. Hiding the active row chooses the first remaining visible smart destination, else Inbox. Summary never shows a count. The internal `Destination` enum also has Notes and Reminders, but the current sidebar construction exposes no corresponding standalone navigation row; do not claim dedicated Notes/Reminders tabs.
 
 Folders are single-level disclosure containers, not task destinations. Folder rows use spacing 8, chevron 8 medium, folder glyph 14, title 14, count 11, height 38. Children indent 16. Ordinary folder counts show active member lists. Tag children use recursively applied `depth × 12` leading padding; an empty disclosure slot is 16 × 20, so effective nested indentation accumulates. Parent tag navigation includes descendant-tagged tasks.

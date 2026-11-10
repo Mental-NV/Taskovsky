@@ -1470,3 +1470,18 @@ The shared unit test covers recalculation with a shifted clock, civil-day counti
 | Saved fixture audit | Both platforms wrote the exact expected description text and rich ranges. Other records were semantically equal after accounting for decoded default fields. Both settings files were byte-identical. |
 
 The first test pass exposed an end-of-document boundary guard that rejected Return at the last saved character. The recorded results use the corrected source. Native iPhone verification covered the end-of-list continuation, and the Mac pass covered the split within a numbered item. Physical iPhone and VoiceOver checks remain open.
+
+<a id="list-emoji-icons"></a>
+
+## Local list emoji icons — November 10, 2026
+
+[Change contract](../changes/list-emoji-icons-2026-11-10.md). The feature branch starts from merged `main` at `36a9e17ad1fac20e7d0c32eb5507f7d22b69b4b8`. The Mac QA source manifest SHA-256 is `ce4163d6c34ea841be1434e5595793fd469d206250386e89a74f15616c59defb`. The final 167-file manifest SHA-256 is `ff8ed214d2c57f62bcaebe56813852a309ec38ef29e1a5cab89e1746ec48f98c`. Only the iPhone icon renderer changed between these manifests.
+
+| Evidence | Result |
+| --- | --- |
+| macOS 27.0.1, Xcode 27.0 | **672 passed.** Release build and strict signature verification passed. Shared cases include a joined skin-tone emoji, flags, keycaps, ordinary digits, emoji-only names, legacy names and explicit system icon choices. |
+| Guarded native Mac | **Passed.** Creating `👩🏽‍💻 Lab` showed `Lab` with the emoji in the sidebar. Reopening the editor showed the exact custom glyph. Resetting to the default icon and renaming to `🏳️‍🌈 Project Lab` saved `Project Lab` and rendered the flag. The prior QA app and preferences were restored. |
+| iPhone 13 Pro simulator, iOS 26.5 | **3 passed.** Native tests covered name promotion, rejecting ordinary text as an emoji, discarding a replacement, saving it, relaunching and retaining existing folder workflows. `iphone-list-emoji.png` shows the joined emoji in one drawer icon slot. |
+| Saved fixture audit | Both platforms stored exactly one new list with the expected name and exact UTF-16 icon. Other workspace records were semantically identical after known default-field normalization. Both settings files were byte-identical. |
+
+On the iOS 26.3.1 simulator, persistence checks passed while the first screenshots showed placeholders. An independent Core Text probe returned only glyph 4 even when Apple Color Emoji was explicitly selected. The same probe on iOS 26.5 produced a single glyph for the joined emoji, and the final app screenshot confirmed it. The renderer reserves a bounded icon slot. No physical iPhone was available for this pass.
