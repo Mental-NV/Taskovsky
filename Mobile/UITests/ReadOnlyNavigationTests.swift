@@ -3660,6 +3660,51 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["taskHierarchyCancel"].waitForExistence(timeout: 5))
     }
 
+    @MainActor func testListEmojiPrefixAndExplicitIconPersistAcrossRelaunch() {
+        let app = launch()
+        let lab = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@", "manageList-", "Lab")).firstMatch
+        let emoji = app.textFields["organizationCustomEmoji"]
+        let done = app.buttons["organizationSave"]
+        func editLab() {
+            reveal(lab, in: app)
+            lab.tap()
+            reveal(emoji, in: app)
+            XCTAssertTrue(emoji.waitForExistence(timeout: 5))
+        }
+        func replaceEmoji(_ next: String) {
+            emoji.tap()
+            emoji.typeText(XCUIKeyboardKey.delete.rawValue + next)
+            XCTAssertEqual(emoji.value as? String, next)
+        }
+        openOrganization(app)
+        app.buttons["organizationNewList"].tap()
+        editOrganizationName("🧪 Lab", in: app)
+        finishOrganizationEdit(app)
+        editLab()
+        XCTAssertEqual(emoji.value as? String, "🧪")
+        replaceEmoji("x")
+        XCTAssertFalse(done.isEnabled)
+        replaceEmoji("👩🏽‍💻")
+        XCTAssertTrue(done.isEnabled)
+        app.buttons["organizationCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(done)
+        editLab()
+        XCTAssertEqual(emoji.value as? String, "🧪")
+        replaceEmoji("👩🏽‍💻")
+        finishOrganizationEdit(app)
+        app.buttons["organizationManagerDone"].tap()
+        reveal(app.buttons["Lab"], in: app)
+        attach(app, "Custom emoji in the list drawer")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openOrganization(app)
+        editLab()
+        XCTAssertEqual(emoji.value as? String, "👩🏽‍💻")
+    }
+
     @MainActor func testListAndFolderManagementPersistsPlacementAndUngroups() {
         let app = launch()
         openOrganization(app)

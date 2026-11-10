@@ -1192,6 +1192,27 @@ final class MobileContractTests: XCTestCase {
         }
     }
 
+    func testListIconExtractsOnlyOneWholeEmojiAndHonorsExplicitChoice() {
+        for icon in ["👩🏽‍💻", "🇬🇧", "1️⃣", "🏳️‍🌈", "❤️"] {
+            let result = ListIcon.resolvingName(" \(icon)  Research ", symbol: nil, previousName: nil)
+            XCTAssertEqual(result.name, "Research")
+            XCTAssertTrue(result.symbol?.utf16.elementsEqual(icon.utf16) == true)
+        }
+        XCTAssertNil(ListIcon.emoji("1"))
+        XCTAssertNil(ListIcon.emoji("©"))
+        XCTAssertNil(ListIcon.emoji("🧪📚"))
+        XCTAssertNil(ListIcon.emoji("list.bullet"))
+        let unchanged = ListIcon.resolvingName("🧩 Legacy", symbol: nil, previousName: "🧩 Legacy")
+        XCTAssertEqual(unchanged.name, "🧩 Legacy")
+        XCTAssertNil(unchanged.symbol)
+        let explicit = ListIcon.resolvingName("🧩 Renamed", symbol: "star", previousName: "Legacy")
+        XCTAssertEqual(explicit.name, "🧩 Renamed")
+        XCTAssertEqual(explicit.symbol, "star")
+        let onlyEmoji = ListIcon.resolvingName(" 🧩 ", symbol: nil, previousName: nil)
+        XCTAssertEqual(onlyEmoji.name, "🧩")
+        XCTAssertNil(onlyEmoji.symbol)
+    }
+
     func testTypedMarkdownInlineKeepsUnicodeAndExistingStyles() throws {
         let text = "**e\u{301} 🧩**"
         let interior = "e\u{301} 🧩"

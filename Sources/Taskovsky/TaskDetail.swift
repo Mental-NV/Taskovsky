@@ -475,10 +475,10 @@ struct EntitySheet: View {
             } else {
                 HStack(spacing: 8) {
                     ForEach(symbols, id: \.self) { value in
-                        Button { symbol = value } label: {
+                        Button { symbol = value == "line.3.horizontal" ? "" : value } label: {
                             Image(systemName: value).frame(width: 27, height: 27)
                                 .background((symbol == value || (symbol.isEmpty && value == "line.3.horizontal")) ? accent.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
-                        }.buttonStyle(.plain).help(value)
+                        }.buttonStyle(.plain).help(value == "line.3.horizontal" ? "Default list icon" : value)
                     }
                 }
                 TextField("Custom emoji", text: Binding(get: { symbols.contains(symbol) ? "" : symbol }, set: { symbol = String($0.prefix(1)) })).textFieldStyle(.roundedBorder)
@@ -508,7 +508,17 @@ struct EntitySheet: View {
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(28).frame(width: 360).tint(accent).onAppear { focused = true }
     }
-    private func submit() { let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines); guard !cleaned.isEmpty else { return }; let cleanedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines); save(cleaned, color, kind, cleanedSymbol.isEmpty ? nil : cleanedSymbol, folderID, folderID == nil ? editor.belowFolders : false, parentTagID, showsInSmartLists, viewMode); dismiss() }
+    private func submit() {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else { return }
+        let cleanedSymbol = symbol.trimmingCharacters(in: .whitespacesAndNewlines)
+        let selectedIcon = cleanedSymbol.isEmpty ? nil : cleanedSymbol
+        let identity = editor.isTag ? (name: cleaned, symbol: selectedIcon) :
+            ListIcon.resolvingName(cleaned, symbol: selectedIcon, previousName: editor.entityID == nil ? nil : editor.name)
+        save(identity.name, color, kind, identity.symbol, folderID, folderID == nil ? editor.belowFolders : false,
+             parentTagID, showsInSmartLists, viewMode)
+        dismiss()
+    }
 }
 
 /// Name-only folder dialog (TickTick reference: text plus Cancel/Save).

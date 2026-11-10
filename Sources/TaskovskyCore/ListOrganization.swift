@@ -1,5 +1,25 @@
 import Foundation
 
+public enum ListIcon {
+    public static func emoji(_ value: String) -> String? {
+        let candidate = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        let scalars = candidate.unicodeScalars
+        guard candidate.count == 1, let first = scalars.first, first.properties.isEmoji else { return nil }
+        if first.isASCII {
+            return scalars.last?.value == 0x20E3 ? candidate : nil
+        }
+        return scalars.contains { $0.properties.isEmojiPresentation || $0.value == 0xFE0F } ? candidate : nil
+    }
+
+    public static func resolvingName(_ name: String, symbol: String?, previousName: String?) -> (name: String, symbol: String?) {
+        let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard symbol == nil, previousName.map({ !$0.utf16.elementsEqual(cleaned.utf16) }) ?? true,
+              let first = cleaned.first, let icon = emoji(String(first)) else { return (cleaned, symbol) }
+        let title = cleaned.dropFirst().trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? (cleaned, nil) : (title, icon)
+    }
+}
+
 public enum ListPlacement: Hashable, Sendable {
     case aboveFolders, folder(UUID), belowFolders
 
