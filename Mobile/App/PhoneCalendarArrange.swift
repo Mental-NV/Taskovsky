@@ -125,6 +125,8 @@ struct PhoneCalendarEditSheet: View {
     let request: PhoneCalendarEditRequest
     @State private var draft: CalendarScheduleDraft
     @State private var remove = false
+    @State private var scope: CalendarScheduleScope = .series
+    @State private var restoreOccurrence = false
     @State private var error: String?
 
     private var original: CalendarScheduleDraft {
@@ -143,17 +145,26 @@ struct PhoneCalendarEditSheet: View {
         NavigationStack {
             Form {
                 Section { Text(request.task.title).font(.headline) }
-                switch request.mode {
-                case .schedule: scheduleSection
-                case .move:
+                if restoreOccurrence {
                     Section {
-                        DatePicker(draft.hasDuration ? "New start" : "New date", selection: $draft.start,
-                                   displayedComponents: components)
-                    } footer: { Text("Moving keeps the existing duration and shifts manual reminders with the task.") }
-                case .resize:
-                    Section {
-                        DatePicker("New end", selection: $draft.end, displayedComponents: components)
-                    } footer: { Text(draft.allDay ? "The start day stays fixed." : "The start stays fixed. A changed timed range lasts at least 15 minutes.") }
+                        Text("Done restores the original schedule for this occurrence.")
+                        Button("Keep editing") { restoreOccurrence = false }
+                    }
+                } else {
+                    scheduleControls
+                    if !remove, let data = model.document?.snapshot.workspace,
+                       CalendarScheduling.canRescheduleCurrentOccurrence(request.task, in: data.tasks) {
+                        Section("Apply change to") {
+                            Picker("Apply change to", selection: $scope) {
+                                Text("This occurrence").tag(CalendarScheduleScope.currentOccurrence)
+                                Text("Series").tag(CalendarScheduleScope.series)
+                            }.pickerStyle(.segmented).accessibilityIdentifier("calendarOccurrenceScope")
+                            if request.task.originalOccurrenceSchedule != nil {
+                                Button("Restore original schedule") { restoreOccurrence = true }
+                                    .accessibilityIdentifier("calendarOccurrenceRestore")
+                            }
+                        }
+                    }
                 }
                 if !valid { Text("The end must be on or after the start.").font(.footnote).foregroundStyle(.red) }
             }
@@ -181,6 +192,21 @@ struct PhoneCalendarEditSheet: View {
         .interactiveDismissDisabled(model.isBusy)
     }
 
+    @ViewBuilder private var scheduleControls: some View {
+        switch request.mode {
+        case .schedule: scheduleSection
+        case .move:
+            Section {
+                DatePicker(draft.hasDuration ? "New start" : "New date", selection: $draft.start,
+                           displayedComponents: components)
+            } footer: { Text("Moving keeps the existing duration and shifts manual reminders with the task.") }
+        case .resize:
+            Section {
+                DatePicker("New end", selection: $draft.end, displayedComponents: components)
+            } footer: { Text(draft.allDay ? "The start day stays fixed." : "The start stays fixed. A changed timed range lasts at least 15 minutes.") }
+        }
+    }
+
     private var scheduleSection: some View {
         Section {
             if remove {
@@ -205,7 +231,8 @@ struct PhoneCalendarEditSheet: View {
     }
 
     private var valid: Bool {
-        switch request.mode {
+        if restoreOccurrence { return true }
+        return switch request.mode {
         case .schedule: remove || draft.isValid
         case .move: draft.start.timeIntervalSinceReferenceDate.isFinite
         case .resize: draft.end >= draft.start
@@ -213,7 +240,8 @@ struct PhoneCalendarEditSheet: View {
     }
 
     private var operation: CalendarScheduleOperation? {
-        switch request.mode {
+        if restoreOccurrence { return .restoreOccurrence }
+        return switch request.mode {
         case .schedule: remove ? .unschedule : draft.operation
         case .move: draft.start == original.start ? nil : .move(start: draft.start, allDay: draft.allDay)
         case .resize: draft.end == original.end ? nil : .resizeEnd(draft.end)
@@ -223,7 +251,8 @@ struct PhoneCalendarEditSheet: View {
     private func save() {
         guard let operation else { dismiss(); return }
         Task {
-            error = await model.saveCalendarSchedule(operation, taskID: request.task.id, expected: request.expected)
+            error = await model.saveCalendarSchedule(operation, taskID: request.task.id, expected: request.expected,
+                                                     scope: remove || restoreOccurrence ? .series : scope)
             if error == nil { dismiss() }
         }
     }

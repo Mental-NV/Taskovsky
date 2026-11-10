@@ -27,14 +27,19 @@ public enum TaskCalendarProjection {
         var entries: [CalendarEntry] = []
         var truncated = Set<UUID>()
         let limit = min(5_000, max(1, traversalLimit))
+        let predecessors = Set(data.tasks.compactMap(\.recurrenceSourceID))
         for original in data.tasks where options.includes(original, data: data) {
-            guard let initialDue = original.dueDate,
+            let recurrence = original.recurrenceSchedule
+            guard original.dueDate != nil, let initialDue = recurrence.dueDate,
                   options.showCompleted || (original.completedAt == nil && original.wontDoAt == nil) else { continue }
-            var cursor = original
+            var cursor = recurrence
             let local = taskCalendar(original, fallback: calendar)
             for index in 0..<limit {
                 guard let due = cursor.dueDate else { break }
-                let entry = makeEntry(cursor, originalID: original.id, projected: index > 0, data: data, options: options, calendar: calendar)
+                var entry = makeEntry(index == 0 ? original : cursor, originalID: original.id, projected: index > 0,
+                                      data: data, options: options, calendar: calendar)
+                // A current occurrence can land on the exact instant of a forecast.
+                if index > 0, due == original.dueDate { entry.id += ":forecast" }
                 if entry.overlaps(range) {
                     entries.append(entry)
                     if options.showChecklistItems {
@@ -50,7 +55,9 @@ public enum TaskCalendarProjection {
                 }
                 guard options.showRepeatCycles, original.isRepeating,
                       original.completedAt == nil, original.wontDoAt == nil,
-                      entry.start < range.end else { break }
+                      !predecessors.contains(original.id),
+                      forecastCanContinue(from: cursor, displayed: entry, original: original,
+                                          before: range.end, data: data, options: options, calendar: calendar) else { break }
                 let next: Date
                 if let rule = cursor.customRecurrence, rule.isValid {
                     if rule.anchor == .completionDate {
@@ -70,7 +77,7 @@ public enum TaskCalendarProjection {
                 guard next > due,
                       cursor.recurrenceEndDate.map({ local.startOfDay(for: next) <= local.startOfDay(for: $0) }) ?? true else { break }
                 cursor.dueDate = next
-                if let window = original.scheduledDuration?.validated(in: local) {
+                if let window = recurrence.scheduledDuration?.validated(in: local) {
                     cursor.scheduledDuration = window.anchoredEnd(at: next, calendar: local)
                 }
                 if index == limit - 1,
@@ -85,6 +92,14 @@ public enum TaskCalendarProjection {
             return $0.id < $1.id
         }
         return CalendarProjectionResult(entries: entries, truncatedTaskIDs: truncated)
+    }
+
+    private static func forecastCanContinue(from cursor: TaskItem, displayed: CalendarEntry, original: TaskItem,
+                                            before end: Date, data: WorkspaceData, options: TaskCalendarOptions,
+                                            calendar: Calendar) -> Bool {
+        if displayed.isProjected || original.originalOccurrenceSchedule == nil { return displayed.start < end }
+        let cadence = makeEntry(cursor, originalID: original.id, projected: false, data: data, options: options, calendar: calendar)
+        return cadence.start < end
     }
     private static func makeEntry(_ task: TaskItem, originalID: UUID, projected: Bool, data: WorkspaceData,
                                   options: TaskCalendarOptions, calendar: Calendar) -> CalendarEntry {
@@ -149,26 +164,123 @@ public enum TaskCalendarProjection {
 
 }
 
+public struct CalendarAllDayPlacement: Identifiable, Equatable, Sendable {
+    public let entry: CalendarEntry
+    public let firstDay: Int
+    public let dayCount: Int
+    public let lane: Int
+    public let continuesBefore: Bool
+    public let continuesAfter: Bool
+    public var id: String { entry.id }
+}
+
+public enum CalendarAllDayLayout {
+    /// Projects one visible run of consecutive civil days. Month passes
+    /// one week at a time so a range continues on the following row.
+    public static func placements(entries: [CalendarEntry], days: [Date], calendar: Calendar) -> [CalendarAllDayPlacement] {
+        let starts = days.map { calendar.startOfDay(for: $0) }
+        guard let first = starts.first, let last = starts.last,
+              let rangeEnd = calendar.date(byAdding: .day, value: 1, to: last) else { return [] }
+        let boundaries = starts + [rangeEnd]
+        let visible = entries.filter { $0.isAllDay && $0.start < rangeEnd && $0.end > first && $0.start < $0.end }
+            .sorted {
+                if $0.start != $1.start { return $0.start < $1.start }
+                if $0.end != $1.end { return $0.end > $1.end }
+                return $0.id < $1.id
+            }
+        var occupiedUntil: [Int] = []
+        var result: [CalendarAllDayPlacement] = []
+        for entry in visible {
+            guard let start = starts.indices.first(where: { entry.start < boundaries[$0 + 1] }),
+                  let end = starts.indices.last(where: { entry.end > boundaries[$0] }),
+                  start <= end else { continue }
+            let lane = occupiedUntil.firstIndex(where: { $0 <= start }) ?? occupiedUntil.count
+            if lane == occupiedUntil.count { occupiedUntil.append(end + 1) }
+            else { occupiedUntil[lane] = end + 1 }
+            result.append(CalendarAllDayPlacement(entry: entry, firstDay: start, dayCount: end - start + 1,
+                                                 lane: lane, continuesBefore: entry.start < first,
+                                                 continuesAfter: entry.end > rangeEnd))
+        }
+        return result
+    }
+}
+
+/// Packs one month row. Continuous all-day ranges reserve the same lane
+/// across their dates. Other cards fill the remaining slots in each date.
+public struct CalendarMonthWeekLayout: Equatable, Sendable {
+    public struct Day: Equatable, Sendable {
+        public let entries: [CalendarEntry]
+        /// Empty slots align local cards with the week’s spanning bars.
+        public let slots: [CalendarEntry?]
+        public let hiddenCount: Int
+    }
+
+    public let spans: [CalendarAllDayPlacement]
+    public let days: [Day]
+
+    public init(entries: [CalendarEntry], dates: [Date], capacity: Int, calendar: Calendar) {
+        let capacity = max(0, capacity)
+        let ranges = entries.filter { entry in
+            guard entry.isAllDay, let next = calendar.date(byAdding: .day, value: 1,
+                                                           to: calendar.startOfDay(for: entry.start)) else { return false }
+            return entry.end > next
+        }
+        let placements = CalendarAllDayLayout.placements(entries: ranges, days: dates, calendar: calendar)
+        spans = placements.filter { $0.lane < capacity }
+        let visibleSpans = spans
+        let spanningIDs = Set(placements.map(\.id))
+        days = dates.enumerated().map { index, date in
+            let next = calendar.date(byAdding: .day, value: 1, to: date) ?? date
+            let items = entries.filter { $0.start < next && $0.end > date }
+            let reserved = Set(visibleSpans.filter {
+                index >= $0.firstDay && index < $0.firstDay + $0.dayCount
+            }.map(\.lane))
+            let local = items.lazy.filter { !spanningIDs.contains($0.id) }
+            var remaining = local.makeIterator()
+            var slots: [CalendarEntry?] = []
+            var localCount = 0
+            for lane in 0..<capacity {
+                if reserved.contains(lane) {
+                    slots.append(nil)
+                } else if let item = remaining.next() {
+                    slots.append(item)
+                    localCount += 1
+                } else if reserved.contains(where: { $0 > lane }) {
+                    slots.append(nil)
+                } else {
+                    break
+                }
+            }
+            return Day(entries: items, slots: slots, hiddenCount: items.count - reserved.count - localCount)
+        }
+    }
+}
+
 public struct CalendarTimedPlacement: Identifiable, Equatable, Sendable {
     public var entry: CalendarEntry
     public var startMinute: Double
     public var endMinute: Double
     public var column: Int
     public var columnCount: Int
+    public var endIsVisible: Bool
+    public var resizeMinute: Double
     public var id: String { entry.id }
 }
 public enum CalendarTimedLayout {
     /// Interval coloring per connected overlap cluster. Adjacent events can
     /// reuse a lane. Midnight boundaries are exclusive; DST uses wall hours.
-    public static func placements(entries: [CalendarEntry], day: Date, calendar: Calendar) -> [CalendarTimedPlacement] {
+    public static func placements(entries: [CalendarEntry], day: Date, calendar: Calendar,
+                                  window: CalendarHourlyWindow = .full) -> [CalendarTimedPlacement] {
         let start = calendar.startOfDay(for: day)
         let end = calendar.date(byAdding: .day, value: 1, to: start) ?? start.addingTimeInterval(86_400)
+        let visibleStart = window.firstMinute == 0 ? start : CalendarDates.instant(on: day, minute: window.firstMinute, calendar: calendar)
+        let visibleEnd = window.endMinute == 1440 ? end : CalendarDates.instant(on: day, minute: window.endMinute, calendar: calendar)
         func minute(_ date: Date) -> Double {
             if date <= start { return 0 }; if date >= end { return 1_440 }
             let c = calendar.dateComponents([.hour, .minute, .second], from: date)
             return Double((c.hour ?? 0) * 60 + (c.minute ?? 0)) + Double(c.second ?? 0) / 60
         }
-        let sorted = entries.filter { !$0.isAllDay && $0.start < end && $0.end > start }.sorted {
+        let sorted = entries.filter { !$0.isAllDay && $0.start < visibleEnd && $0.end > visibleStart }.sorted {
             if $0.start != $1.start { return $0.start < $1.start }
             if $0.end != $1.end { return $0.end > $1.end }
             return $0.id < $1.id
@@ -181,11 +293,16 @@ public enum CalendarTimedLayout {
             cluster = []; laneEnds = []; clusterEnd = -1
         }
         for entry in sorted {
-            let a = minute(entry.start), b = min(1_440, max(a + 15, minute(entry.end)))
+            let rawStart = minute(entry.start), rawEnd = minute(entry.end)
+            let a = max(Double(window.firstMinute), rawStart)
+            let b = min(Double(window.endMinute), max(rawStart + 15, rawEnd))
+            guard a < b else { continue }
             if a >= clusterEnd { flush() }
             let lane = laneEnds.firstIndex { $0 <= a } ?? laneEnds.count
             if lane == laneEnds.count { laneEnds.append(b) } else { laneEnds[lane] = b }
-            cluster.append(CalendarTimedPlacement(entry: entry, startMinute: a, endMinute: b, column: lane, columnCount: 1))
+            cluster.append(CalendarTimedPlacement(entry: entry, startMinute: a, endMinute: b, column: lane,
+                                                  columnCount: 1, endIsVisible: entry.end <= visibleEnd,
+                                                  resizeMinute: entry.hasDuration ? rawEnd : b))
             clusterEnd = max(clusterEnd, b)
         }
         flush()

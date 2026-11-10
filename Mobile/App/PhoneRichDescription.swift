@@ -5,6 +5,8 @@ import TaskovskyDomain
 struct PhoneRichDescription: UIViewRepresentable {
     let preview: RichDescriptionPreview
     var identifier = "richTaskDescription"
+    var headings: [RichDescriptionPreview.Heading] = []
+    var onHeadingPositions: ([Int: CGFloat]) -> Void = { _ in }
     @ScaledMetric(relativeTo: .body) private var pointSize: CGFloat = 17
 
     func makeUIView(context: Context) -> RichPreviewTextView {
@@ -27,6 +29,8 @@ struct PhoneRichDescription: UIViewRepresentable {
     }
 
     func updateUIView(_ view: RichPreviewTextView, context: Context) {
+        view.headings = headings
+        view.onHeadingPositions = onHeadingPositions
         guard view.renderedSize != pointSize || view.rendered?.matches(preview) != true else { return }
         let layout = view.layoutManager as? RichPreviewLayout
         let gutter = preview.paragraphs.reduce(0) { width, paragraph in
@@ -40,6 +44,7 @@ struct PhoneRichDescription: UIViewRepresentable {
         view.attributedText = attributedDescription(preview, pointSize: pointSize, markerIndent: markerIndent)
         view.rendered = preview
         view.renderedSize = pointSize
+        view.setNeedsLayout()
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: RichPreviewTextView, context: Context) -> CGSize? {
@@ -49,9 +54,60 @@ struct PhoneRichDescription: UIViewRepresentable {
     }
 }
 
+struct PhoneFoldableRichDescription: View {
+    let preview: RichDescriptionPreview
+    let revision: Date
+    @State private var collapsed: Set<Int> = []
+    @State private var positions: [Int: CGFloat] = [:]
+
+    var body: some View {
+        let reading = preview.readingView(collapsed: collapsed)
+        ZStack(alignment: .topLeading) {
+            PhoneRichDescription(preview: reading.preview, headings: reading.headings) { positions = $0 }
+                .padding(.leading, reading.headings.isEmpty ? 0 : 34)
+            ForEach(reading.headings) { heading in
+                if let y = positions[heading.id] {
+                    let folded = collapsed.contains(heading.id)
+                    Button {
+                        if folded { collapsed.remove(heading.id) } else { collapsed.insert(heading.id) }
+                    } label: {
+                        Image(systemName: folded ? "chevron.right" : "chevron.down")
+                            .font(.caption.weight(.semibold)).frame(width: 34, height: 34)
+                            .contentShape(Rectangle())
+                    }.buttonStyle(.plain)
+                        .accessibilityLabel((folded ? "Expand " : "Collapse ") + heading.title)
+                        .accessibilityIdentifier("richFoldHeading-" + String(heading.id))
+                        .offset(y: y)
+                }
+            }
+        }.onChange(of: revision) { _, _ in collapsed.removeAll() }
+    }
+}
+
 final class RichPreviewTextView: UITextView {
     var rendered: RichDescriptionPreview?
     var renderedSize: CGFloat = 0
+    var headings: [RichDescriptionPreview.Heading] = []
+    var onHeadingPositions: ([Int: CGFloat]) -> Void = { _ in }
+    private var headingPositions: [Int: CGFloat] = [:]
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard !headings.isEmpty, bounds.width > 0 else { return }
+        layoutManager.ensureLayout(for: textContainer)
+        var positions: [Int: CGFloat] = [:]
+        for heading in headings where heading.range.location < textStorage.length {
+            let glyph = layoutManager.glyphIndexForCharacter(at: heading.range.location)
+            let line = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            positions[heading.id] = line.minY + textContainerInset.top
+        }
+        guard headingPositions != positions else { return }
+        headingPositions = positions
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.headingPositions == positions else { return }
+            self.onHeadingPositions(positions)
+        }
+    }
 }
 
 private extension NSAttributedString.Key {
@@ -62,7 +118,7 @@ private extension NSAttributedString.Key {
     static let previewHeading = Self("TaskovskyPreviewHeading")
 }
 
-private func attributedDescription(_ preview: RichDescriptionPreview, pointSize: CGFloat,
+func attributedDescription(_ preview: RichDescriptionPreview, pointSize: CGFloat,
                                    markerIndent: CGFloat) -> NSAttributedString {
     let result = NSMutableAttributedString(string: preview.text, attributes: [.foregroundColor: UIColor.label])
     for run in preview.inline {
@@ -115,7 +171,7 @@ private func attributedDescription(_ preview: RichDescriptionPreview, pointSize:
     return result
 }
 
-private final class RichPreviewLayout: NSLayoutManager {
+final class RichPreviewLayout: NSLayoutManager {
     var decorations: [RichDescriptionPreview.Paragraph] = []
     var pointSize: CGFloat = 17
     var markerIndent: CGFloat = 26
@@ -125,7 +181,9 @@ private final class RichPreviewLayout: NSLayoutManager {
         guard let container = textContainers.first else { return }
         let markerFont = UIFont.systemFont(ofSize: pointSize)
         let markerAttributes: [NSAttributedString.Key: Any] = [.font: markerFont, .foregroundColor: UIColor.secondaryLabel]
+        let textLength = textStorage?.length ?? 0
         for paragraph in decorations {
+            guard paragraph.range.location < textLength, paragraph.range.length <= textLength - paragraph.range.location else { continue }
             let glyphs = glyphRange(forCharacterRange: paragraph.range, actualCharacterRange: nil)
             guard NSIntersectionRange(glyphs, glyphsToShow).length > 0 else { continue }
             let first = lineFragmentRect(forGlyphAt: glyphs.location, effectiveRange: nil)

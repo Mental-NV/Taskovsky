@@ -1,6 +1,19 @@
 import Foundation
+import TaskovskyDomain
 
-public enum TaskDraftField: String, Codable, Sendable { case title, plainBody }
+public enum TaskDraftField: String, Codable, Sendable { case title, plainBody, richBody }
+
+public struct RichFieldState: Codable, Sendable {
+    public let original: RichBody
+    public fileprivate(set) var content: RichBody
+    public fileprivate(set) var edits: [RichBodyEdit]
+
+    fileprivate init(original: RichBody) {
+        self.original = original
+        content = original
+        edits = []
+    }
+}
 
 /// Scratch content only: compact revisions, not a second workspace snapshot.
 public struct TaskFieldDraft: LocalDraftRecord {
@@ -11,30 +24,76 @@ public struct TaskFieldDraft: LocalDraftRecord {
     public let baseRevision: WorkspaceRevision
     public let originalText: String
     public private(set) var text: String
+    public private(set) var richState: RichFieldState?
     public private(set) var sequence: Int
     public private(set) var updatedAt: Date
 
     public init(id: UUID = UUID(), taskID: UUID, field: TaskDraftField, baseRevision: WorkspaceRevision,
-                text: String, now: Date = Date()) {
+                text: String, richBody: RichBody? = nil, now: Date = Date()) {
         version = 1; self.id = id; self.taskID = taskID; self.field = field
         self.baseRevision = baseRevision; originalText = text; self.text = text
+        richState = field == .richBody ? RichFieldState(original: richBody ?? RichBody(text: text)) : nil
         sequence = 0; updatedAt = now
     }
-    public var hasChanges: Bool { !text.utf16.elementsEqual(originalText.utf16) }
+    public var hasChanges: Bool {
+        if let richState { return !exactEncoding(richState.content, richState.original) }
+        return !text.utf16.elementsEqual(originalText.utf16)
+    }
+
+    public var isRecoverable: Bool {
+        guard field == .richBody else { return richState == nil }
+        guard let richState, RichBody.sameCodeUnits(originalText, richState.original.text),
+              RichBody.sameCodeUnits(text, richState.content.text),
+              let replay = try? RichBodyEdit.applying(richState.edits, to: originalText, rich: richState.original)
+        else { return false }
+        return exactEncoding(replay, richState.content)
+    }
+
     public mutating func replaceText(_ value: String, now: Date = Date()) {
-        guard !value.utf16.elementsEqual(text.utf16) else { return }
-        text = value; updatedAt = now
+        guard field != .richBody, !value.utf16.elementsEqual(text.utf16) else { return }
+        text = value
+        advance(now: now)
+    }
+
+    public mutating func applyRichEdit(_ edit: RichBodyEdit, now: Date = Date()) throws {
+        guard var state = richState else { throw RichBodyEditError.invalidSource }
+        let result = try RichBodyEdit.applying([edit], to: state.content.text, rich: state.content)
+        guard !exactEncoding(result, state.content) else { return }
+        state.edits.append(edit)
+        state.content = result
+        text = result.text
+        richState = state
+        advance(now: now)
+    }
+
+    /// Undo and redo replace the operation history for this draft identity.
+    public mutating func replaceRichEdits(_ edits: [RichBodyEdit], now: Date = Date()) throws {
+        guard var state = richState else { throw RichBodyEditError.invalidSource }
+        guard !exactEncoding(edits, state.edits) else { return }
+        let result = try RichBodyEdit.applying(edits, to: originalText, rich: state.original)
+        state.edits = edits
+        state.content = result
+        text = result.text
+        richState = state
+        advance(now: now)
+    }
+
+    private mutating func advance(now: Date) {
+        updatedAt = now
         let next = sequence.addingReportingOverflow(1)
         sequence = next.overflow ? Int.max : next.partialValue
     }
+
     public func continues(_ earlier: Self) -> Bool {
         id == earlier.id && taskID == earlier.taskID && field == earlier.field && baseRevision == earlier.baseRevision &&
-            originalText.utf16.elementsEqual(earlier.originalText.utf16)
+            originalText.utf16.elementsEqual(earlier.originalText.utf16) &&
+            exactEncoding(richState?.original, earlier.richState?.original)
     }
     public static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.version == rhs.version && lhs.id == rhs.id && lhs.taskID == rhs.taskID && lhs.field == rhs.field &&
         lhs.baseRevision == rhs.baseRevision && lhs.sequence == rhs.sequence && lhs.updatedAt == rhs.updatedAt &&
-        lhs.originalText.utf16.elementsEqual(rhs.originalText.utf16) && lhs.text.utf16.elementsEqual(rhs.text.utf16)
+        lhs.originalText.utf16.elementsEqual(rhs.originalText.utf16) && lhs.text.utf16.elementsEqual(rhs.text.utf16) &&
+        exactEncoding(lhs.richState, rhs.richState)
     }
 }
 

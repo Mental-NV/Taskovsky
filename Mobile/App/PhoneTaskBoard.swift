@@ -8,22 +8,32 @@ struct PhoneListModeControl: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let list: TaskList
     @State private var error: String?
+    @State private var manageSections = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Picker("List view", selection: Binding(get: { list.viewMode }, set: select)) {
-                ForEach(TaskListViewMode.allCases, id: \.self) { mode in
-                    Text(mode.label).tag(mode)
+            HStack {
+                Picker("List view", selection: Binding(get: { list.viewMode }, set: select)) {
+                    ForEach(TaskListViewMode.allCases, id: \.self) { mode in
+                        Text(mode.label).tag(mode)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .disabled(list.isArchived || !model.canBeginEditing)
-            .accessibilityIdentifier("listViewMode")
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("listViewMode")
+                if !list.isArchived {
+                    Button { manageSections = true } label: {
+                        Image(systemName: "list.bullet.indent").frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel("Manage Sections")
+                }
+            }.disabled(list.isArchived || !model.canBeginEditing)
             if let error {
                 Text(error).font(.footnote).foregroundStyle(.secondary).accessibilityIdentifier("listViewModeError")
             }
         }
         .padding(.horizontal, 16)
+        .sheet(isPresented: $manageSections) {
+            PhoneTaskSectionsSheet(model: model, listID: list.id)
+        }
     }
 
     private func select(_ mode: TaskListViewMode) {
@@ -32,13 +42,28 @@ struct PhoneListModeControl: View {
     }
 }
 
-private struct PhoneBoardDrag: Codable, Transferable {
+struct PhoneBoardDrag: Codable, Transferable {
     let session: UUID
     let listID: UUID
     let taskID: UUID
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: UTType(exportedAs: "local.taskovsky.board-card"))
+    }
+}
+
+private struct PhoneTaskSectionsSheet: View {
+    @ObservedObject var model: PhoneWorkspaceModel
+    let listID: UUID
+
+    var body: some View {
+        if let list = model.document?.snapshot.workspace.lists.first(where: { $0.id == listID }) {
+            TaskSectionOrganizer(list: list, editable: !list.isArchived && model.canBeginEditing) {
+                await model.saveSection(.init(listID: listID, operation: $0))
+            }
+        } else {
+            ContentUnavailableView("List unavailable", systemImage: "list.bullet")
+        }
     }
 }
 
@@ -146,19 +171,7 @@ struct PhoneTaskBoard: View {
     }
 
     @ViewBuilder private func cardTitle(_ task: TaskItem) -> some View {
-        let title = Button { openTask(task.id) } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(task.title).font(.body)
-                if let due = task.dueDate {
-                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            .padding(.trailing, 8).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(task.title)
-        .accessibilityIdentifier("boardCard-" + task.id.uuidString)
+        let title = PhoneBoardTaskTitle(task: task, open: openTask)
         if writable { title.draggable(PhoneBoardDrag(session: dragSession, listID: list.id, taskID: task.id)) }
         else { title }
     }
@@ -180,5 +193,141 @@ struct PhoneTaskBoard: View {
             }
         }
         return true
+    }
+}
+
+struct PhoneSectionBoard: View {
+    @ObservedObject var model: PhoneWorkspaceModel
+    let list: TaskList
+    let data: WorkspaceData
+    let openTask: (UUID) -> Void
+    let addTask: (UUID) -> Void
+    @State private var selected: UUID?
+    @State private var dragSession = UUID()
+    @State private var refusal: String?
+
+    private var writable: Bool { !list.isArchived && model.canBeginEditing }
+
+    var body: some View {
+        let groups = TaskSectionGroup.project(BoardProjection.tasks(forList: list.id, in: data), for: list, in: data)
+        VStack(spacing: 8) {
+            ScrollView(.horizontal) {
+                HStack(spacing: 6) {
+                    ForEach(groups) { group in tab(group) }
+                }.padding(.horizontal, 16)
+            }.scrollIndicators(.hidden)
+            if let refusal {
+                Text(refusal).font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("boardMoveNotice")
+            }
+            if let group = groups.first(where: { $0.id == selected }) ?? groups.first {
+                sectionColumn(group)
+            }
+        }
+        .onChange(of: list.sections.map(\.id)) { _, ids in
+            if let selected, !ids.contains(selected) { self.selected = nil }
+        }
+    }
+
+    private func tab(_ group: TaskSectionGroup) -> some View {
+        Button { selected = group.id; refusal = nil } label: {
+            VStack(spacing: 3) {
+                Text(group.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(group.tasks.count.formatted()).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 12).frame(minHeight: 48)
+            .background(selected == group.id ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 10))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(group.title).accessibilityValue(group.tasks.count.formatted())
+        .accessibilityAddTraits(selected == group.id ? .isSelected : [])
+        .accessibilityIdentifier("boardSection-" + (group.id?.uuidString ?? "none"))
+        .dropDestination(for: PhoneBoardDrag.self) { payloads, _ in
+            guard writable, payloads.count == 1, let drag = payloads.first,
+                  drag.session == dragSession, drag.listID == list.id else { return false }
+            move(drag.taskID, to: group.id)
+            return true
+        }
+    }
+
+    private func sectionColumn(_ group: TaskSectionGroup) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 10) {
+                if let section = group.section, writable && model.canBeginCapture {
+                    Button { addTask(section.id) } label: {
+                        Label("Add task to " + section.name, systemImage: "plus").frame(minHeight: 44)
+                    }.buttonStyle(.plain)
+                }
+                if group.tasks.isEmpty {
+                    ContentUnavailableView("No tasks", systemImage: "rectangle.stack")
+                }
+                ForEach(TaskHierarchy.displayOrder(group.tasks), id: \.task.id) { entry in
+                    HStack(spacing: 0) {
+                        PhoneCompletionButton(model: model, task: entry.task, lists: data.lists)
+                        title(entry.task)
+                    }
+                    .padding(.leading, CGFloat(min(entry.depth, 4)) * 14)
+                    .padding(.vertical, 6)
+                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+                }
+                Color.clear.frame(height: 90).accessibilityHidden(true)
+            }.padding(.horizontal, 16)
+        }
+    }
+
+    @ViewBuilder private func title(_ task: TaskItem) -> some View {
+        let title = PhoneBoardTaskTitle(task: task, open: openTask)
+        if writable && task.parentID == nil {
+            HStack(spacing: 0) {
+                title.contextMenu {
+                    TaskSectionMoveMenu(sections: list.sections, current: task.sectionID) { target in
+                        move(task.id, to: target)
+                    }
+                }
+                PhoneSectionTaskGrip(task: task, session: dragSession, listID: list.id)
+            }
+        } else { title }
+    }
+
+    private func move(_ taskID: UUID, to sectionID: UUID?) {
+        Task {
+            refusal = await model.saveSection(.init(listID: list.id, operation: .assign(taskID: taskID, sectionID: sectionID)))
+            if refusal == nil { selected = sectionID }
+        }
+    }
+}
+
+struct PhoneSectionTaskGrip: View {
+    let task: TaskItem
+    let session: UUID
+    let listID: UUID
+
+    var body: some View {
+        Image(systemName: "line.3.horizontal")
+            .foregroundStyle(.secondary).frame(width: 44, height: 44)
+            .contentShape(Rectangle()).accessibilityLabel("Drag " + task.title)
+            .draggable(PhoneBoardDrag(session: session, listID: listID, taskID: task.id))
+    }
+}
+
+private struct PhoneBoardTaskTitle: View {
+    let task: TaskItem
+    let open: (UUID) -> Void
+
+    var body: some View {
+        Button { open(task.id) } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.title).font(.body)
+                if let due = task.dueDate {
+                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .padding(.trailing, 8).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(task.title)
+        .accessibilityIdentifier("boardCard-" + task.id.uuidString)
     }
 }

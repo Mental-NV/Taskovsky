@@ -32,11 +32,18 @@ extension TaskSchedulePolicy {
     }
 
     public static func reconcileSeries(of task: inout TaskItem, from original: TaskItem) {
-        if original.dueDate != task.dueDate || original.recurrence != task.recurrence {
+        let changesSeries = task.dueDate != original.dueDate || task.hasDueTime != original.hasDueTime ||
+            task.scheduledDuration != original.scheduledDuration || task.timeZoneID != original.timeZoneID ||
+            task.kind != original.kind || task.recurrence != original.recurrence ||
+            task.customRecurrence != original.customRecurrence || task.recurrenceEndDate != original.recurrenceEndDate
+        if changesSeries { task.originalOccurrenceSchedule = nil }
+        else { task.originalOccurrenceSchedule = original.originalOccurrenceSchedule }
+        let series = changesSeries ? original.recurrenceSchedule : original
+        if series.dueDate != task.dueDate || series.recurrence != task.recurrence {
             task.recurrenceAnchorDay = nil
             task.recurrenceAnchorMonth = nil
         }
-        task.normalizeSeriesPosition(old: original)
+        task.normalizeSeriesPosition(old: series)
     }
 }
 
@@ -176,6 +183,7 @@ public struct TaskScheduleEdit: Sendable {
             cleared.recurrenceAnchorDay = nil
             cleared.recurrenceAnchorMonth = nil
             cleared.recurrenceNominalDate = nil
+            cleared.originalOccurrenceSchedule = nil
             cleared.occurrenceIndex = 1
             return cleared
         }

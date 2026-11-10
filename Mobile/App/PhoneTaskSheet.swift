@@ -43,7 +43,7 @@ struct PhoneTaskSheet: View {
     @ViewBuilder private func description(_ task: TaskItem) -> some View {
         let preview = task.richBody.flatMap { RichDescriptionPreview(body: task.body, rich: $0) }
         if let preview, task.richBody?.isEmpty == false {
-            PhoneRichDescription(preview: preview).id(task.id)
+            PhoneFoldableRichDescription(preview: preview, revision: task.updatedAt).id(task.id)
         } else {
             if task.richBody != nil, preview == nil {
                 Text("This formatting cannot be displayed. The saved description is shown below.")
@@ -96,6 +96,10 @@ struct PhoneTaskSheet: View {
                         description(task)
                         Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
                             .disabled(!writable || task.richBody != nil).frame(minHeight: 44)
+                        if (try? RichBodyEdit.applying([], to: task.body, rich: task.richBody)) != nil {
+                            Button("Format description") { Task { await model.begin(taskID: task.id, field: .richBody) } }
+                                .disabled(!writable).frame(minHeight: 44).accessibilityIdentifier("editRichDescription")
+                        }
                         metadata(task, data: data)
                         if task.kind == .task || task.parentID != nil {
                             PhoneTaskHierarchy(model: model, task: task, data: data, writable: writable,
@@ -140,7 +144,7 @@ struct PhoneTaskSheet: View {
                     else { openRelatedTask(relatedTasks.dropLast().last ?? route.id) }
                 }
             }) {
-                PhoneTaskActions(model: model, taskID: taskID)
+                PhoneTaskActions(model: model, taskID: taskID, openDuplicate: openRelatedTask)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
@@ -282,6 +286,7 @@ struct PhoneLifecycleFeedback: View {
 private struct PhoneTaskActions: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let taskID: UUID
+    let openDuplicate: (UUID) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var purge: PurgeRequest?
 
@@ -312,6 +317,10 @@ private struct PhoneTaskActions: View {
                                 }.navigationTitle("Move to List")
                             }
                         }
+                        action("Duplicate", .duplicate(copyID: UUID()), task: task, document: document)
+                        let kind: TaskKind = task.kind == .task ? .note : .task
+                        action(kind == .note ? "Convert to Note" : "Convert to Task", .setKind(kind),
+                               task: task, document: document)
                         action("Move to Trash", .trash, role: .destructive, task: task, document: document)
                         action("Restore", .restore, task: task, document: document)
                         if TaskLifecycle.refusal(for: .purge, task: task, lists: lists) == nil {
@@ -369,6 +378,7 @@ private struct PhoneTaskActions: View {
     private func run(_ command: TaskLifecycleCommand, revision: WorkspaceRevision) {
         Task {
             if await model.performLifecycle(command, taskID: taskID, expected: revision) {
+                if case .duplicate(let copyID) = command { openDuplicate(copyID) }
                 dismiss()
             }
         }

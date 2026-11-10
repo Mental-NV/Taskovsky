@@ -8,10 +8,12 @@ public enum TaskLifecycleCommand: Equatable, Sendable {
     case move(UUID?)
     case setParent(UUID?)
     case addSubtask(id: UUID, title: String)
+    case duplicate(copyID: UUID)
+    case setKind(TaskKind)
 }
 
 public enum TaskLifecycleRefusal: Error, Equatable, Sendable {
-    case missing, archived, wrongStatus, invalidDestination, invalidParent, invalidChild
+    case missing, archived, wrongStatus, invalidDestination, invalidParent, invalidChild, invalidCopy
 }
 
 /// Shared graph mutations and transient snapshots used to prove pristine
@@ -56,14 +58,15 @@ public struct TaskLifecycle {
         case .wontDo: return task.kind == .task && task.wontDoAt == nil ? nil : .wrongStatus
         case .setPinned: return active ? nil : .wrongStatus
         case .addSubtask, .setParent: return task.kind == .task ? nil : .wrongStatus
-        case .trash, .move: return nil
+        case .trash, .move, .duplicate, .setKind: return nil
         case .restore, .purge: return .wrongStatus
         }
     }
 
     public mutating func apply(_ command: TaskLifecycleCommand, to id: UUID,
                                now: Date, calendar: Calendar, addPosition: TaskPosition = .top) throws -> Bool {
-        guard let task = data.tasks.first(where: { $0.id == id }) else { throw TaskLifecycleRefusal.missing }
+        guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { throw TaskLifecycleRefusal.missing }
+        let task = data.tasks[index]
         if let refusal = Self.refusal(for: command, task: task, lists: data.lists) { throw refusal }
         switch command {
         case .complete, .completeFromWontDo:
@@ -91,7 +94,49 @@ public struct TaskLifecycle {
                 throw TaskLifecycleRefusal.invalidChild
             }
             return true
+        case .duplicate(let copyID):
+            guard duplicateTask(id: id, copyID: copyID, now: now) else {
+                throw TaskLifecycleRefusal.invalidCopy
+            }
+            return true
+        case .setKind(let kind):
+            guard var converted = task.converted(to: kind) else { return false }
+            TaskSchedulePolicy.reconcileSeries(of: &converted, from: task)
+            converted.updatedAt = now
+            data.tasks[index] = converted
+            return true
         }
+    }
+
+    /// The root stays under its current parent and starts open as a new series.
+    /// Each non-deleted descendant retains its status and gets an independent ID.
+    package mutating func duplicateTask(id: UUID, copyID: UUID, now: Date) -> Bool {
+        guard let root = data.tasks.first(where: { $0.id == id }),
+              !data.tasks.contains(where: { $0.id == copyID }) else { return false }
+        let descendants = TaskHierarchy.descendants(of: id, in: data.tasks).filter { $0.deletedAt == nil }
+        let members = [(root, copyID)] + descendants.map { ($0, UUID()) }
+        let copiedIDs = Dictionary(uniqueKeysWithValues: members.map { ($0.0.id, $0.1) })
+        let copies = members.map { task, newID in
+            var copy = task
+            copy.id = newID
+            if task.id == id {
+                copy.completedAt = nil
+                copy.deletedAt = nil
+                copy.wontDoAt = nil
+                copy.occurrenceIndex = 1
+                copy.restartCustomSeries(ruleChangedFrom: nil)
+            } else if let parent = task.parentID, let copiedParent = copiedIDs[parent] {
+                copy.parentID = copiedParent
+            }
+            copy.recurrenceSourceID = nil
+            copy.discardOccurrenceBaselineForCopy()
+            copy.checklist = task.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
+            copy.createdAt = now
+            copy.updatedAt = now
+            return copy
+        }
+        data.tasks.append(contentsOf: copies)
+        return true
     }
 
     public mutating func toggleComplete(id: UUID, now: Date, calendar: Calendar) -> Bool {
@@ -135,7 +180,7 @@ public struct TaskLifecycle {
                 // Cloning needs both dues (guaranteed by the spawn, which
                 // requires a due date and always sets the next one); the
                 // cascade below runs regardless.
-                if let parentDue = original.dueDate, let successorDue = successor.dueDate {
+                if let parentDue = original.recurrenceSchedule.dueDate, let successorDue = successor.dueDate {
                     let clones = cloneSubtreeIntoSuccessor(originalRootID: rootID, newParentID: successor.id, parentDue: parentDue, successorDue: successorDue, now: now, calendar: calendar)
                     completionSnapshots[rootID]?.append(contentsOf: clones)
                 }
@@ -227,7 +272,8 @@ public struct TaskLifecycle {
         var idMap: [UUID: UUID] = [:]
         for member in members { idMap[member.id] = UUID() }
         var clones: [TaskItem] = []
-        for member in members {
+        for record in members {
+            let member = record.recurrenceSchedule
             var clone = member
             clone.id = idMap[member.id]!
             clone.completedAt = nil; clone.wontDoAt = nil; clone.deletedAt = nil
@@ -272,7 +318,8 @@ public struct TaskLifecycle {
     /// Nil when the series ends, already has a successor, or has no due
     /// date. A valid custom rule supersedes the legacy enum; both honor the
     /// legacy end date.
-    private static func spawnSuccessor(of original: TaskItem, now: Date, calendar: Calendar, in tasks: [TaskItem]) -> TaskItem? {
+    private static func spawnSuccessor(of record: TaskItem, now: Date, calendar: Calendar, in tasks: [TaskItem]) -> TaskItem? {
+        let original = record.recurrenceSchedule
         guard let (next, customIndex) = Self.nextRecurrenceDate(for: original, now: now, calendar: calendar),
               !tasks.contains(where: { $0.recurrenceSourceID == original.id }),
               let due = original.dueDate else { return nil }
@@ -563,7 +610,8 @@ public struct TaskLifecycle {
     /// the legacy enum; both honor the legacy end date. Due-date custom
     /// series advance from the stored nominal (see `nextCustomStep`), so
     /// the returned date already reflects the weekend roll.
-    public static func nextRecurrenceDate(for task: TaskItem, now: Date = Date(), calendar: Calendar = .current) -> (Date, Int?)? {
+    public static func nextRecurrenceDate(for record: TaskItem, now: Date = Date(), calendar: Calendar = .current) -> (Date, Int?)? {
+        let task = record.recurrenceSchedule
         guard let due = task.dueDate else { return nil }
         if task.isCustomRepeating {
             guard let step = nextCustomStep(for: task, now: now, calendar: calendar) else { return nil }

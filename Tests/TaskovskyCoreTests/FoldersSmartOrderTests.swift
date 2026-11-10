@@ -183,6 +183,27 @@ final class FoldersSmartOrderTests: XCTestCase {
 
     // MARK: - Strict folder decode
 
+    @MainActor func testFailedSectionWriteKeepsPublishedWorkspace() throws {
+        let url = tempURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let list = TaskList(name: "Work", color: "#123456")
+        let section = TaskSection(name: "Planning")
+        var workspace = WorkspaceData(lists: [list])
+        XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .create(section)).apply(to: &workspace, now: Date()), true)
+        try JSONEncoder().encode(workspace).write(to: url)
+        let store = TaskStore(fileURL: url, seed: false)
+        XCTAssertFalse(store.needsRecovery)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+
+        XCTAssertNil(store.applySectionChange(.init(listID: list.id, operation: .rename(section.id, name: "Unsaved"))))
+        XCTAssertNil(store.createTask(title: "Unsaved task", inSection: section.id, listID: list.id,
+                                      kind: .task, recognizeDates: false, body: ""))
+        XCTAssertEqual(store.data, workspace)
+        XCTAssertNotNil(store.storageError)
+    }
+
     @MainActor func testMalformedFolderRecordFailsClosedPreservingFile() throws {
         // ListFolder.id/name are required: a folder missing either fails the
         // whole decode and the existing protection preserves the original

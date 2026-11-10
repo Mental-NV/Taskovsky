@@ -36,6 +36,24 @@ final class ReadOnlyNavigationTests: XCTestCase {
         app.buttons["Calendar view"].tap(); app.buttons["Month"].tap()
         attach(app, "Calendar Month")
     }
+
+    @MainActor func testAgendaShowMoreRevealsFutureTaskAndTodayResetsWindow() {
+        let app = launch(qaCase: "agenda")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Agenda"].tap()
+        let future = app.buttons["Read a chapter"]
+        XCTAssertFalse(future.exists)
+        let showMore = app.buttons["agendaShowMore"]
+        reveal(showMore, in: app)
+        showMore.tap()
+        reveal(future, in: app)
+        attach(app, "Agenda with extended schedule")
+        app.buttons["Today"].tap()
+        waitGone(future)
+        reveal(showMore, in: app)
+        XCTAssertFalse(future.exists)
+    }
     @MainActor func testCalendarFilterReset() {
         let app = launch()
         app.buttons["Calendar"].tap()
@@ -261,6 +279,113 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.buttons[original].waitForExistence(timeout: 10))
         XCTAssertFalse(app.alerts["Resume saved edit?"].exists)
     }
+    @MainActor func testRichDescriptionDraftRecoversAndCommitsTextWithFormatting() {
+        let app = launch()
+        let title = "Review the project outline"
+        app.buttons[title].tap()
+        let format = app.buttons["editRichDescription"]
+        reveal(format, in: app)
+        format.tap()
+        let input = app.textViews["richFieldEditor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        let original = input.value as? String ?? ""
+        input.typeText(" Rich update")
+        let expected = original + " Rich update"
+        XCTAssertEqual(input.value as? String, expected)
+
+        let paragraph = app.buttons["richParagraphMenu"]
+        XCTAssertTrue(paragraph.isHittable)
+        paragraph.tap()
+        app.buttons["Quote"].tap()
+        app.buttons["richUndo"].tap()
+        XCTAssertEqual(input.value as? String, expected)
+        app.buttons["richRedo"].tap()
+        XCTAssertEqual(input.value as? String, expected)
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Recovery copy saved"),
+                                               object: app.staticTexts["draftRecoveryStatus"])
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 5), .completed)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.alerts["Resume saved edit?"].waitForExistence(timeout: 10))
+        app.buttons["Resume"].tap()
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        XCTAssertEqual(input.value as? String, expected)
+        attach(app, "Recovered formatted description")
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        let result = app.textViews["richTaskDescription"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        XCTAssertEqual(result.value as? String, expected)
+        attach(app, "Saved formatted description")
+    }
+
+    @MainActor func testRichDescriptionFormatsNativeSelectionAndAddsLink() {
+        let app = launch()
+        app.buttons["Review the project outline"].tap()
+        let format = app.buttons["editRichDescription"]
+        reveal(format, in: app)
+        format.tap()
+        let input = app.textViews["richFieldEditor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        let original = input.value as? String
+        let firstWord = input.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            .withOffset(CGVector(dx: 27, dy: 11))
+        let inline = app.buttons["richInlineMenu"]
+        firstWord.doubleTap()
+        XCTAssertTrue(inline.isEnabled)
+        XCTAssertTrue(inline.isHittable)
+        XCTAssertLessThanOrEqual(inline.frame.maxX, app.frame.maxX - 12)
+        inline.tap()
+        app.buttons["Italic"].tap()
+        firstWord.doubleTap()
+        XCTAssertTrue(inline.isEnabled)
+        inline.tap()
+        app.buttons["Link"].tap()
+        let alert = app.alerts["Edit link"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        let url = alert.textFields.firstMatch
+        url.tap()
+        url.typeText("https://example.test/project")
+        alert.buttons["Apply"].tap()
+        XCTAssertEqual(input.value as? String, original)
+        attach(app, "Edited inline selection")
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        XCTAssertEqual(app.textViews["richTaskDescription"].value as? String, original)
+        attach(app, "Saved inline selection")
+    }
+
+    @MainActor func testRichDescriptionPlainPasteClearsFormattingFromIdenticalText() {
+        let app = launch()
+        app.buttons["Review the project outline"].tap()
+        let format = app.buttons["editRichDescription"]
+        reveal(format, in: app)
+        format.tap()
+        let input = app.textViews["richFieldEditor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        let original = input.value as? String
+        let firstWord = input.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            .withOffset(CGVector(dx: 27, dy: 11))
+        firstWord.doubleTap()
+        XCTAssertTrue(app.buttons["richInlineMenu"].isEnabled)
+        input.typeKey("c", modifierFlags: .command)
+        input.typeKey("v", modifierFlags: .command)
+        XCTAssertEqual(input.value as? String, original)
+        let undo = app.buttons["richUndo"]
+        let redo = app.buttons["richRedo"]
+        XCTAssertTrue(undo.isEnabled)
+        undo.tap()
+        XCTAssertFalse(undo.isEnabled)
+        XCTAssertTrue(redo.isEnabled)
+        redo.tap()
+        XCTAssertTrue(undo.isEnabled)
+        XCTAssertFalse(redo.isEnabled)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        XCTAssertEqual(app.textViews["richTaskDescription"].value as? String, original)
+        attach(app, "Saved plain paste over bold selection")
+    }
+
     @MainActor func testPlainDescriptionRecoveryDoesNotAutosubmit() {
         let app = launch(), title = "Prepare the weekly plan"
         app.buttons[title].tap(); app.buttons["Edit description"].tap()
@@ -308,6 +433,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertFalse(app.buttons["openCapture"].isEnabled)
         app.buttons["Review the project outline"].tap()
         XCTAssertFalse(app.buttons["editTitle"].isEnabled); XCTAssertFalse(app.buttons["Edit description"].isEnabled)
+        XCTAssertFalse(app.buttons["editRichDescription"].isEnabled)
         XCTAssertTrue(app.staticTexts["This workspace contains data this build cannot safely rewrite. Viewing remains available."].exists)
         attach(app, "Compatibility read-only")
     }
@@ -381,6 +507,89 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Day"].exists)
         XCTAssertTrue(app.buttons["Local calendar capture"].waitForExistence(timeout: 4))
     }
+    @MainActor func testCalendarRangeCaptureStagesAndRecoversBeforeAdding() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Month"].tap()
+        let grid = app.descendants(matching: .any)["calendarMonthDays"].firstMatch
+        let start = grid.staticTexts["11"]
+        let end = grid.staticTexts.matching(identifier: "6").firstMatch
+        let title = app.textViews["captureTitle"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        XCTAssertTrue(end.isHittable)
+        XCTAssertLessThan(end.frame.minY, start.frame.minY)
+        func stage() {
+            dragCalendarDateRange(from: start, to: end)
+            XCTAssertTrue(title.waitForExistence(timeout: 5))
+        }
+        stage()
+        app.buttons["captureCancel"].tap()
+        waitGone(title)
+        stage()
+        let taskTitle = "Phone range capture tomorrow"
+        title.tap()
+        title.typeText(taskTitle)
+        let recovery = app.staticTexts["captureRecoveryStatus"]
+        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Recovery copy saved"), object: recovery)
+        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 6), .completed)
+        app.terminate()
+        app.launch()
+        let prompt = app.alerts["Resume new task?"]
+        XCTAssertTrue(prompt.waitForExistence(timeout: 10))
+        prompt.buttons["Later"].tap()
+        XCTAssertFalse(app.buttons[taskTitle].exists)
+        app.buttons["Resume new task"].tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertEqual(title.value as? String, taskTitle)
+        let rangeEnd = app.descendants(matching: .any)["captureCalendarRangeEnd"].firstMatch
+        reveal(rangeEnd, in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["captureCalendarRangeStart"].firstMatch.exists)
+        attach(app, "Recovered Calendar range draft")
+        finishCapture(app)
+        app.buttons["Calendar"].tap()
+        XCTAssertEqual(app.buttons.matching(identifier: taskTitle).count, 2)
+        attach(app, "Saved Calendar range spans two rows")
+        let top = start.frame.minY
+        let scroller = app.scrollViews["calendarMonthGrid"]
+        // Start above the floating tab bar, within the grid’s touch area.
+        let lower = scroller.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.68))
+        let upper = scroller.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: 0.32))
+        lower.press(forDuration: 0.05, thenDragTo: upper, withVelocity: .fast, thenHoldForDuration: 0)
+        let scrolled = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in
+            !start.exists || start.frame.minY < top - 15
+        }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [scrolled], timeout: 4), .completed)
+        XCTAssertFalse(title.exists)
+    }
+
+    @MainActor private func dragCalendarDateRange(from start: XCUIElement, to end: XCUIElement) {
+        // The Calendar dates expose the full cell as their accessibility frame.
+        let from = start.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.72))
+        let to = end.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.72))
+        from.press(forDuration: 0.55, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.1)
+    }
+
+    @MainActor func testMultiWeekRangeCaptureCanCancel() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Multi-Week"].tap()
+        let start = app.staticTexts["11"], end = app.staticTexts["17"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        XCTAssertTrue(end.isHittable)
+        dragCalendarDateRange(from: start, to: end)
+        let title = app.textViews["captureTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        let rangeEnd = app.descendants(matching: .any)["captureCalendarRangeEnd"].firstMatch
+        reveal(rangeEnd, in: app)
+        XCTAssertTrue(app.descendants(matching: .any)["captureCalendarRangeStart"].firstMatch.exists)
+        attach(app, "Staged Multi-Week range")
+        app.buttons["captureCancel"].tap()
+        waitGone(title)
+        XCTAssertTrue(app.staticTexts["Multi-Week"].exists)
+    }
+
     @MainActor func testCaptureDirtyCancelDoesNotCreate() {
         let app = launch(), title = openCapture(app); title.tap(); title.typeText("Discard this capture")
         app.buttons["captureCancel"].tap(); app.buttons["Keep Editing"].tap()
@@ -480,6 +689,42 @@ final class ReadOnlyNavigationTests: XCTestCase {
         waitGone(destination)
     }
 
+    @MainActor func testTaskTimestampSortOrdersWorkRowsAndSurvivesRelaunch() {
+        let app = launch(qaCase: "task-sort")
+        goTo("Work", in: app)
+        let menu = app.buttons["taskSortMenu"]
+        let old = "Review the project outline", newest = "Prepare the weekly plan", middle = "Review the draft"
+        func choose(_ sort: String) {
+            menu.tap()
+            let choice = app.buttons[sort]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5))
+            choice.tap()
+            waitGone(choice)
+        }
+        func expect(_ titles: [String]) {
+            let rows = (["Write meeting notes"] + titles).map { app.buttons[$0] }
+            for row in rows { XCTAssertTrue(row.exists, row.debugDescription) }
+            let y = rows.map { $0.frame.minY }
+            XCTAssertEqual(y, y.sorted())
+            XCTAssertEqual(Set(y).count, y.count)
+        }
+        expect([old, newest, middle])
+        choose("Created · Newest First")
+        expect([newest, middle, old])
+        choose("Created · Oldest First")
+        expect([old, middle, newest])
+        choose("Modified · Newest First")
+        expect([old, middle, newest])
+        choose("Modified · Oldest First")
+        expect([newest, middle, old])
+        attach(app, "Work sorted by oldest modification")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        expect([newest, middle, old])
+    }
+
     @MainActor private func chooseLifecycleAction(_ name: String, in app: XCUIApplication) {
         app.buttons["taskActions"].tap()
         let action = app.buttons[name]
@@ -491,6 +736,62 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let notice = app.staticTexts["lifecycleFeedback"]
         let predicate = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND label == %@", value), object: notice)
         XCTAssertEqual(XCTWaiter.wait(for: [predicate], timeout: 6), .completed)
+    }
+
+    @MainActor func testDuplicateTaskOpensTheIndependentStyledCopy() {
+        let app = launch(qaCase: "task-metadata")
+        let root = app.buttons["Review the project outline"]
+        XCTAssertTrue(root.waitForExistence(timeout: 5))
+        root.tap()
+        app.buttons["taskActions"].tap()
+        let duplicate = app.buttons["Duplicate"]
+        reveal(duplicate, in: app)
+        duplicate.tap()
+        waitGone(app.buttons["taskActionsDone"])
+        let previous = app.buttons["relatedTaskBack"]
+        XCTAssertTrue(previous.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["editTitle"].label, "Edit title, Review the project outline")
+        XCTAssertTrue(app.textViews["richTaskDescription"].exists)
+        let originalChild = app.buttons["openSubtask-00000000-0000-0000-0000-000000000004"]
+        let copiedChild = app.buttons["Open subtask Arrange the studio"]
+        reveal(copiedChild, in: app)
+        XCTAssertFalse(originalChild.exists)
+        attach(app, "Duplicated task with an independent subtask")
+        previous.tap()
+        reveal(originalChild, in: app)
+        XCTAssertFalse(previous.exists)
+    }
+
+    @MainActor func testConvertTaskToNoteAndBackAfterRelaunch() {
+        let app = launch(qaCase: "task-metadata")
+        let root = app.buttons["Review the project outline"]
+        XCTAssertTrue(root.waitForExistence(timeout: 5))
+        root.tap()
+        app.buttons["taskActions"].tap()
+        let toNote = app.buttons["Convert to Note"]
+        reveal(toNote, in: app)
+        toNote.tap()
+        waitGone(app.buttons["taskActionsDone"])
+        expectLifecycleNotice("Converted to note", in: app)
+        XCTAssertFalse(app.buttons["editSchedule"].exists)
+        XCTAssertTrue(app.textViews["richTaskDescription"].exists)
+        attach(app, "Converted note keeps its rich description")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(root.waitForExistence(timeout: 10))
+        root.tap()
+        XCTAssertFalse(app.buttons["editSchedule"].exists)
+        app.buttons["taskActions"].tap()
+        let toTask = app.buttons["Convert to Task"]
+        reveal(toTask, in: app)
+        toTask.tap()
+        waitGone(app.buttons["taskActionsDone"])
+        expectLifecycleNotice("Converted to task", in: app)
+        XCTAssertTrue(app.buttons["editSchedule"].exists)
+        let child = app.buttons["openSubtask-00000000-0000-0000-0000-000000000004"]
+        reveal(child, in: app)
+        XCTAssertTrue(app.buttons["editTaskChecklist"].isEnabled)
     }
 
     @MainActor func testLifecycleCompletesRecurringTreeAndUndoFromRow() {
@@ -828,6 +1129,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar"].tap()
         app.buttons["Calendar view"].tap()
         app.buttons["Day"].tap()
+        app.buttons["calendarHourBand-early"].tap()
         let grip = app.images["Drag Review the project outline"]
         let hour = app.staticTexts["02"]
         XCTAssertTrue(grip.waitForExistence(timeout: 5))
@@ -840,6 +1142,103 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertEqual(notice.label, "Schedule updated")
         attach(app, "Hour drop created timed range")
+    }
+
+    @MainActor func testCalendarFoldedHoursRevealTasksAndResetOnRelaunch() {
+        let app = launch(qaCase: "folded-hours")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        let early = app.buttons["calendarHourBand-early"]
+        let late = app.buttons["calendarHourBand-late"]
+        XCTAssertTrue(early.waitForExistence(timeout: 5))
+        XCTAssertEqual(early.label, "Show early hours")
+        XCTAssertEqual(early.value as? String, "1 item")
+        XCTAssertEqual(late.value as? String, "1 item")
+        XCTAssertFalse(app.buttons["Read a chapter"].exists)
+        XCTAssertFalse(app.buttons["Arrange the studio"].exists)
+        early.tap()
+        reveal(app.buttons["Read a chapter"], in: app)
+        XCTAssertEqual(early.label, "Hide early hours")
+        XCTAssertEqual(late.label, "Show late hours")
+        late.tap()
+        reveal(app.buttons["Arrange the studio"], in: app)
+        XCTAssertEqual(late.label, "Hide late hours")
+        attach(app, "Expanded late hours")
+        late.tap()
+        waitGone(app.buttons["Arrange the studio"])
+        XCTAssertEqual(early.label, "Hide early hours")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(early.waitForExistence(timeout: 5))
+        XCTAssertEqual(early.label, "Show early hours")
+        XCTAssertEqual(late.label, "Show late hours")
+    }
+
+    @MainActor func testMonthZoomPinchRevealsMoreTasksAndResetsOnModeChange() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Month"].tap()
+        let level = app.staticTexts["calendarMonthZoomLevel"]
+        let extra = app.buttons["Book time for a walk"]
+        func expectLevel(_ label: String) {
+            let expected = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", label), object: level)
+            XCTAssertEqual(XCTWaiter.wait(for: [expected], timeout: 5), .completed, "Expected \(label), saw \(level.label)")
+        }
+        expectLevel("Full Month")
+        XCTAssertFalse(extra.exists)
+        let grid = app.scrollViews["calendarMonthGrid"]
+        XCTAssertTrue(grid.exists)
+        grid.pinch(withScale: 1.7, velocity: 1)
+        expectLevel("3 Weeks")
+        app.buttons["Zoom Month in"].tap()
+        expectLevel("2 Weeks")
+        app.buttons["Zoom Month in"].tap()
+        expectLevel("1 Week")
+        XCTAssertTrue(extra.waitForExistence(timeout: 5))
+        attach(app, "One-week Month zoom shows more tasks")
+        app.buttons["Next Calendar period"].tap()
+        waitGone(extra)
+        app.buttons["Today"].tap()
+        XCTAssertTrue(extra.waitForExistence(timeout: 5))
+        // The scroll view extends under the floating navigation bar.
+        // Keep both simulated touches inside the visible week.
+        let dayGrid = app.descendants(matching: .any).matching(identifier: "calendarMonthDays").firstMatch
+        XCTAssertTrue(dayGrid.exists)
+        dayGrid.pinch(withScale: 0.55, velocity: -1)
+        expectLevel("2 Weeks")
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+        XCTAssertFalse(level.exists)
+        app.buttons["Calendar view"].tap()
+        app.buttons["Month"].tap()
+        expectLevel("Full Month")
+        XCTAssertFalse(extra.exists)
+    }
+
+    @MainActor func testCalendarMonthAllDayRangeContinuesOnNextWeekRow() {
+        let app = launch(qaCase: "month-spans")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Month"].tap()
+        let retreat = app.buttons.matching(identifier: "Weekend retreat")
+        XCTAssertTrue(retreat.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(retreat.count, 2)
+        let rows = retreat.allElementsBoundByIndex.sorted { $0.frame.minY < $1.frame.minY }
+        guard rows.count == 2 else { return }
+        XCTAssertGreaterThan(rows[0].frame.width, 125)
+        XCTAssertGreaterThan(rows[1].frame.width, 60)
+        XCTAssertGreaterThan(rows[0].frame.minX, rows[1].frame.minX)
+        XCTAssertGreaterThan(rows[1].frame.minY - rows[0].frame.minY, 55)
+        XCTAssertTrue(app.buttons["1 more items, open Day"].exists)
+        attach(app, "Month range continues on next row")
+
+        app.buttons["Calendar view"].tap()
+        app.buttons["Multi-Week"].tap()
+        XCTAssertEqual(retreat.count, 2)
+        attach(app, "Multi-Week range continues on next row")
     }
 
     @MainActor func testCalendarMonthDragMovesAnAllDayTask() {
@@ -865,15 +1264,109 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar"].tap()
         app.buttons["Calendar view"].tap()
         app.buttons["Day"].tap()
-        let card = app.buttons["Prepare the weekly plan"]
-        reveal(card, in: app)
-        let start = card.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.82))
+        let handle = app.buttons["calendarResizeHandle-00000000-0000-0000-0000-000000000002"]
+        // A card can report a hittable sliver beneath the floating tab bar.
+        // Bring the handle and the complete drag into the timeline viewport.
+        let lower = app.frame.minY + 220
+        let upper = app.frame.maxY - 150
+        for _ in 0..<6 {
+            if handle.isHittable, (lower...upper).contains(handle.frame.midY) { break }
+            let above = handle.exists && handle.frame.midY < lower
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: above ? 0.4 : 0.65))
+                .press(forDuration: 0.05, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.4, dy: above ? 0.65 : 0.4)))
+        }
+        XCTAssertTrue(handle.isHittable)
+        XCTAssertTrue((lower...upper).contains(handle.frame.midY))
+        let start = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         let end = start.withOffset(CGVector(dx: 0, dy: 26))
         start.press(forDuration: 0.05, thenDragTo: end)
         let notice = app.staticTexts["calendarScheduleNotice"]
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertEqual(notice.label, "Schedule updated")
         attach(app, "Day timed range after resize")
+        handle.tap()
+        XCTAssertTrue(app.buttons["calendarEditDone"].waitForExistence(timeout: 5))
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(app.buttons["calendarEditDone"])
+    }
+
+    @MainActor private func openRecurringCalendar() -> XCUIApplication {
+        let app = launch(qaCase: "occurrence")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Month"].tap()
+        return app
+    }
+
+    @MainActor private func dragOccurrence(in app: XCUIApplication, title: String) {
+        let grip = app.images["Drag " + title]
+        let destination = app.staticTexts["10"]
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        XCTAssertTrue(destination.waitForExistence(timeout: 5))
+        grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.5, thenDragTo: destination.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)),
+                   withVelocity: .slow, thenHoldForDuration: 0.25)
+    }
+
+    @MainActor func testCalendarRecurringDragStagesScopeAndRetainsExceptionOnRelaunch() {
+        let app = openRecurringCalendar(), title = "Review the project outline"
+        let forecast = app.buttons.matching(identifier: title + ", recurring preview")
+        XCTAssertEqual(forecast.count, 3)
+        let occurrence = app.buttons["This occurrence"]
+        dragOccurrence(in: app, title: title)
+        XCTAssertTrue(occurrence.waitForExistence(timeout: 5))
+        attach(app, "Recurring Calendar drag scope")
+        app.buttons["Cancel"].tap()
+        waitGone(occurrence)
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+
+        dragOccurrence(in: app, title: title)
+        XCTAssertTrue(occurrence.waitForExistence(timeout: 5))
+        occurrence.tap()
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "This occurrence updated")
+        XCTAssertTrue(app.buttons["undoCalendarSchedule"].isEnabled)
+        XCTAssertEqual(forecast.count, 3)
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        editCalendarCard(app, title: title)
+        let restore = app.buttons["calendarOccurrenceRestore"]
+        XCTAssertTrue(restore.waitForExistence(timeout: 5))
+        restore.tap()
+        XCTAssertTrue(app.staticTexts["Done restores the original schedule for this occurrence."].exists)
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(app.buttons["calendarEditDone"])
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+    }
+
+    @MainActor func testCalendarRestoresOriginalOccurrenceAfterRelaunch() {
+        let app = openRecurringCalendar(), title = "Review the project outline"
+        dragOccurrence(in: app, title: title)
+        let occurrence = app.buttons["This occurrence"]
+        XCTAssertTrue(occurrence.waitForExistence(timeout: 5))
+        occurrence.tap()
+        XCTAssertTrue(app.staticTexts["calendarScheduleNotice"].waitForExistence(timeout: 5))
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        editCalendarCard(app, title: title)
+        let restore = app.buttons["calendarOccurrenceRestore"]
+        XCTAssertTrue(restore.waitForExistence(timeout: 5))
+        restore.tap()
+        XCTAssertTrue(app.staticTexts["Done restores the original schedule for this occurrence."].exists)
+        app.buttons["calendarEditDone"].tap()
+        waitGone(app.buttons["calendarEditDone"])
+        XCTAssertEqual(app.staticTexts["calendarScheduleNotice"].label, "Schedule updated")
+        XCTAssertEqual(app.buttons.matching(identifier: title + ", recurring preview").count, 3)
+        editCalendarCard(app, title: title)
+        XCTAssertFalse(restore.exists)
+        attach(app, "Original recurring schedule restored")
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(app.buttons["calendarEditDone"])
     }
 }
 
@@ -894,6 +1387,294 @@ extension ReadOnlyNavigationTests {
             toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         }
         XCTAssertEqual(toggle.value as? String, desired)
+    }
+
+    @MainActor func testCalendarAllDaySpansShareLanesAcrossWeekDays() {
+        let app = launch(qaCase: "all-day-spans")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+
+        let workshop = app.buttons.matching(identifier: "Three-day workshop")
+        let review = app.buttons.matching(identifier: "Two-day review")
+        XCTAssertTrue(workshop.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertTrue(review.firstMatch.isHittable)
+        XCTAssertEqual(workshop.count, 1)
+        XCTAssertEqual(review.count, 1)
+        XCTAssertGreaterThan(workshop.firstMatch.frame.width, 128)
+        XCTAssertGreaterThan(review.firstMatch.frame.width, 64)
+        XCTAssertGreaterThan(review.firstMatch.frame.minX, workshop.firstMatch.frame.minX)
+        XCTAssertGreaterThanOrEqual(review.firstMatch.frame.minY, workshop.firstMatch.frame.maxY)
+        attach(app, "Overlapping all-day spans in Week")
+
+        app.buttons["Calendar view"].tap()
+        app.buttons["Multi-Day"].tap()
+        XCTAssertEqual(workshop.count, 1)
+        XCTAssertEqual(review.count, 1)
+        attach(app, "Overlapping all-day spans in Multi-Day")
+    }
+
+    @MainActor func testCalendarAllDaySpanDropRetainsItsRange() {
+        let app = launch(qaCase: "all-day-spans")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+
+        let workshop = app.buttons["Three-day workshop"]
+        let grip = app.images["Drag Three-day workshop"]
+        XCTAssertTrue(workshop.waitForExistence(timeout: 5))
+        XCTAssertTrue(grip.isHittable)
+        let initialX = workshop.frame.minX
+        let start = grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.5, thenDragTo: start.withOffset(CGVector(dx: 40, dy: 0)),
+                    withVelocity: .slow, thenHoldForDuration: 0.25)
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertGreaterThan(workshop.frame.minX - initialX, 180)
+        XCTAssertGreaterThan(workshop.frame.width, 128)
+        attach(app, "Moved all-day span retains three dates")
+
+        let undo = app.buttons["undoCalendarSchedule"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        undo.tap()
+        XCTAssertEqual(notice.label, "Schedule restored")
+        XCTAssertEqual(workshop.frame.minX, initialX, accuracy: 2)
+        XCTAssertGreaterThan(workshop.frame.width, 128)
+        attach(app, "Undo restores the original three-day span")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(workshop.waitForExistence(timeout: 5))
+        XCTAssertEqual(workshop.frame.minX, initialX, accuracy: 2)
+        XCTAssertGreaterThan(workshop.frame.width, 128)
+    }
+
+    @MainActor func testWeekEdgeDragPagesWithoutWritingSchedule() {
+        let app = launch(qaCase: "all-day-spans")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+        let grid = app.scrollViews["calendarHourlyGrid"]
+        let grip = app.images["Drag Three-day workshop"]
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        XCTAssertTrue(grid.isHittable)
+        let start = grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let edge = grid.coordinate(withNormalizedOffset: CGVector(dx: 0.98, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: grip.frame.midY - grid.frame.minY))
+        let current = app.buttons["calendarDay-2026-11-9"]
+        let next = app.buttons["calendarDay-2026-11-16"]
+        XCTAssertTrue(current.exists)
+        start.press(forDuration: 0.5, thenDragTo: edge, withVelocity: .fast, thenHoldForDuration: 0.05)
+        XCTAssertTrue(current.exists)
+        XCTAssertTrue(grip.exists)
+        XCTAssertFalse(next.exists)
+        start.press(forDuration: 0.5, thenDragTo: edge, withVelocity: .slow, thenHoldForDuration: 1.15)
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        XCTAssertFalse(current.exists)
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+        attach(app, "Week edge hover paged without changing the schedule")
+        app.buttons["Previous Calendar period"].tap()
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        let previousEdge = grid.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0))
+            .withOffset(CGVector(dx: 0, dy: grip.frame.midY - grid.frame.minY))
+        start.press(forDuration: 0.5, thenDragTo: previousEdge, withVelocity: .slow, thenHoldForDuration: 1.15)
+        let prior = app.buttons["calendarDay-2026-11-2"]
+        XCTAssertTrue(prior.waitForExistence(timeout: 5))
+        XCTAssertFalse(current.exists)
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+        app.buttons["Next Calendar period"].tap()
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        let sunday = app.buttons["calendarDay-2026-11-15"]
+        let trailing = grid.coordinate(withNormalizedOffset: CGVector(dx: 0.79, dy: 0.5))
+        let leading = grid.coordinate(withNormalizedOffset: CGVector(dx: 0.35, dy: 0.5))
+        trailing.press(forDuration: 0.05, thenDragTo: leading)
+        XCTAssertTrue(sunday.isHittable)
+        XCTAssertTrue(current.exists)
+    }
+
+    @MainActor func testWeekAllDayEndResizeUndoAndOneDayHandle() {
+        let app = launch(qaCase: "all-day-spans")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+        let workshop = app.buttons["Three-day workshop"]
+        let handle = app.buttons["Resize end of Three-day workshop"]
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        XCTAssertTrue(handle.isHittable)
+        let initialWidth = workshop.frame.width
+        func resize(by points: CGFloat) {
+            let grip = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            grip.press(forDuration: 0.06, thenDragTo: grip.withOffset(CGVector(dx: points, dy: 0)))
+        }
+        resize(by: 64)
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertGreaterThan(workshop.frame.width - initialWidth, 50)
+        attach(app, "Extended Week all-day range")
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertEqual(notice.label, "Schedule restored")
+        XCTAssertEqual(workshop.frame.width, initialWidth, accuracy: 2)
+        resize(by: -128)
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertLessThan(workshop.frame.width, 64)
+        XCTAssertTrue(handle.isHittable)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(handle.waitForExistence(timeout: 5))
+        XCTAssertLessThan(workshop.frame.width, 64)
+        attach(app, "Resized one-day all-day range retains its handle")
+    }
+
+    @MainActor func testMonthAllDayEndResizeCrossesWeekRow() {
+        let app = launch(qaCase: "month-spans")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Month"].tap()
+        let retreat = app.buttons.matching(identifier: "Weekend retreat")
+        let handles = app.buttons.matching(identifier: "Resize end of Weekend retreat")
+        XCTAssertTrue(handles.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(handles.count, 1)
+        XCTAssertEqual(retreat.count, 2)
+        let target = app.staticTexts["15"]
+        XCTAssertTrue(target.isHittable)
+        let from = handles.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let to = target.coordinate(withNormalizedOffset: CGVector(dx: 0.55, dy: 0.65))
+        from.press(forDuration: 0.06, thenDragTo: to, withVelocity: .slow, thenHoldForDuration: 0.1)
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertEqual(retreat.count, 1)
+        attach(app, "Month all-day end moved to the previous week row")
+    }
+
+    @MainActor func testCalendarAllDayRowsScrollAndSurviveRelaunch() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        let overflow = app.scrollViews["calendarAllDayOverflow"]
+        XCTAssertFalse(overflow.exists)
+
+        let rows = app.buttons["calendarAllDayRows"]
+        openCalendarViewOptions(app)
+        reveal(rows, in: app)
+        rows.tap()
+        app.buttons["2 rows"].tap()
+        app.buttons["calendarPreferencesDone"].tap()
+        XCTAssertTrue(overflow.waitForExistence(timeout: 5))
+        let laterTask = overflow.buttons["Book time for a walk"]
+        XCTAssertFalse(laterTask.isHittable)
+        for _ in 0..<6 where !laterTask.isHittable { overflow.swipeUp() }
+        XCTAssertTrue(laterTask.isHittable)
+        attach(app, "All-day overflow in two rows")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(overflow.waitForExistence(timeout: 5))
+        openCalendarViewOptions(app)
+        reveal(rows, in: app)
+        XCTAssertTrue(rows.label.contains("2 rows") || (rows.value as? String) == "2 rows")
+        rows.tap()
+        app.buttons["Automatic"].tap()
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(overflow.exists)
+    }
+
+    @MainActor func testCalendarFoldCutoffsDragAndPreferenceSurviveRelaunch() {
+        let app = launch(qaCase: "folded-hours")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        let early = app.buttons["calendarHourBand-early"], late = app.buttons["calendarHourBand-late"]
+        let marker = app.descendants(matching: .any)["calendarFoldCutoff-early"].firstMatch
+        XCTAssertFalse(marker.exists)
+        early.tap()
+        XCTAssertFalse(marker.exists)
+        late.tap()
+        reveal(marker, in: app)
+        XCTAssertEqual(marker.value as? String, "07:00")
+        let handle = marker.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        handle.press(forDuration: 0.06, thenDragTo: handle.withOffset(CGVector(dx: 0, dy: -52)))
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "06:00"), object: marker)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 8), .completed)
+        attach(app, "Early cutoff moved to 06:00")
+        early.tap()
+        late.tap()
+        let earlierTask = app.buttons["Read a chapter"]
+        XCTAssertTrue(earlierTask.waitForExistence(timeout: 5))
+        XCTAssertFalse(marker.exists)
+
+        openCalendarViewOptions(app)
+        let latePreference = app.buttons["calendarFoldPreference-late"]
+        reveal(latePreference, in: app)
+        latePreference.tap()
+        let later = app.buttons["22:00"]
+        reveal(later, in: app)
+        later.tap()
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(earlierTask.waitForExistence(timeout: 5))
+        openCalendarViewOptions(app)
+        reveal(latePreference, in: app)
+        XCTAssertTrue(latePreference.label.contains("22:00") || (latePreference.value as? String) == "22:00")
+        let reset = app.buttons["Reset Folded Hours"]
+        reveal(reset, in: app)
+        reset.tap()
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(earlierTask.exists)
+    }
+
+    @MainActor func testCalendarTaskAndNoteIconsStayIndependentAcrossRelaunch() {
+        let app = launch(qaCase: "lifecycle")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        let task = app.buttons["Review the project outline"], note = app.buttons["Book time for a walk"]
+        XCTAssertTrue(task.waitForExistence(timeout: 5))
+        XCTAssertTrue(note.exists)
+        attach(app, "Task and note icons shown")
+        openCalendarViewOptions(app)
+        setCalendarSwitch("calendarTaskIcons", to: false, app: app)
+        XCTAssertEqual(app.switches["calendarNoteIcons"].value as? String, "1")
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(task.exists && note.exists)
+        attach(app, "Only note icons shown")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        XCTAssertEqual(app.switches["calendarTaskIcons"].value as? String, "0")
+        XCTAssertEqual(app.switches["calendarNoteIcons"].value as? String, "1")
+        setCalendarSwitch("calendarIcons", to: false, app: app)
+        XCTAssertFalse(app.switches["calendarTaskIcons"].isEnabled)
+        XCTAssertFalse(app.switches["calendarNoteIcons"].isEnabled)
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+
+        openCalendarViewOptions(app)
+        XCTAssertEqual(app.switches["calendarIcons"].value as? String, "1")
+        setCalendarSwitch("calendarTaskIcons", to: true, app: app)
+        setCalendarSwitch("calendarNoteIcons", to: false, app: app)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(task.exists && note.exists)
+        attach(app, "Only task icons shown")
     }
 
     @MainActor func testCalendarViewOptionsRenderAndPersistAcrossRelaunch() {
@@ -1009,6 +1790,40 @@ extension ReadOnlyNavigationTests {
 }
 
 extension ReadOnlyNavigationTests {
+    @MainActor func testRichHeadingCollapseKeepsTheFullEditableDescription() {
+        let app = launch(qaCase: "rich-preview")
+        let task = app.buttons["Review the project outline"]
+        XCTAssertTrue(task.waitForExistence(timeout: 5))
+        task.tap()
+        let description = app.textViews["richTaskDescription"]
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        let original = description.value as? String ?? ""
+        XCTAssertTrue(original.contains("Check e\u{301} 🧩 with care"))
+        let heading = app.buttons["richFoldHeading-0"]
+        reveal(heading, in: app)
+        XCTAssertEqual(heading.label, "Collapse Launch plan")
+        heading.tap()
+        XCTAssertEqual(heading.label, "Expand Launch plan")
+        XCTAssertEqual(description.value as? String, "Launch plan\n")
+        attach(app, "Collapsed description heading")
+        heading.tap()
+        XCTAssertTrue((description.value as? String)?.utf16.elementsEqual(original.utf16) == true)
+        heading.tap()
+
+        let format = app.buttons["editRichDescription"]
+        reveal(format, in: app)
+        format.tap()
+        let editor = app.textViews["richFieldEditor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertTrue((editor.value as? String)?.utf16.elementsEqual(original.utf16) == true)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(editor)
+        app.buttons["taskDetailDone"].tap()
+        task.tap()
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertTrue((description.value as? String)?.utf16.elementsEqual(original.utf16) == true)
+    }
+
     @MainActor func testRichDescriptionRendersExactTextAndSurvivesTitleEdit() {
         let app = launch(qaCase: "rich-preview")
         let title = "Review the project outline"
@@ -1045,6 +1860,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.staticTexts["taskDescription"].exists)
         XCTAssertFalse(app.textViews["richTaskDescription"].exists)
         XCTAssertFalse(app.buttons["Edit description"].isEnabled)
+        XCTAssertFalse(app.buttons["editRichDescription"].exists)
     }
 }
 
@@ -2007,6 +2823,89 @@ extension ReadOnlyNavigationTests {
         app.buttons["captureCancel"].tap()
         waitGone(body)
         XCTAssertFalse(app.staticTexts["Note added"].exists)
+    }
+
+    @MainActor func testListSectionOrganizerDragReordersRows() {
+        let app = launch()
+        goTo("Work", in: app)
+        app.buttons["Manage Sections"].tap()
+        let name = app.textFields["sectionName"]
+        let save = app.buttons["sectionSaveName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("Planning"); save.tap()
+        let first = app.buttons["Actions for Planning"]
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("Active"); save.tap()
+        let second = app.buttons["Actions for Active"]
+        XCTAssertTrue(second.waitForExistence(timeout: 5))
+        let grip = app.descendants(matching: .any).matching(identifier: "Drag Active").firstMatch
+        reveal(grip, in: app)
+        XCTAssertTrue(first.isHittable)
+        grip.press(forDuration: 0.1, thenDragTo: first)
+        let ordered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in second.frame.minY < first.frame.minY }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ordered], timeout: 6), .completed)
+        attach(app, "Section organizer reordered by drag")
+    }
+
+    @MainActor func testListSectionsCreateMoveAndRemoveWithoutLosingTask() {
+        let app = launch()
+        goTo("Work", in: app)
+        let name = app.textFields["sectionName"]
+        let save = app.buttons["sectionSaveName"]
+        let manage = app.buttons["Manage Sections"]
+        let done = app.buttons["sectionsDone"]
+        manage.tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("Planning"); save.tap()
+        let planning = app.buttons["Actions for Planning"]
+        XCTAssertTrue(planning.waitForExistence(timeout: 5))
+        name.tap(); name.typeText("Active"); save.tap()
+        let active = app.buttons["Actions for Active"]
+        XCTAssertTrue(active.waitForExistence(timeout: 5))
+        active.tap(); app.buttons["Move Up"].tap()
+        let ordered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in active.frame.minY < planning.frame.minY }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ordered], timeout: 5), .completed)
+        active.tap(); app.buttons["Rename"].tap()
+        name.tap()
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Active".count) + "Doing")
+        save.tap()
+        let doing = app.buttons["Actions for Doing"]
+        XCTAssertTrue(doing.waitForExistence(timeout: 5))
+        done.tap()
+        waitGone(done)
+
+        app.buttons["Add task to Planning"].tap()
+        let title = app.textViews["captureTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("Local section task")
+        finishCapture(app)
+        app.segmentedControls["listViewMode"].buttons["Board"].tap()
+        let planningTab = app.buttons["Planning"], doingTab = app.buttons["Doing"]
+        XCTAssertTrue(planningTab.waitForExistence(timeout: 5)); planningTab.tap()
+        let card = app.buttons["Local section task"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let grip = app.descendants(matching: .any).matching(identifier: "Drag Local section task").firstMatch
+        reveal(grip, in: app)
+        grip.press(forDuration: 0.8, thenDragTo: doingTab)
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "selected == true AND value == %@", "1"), object: doingTab)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 8), .completed)
+        XCTAssertTrue(card.exists)
+        attach(app, "Moved card in Doing")
+
+        manage.tap()
+        XCTAssertTrue(doing.waitForExistence(timeout: 5))
+        doing.tap(); app.buttons["Remove"].tap()
+        app.alerts["Remove section?"].buttons["Remove Section"].tap()
+        waitGone(doing)
+        done.tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertTrue(app.segmentedControls["listViewMode"].buttons["Board"].isSelected)
+        XCTAssertFalse(doingTab.exists)
+        XCTAssertTrue(planningTab.exists)
+        XCTAssertTrue(app.buttons["boardSection-none"].isSelected)
+        XCTAssertTrue(card.exists)
     }
 
     @MainActor func testBoardModeIsPerListAndSurvivesRelaunch() {

@@ -90,6 +90,109 @@ public struct RichDescriptionPreview: Sendable {
         paragraphs = result
     }
 
+    private init(text: String, inline: [RichInlineRun], paragraphs: [Paragraph]) {
+        self.text = text
+        self.inline = inline
+        self.paragraphs = paragraphs
+    }
+
+    public struct Heading: Identifiable, Equatable, Sendable {
+        public let id: Int
+        public let title: String
+        public let range: NSRange
+        fileprivate let hidden: NSRange
+    }
+
+    public struct ReadingView: Sendable {
+        public let preview: RichDescriptionPreview
+        public let headings: [Heading]
+    }
+
+    /// The source offsets are stable while reading. Only headings with
+    /// content before the next heading at the same or a higher level fold.
+    public var foldableHeadings: [Heading] {
+        let source = text as NSString
+        var nextHeadings: [(offset: Int, level: Int)] = []
+        var headings: [Heading] = []
+        for paragraph in paragraphs.reversed() {
+            guard let level = paragraph.heading else { continue }
+            while let next = nextHeadings.last, next.level > level { nextHeadings.removeLast() }
+            let end = nextHeadings.last?.offset ?? source.length
+            let start = NSMaxRange(paragraph.range)
+            if start < end {
+                let title = source.substring(with: paragraph.range).trimmingCharacters(in: .whitespacesAndNewlines)
+                headings.append(.init(id: paragraph.range.location, title: title.isEmpty ? "Untitled heading" : title,
+                                      range: paragraph.range, hidden: NSRange(location: start, length: end - start)))
+            }
+            nextHeadings.append((paragraph.range.location, level))
+        }
+        return headings.reversed()
+    }
+
+    /// Build a separate selectable view of the visible text. UTF-16 ranges
+    /// are clipped and remapped here. The editor keeps the original body.
+    public func readingView(collapsed: Set<Int>) -> ReadingView {
+        let headings = foldableHeadings
+        let source = text as NSString
+        var kept: [NSRange] = []
+        var cursor = 0
+        for heading in headings where collapsed.contains(heading.id) {
+            let hidden = heading.hidden
+            if hidden.location > cursor {
+                kept.append(NSRange(location: cursor, length: hidden.location - cursor))
+            }
+            cursor = max(cursor, NSMaxRange(hidden))
+        }
+        guard cursor > 0 else { return ReadingView(preview: self, headings: headings) }
+        if cursor < source.length { kept.append(NSRange(location: cursor, length: source.length - cursor)) }
+
+        var visibleText = ""
+        var visibleInline: [RichInlineRun] = []
+        var visibleParagraphs: [Paragraph] = []
+        var visibleHeadings: [Heading] = []
+        var outputStart = 0
+        for range in kept {
+            let shift = outputStart - range.location
+            visibleText += source.substring(with: range)
+            outputStart += range.length
+            for var run in inline {
+                let overlap = NSIntersectionRange(range, NSRange(location: run.location, length: run.length))
+                guard overlap.length > 0 else { continue }
+                run.location = overlap.location + shift
+                run.length = overlap.length
+                visibleInline.append(run)
+            }
+            for paragraph in paragraphs where NSLocationInRange(paragraph.range.location, range) {
+                let adjusted = NSRange(location: paragraph.range.location + shift, length: paragraph.range.length)
+                visibleParagraphs.append(.init(range: adjusted, heading: paragraph.heading, quote: paragraph.quote,
+                                               marker: paragraph.marker, rule: paragraph.rule))
+            }
+            for heading in headings where NSLocationInRange(heading.range.location, range) {
+                let adjusted = NSRange(location: heading.range.location + shift, length: heading.range.length)
+                visibleHeadings.append(.init(id: heading.id, title: heading.title, range: adjusted, hidden: heading.hidden))
+            }
+        }
+        return ReadingView(preview: .init(text: visibleText, inline: visibleInline, paragraphs: visibleParagraphs),
+                           headings: visibleHeadings)
+    }
+
+    /// A display-only companion for the native Mac reader. Never save this
+    /// projection back onto a record.
+    public var displayRichBody: RichBody {
+        let blocks = paragraphs.compactMap { paragraph -> RichBlockRun? in
+            var block = RichBlockRun(location: paragraph.range.location, length: paragraph.range.length,
+                                    heading: paragraph.heading, quote: paragraph.quote, rule: paragraph.rule)
+            switch paragraph.marker {
+            case .bullet: block.list = .bullet
+            case .number: block.list = .numbered
+            case .checklist(let checked): block.list = .checklist; block.checked = checked
+            case nil: break
+            }
+            return block.isEmpty ? nil : block
+        }
+        return RichBody(text: text, runs: inline, blocks: blocks)
+    }
+
     public func matches(_ other: Self) -> Bool {
         RichBody.sameCodeUnits(text, other.text) && inline == other.inline && paragraphs == other.paragraphs &&
             zip(inline, other.inline).allSatisfy { RichBody.sameCodeUnits($0.link ?? "", $1.link ?? "") }

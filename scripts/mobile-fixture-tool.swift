@@ -26,7 +26,8 @@ import TaskovskyWorkspace
                                        "verify-saved-filter-advanced": 8, "verify-saved-filter-rename": 8,
                                        "verify-tag-merge": 8, "verify-tag-delete": 8,
                                        "verify-board-archive": 8, "verify-board-mode": 8,
-                                       "verify-board-undo": 8, "verify-board-drop": 8, "verify-summary-note": 9, "verify-search-filter": 8, "verify-template-application": 8, "verify-local-settings": 8][args[1]] {
+                                       "verify-board-undo": 8, "verify-board-drop": 8, "verify-summary-note": 9, "verify-search-filter": 8, "verify-template-application": 8, "verify-local-settings": 8,
+                                       "verify-rich-editor": 8, "verify-rich-inline-edit": 8, "verify-rich-plain-paste": 8][args[1]] {
             guard UUID(uuidString: root.lastPathComponent) != nil,
                   root.deletingLastPathComponent().lastPathComponent == "QA",
                   root.deletingLastPathComponent().deletingLastPathComponent().lastPathComponent == "TaskovskyMobile",
@@ -151,6 +152,25 @@ import TaskovskyWorkspace
                 guard let work = store.data.lists.first(where: { $0.name == "Work" }),
                       store.settings.startWeekOn == 1, store.settings.calendar.firstWeekday == 1,
                       store.settings.defaultListID == work.id, store.settings.defaultPriority == .high
+                else { throw CocoaError(.fileReadCorruptFile) }
+            }
+            if args[1] == "verify-rich-editor" {
+                let source = try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: root.appendingPathComponent("initial-workspace.json")))
+                guard let original = source.tasks.first, let task = store.data.tasks.first, task.id == original.id,
+                      let rich = task.richBody, let preview = RichDescriptionPreview(body: task.body, rich: rich),
+                      RichBody.sameCodeUnits(task.body, original.body + " Rich update"),
+                      preview.inline == original.richBody?.runs, preview.paragraphs.last?.quote == true
+                else { throw CocoaError(.fileReadCorruptFile) }
+            }
+            if ["verify-rich-inline-edit", "verify-rich-plain-paste"].contains(args[1]) {
+                let source = try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: root.appendingPathComponent("initial-workspace.json")))
+                let remaining = RichInlineRun(location: 7, length: 9, bold: true)
+                let expected: [RichInlineRun] = args[1] == "verify-rich-inline-edit"
+                    ? [.init(location: 0, length: 7, bold: true, italic: true, link: "https://example.test/project"), remaining]
+                    : [remaining]
+                guard let original = source.tasks.first, let task = store.data.tasks.first, task.id == original.id,
+                      RichBody.sameCodeUnits(task.body, original.body), let rich = task.richBody,
+                      RichDescriptionPreview(body: task.body, rich: rich)?.inline == expected
                 else { throw CocoaError(.fileReadCorruptFile) }
             }
             if args[1] == "verify-summary-note" {

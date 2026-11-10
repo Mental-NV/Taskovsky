@@ -34,7 +34,17 @@ public final class TaskStore: ObservableObject {
         } else { self.settings = AppSettings() }
         if FileManager.default.fileExists(atPath: self.fileURL.path) {
             do {
-                self.data = try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: self.fileURL))
+                let bytes = try Data(contentsOf: self.fileURL)
+                let workspace = try JSONDecoder().decode(WorkspaceData.self, from: bytes)
+                if workspace.requiresProtectedTaskCollection {
+                    let loaded = try JSONSerialization.jsonObject(with: bytes)
+                    let understood = try JSONSerialization.jsonObject(with: JSONEncoder().encode(workspace))
+                    guard try JSONSerialization.data(withJSONObject: loaded, options: .sortedKeys) ==
+                              JSONSerialization.data(withJSONObject: understood, options: .sortedKeys) else {
+                        throw CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: "The protected task data includes unsupported fields or values."])
+                    }
+                }
+                self.data = workspace
                 self.storageError = nil
             } catch {
                 // Never overwrite a file that failed to load, even after in-memory edits.
@@ -68,14 +78,22 @@ public final class TaskStore: ObservableObject {
     }
 
     public func save() {
-        guard !blockedByLoadFailure else { return }
+        _ = writeWorkspace()
+    }
+
+    private func writeWorkspace(_ replacement: WorkspaceData? = nil) -> Bool {
+        guard !blockedByLoadFailure else { return false }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(data).write(to: fileURL, options: .atomic)
+            try encoder.encode(replacement ?? data).write(to: fileURL, options: .atomic)
             if !settingsLoadFailed { storageError = settingsSaveError }
-        } catch { storageError = "Could not save workspace: \(error.localizedDescription)" }
+            return true
+        } catch {
+            storageError = "Could not save workspace: \(error.localizedDescription)"
+            return false
+        }
     }
 
     private func saveSettings() {
@@ -160,6 +178,7 @@ public final class TaskStore: ObservableObject {
             case .refuse: task.parentID = old.parentID
             }
         }
+        task.sectionID = task.listID == old.listID && task.parentID == nil ? old.sectionID : nil
         // Schedule coherence on every save: a staged window must be valid
         // with due == end and hasDueTime matching the shape. Invalid windows
         // drop; a record is never left undated with an absolute window.
@@ -186,9 +205,40 @@ public final class TaskStore: ObservableObject {
 
     @discardableResult public func createTask(title: String, listID: UUID? = nil, kind: TaskKind = .task, dueDate: Date? = nil, useDefaultList: Bool = true, preferRecognizedDate: Bool = false, recognizeDates: Bool = true, body: String = "", duration: TaskDurationRange? = nil) -> UUID {
         let result = TaskCreation.make(workspace: data, settings: settings, title: title, listID: listID, kind: kind, dueDate: dueDate, useDefaultList: useDefaultList, preferRecognizedDate: preferRecognizedDate, recognizeDates: recognizeDates, body: body, duration: duration)
-        data.tags.append(contentsOf: result.addedTags)
-        if settings.defaultAddTo == .top { data.tasks.insert(result.task, at: 0) } else { data.tasks.append(result.task) }
-        save(); if settings.urlParsing { resolveURLTitle(for: result.task.id) }; return result.task.id
+        return persistCreatedTask(result)
+    }
+
+    public func createTask(title: String, inSection sectionID: UUID, listID: UUID, kind: TaskKind,
+                           recognizeDates: Bool, body: String) -> UUID? {
+        guard let list = data.lists.first(where: { $0.id == listID && !$0.isArchived }),
+              list.sections.contains(where: { $0.id == sectionID }) else { return nil }
+        let result = TaskCreation.make(workspace: data, settings: settings, title: title, listID: listID,
+                                       kind: kind, useDefaultList: false, preferRecognizedDate: true,
+                                       recognizeDates: recognizeDates, body: body)
+        return persistSectionTask(result.task, tags: result.addedTags, sectionID: sectionID, resolveTitle: true)
+    }
+
+    private func persistCreatedTask(_ result: TaskCreationResult) -> UUID {
+        insertCreatedTask(result.task, tags: result.addedTags, into: &data)
+        save()
+        if settings.urlParsing { resolveURLTitle(for: result.task.id) }
+        return result.task.id
+    }
+
+    private func persistSectionTask(_ item: TaskItem, tags: [TaskTag], sectionID: UUID, resolveTitle: Bool) -> UUID? {
+        var task = item
+        task.sectionID = sectionID
+        var draft = data
+        insertCreatedTask(task, tags: tags, into: &draft)
+        guard writeWorkspace(draft) else { return nil }
+        data = draft
+        if resolveTitle && settings.urlParsing { resolveURLTitle(for: task.id) }
+        return task.id
+    }
+
+    private func insertCreatedTask(_ task: TaskItem, tags: [TaskTag], into draft: inout WorkspaceData) {
+        draft.tags.append(contentsOf: tags)
+        if settings.defaultAddTo == .top { draft.tasks.insert(task, at: 0) } else { draft.tasks.append(task) }
     }
 
     public static func recognizeDate(in text: String, calendar: Calendar, now: Date = Date()) -> (date: Date, hasTime: Bool, range: Range<String.Index>)? {
@@ -250,8 +300,13 @@ public final class TaskStore: ObservableObject {
     }
     public func updateTemplate(_ template: TaskTemplate) { if let i = data.templates.firstIndex(where: { $0.id == template.id }) { data.templates[i] = template } else { data.templates.append(template) }; save() }
     public func deleteTemplate(id: UUID) { data.templates.removeAll { $0.id == id }; save() }
-    @discardableResult public func createTaskFromTemplate(id: UUID, listID: UUID? = nil, dueDate: Date? = nil, useDefaultList: Bool = true) -> UUID? {
+    @discardableResult public func createTaskFromTemplate(id: UUID, listID: UUID? = nil, dueDate: Date? = nil, useDefaultList: Bool = true, sectionID: UUID? = nil) -> UUID? {
+        if let sectionID {
+            guard data.lists.contains(where: { $0.id == listID && !$0.isArchived && $0.sections.contains(where: { $0.id == sectionID }) })
+            else { return nil }
+        }
         guard let task = TaskCreation.fromTemplate(workspace: data, settings: settings, id: id, listID: listID, dueDate: dueDate, useDefaultList: useDefaultList) else { return nil }
+        if let sectionID { return persistSectionTask(task, tags: [], sectionID: sectionID, resolveTitle: false) }
         if settings.defaultAddTo == .top { data.tasks.insert(task, at: 0) } else { data.tasks.append(task) }; save(); return task.id
     }
     public func trashTask(id: UUID) {
@@ -264,43 +319,9 @@ public final class TaskStore: ObservableObject {
         commitLifecycle { $0.purgeTask(id: id, now: Date()) ? true : nil }
     }
 
-    /// Duplicates a task with its whole non-deleted subtree. Every copied
-    /// record takes a fresh ID (and fresh checklist IDs); descendant links
-    /// remap into the copy, while the copy itself keeps the original's
-    /// parent slot (duplicating a child keeps it a sibling under the same
-    /// parent). The root resets to open (completed/Won't Do/trashed clear,
-    /// new custom series at position 1); descendants keep their statuses,
-    /// bodies, rich styles, priorities, dates, checklist behavior, and
-    /// custom-rule/duration state. Recurrence links cut on every copy so the
-    /// duplicate never chains to the original.
     @discardableResult public func duplicateTask(id: UUID) -> UUID? {
-        guard data.tasks.contains(where: { $0.id == id }) else { return nil }
-        let now = Date()
-        let members = [id] + TaskHierarchy.descendants(of: id, in: data.tasks)
-            .filter { $0.deletedAt == nil }.map(\.id)
-        var idMap: [UUID: UUID] = [:]
-        for member in members { idMap[member] = UUID() }
-        let newRootID = idMap[id]!
-        for member in members {
-            guard var copy = data.tasks.first(where: { $0.id == member }) else { continue }
-            copy.id = idMap[member]!
-            if member == id {
-                copy.completedAt = nil; copy.deletedAt = nil; copy.wontDoAt = nil
-                // The duplicate restarts the series at position 1 with the
-                // nominal back at the copy's due date (the new series start);
-                // the rule itself carries over. Clearing the rule drops it.
-                copy.occurrenceIndex = 1
-                copy.restartCustomSeries(ruleChangedFrom: nil)
-            }
-            copy.recurrenceSourceID = nil
-            // Links inside the copied subtree remap; the root keeps its
-            // original parent slot (outside the copy by construction).
-            if let parent = copy.parentID, let remapped = idMap[parent] { copy.parentID = remapped }
-            copy.checklist = copy.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
-            copy.createdAt = now; copy.updatedAt = now
-            data.tasks.append(copy)
-        }
-        save(); return newRootID
+        let copyID = UUID()
+        return commitLifecycle({ $0.duplicateTask(id: id, copyID: copyID, now: Date()) ? true : nil }) ? copyID : nil
     }
     @discardableResult public func createList(name: String, color: String, kind: TaskKind = .task, symbol: String? = nil, folderID: UUID? = nil, showsInSmartLists: Bool = true) -> UUID {
         let folder = folderID.flatMap { id in data.folders.contains(where: { $0.id == id }) ? id : nil }
@@ -364,12 +385,21 @@ public final class TaskStore: ObservableObject {
     public func updateList(_ list: TaskList) {
         guard let index = data.lists.firstIndex(where: { $0.id == list.id }) else { return }
         var list = list
+        list.sections = data.lists[index].sections
         // Membership and trailing placement travel on the record itself:
         // callers must carry the stored folderID and belowFolders
         // (EntityEditor(list:) does) or the save resets them. Unknown folder
         // IDs always clear to top root.
         if let folder = list.folderID, !data.folders.contains(where: { $0.id == folder }) { list.folderID = nil; list.belowFolders = false }
         data.lists[index] = list; save()
+    }
+    @discardableResult public func applySectionChange(_ change: TaskSectionChange) -> Bool? {
+        var draft = data
+        guard let changed = change.apply(to: &draft, now: Date()) else { return nil }
+        guard changed else { return false }
+        guard writeWorkspace(draft) else { return nil }
+        data = draft
+        return true
     }
     public func deleteList(id: UUID) {
         ListOrganization.deleteList(id, in: &data, now: Date())
@@ -595,27 +625,36 @@ public final class TaskStore: ObservableObject {
 
     /// The Calendar's drag, resize, context-menu and accessible scheduling
     /// controls all use this one store mutation path.
-    @discardableResult public func scheduleOnCalendar(id: UUID, operation: CalendarScheduleOperation, calendar: Calendar? = nil) -> CalendarScheduleUndo? {
-        guard let original = data.tasks.first(where: { $0.id == id }), original.deletedAt == nil,
+    @discardableResult public func scheduleOnCalendar(id: UUID, operation: CalendarScheduleOperation, calendar: Calendar? = nil,
+                                                      scope: CalendarScheduleScope = .series) -> CalendarScheduleUndo? {
+        guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { return nil }
+        let original = data.tasks[index]
+        guard original.deletedAt == nil,
               !SmartListEligibility.isArchived(original, lists: data.lists),
               let changed = CalendarScheduling.prepared(operation, to: original,
-                  displayCalendar: calendar ?? settings.calendar, settings: settings, policyCalendar: settings.calendar),
-              CalendarScheduleSnapshot(changed) != CalendarScheduleSnapshot(original) else { return nil }
-        updateTask(changed, applyDefaultReminders: false)
-        guard let saved = data.tasks.first(where: { $0.id == id }) else { return nil }
-        let before = CalendarScheduleSnapshot(original), after = CalendarScheduleSnapshot(saved)
-        guard before != after else { return nil }
+                  displayCalendar: calendar ?? settings.calendar, settings: settings, policyCalendar: settings.calendar,
+                  scope: scope, in: data.tasks)
+        else { return nil }
+        let before = CalendarScheduleSnapshot(original), after = CalendarScheduleSnapshot(changed)
+        guard before != after, commitCalendarSchedule(changed, at: index) else { return nil }
         return CalendarScheduleUndo(taskID: id, before: before, after: after,
-                                    completedAt: saved.completedAt, wontDoAt: saved.wontDoAt)
+                                    completedAt: changed.completedAt, wontDoAt: changed.wontDoAt)
     }
 
     @discardableResult public func undoCalendarSchedule(_ token: CalendarScheduleUndo) -> Bool {
         guard let index = data.tasks.firstIndex(where: { $0.id == token.taskID }) else { return false }
-        guard var restored = token.restoring(on: data.tasks[index], lists: data.lists) else { return false }
-        restored.updatedAt = Date()
-        data.tasks[index] = restored
-        save()
-        return true
+        guard let restored = token.restoring(on: data.tasks[index], lists: data.lists) else { return false }
+        return commitCalendarSchedule(restored, at: index)
+    }
+
+    private func commitCalendarSchedule(_ task: TaskItem, at index: Int) -> Bool {
+        let previous = data.tasks[index]
+        var task = task
+        task.updatedAt = Date()
+        data.tasks[index] = task
+        guard !writeWorkspace() else { return true }
+        data.tasks[index] = previous
+        return false
     }
 
     private static func starterData() -> WorkspaceData {

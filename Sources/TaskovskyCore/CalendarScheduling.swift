@@ -6,13 +6,31 @@ public enum CalendarScheduleOperation: Sendable {
     case setRange(TaskDurationRange)
     case setPoint(date: Date, allDay: Bool)
     case unschedule
+    case restoreOccurrence
 }
 
+public enum CalendarScheduleScope: Hashable, Sendable { case series, currentOccurrence }
+
 public enum CalendarScheduling {
+    public static func canRescheduleCurrentOccurrence(_ task: TaskItem, in tasks: [TaskItem] = []) -> Bool {
+        task.kind == .task && task.isRepeating && task.dueDate != nil &&
+            task.deletedAt == nil && task.completedAt == nil && task.wontDoAt == nil &&
+            !tasks.contains { $0.recurrenceSourceID == task.id }
+    }
+
     /// Prepare the exact schedule both stores persist, including reminder
     /// provenance and recurring series position. Invalid commands return nil.
     public static func prepared(_ operation: CalendarScheduleOperation, to original: TaskItem,
-                                displayCalendar: Calendar, settings: AppSettings, policyCalendar: Calendar) -> TaskItem? {
+                                displayCalendar: Calendar, settings: AppSettings, policyCalendar: Calendar,
+                                scope: CalendarScheduleScope = .series, in tasks: [TaskItem] = []) -> TaskItem? {
+        if case .restoreOccurrence = operation {
+            guard canRescheduleCurrentOccurrence(original, in: tasks), original.originalOccurrenceSchedule != nil else { return nil }
+            return original.recurrenceSchedule
+        }
+        if scope == .currentOccurrence {
+            guard canRescheduleCurrentOccurrence(original, in: tasks) else { return nil }
+            if case .unschedule = operation { return nil }
+        }
         let minutes = settings.defaultDurationMinutes > 0 ? settings.defaultDurationMinutes : 30
         guard var task = applying(operation, to: original, displayCalendar: displayCalendar, defaultMinutes: minutes) else { return nil }
         guard CalendarScheduleSnapshot(task) != CalendarScheduleSnapshot(original) else { return original }
@@ -27,7 +45,12 @@ public enum CalendarScheduling {
             task.reminderFollowsSchedule = true
         }
         TaskSchedulePolicy.reconcileReminders(of: &task, from: original, settings: settings, calendar: policyCalendar)
-        TaskSchedulePolicy.reconcileSeries(of: &task, from: original)
+        if scope == .currentOccurrence {
+            task.originalOccurrenceSchedule = original.originalOccurrenceSchedule ?? OccurrenceSchedule(task: original)
+        } else {
+            task.originalOccurrenceSchedule = nil
+            TaskSchedulePolicy.reconcileSeries(of: &task, from: original.recurrenceSchedule)
+        }
         return task
     }
 
@@ -57,6 +80,8 @@ public enum CalendarScheduling {
         let oldWindow = original.scheduledDuration?.validated(in: local)
         let duration = Double(min(10_080, max(15, defaultMinutes))) * 60
         switch operation {
+        case .restoreOccurrence:
+            return nil  // Requires the scope and eligibility checks in prepared().
         case .unschedule:
             task.dueDate = nil; task.hasDueTime = false; task.scheduledDuration = nil; task.reminderDates = []
             task.recurrence = .none; task.customRecurrence = nil; task.recurrenceEndDate = nil
@@ -140,12 +165,14 @@ public struct CalendarScheduleSnapshot: Equatable, Sendable {
     public var anchorDay: Int?
     public var anchorMonth: Int?
     public var end: Date?
+    public var occurrence: OccurrenceSchedule?
     public init(_ task: TaskItem) {
         due = task.dueDate; timed = task.hasDueTime; window = task.scheduledDuration
         reminders = task.reminderDates; follows = task.reminderFollowsSchedule; zone = task.timeZoneID
         rule = task.recurrence; custom = task.customRecurrence; index = task.occurrenceIndex
         nominal = task.recurrenceNominalDate; anchorDay = task.recurrenceAnchorDay
         anchorMonth = task.recurrenceAnchorMonth; end = task.recurrenceEndDate
+        occurrence = task.originalOccurrenceSchedule
     }
     public func restoring(on task: TaskItem) -> TaskItem {
         var task = task
@@ -154,6 +181,7 @@ public struct CalendarScheduleSnapshot: Equatable, Sendable {
         task.recurrence = rule; task.customRecurrence = custom; task.occurrenceIndex = index
         task.recurrenceNominalDate = nominal; task.recurrenceAnchorDay = anchorDay
         task.recurrenceAnchorMonth = anchorMonth; task.recurrenceEndDate = end
+        task.originalOccurrenceSchedule = occurrence
         return task
     }
 }

@@ -150,6 +150,32 @@ public enum TaskSortPolicy {
     public static func canReorder(_ raw: String) -> Bool { isManual(raw) }
 }
 
+public enum TaskTimestampSort: String, CaseIterable, Sendable {
+    // The existing Mac Created preference sorts newest first.
+    case createdNewest = "Created"
+    case createdOldest = "CreatedOldest"
+    case modifiedNewest = "Modified"
+    case modifiedOldest = "ModifiedOldest"
+
+    public var title: String {
+        switch self {
+        case .createdNewest: "Created · Newest First"
+        case .createdOldest: "Created · Oldest First"
+        case .modifiedNewest: "Modified · Newest First"
+        case .modifiedOldest: "Modified · Oldest First"
+        }
+    }
+
+    public func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
+        switch self {
+        case .createdNewest: lhs.createdAt > rhs.createdAt
+        case .createdOldest: lhs.createdAt < rhs.createdAt
+        case .modifiedNewest: lhs.updatedAt > rhs.updatedAt
+        case .modifiedOldest: lhs.updatedAt < rhs.updatedAt
+        }
+    }
+}
+
 public enum FilterDateRule: String, Codable, CaseIterable, Sendable {
     case all, today, tomorrow, next7, overdue, noDate
     case thisWeek, nextWeek, lastWeek, thisMonth, nextMonth, lastMonth, repeating, custom

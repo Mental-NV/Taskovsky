@@ -15,19 +15,23 @@ struct PhoneFieldEditor: View {
                         if model.staleDraft && model.editorError == nil { Text("This edit is based on an older task. Your text is kept; discard to reload the current task.").foregroundStyle(.orange) }
                         if let error = model.editorError { Text(error).foregroundStyle(.red).accessibilityIdentifier("fieldEditorError") }
                         if model.isComposing { Text("Finish your keyboard entry before saving.").font(.footnote).foregroundStyle(.secondary) }
-                        Text(model.recoveryStatus).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("draftRecoveryStatus")
-                        NativeFieldInput(text: Binding(get: { model.activeDraft?.id == draftID ? model.activeDraft!.text : draft.text },
-                                                      set: { model.changeText($0, editorID: draftID) }),
-                                         composing: Binding(get: { model.activeDraft?.id == draftID ? model.isComposing : false },
-                                                            set: { if model.activeDraft?.id == draftID { model.isComposing = $0 } }), editorID: draftID,
-                                         title: draft.field == .title, editable: !model.isBusy)
-                            .id(draft.id).frame(minHeight: draft.field == .title ? 90 : 220, alignment: .topLeading)
+                        if draft.field == .richBody {
+                            PhoneRichFieldEditor(model: model, draftID: draftID, initialText: draft.text).id(draft.id)
+                        } else {
+                            Text(model.recoveryStatus).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("draftRecoveryStatus")
+                            NativeFieldInput(text: Binding(get: { model.activeDraft?.id == draftID ? model.activeDraft!.text : draft.text },
+                                                          set: { model.changeText($0, editorID: draftID) }),
+                                             composing: Binding(get: { model.activeDraft?.id == draftID ? model.isComposing : false },
+                                                                set: { if model.activeDraft?.id == draftID { model.isComposing = $0 } }), editorID: draftID,
+                                             title: draft.field == .title, editable: !model.isBusy)
+                                .id(draft.id).frame(minHeight: draft.field == .title ? 90 : 220, alignment: .topLeading)
+                        }
                         if draft.field == .title && draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text("A title cannot be empty.").font(.footnote).foregroundStyle(.secondary)
                         }
                     }.padding(20)
                 }
-            }.navigationTitle(field == .title ? "Edit title" : "Edit description")
+            }.navigationTitle(field == .title ? "Edit title" : field == .richBody ? "Format description" : "Edit description")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("Cancel") { model.requestCloseEditor() }.disabled(model.isBusy).accessibilityIdentifier("fieldEditorCancel") }
@@ -36,7 +40,7 @@ struct PhoneFieldEditor: View {
                         Task { await model.save() }
                     }.disabled(!model.canSave).accessibilityIdentifier("fieldEditorDone") }
                 }
-        }.interactiveDismissDisabled(model.activeDraft?.hasChanges == true || model.isBusy)
+        }.interactiveDismissDisabled(model.activeDraft?.hasChanges == true || model.isComposing || model.isBusy)
             .alert("Discard this edit?", isPresented: $model.confirmDiscard) {
                 Button("Discard", role: .destructive) { Task { await model.discardActive() } }
                 Button("Keep Editing", role: .cancel) { }

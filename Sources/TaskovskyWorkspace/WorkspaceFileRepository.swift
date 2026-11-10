@@ -30,11 +30,11 @@ public struct WorkspaceDocument: Sendable {
 }
 
 public enum WorkspaceFieldPatch: Sendable {
-    case title(String), plainBody(String), metadata(TaskMetadataChange)
+    case title(String), plainBody(String), richBody([RichBodyEdit]), metadata(TaskMetadataChange)
 }
 public enum WorkspaceWriteRefusal: Equatable, Sendable {
     case stale, compatibility, missing, readOnlyRecord, emptyTitle, styledBody
-    case metadata(TaskMetadataValidation)
+    case metadata(TaskMetadataValidation), richBody(RichBodyEditError)
 }
 public enum WorkspaceWriteOutcome: Sendable {
     case saved(WorkspaceDocument), unchanged(WorkspaceDocument)
@@ -319,7 +319,7 @@ public actor WorkspaceFileRepository {
     }
 
     public func apply(_ operation: CalendarScheduleOperation, to taskID: UUID, expected: WorkspaceRevision,
-                      calendar: Calendar, now: Date = Date()) -> WorkspaceScheduleOutcome {
+                      calendar: Calendar, scope: CalendarScheduleScope = .series, now: Date = Date()) -> WorkspaceScheduleOutcome {
         editSchedule(taskID: taskID, expected: expected, now: now) { task, document in
             if case .unschedule = operation {
                 // Explicit removal also works for an unrecognized zone.
@@ -334,7 +334,7 @@ public actor WorkspaceFileRepository {
                 guard task.customRecurrence?.isValid != false else { throw TaskScheduleValidation.invalidRepeat }
             }
             guard let changed = CalendarScheduling.prepared(operation, to: task, displayCalendar: calendar,
-                                                             settings: document.snapshot.settings, policyCalendar: calendar) else {
+                    settings: document.snapshot.settings, policyCalendar: calendar, scope: scope, in: document.snapshot.workspace.tasks) else {
                 throw WorkspaceScheduleRefusal.invalidCalendarOperation
             }
             let undo = CalendarScheduleUndo(taskID: task.id, before: CalendarScheduleSnapshot(task),
@@ -389,6 +389,11 @@ public actor WorkspaceFileRepository {
     public func apply(_ command: ListOrganizationCommand, expected: WorkspaceRevision,
                       now: Date = Date()) -> WorkspaceWriteOutcome {
         editKnownWorkspace(expected: expected) { data, _ in command.apply(to: &data, now: now) }
+    }
+
+    public func apply(_ change: TaskSectionChange, expected: WorkspaceRevision,
+                      now: Date = Date()) -> WorkspaceWriteOutcome {
+        editKnownWorkspace(expected: expected) { data, _ in change.apply(to: &data, now: now) }
     }
 
     public func apply(_ command: SavedFilterChange, expected: WorkspaceRevision) -> WorkspaceWriteOutcome {
@@ -466,6 +471,18 @@ public actor WorkspaceFileRepository {
             guard original.richBody == nil else { return .refused(.styledBody) }
             if value.utf16.elementsEqual(original.body.utf16) { return .unchanged(current) }
             data.tasks[index].body = value
+        case .richBody(let edits):
+            do {
+                let updated = try RichBodyEdit.applying(edits, to: original.body, rich: original.richBody)
+                let prior = original.richBody ?? RichBody(text: original.body)
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys]
+                if try encoder.encode(updated) == encoder.encode(prior) { return .unchanged(current) }
+                data.tasks[index].body = updated.text
+                data.tasks[index].richBody = updated.isEmpty ? nil : updated
+            } catch let reason as RichBodyEditError {
+                return .refused(.richBody(reason))
+            } catch { return .persistenceFailed }
         case .metadata(let command):
             do {
                 guard let updated = try command.applying(to: original, availableTags: data.tags) else {

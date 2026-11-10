@@ -73,6 +73,10 @@ struct PhoneCalendarPreferences: View {
                 ForEach(CalendarYearStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }.accessibilityIdentifier("calendarYearStyle")
             Toggle("Show Item Icons", isOn: $draft.showItemIcons).accessibilityIdentifier("calendarIcons")
+            Group {
+                Toggle("Show Task Icons", isOn: $draft.showTaskIcons).accessibilityIdentifier("calendarTaskIcons")
+                Toggle("Show Note Icons", isOn: $draft.showNoteIcons).accessibilityIdentifier("calendarNoteIcons")
+            }.disabled(!draft.showItemIcons)
         }
         Section {
             Toggle("Show Completed", isOn: $draft.showCompleted).accessibilityIdentifier("calendarCompleted")
@@ -82,6 +86,12 @@ struct PhoneCalendarPreferences: View {
         Section("Range") {
             Stepper("Multi-Day: \(draft.multiDayCount) days", value: $draft.multiDayCount, in: 2...14)
             Stepper("Multi-Week: \(draft.multiWeekCount) weeks", value: $draft.multiWeekCount, in: 2...6)
+            Picker("All-day rows", selection: $draft.allDayRows) {
+                Text("Automatic").tag(nil as Int?)
+                ForEach(TaskCalendarOptions.allDayRowRange, id: \.self) { rows in
+                    Text(rows == 1 ? "1 row" : "\(rows) rows").tag(Optional(rows))
+                }
+            }.pickerStyle(.navigationLink).accessibilityIdentifier("calendarAllDayRows")
         }
         Section {
             Toggle("Additional Time Zones", isOn: $draft.showAdditionalTimeZones)
@@ -90,6 +100,19 @@ struct PhoneCalendarPreferences: View {
                 LabeledContent("Time Zone Settings", value: "\(draft.additionalTimeZones.count) configured")
             }.accessibilityIdentifier("calendarZoneSettings")
         } header: { Text("Time Zone Rulers") } footer: { Text("Secondary rulers appear in Day, Week, and Multi-Day.") }
+        Section {
+            ForEach(CalendarHourBand.allCases, id: \.self) { band in
+                let value = draft.foldedHours
+                Picker(band.cutoffTitle, selection: Binding(
+                    get: { draft.foldedHours.cutoff(band) },
+                    set: { draft.foldedHours = draft.foldedHours.moving(band, to: $0) }
+                )) {
+                    ForEach(value.range(for: band), id: \.self) { hour in Text(String(format: "%02d:00", hour)).tag(hour) }
+                }.pickerStyle(.navigationLink)
+                .accessibilityIdentifier("calendarFoldPreference-" + band.rawValue)
+            }
+            Button("Reset Folded Hours") { draft.foldedHours = .init() }.disabled(draft.foldedHours == .init())
+        } header: { Text("Folded Hours") } footer: { Text("Expand both bands to drag their boundaries in the timeline.") }
     }
 
     @ViewBuilder private func sources(_ data: WorkspaceData) -> some View {

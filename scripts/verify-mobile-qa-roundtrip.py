@@ -109,6 +109,10 @@ TEMPLATE_MANAGEMENT = "testTemplateManagerCreatesRenamesAndDeletesPlainTemplate"
 TEMPLATE_APPLICATION = "testStyledTaskCanBeSavedAndAppliedAsTemplate"
 TEMPLATE_CASES = {TEMPLATE_MANAGEMENT, TEMPLATE_APPLICATION}
 LOCAL_SETTINGS = "testLocalSettingsCancelAndSaveAffectNewCaptureAfterRelaunch"
+RICH_BODY_EDIT = "testRichDescriptionDraftRecoversAndCommitsTextWithFormatting"
+RICH_INLINE_EDIT = "testRichDescriptionFormatsNativeSelectionAndAddsLink"
+RICH_PLAIN_PASTE = "testRichDescriptionPlainPasteClearsFormattingFromIdenticalText"
+RICH_EDITOR_CASES = {RICH_BODY_EDIT, RICH_INLINE_EDIT, RICH_PLAIN_PASTE}
 SAVED_FILTER_MUTATIONS = (SAVED_FILTERS - {SAVED_FILTER_FAILURE}) | {SEARCH_ARCHIVE}
 TAG_CREATE = "testTagManagerCreatesPinsAndAssignsNestedTag"
 TAG_MERGE = "testTagManagerMergesIntoDescendantAndReopensMatchingFilter"
@@ -657,6 +661,28 @@ def check_template_change(name, before, after):
     require(actual == expected, name + ": unexpected template or task changes")
 
 
+def check_rich_body_edit(name, before, after):
+    expected, actual = json.loads(before), json.loads(after)
+    task = expected["tasks"][0]
+    edited = actual["tasks"][0]
+    require(edited["updatedAt"] > task["updatedAt"], name + ": modification time did not advance")
+    task["updatedAt"] = edited["updatedAt"]
+    rich = task["richBody"]
+    if name == RICH_INLINE_EDIT:
+        original = rich["runs"][0]
+        rich["runs"] = [dict(original, length=7, italic=True, link="https://example.test/project"),
+                        dict(original, location=7, length=9)]
+    elif name == RICH_PLAIN_PASTE:
+        rich["runs"] = [dict(rich["runs"][0], location=7, length=9)]
+    else:
+        task["body"] += " Rich update"
+        rich["text"] = task["body"]
+        prefix, _, last = task["body"].rpartition("\n")
+        rich["blocks"] = [{"location": len((prefix + "\n").encode("utf-16-le")) // 2,
+                           "length": len(last.encode("utf-16-le")) // 2, "quote": True, "rule": False}]
+    require(actual == expected, name + ": text, formatting or unowned task fields differ")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--container", type=Path, required=True)
@@ -680,6 +706,7 @@ def main():
     parser.add_argument("--search", action="store_true", help="audit local search and saved search criteria")
     parser.add_argument("--templates", action="store_true", help="audit template management and application")
     parser.add_argument("--local-settings", action="store_true", help="audit local settings and new-capture defaults")
+    parser.add_argument("--rich-editor", action="store_true", help="audit the saved styled description")
     parser.add_argument("--only-case", help="audit a focused result bundle containing one known case")
     args = parser.parse_args()
     fixtures = Path(__file__).resolve().parent.parent / "Mobile/Fixtures"
@@ -776,6 +803,13 @@ def main():
             expected.add(LOCAL_SETTINGS)
         else:
             expected = {LOCAL_SETTINGS}
+    if args.rich_editor:
+        if any((args.capture, args.lifecycle, args.schedule, args.arrange, args.preferences, args.rich_preview,
+                args.metadata, args.hierarchy, args.organization, args.smart_lists, args.saved_filters, args.tags,
+                args.boards, args.summary, args.search, args.templates, args.local_settings)):
+            expected |= RICH_EDITOR_CASES
+        else:
+            expected = RICH_EDITOR_CASES
     if args.only_case:
         require(args.only_case in expected, "Unknown focused QA case")
         expected = {args.only_case}
@@ -915,6 +949,8 @@ def main():
             check_summary_note(name, before, after, exported.read_bytes().decode("utf-8"))
         elif name in TEMPLATE_CASES:
             check_template_change(name, before, after)
+        elif name in RICH_EDITOR_CASES:
+            check_rich_body_edit(name, before, after)
         elif field_changed:
             original, actual = json.loads(before), json.loads(after)
             task_id = "00000000-0000-0000-0000-000000000002" if name == "testPlainDescriptionRecoveryDoesNotAutosubmit" else "00000000-0000-0000-0000-000000000001"
@@ -973,6 +1009,12 @@ def main():
                 mode = "verify-template-application"
             elif name == LOCAL_SETTINGS:
                 mode = "verify-local-settings"
+            elif name == RICH_BODY_EDIT:
+                mode = "verify-rich-editor"
+            elif name == RICH_INLINE_EDIT:
+                mode = "verify-rich-inline-edit"
+            elif name == RICH_PLAIN_PASTE:
+                mode = "verify-rich-plain-paste"
             subprocess.run([str(args.mac_tool.resolve()), mode, str(root)], check=True, capture_output=True, text=True)
             mac_reload = True
         rows.append({"test": name, "passed": True, "workspaceChanged": before != after, "captureCreated": capture_created,

@@ -605,3 +605,202 @@ The [local Settings implementation](../changes/mobile-local-settings-2026-11-09.
 Mac tests ran on macOS 27.0.1 ARM64 with Xcode 27.0 (27A266a) and Swift 6.4. The native tests used an owned iPhone 13 Pro simulator with iOS 26.3.1 (23D8133). The staged Settings screenshot shows the rounded sheet, centered title, grouped controls and blue confirmation button. Physical-device, VoiceOver, Dynamic Type, reference measurement and OS reminder delivery remain open.
 
 The uncommitted archive is `taskovsky-checkpoints/MobileLocalSettings-2026-11-09.zip`. Companion evidence includes Settings in light and dark, the resulting Add defaults and Sunday Calendar, exact build checksums, and the fixture audits. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-rich-editor"></a>
+
+### MOB-RICH-EDIT-001 iPhone formatted description editing
+
+[Change and transaction contract](../changes/mobile-rich-editor-2026-11-09.md). The rich editor and the ordinary plain editor use different native adapters. Task and note detail use a separate selectable preview.
+
+- **Native workflows.** On a disposable iPhone 13 Pro simulator, edit a stored styled description, apply a quote, Undo, Redo, terminate, resume and save. Separately select “Project” using a native double tap, apply italic and add an HTTP(S) link. Paste the same word over a bold selection and exercise Undo and Redo. A malformed description still displays its saved plain text, and an incompatible workspace disables body writes.
+- **Storage.** The exact task JSON and settings audits compare the saved text, every owned rich run and paragraph range, and all unrelated values. Mac TaskStore reloads the audited known workspace without writing. The unknown-workspace case retains the original bytes. The shared contract tests cover scalar alignment, repeated-character edit ranges, style inheritance, paragraph selection and splitting, refused operations, stale revisions and scratch replay.
+- **Composition.** A hosted test drives the production UIKit view with two marked-text updates and unmarking. The underlying draft stays unchanged while text is marked. The committed text adds exactly one edit at the original style boundary.
+- **Limits.** System IME keyboard candidates, hardware and gesture Undo/Redo, VoiceOver, physical devices and complete Dynamic Type coverage remain separate. The simulator can show a missing puzzle glyph while the saved UTF-16 text remains intact. External services remain deferred.
+
+**Exact run.** The uncommitted `codex/mobile-local-prealpha` worktree is based on `6ee96eeb8f88e74a105c518de2202233ea528efa`. The final source manifest has 154 inputs and SHA-256 `d4fe7f88f8f5caa672ebcc01932ddba4688073f2d5dd45c96598c1dea223ceef`. The earlier Local Settings checkpoint and all 98 original Desktop inputs were verified against their sealed hashes before integration.
+
+- Mac: 582 tests passed (451 Core, 22 Domain, 75 Workspace, 34 Swift Testing). The local release built and passed strict signature verification. The iPhone Release build compiled for the simulator.
+- iPhone 13 Pro, iOS 26.3.1 (23D8133): 179 full-suite tests passed (98 shared/hosted, 81 native UI) with zero failures or skips. The 80 QA fixture audits included 79 Mac reopens without writes. The incompatible fixture retained its bytes and refused writes.
+- The exact build separately passed 30 focused tests and five file audits, including four Mac reopens without writes. The native link workflow also passed in dark mode and at the accessibility-medium text size, each with a file audit and Mac reopen. The owned simulators were removed after verification.
+- Earlier native runs identified a caret jump during fast input and a system Copy/Paste menu overlapping the formatting controls at larger text sizes. The final build retains the live UIKit caret and places the recovery caption between the toolbar and description. The focused and larger-text reruns passed after those changes.
+
+<a id="calendar-current-occurrence-agenda"></a>
+
+### CAL-OCCURRENCE-001 and CAL-AGENDA-001
+
+[Local change and compatibility contract](../changes/calendar-current-occurrence-agenda-2026-11-09.md). The original Desktop worktree was kept separate. The changes are prepared on the isolated mobile line and exercised with neutral QA data on Mac and iPhone.
+
+- **Current occurrence.** Mac Computer Use opened a recurring card's Schedule sheet, selected This occurrence, changed November 9 to November 10, saved, and used Undo. The saved file kept the weekly baseline. Undo restored the original date and the settings stayed byte-for-byte identical. iPhone QA exercised the drag scope chooser, visible Cancel, a saved exception after relaunch, unchanged forecast count, and explicit Restore original schedule.
+- **Compatibility.** The iPhone audit compares the saved moved and restored files with the Mac-created fixture and checks the exact schedule members and all unrelated data. The prior Mac TaskStore refused the protected file and left it byte-for-byte intact, including after a save attempt. The current reader reopened it. Both readers accept the restored legacy shape. The Mac test inserts an unfamiliar field into the protected baseline and confirms the current writer leaves the complete bytes intact.
+- **Recurrence semantics.** Shared checks cover a current card moved beyond its next forecast, coincident card identities, a resized nominal monthly series, unchanged successor reminder/duration/subtree offsets, reopened predecessors with retained successors, and schedule Undo after an unrelated title edit.
+- **Agenda.** Mac showed through December 8, 2026, then through June 8, 2027, and returned to December 8 with Today. Both Mac files remained identical. iPhone showed a task 60 days out and removed it from the visible window on Today. The iPhone workspace stayed byte-for-byte identical. Its expected settings change was the selected Agenda mode.
+- **Timed resize.** Earlier simulator runs occasionally grabbed the card rather than its partly offscreen resize handle. The new named control is explicitly scrolled into the usable viewport before dragging. The focused checks verify the persisted end time and also tap the same handle to open and cancel the staged resize editor.
+- **Mac numeric mode shortcuts.** A separate Mac-only build changed a single Desktop source file over the exact iPhone regression candidate. Computer Use verified 1–5 in the Calendar window, typed 42 in the Calendar Add draft, cancelled it with Escape, and typed 3 in Tasks quick entry. The Agenda mode returned, the workspace bytes were identical, and saved settings were semantically identical after normalizing the stored Smart List dictionary order.
+
+**Exact run.** Integrated on the isolated, uncommitted mobile branch at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The iPhone source manifest has SHA-256 `2c142e6592f23ac232d9ad2b6bbe0c2de716f08d30792fae0331c0542f7e602f`. The Mac manifest with numeric shortcuts has SHA-256 `a6f989de53d52544a6d92bbca312da9df94517419c60aa80374dc69e34d10e13` and differs only in the Desktop Calendar workspace file.
+
+- Mac: 588 tests passed. The local Mac release built and passed strict signature verification. The exact iPhone candidate compiled in Release.
+- iPhone 13 Pro simulator, iOS 26.3.1: 11 focused tests and 187 full-suite tests passed. The full run recorded 80 baseline file audits with 79 Mac reopens without writes, plus separate audits for the moved occurrence, explicit restoration and Agenda.
+- The first focused file-audit runner exited on a shell array expansion error after the tests passed. The full run reused the same app and test binaries in a fresh simulator with the corrected runner. All full audits passed and the owned simulator was removed.
+- All 98 recorded inputs in the original Desktop tree matched their sealed checksums.
+
+<a id="calendar-folded-hours"></a>
+
+### CAL-FOLD-001 — Local Calendar folded hours
+
+[Change contract](../changes/calendar-folded-hours-2026-11-09.md). The exact isolated source manifest has SHA-256 `de72b70e8e28526440db20eb7bc8aecef91a7e94ccfeb30ecd9028983e4a8867`. The original Desktop tree still matches all 98 sealed inputs.
+
+- Mac native QA opened Day at 07:00–21:00, read one timed item in each folded band, revealed 06:30 and 22:00 independently, and restored both folds. Workspace and settings remained byte-for-byte identical. The Mac suite passed 589 tests, and the local release passed strict signature verification.
+- On iPhone 13 Pro (iOS 26.3.1), five focused tests and a separate dark-appearance check passed. The fold fixture survived relaunch with its task file identical. Selecting Day was the sole settings change. The native early drop saved 02:00, and the timed-resize audit verified the real endpoint. The Mac reopened both changed files without writes. The disposable dark-mode simulator returned to its initial light appearance before removal.
+- The shared geometry check covers clipping at the visible boundaries, suppressing the direct handle while the actual endpoint is folded, and converting the expanded grid's pointer offsets to wall-clock minutes. The full iPhone suite passed 189 tests and 80 baseline file audits, with 79 Mac reopens without writes, plus separate moved occurrence, restoration, Agenda and folded-hours audits. The disposable regression simulator was removed.
+
+<a id="mobile-task-actions"></a>
+
+### TASK-ACTIONS-001 — iPhone Duplicate and Convert
+
+[Change contract](../changes/mobile-task-actions-2026-11-09.md). The exact isolated source manifest has SHA-256 `ca3086f4ca7788f08e456eb88ddd1f8a32875ebc9ab3e2ee98ab045f740ef8aa`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- Mac tests passed 591 cases and the local app passed strict signature verification. The shared transaction tests checked completed-task conversion, archive refusal, unchanged repeat, stale refusal, reopening and original fields. The Mac QA app converted a styled task to a note and back from its More menu. Both saves retained the task, child link, formatted body and checklist. The fixture’s explicit null Inbox ID re-encoded as an absent optional field. Settings stayed byte-for-byte identical and the guarded app was closed.
+- On iPhone 13 Pro (iOS 26.3.1), two focused native tests passed. Duplicate opened the separate copy and Previous task returned to the original. The saved graph added one root and one child with fresh IDs and preserved the original records. Convert to Note remained in effect after relaunch. Convert to Task restored the schedule and checklist controls, retaining all record fields except the updated timestamp. The Mac reopened both workspaces without writes. The focused simulator was removed after the audits.
+- The full iPhone run passed 193 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus separate moved occurrence, restoration, Agenda, folded-hours, duplication and conversion audits. The disposable regression simulator was removed.
+
+<a id="calendar-icon-visibility"></a>
+
+### CAL-ICONS-001 — Calendar task and note icons
+
+[Change contract](../changes/calendar-icon-visibility-2026-11-09.md). The exact isolated source manifest has SHA-256 `aaadb2ff7cd475fbf27a8c0e5c6222afe9dea7149f7088102502357d964c86c5`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- Mac tests passed 593 cases, and the local app passed strict signature verification. The guarded Mac QA app showed a note icon after hiding task icons, then showed a task checkbox after hiding note icons. Both cards remained present. The workspace stayed byte-for-byte identical. The only settings value changed was note icon visibility. Saving also reordered the serialized Smart List dictionary without changing its values.
+- On iPhone 13 Pro (iOS 26.3.1), three focused checks passed. The native test saved a task-only icon change, checked it after relaunch, cancelled a draft master switch change and saved the reverse task/note choices. The two Day captures show each card type separately retaining its icon. The final settings change was Day mode and hidden note icons. Workspace bytes stayed identical and the Mac reader reopened the file without writes. The focused simulator was removed.
+- The full iPhone run passed 196 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus seven individual audits for occurrence move and restoration, Agenda, folded hours, Duplicate, Convert and icon visibility. The disposable regression simulator was removed.
+
+<a id="calendar-adjustable-cutoffs"></a>
+
+### CAL-FOLD-001 follow-up — Adjustable Calendar cutoffs
+
+[Change contract](../changes/calendar-folded-hours-2026-11-09.md#adjustable-cutoffs). The exact isolated source manifest has SHA-256 `4ba6ce3b650936818cce906060ce7286f8d4cbe780a368dd6564771215f1950d`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 595 tests, and the local app passed strict signature verification. The guarded Mac QA app expanded both bands, dragged the early marker from 07:00 to 06:00, and used the late marker’s accessibility Increment action to reach 22:00. Folding both bands kept the 06:30 task visible and counted one hidden late task. The task file remained byte-for-byte identical. The only changed settings value was the saved cutoffs. Saving reordered the serialized Smart List dictionary without changing its values.
+- On iPhone 13 Pro (iOS 26.3.1), three focused checks passed. Direct drag moved the early cutoff to 06:00. The late cutoff was set to 22:00 through View Options, then the native test relaunched and cancelled a staged Reset. The saved cutoffs remained 06:00 and 22:00. Selecting Day and changing the cutoffs were the only settings changes, and the task file stayed byte-for-byte identical. The Mac reader reopened without writes.
+- The full iPhone run passed 199 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus eight individual audits covering recurrence, Agenda, folded hours, task actions, icon visibility and adjustable cutoffs. The disposable regression simulator was removed.
+
+<a id="task-timestamp-sorting"></a>
+
+### TASK-SORT-001 — Created and Modified task sorts
+
+[Change contract](../changes/task-timestamp-sorting-2026-11-09.md). The exact isolated source manifest has SHA-256 `700126848dbb9bc1d723cfdfdbc06357dc0827826c6d6138af26f6c765954d22`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 596 cases and the local release passed strict signature verification. A guarded Work list with tasks on different due dates put the pinned row first and correctly reversed the remaining rows in the two Modified directions. Workspace and settings files stayed byte-for-byte identical. The app closed and the shared QA sort and navigation preferences were restored.
+- On iPhone 13 Pro (iOS 26.3.1), two focused checks passed. The native Work list kept its pinned item first, verified both directions for both timestamps, and kept Oldest Modified after relaunch. The saved key belonged to the disposable QA session. Workspace and settings bytes remained identical and the Mac reader reopened without writes. The first native build exposed a UIKit view-hierarchy warning when presenting the picker. The replacement uses the existing Calendar-style popover and its rerun emitted no runtime warning.
+- The full iPhone run passed 201 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus nine individual audits. The disposable regression simulator was removed.
+
+<a id="rich-description-heading-folds"></a>
+
+### RICH-FOLD-001 — Collapsible description headings
+
+[Change contract](../changes/rich-description-heading-folds-2026-11-09.md). The exact isolated source manifest has SHA-256 `3f8b320ca8c9dfd773a0256daff6304236c7cbe717b5d0b7e5bb726b325c2f0f`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 597 tests, and the signed release passed strict verification. The guarded Mac reader folded a nested heading, collapsed its parent, and retained the nested fold when the parent reopened. Escape returned to the full editable body. The app closed and both fixture files stayed byte-for-byte identical.
+- On iPhone 13 Pro (iOS 26.3.1), two focused tests passed, including exact visible UTF-16 text and the full editor body after folding. A separate dark-appearance native test passed. Both workspace and settings bytes stayed identical and the Mac reader reopened both fixtures without writes. The dark simulator returned to its original appearance before removal.
+- The full iPhone run passed 203 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus ten individual audits. The disposable regression simulator was removed.
+
+<a id="mobile-calendar-month-zoom"></a>
+
+### CAL-MONTH-ZOOM-001 — Flexible iPhone Month grid
+
+[Change contract](../changes/mobile-calendar-month-zoom-2026-11-09.md). The exact isolated source manifest has SHA-256 `3042d61b670e70ae0a5b7adc62057644c242944762031aaf26bc753790487712`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 598 tests, and the local release passed strict signature verification. Shared Calendar checks covered navigating civil weeks across a daylight-saving transition. The zoom controls are on iPhone.
+- On iPhone 13 Pro (iOS 26.3.1), three focused checks passed, including both zoom directions, navigation, mode reset and a Month all-day drag. The initial pinch-out test placed touches outside Calendar because the scroll view extends beneath the floating navigation bar. The verified test pinches inside the visible week. Zoom left workspace bytes intact and the only settings change was Month mode. The Mac reader reopened both focused fixtures without writes.
+- The full iPhone run passed 205 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus eleven individual audits. The disposable regression simulator was removed.
+
+<a id="calendar-all-day-rows"></a>
+
+### CAL-ALLDAY-001 — All-day row count
+
+[Change contract](../changes/calendar-all-day-rows-2026-11-09.md). The exact isolated source manifest has SHA-256 `df478daad30acc1c09d0623d5ca8efabd32fd87133c746ca87aa1cc360a4a0ee`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 599 tests and the local release passed strict signature verification. The guarded app dragged the divider from two to five rows and reached six through the accessibility Increment action. The six all-day cards fit and the 13:00–14:00 card remained aligned. The task file stayed byte-identical. Saving changed the row count and reordered the serialized Smart List dictionary without changing its values. The disposable settings and prior guarded app were restored.
+- On iPhone 13 Pro (iOS 26.3.1), three focused checks passed. The app scrolled to a hidden all-day task in the two-row strip, retained that row count after relaunch, and discarded the staged Automatic reset. The task file stayed byte-identical and the only settings changes were Day mode and the saved row count.
+- The full iPhone run passed 207 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus twelve individual audits. The disposable regression simulator was removed.
+
+<a id="calendar-hourly-zoom"></a>
+
+### CAL-HOUR-ZOOM-001 — Mac hourly timeline zoom
+
+[Change contract](../changes/calendar-hourly-zoom-2026-11-09.md). The isolated source manifest has SHA-256 `3c5d3ae22d005597788960f0d53503d0655d42311ff7eb0463adae658ea42e5b`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 600 tests and the local release passed strict signature verification. In a guarded Week fixture with four additional rulers, the scale went from 100% to 115% and back. The 13:00–14:00 card kept its time and aligned with the ruler. Both fixture files and scoped QA preferences stayed intact.
+- A separate guarded harness at 382 × 580 points changed only the initial window size. The stacked zoom controls accepted coordinate clicks, and vertical and horizontal scrolling worked. Both fixture files stayed byte-identical. The prior guarded bundle and saved window frame were restored. Physical pinch and Control-scroll remain unverified. Computer Use rejected the modifier-only Control press.
+- Three focused iPhone checks passed on the shared scale contract, Month zoom and the two-row all-day strip. Both task files stayed byte-identical. The disposable simulator was removed. The prior all-day rows milestone records the full 207-test iPhone regression.
+
+<a id="task-list-sections"></a>
+
+### TASK-SECTION-001 — Named list sections
+
+[Change contract](../changes/task-list-sections-2026-11-09.md). The exact isolated source manifest has SHA-256 `8dad38c07a70b45e6e6517d191c8b6135ba4e398993dbed84ca520dab7675069`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 606 tests, including a failed-write check that left the published workspace unchanged. A guarded Mac fixture exercised add, rename, reorder through the menu, scoped quick entry, the Board move menu and removal. Its task moved from Planning to Review and then to No Section. The Mac organizer drag attempt left the order unchanged. A second guarded run on the final signed build saved a new section and task together. The original tasks and settings remained intact. Both disposable fixtures, scoped preferences and the prior guarded bundle were restored.
+- Three focused iPhone checks passed. The native workflow created and reordered sections, renamed one, captured a task, dragged it to another Board section and removed the destination. The task reappeared in No Section after relaunch. The audit preserved the eight original tasks and settings bytes. The pre-sections Mac store refused the saved protected fixture and left both files intact, while the current store opened it.
+- The full iPhone run passed 214 tests and 80 baseline file audits, with 79 baseline Mac reopens without writes, plus thirteen individual audits. The simulator reported a missing transfer-type declaration and a UIKit reparenting warning in the original section drag path. The subsequent shared grip candidate replaced that path and its focused organizer and Board checks ran without runtime warnings. The disposable regression simulator was removed.
+
+<a id="calendar-all-day-spans"></a>
+
+### CAL-ALL-DAY-SPANS-001 — Continuous all-day bars and section grip follow-up
+
+[All-day range contract](../changes/calendar-all-day-spans-2026-11-09.md) and [named sections](../changes/task-list-sections-2026-11-09.md). The combined source manifest has SHA-256 `bc4b083a05749c57659407eea83e329fcbaf2970e5b6b934c8b467ab8f5fe27a`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The combined Mac suite passed 607 tests and the signed release passed strict verification. Separate guarded Mac trials exercised Week and Multi-Day overlapping ranges, Day continuation labels, movement from November 9–11 to November 12–14 and Undo. The dedicated grip moved the range. Undo restored the schedule and changed only the task’s modification timestamp. The fixtures, scoped preferences and prior signed QA bundle were restored.
+- The Mac organizer grip moved Review above Planning. A release outside the rows retained that order, and the file audit recorded only the section reorder. A separate iPhone gesture check reordered the sections through the same organizer.
+- The combined iPhone run passed eight focused tests. The Calendar file audit kept the moved span at three dates and preserved the overlapping review. The section and all-day rows file audits preserved the expected settings and task data. The disposable simulator was removed. The base sections checkpoint records the full 214-test regression.
+
+<a id="calendar-month-spans"></a>
+
+### CAL-MONTH-SPANS-001 — Week-row segments in Month and Multi-Week
+
+[All-day range contract](../changes/calendar-all-day-spans-2026-11-09.md). The isolated source manifest has SHA-256 `ea6a540d4bedd407bd0d31d3e8809fcd7ce8c72e7e8712713c09aa1a49be5c88`. The original Desktop worktree matched all 98 sealed inputs at integration.
+
+- The Mac suite passed 608 tests and the signed release passed strict verification. In native Month, a five-day range covered November 13–15 on one row and November 16–17 on the next. Saturday showed +1 more, and the overflow sheet contained the hidden point task. Multi-Week showed the same two segments. Moving the continuation grip kept five all-day dates, and Undo restored the schedule. The overlapping range, point task, QA preferences and prior signed bundle were preserved. The restored disposable fixture matched its initial bytes.
+- Four focused iPhone checks passed without runtime warnings. The native checks exercised two-row continuation in Month and Multi-Week, the hidden Saturday count, the existing point-task drop, and Month zoom. The Mac reopened the zoom fixture without writes. The disposable focused simulator was removed.
+- The full regression on the sealed Month source passed 220 iPhone tests without runtime warnings. It passed 80 baseline file audits and 79 Mac reopens without writes. The feature audits confirmed the two range layouts, a three-day range move, the saved section reorder, and preservation of the other tasks. The disposable simulator was removed. The 214-test section and eight-test combined runs are recorded above.
+- A separate native iPhone check extended only the span UI test. The app source matches the full regression. The added check moved the three-day range, undid it, and confirmed the original dates after relaunch. The saved workspace differed only in the moved task’s modification timestamp. The overlapping task and settings matched, and the disposable simulator was removed.
+
+<a id="calendar-date-range-creation"></a>
+
+### CAL-RANGE-CREATE-001 — Staged Mac date-range creation
+
+[All-day range contract](../changes/calendar-all-day-spans-2026-11-09.md). The isolated integrated manifest has SHA-256 `d649147d4bbb18891e41f3607fc438772d10d89fac45fa7d7591901149c1c65e`. The original Desktop worktree matched all 98 sealed inputs.
+
+- The Mac suite passed 608 tests and the release passed strict signature verification. Native Month staged November 9–12 and Cancel preserved both files byte-for-byte. A backward drag across week rows saved exactly one all-day task for November 6–11. Multi-Week staged November 14–17 and the single-date double-click still staged November 12. The existing spanning-bar drop and Undo worked in the same build. The prior QA bundle, fixture bytes and scoped window settings were restored.
+- The isolated iPhone UI suite includes the focused range Undo and relaunch check documented above. The completed full Month regression used its sealed source and original test implementation. The two new Calendar view files compile on Mac, and the iPhone app source is identical to the full run’s app source.
+
+<a id="mobile-calendar-range-capture"></a>
+
+### CAL-RANGE-CREATE-002 — Staged iPhone Calendar range capture
+
+[Change contract](../changes/mobile-calendar-range-capture-2026-11-09.md). The isolated source manifest has SHA-256 `2bce2fc8393d46109a613fbd3178d8204e6c225bbba628538ed5335e17e88e07`. The original Desktop worktree matched all 98 sealed inputs.
+
+- The Mac suite passed 609 tests and the signed local release passed strict verification. The final manifest adds only iPhone view and UI test differences to the Mac-tested source. The range capture repository test also passed on iPhone. It reopened the staged range, preserved its title and end date, created one task, and returned the same result on retry. It covered template precedence, conversion to a point, and rejection of a mismatched due date.
+- Six focused iPhone checks passed without runtime warnings. In Month, a backward drag selected November 6–11. Cancel closed the initial draft. After relaunch, the retained draft required Add, then saved exactly one all-day task with its original date words and both endpoints intact. Both week-row segments appeared. The run also verified ordinary scrolling, pinch zoom, existing point-task drag, and overflow navigation to Day. Multi-Week Cancel preserved the original workspace bytes. The file audits confirmed the earlier tasks and cleared recovery files. The disposable simulator was removed.
+- The preceding sealed Month candidate passed its 220-test regression. That run covered sections, Board movement and Calendar span movement. This range capture change was tested separately as described above. The separate span Undo and relaunch check is recorded above.
+
+<a id="calendar-all-day-resize"></a>
+
+### CAL-ALL-DAY-RESIZE-001 — All-day end resizing
+
+[Change contract](../changes/calendar-all-day-resize-2026-11-09.md). The isolated source manifest has SHA-256 `b53888c1d3e9eb584fb6d488c647868a0d68f856ad2989f3c22c72e3e9bd054a`. The original Desktop worktree matched all 98 sealed inputs.
+
+- The Mac suite passed 610 tests and the signed local release passed strict verification. The shared test covered inclusive dates across the New York daylight-saving transition in a Tokyo Calendar, the one-day minimum, no-op releases, and projected occurrences.
+- In the guarded Mac app, Week extended November 9–11 to November 9–12 and shortened it to November 9. The one-day range kept its end handle. In Month, the final segment moved from November 17 to November 15. The continuing segment had no resize handle, and clicking the final handle opened the precise editor. Undo restored both schedules. The fixture bytes and prior guarded bundle were restored after exit.
+- Seven focused iPhone tests passed without runtime warnings. Week resize, Undo and reload preserved the one-day range and its handle. Month resized across week rows. The saved starts and unrelated tasks were preserved, and the expected settings matched. The run also checked all-day scrolling, range drag and Undo, Month continuation and capture recovery. The disposable simulator was removed.
+- The preceding sealed Month source passed the full 220-test regression. A 226-test regression is running on the integrated source with range capture, all-day resize, and span Undo and relaunch.
+
+<a id="calendar-week-edge-paging"></a>
+
+### CAL-WEEK-EDGE-001 — iPhone Week edge paging
+
+[Change contract](../changes/calendar-week-edge-paging-2026-11-09.md). The isolated source manifest has SHA-256 `11df16e04464e5fb1c409131460fbbf6332240ce7cab74fd29735461a2da78c4`. Only the iPhone Calendar view and its UI test changed from the all-day resize checkpoint. The original Desktop worktree matched all 98 sealed inputs.
+
+- Four focused iPhone tests passed without runtime warnings. A quick edge release kept the same week. A dwell on the right advanced one week, a dwell on the left retreated one week, and ordinary horizontal scrolling still reached the last visible day. Paging preserved workspace and settings bytes. The disposable simulator was removed.
+- The same build passed range drop, Undo and relaunch, the recurring drop scope and persisted exception, and all-day end resize and Undo. XCTest used separate touch sequences for edge paging and scheduling drops. A single continuous edge hover followed by a drop on the newly visible week remains unverified.
+- The prior 610-test Mac result covers the unchanged Mac source. The separate 226-test regression uses the all-day resize source sealed before this change.
