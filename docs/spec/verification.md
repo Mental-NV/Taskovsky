@@ -1485,3 +1485,18 @@ The first test pass exposed an end-of-document boundary guard that rejected Retu
 | Saved fixture audit | Both platforms stored exactly one new list with the expected name and exact UTF-16 icon. Other workspace records were semantically identical after known default-field normalization. Both settings files were byte-identical. |
 
 On the iOS 26.3.1 simulator, persistence checks passed while the first screenshots showed placeholders. An independent Core Text probe returned only glyph 4 even when Apple Color Emoji was explicitly selected. The same probe on iOS 26.5 produced a single glyph for the joined emoji, and the final app screenshot confirmed it. The renderer reserves a bounded icon slot. No physical iPhone was available for this pass.
+
+<a id="calendar-year-day-preview"></a>
+
+## Calendar Year day preview — November 10, 2026
+
+[Change contract](../changes/calendar-year-day-preview-2026-11-10.md). The feature branch starts from merged `main` at `36a9e17ad1fac20e7d0c32eb5507f7d22b69b4b8`. The 167-file source manifest SHA-256 is `fbd647b0742d472e2d77a0d10a24f8cc7601be527f23666b13d6cd6c381b9363`.
+
+| Evidence | Result |
+| --- | --- |
+| macOS 27.0.1, Xcode 27.0 | **672 passed.** The shared case covers the final hour of a 25-hour day, the next-day boundary, saved list scope, completed items, forecasts and checklist visibility. Release build and strict signature verification passed. |
+| Guarded native Mac | **Passed.** The Year context menu opened an empty date. Escape returned to Year. The date accessibility action opened a populated date under the Work-only filter and excluded Personal. Done returned to Year. A later date displayed its repeat as a Forecast. Open Week navigated to it, and ordinary date clicks still opened Week. |
+| iPhone 13 Pro simulator, iOS 26.5 | **3 passed.** Verified empty and populated previews, dismissal without losing the Year position, explicit Week navigation and existing View Options persistence. `iphone-year-day-preview.png` records the populated preview. |
+| Saved fixture audit | Mac task and settings files were byte-identical before and after the previews. Explicit Week navigation changed only the Calendar mode value. The iPhone workspace stayed byte-identical, and the final settings matched the original values after navigating Year → Week. The previous Mac QA app and preferences were restored, and the disposable simulator was removed. |
+
+The native checks cover the default Year layout and the recorded fixtures. Compact split panes, large iPhone text sizes and physical iPhone gestures were outside this pass.

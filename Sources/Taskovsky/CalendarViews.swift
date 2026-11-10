@@ -819,6 +819,7 @@ struct CalendarYearView: View {
     var calendar: Calendar
     var style: CalendarYearStyle
     var selectMonth: (Date) -> Void
+    var preview: (Date) -> Void
     var select: (Date) -> Void
     var body: some View {
         GeometryReader { geometry in
@@ -836,7 +837,7 @@ struct CalendarYearView: View {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: columns), spacing: 0) {
                     ForEach(months, id: \.self) { month in
                         CalendarYearMonth(month: month, counts: counts, calendar: calendar, style: style,
-                            width: width, height: rowHeight, selectMonth: selectMonth, select: select)
+                            width: width, height: rowHeight, selectMonth: selectMonth, preview: preview, select: select)
                     }
                 }.padding(.horizontal, outerPadding)
             }.accessibilityLabel(style == .heatmap ? "Year heatmap. Darker dates contain more visible items." : "Year calendar. Dots mark dates with visible items.")
@@ -852,6 +853,7 @@ private struct CalendarYearMonth: View {
     var width: CGFloat
     var height: CGFloat
     var selectMonth: (Date) -> Void
+    var preview: (Date) -> Void
     var select: (Date) -> Void
     private var days: [Date] {
         CalendarDates.days(from: CalendarDates.weekStart(month, calendar: calendar), count: 42, calendar: calendar)
@@ -890,10 +892,54 @@ private struct CalendarYearMonth: View {
                             }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
                         .accessibilityLabel(CalendarText.date(day, "EEEE d MMMM y", calendar: calendar) + ", \(count) items")
+                        .accessibilityAction(named: Text("Preview Scheduled Items")) { preview(day) }
+                        .contextMenu { Button("Preview Scheduled Items") { preview(day) } }
                 }
             }.padding(.horizontal, width * 0.063).padding(.top, height * 0.025)
             Spacer(minLength: 0)
         }.frame(height: height)
+    }
+}
+
+struct CalendarYearDayPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let day: Date
+    let projection: CalendarProjectionResult
+    let listNames: [UUID: String]
+    let calendar: Calendar
+    let openWeek: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(CalendarText.date(day, "EEEE MMMM d y", calendar: calendar)).font(.headline)
+            if projection.entries.isEmpty {
+                Text("No scheduled items for this date").foregroundStyle(.secondary)
+            } else {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(projection.entries) { entry in
+                            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                                Circle().fill(Color(hex: entry.color)).frame(width: 7, height: 7).accessibilityHidden(true)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(entry.title).strikethrough(entry.isCompleted)
+                                    let details = CalendarEntryDetails(entry: entry, listNames: listNames, calendar: calendar)
+                                    Text(details.text + (entry.isProjected ? " · Forecast" : ""))
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                            }.accessibilityElement(children: .combine)
+                        }
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                }.frame(height: min(310, max(52, CGFloat(projection.entries.count) * 48)))
+            }
+            if !projection.truncatedTaskIDs.isEmpty {
+                Text("Some repeat previews reach the preview limit.").font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Spacer()
+                Button("Open Week") { dismiss(); openWeek() }
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+        }.padding(18).frame(width: 365)
     }
 }
 

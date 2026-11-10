@@ -51,6 +51,7 @@ struct TaskCalendarWorkspace: View {
     @State private var viewOptions = false
     @State private var jumpDate = false
     @State private var editor: CalendarEditorDraft?
+    @State private var yearDayPreview: CalendarDayPreview?
     @State private var postponeRequest: PostponeRequest?
     @State private var occurrenceChange: CalendarOccurrenceChange?
     @State private var undo: CalendarScheduleUndo?
@@ -64,7 +65,7 @@ struct TaskCalendarWorkspace: View {
     }
     private var mode: TaskCalendarMode { store.settings.calendarOptions.mode }
     private var dateJumpAction: (() -> Void)? {
-        guard editor == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions else { return nil }
+        guard editor == nil, yearDayPreview == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions else { return nil }
         return { jumpDate = true }
     }
 
@@ -127,7 +128,7 @@ struct TaskCalendarWorkspace: View {
         .focusedSceneValue(\.calendarDateJump, dateJumpAction)
         .background {
             WindowKeyboardInput(optionChanged: { optionHeld = $0 }, handleKeyDown: { event in
-                guard !embeddedInTasks, editor == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions,
+                guard !embeddedInTasks, editor == nil, yearDayPreview == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions,
                       event.modifierFlags.intersection([.command, .control, .option, .shift, .function]).isEmpty,
                       let characters = event.characters, let digit = Int(characters),
                       (1...Self.shortcutModes.count).contains(digit) else { return false }
@@ -140,6 +141,15 @@ struct TaskCalendarWorkspace: View {
         .tint(CalendarAppearance.accent)
         .onChange(of: focus) { _, _ in agendaWindow = CalendarAgendaWindow() }
         .onChange(of: mode) { _, _ in agendaWindow = CalendarAgendaWindow() }
+        .sheet(item: $yearDayPreview) { preview in
+            let listNames = Dictionary(store.data.lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            CalendarYearDayPreviewSheet(day: preview.day,
+                projection: preview.project(data: store.data, options: options.wrappedValue, calendar: calendar),
+                listNames: listNames, calendar: calendar) {
+                focus = preview.day
+                options.wrappedValue.mode = .week
+            }
+        }
         .sheet(item: $postponeRequest) { request in
             TaskBatchSheet(scope: "Calendar sources", tasks: request.tasks, data: request.data,
                            calendar: request.settings.calendar, today: focus, onlyAction: .postpone) { edit in
@@ -285,7 +295,8 @@ struct TaskCalendarWorkspace: View {
                 })
         } else if mode == .year {
             CalendarYearView(focus: focus, entries: entries, calendar: calendar, style: options.wrappedValue.yearStyle,
-                selectMonth: { month in focus = month; options.wrappedValue.mode = .month }) { day in
+                selectMonth: { month in focus = month; options.wrappedValue.mode = .month },
+                preview: { yearDayPreview = CalendarDayPreview($0, calendar: calendar) }) { day in
                 focus = day; options.wrappedValue.mode = .week
             }
         } else if mode == .agenda {

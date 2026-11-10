@@ -90,6 +90,32 @@ final class MobileContractTests: XCTestCase {
         XCTAssertNil(TaskDueCountdown.label(for: TaskItem(title: "Undated"), now: now, calendar: calendar))
     }
 
+    func testYearDayPreviewUsesFullCivilDayAndCalendarSourceRules() {
+        var zone = calendar
+        zone.timeZone = TimeZone(identifier: "America/New_York")!
+        let selection = CalendarDayPreview(date("2026-11-01T17:00:00Z"), calendar: zone)
+        XCTAssertEqual(selection.day, date("2026-11-01T04:00:00Z"))
+        let work = TaskList(name: "Work", color: "#526BF5")
+        let personal = TaskList(name: "Personal", color: "#58A58B")
+        let end = date("2026-11-02T05:00:00Z")
+        let late = TaskItem(title: "Late", listID: work.id, dueDate: end.addingTimeInterval(-300), hasDueTime: true,
+                            checklist: [ChecklistItem(title: "Checklist")])
+        let repeating = TaskItem(title: "Repeat", listID: work.id, dueDate: date("2026-10-31T16:00:00Z"), hasDueTime: true, recurrence: .daily)
+        let data = WorkspaceData(tasks: [late, repeating,
+            TaskItem(title: "Next day", listID: work.id, dueDate: end, hasDueTime: true),
+            TaskItem(title: "Outside source", listID: personal.id, dueDate: late.dueDate, hasDueTime: true),
+            TaskItem(title: "Completed", listID: work.id, dueDate: late.dueDate, hasDueTime: true, completedAt: selection.day)
+        ], lists: [work, personal])
+        var options = TaskCalendarOptions()
+        options.listIDs = [work.id]; options.includeInbox = false
+        options.showChecklistItems = true; options.showCompleted = false
+        let result = selection.project(data: data, options: options, calendar: zone)
+        XCTAssertEqual(Set(result.entries.map(\.title)), ["Late", "Checklist", "Repeat"])
+        XCTAssertEqual(result.entries.first(where: { $0.taskID == repeating.id })?.isProjected, true)
+        options.showRepeatCycles = false; options.showChecklistItems = false
+        XCTAssertEqual(selection.project(data: data, options: options, calendar: zone).entries.map(\.title), ["Late"])
+    }
+
     func testScopedBoardWeekDateMovePreservesInclusiveSpanAndTimedDueClock() throws {
         let days = CalendarDates.days(from: now, count: 7, calendar: calendar)
         let range = TaskItem(title: "Workshop", dueDate: days[2],

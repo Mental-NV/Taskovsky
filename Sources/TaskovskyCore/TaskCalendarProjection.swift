@@ -164,6 +164,22 @@ public enum TaskCalendarProjection {
 
 }
 
+public struct CalendarDayPreview: Identifiable, Sendable {
+    public let day: Date
+    public var id: Date { day }
+
+    public init(_ date: Date, calendar: Calendar) {
+        day = calendar.startOfDay(for: date)
+    }
+
+    public func project(data: WorkspaceData, options: TaskCalendarOptions, calendar: Calendar) -> CalendarProjectionResult {
+        guard let range = calendar.dateInterval(of: .day, for: day) else {
+            return CalendarProjectionResult(entries: [], truncatedTaskIDs: [])
+        }
+        return TaskCalendarProjection.project(data: data, range: range, options: options, calendar: calendar)
+    }
+}
+
 public struct CalendarAllDayPlacement: Identifiable, Equatable, Sendable {
     public let entry: CalendarEntry
     public let firstDay: Int
