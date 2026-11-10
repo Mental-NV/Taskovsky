@@ -746,7 +746,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         input.typeText(" ")
         input.typeText("Check")
         XCTAssertEqual(input.value as? String, original + "\nPlan bold \nCheck")
-        input.typeText("\n--")
+        input.typeText("\n\n--")
         XCTAssertEqual(input.value as? String, original + "\nPlan bold \nCheck\n--")
         input.typeText("-")
         let expected = original + "\nPlan bold \nCheck\n\n"
@@ -757,6 +757,47 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(description.waitForExistence(timeout: 5))
         XCTAssertEqual(description.value as? String, expected)
         attach(app, "Saved typed Markdown heading and checklist")
+    }
+
+    @MainActor func testSavedRichChecklistContinuesAfterRelaunchAndExits() {
+        let app = launch(), title = "Prepare the weekly plan"
+        let input = app.textViews["richFieldEditor"]
+        let description = app.textViews["richTaskDescription"]
+        func openEditor() {
+            app.buttons[title].tap()
+            let format = app.buttons["editRichDescription"]
+            reveal(format, in: app)
+            format.tap()
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+        }
+        openEditor()
+        input.typeText("\n- ")
+        input.typeText("[x] ")
+        input.typeText("First")
+        let saved = "A neutral sample description.\nFirst"
+        XCTAssertEqual(input.value as? String, saved)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openEditor()
+        input.typeText("\n")
+        XCTAssertEqual(input.value as? String, saved + "\n\n")
+        input.typeText("Second")
+        XCTAssertEqual(input.value as? String, saved + "\nSecond")
+        input.typeText("\n\nAfter")
+        let final = saved + "\nSecond\nAfter"
+        XCTAssertEqual(input.value as? String, final)
+        app.buttons["richUndo"].tap()
+        XCTAssertEqual(input.value as? String, saved + "\nSecond\nAfte")
+        app.buttons["richRedo"].tap()
+        XCTAssertEqual(input.value as? String, final)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        XCTAssertEqual(description.value as? String, final)
+        attach(app, "Saved list continued and exited")
     }
 
     @MainActor func testRichDescriptionTypesCodeFenceAndResumesProse() {

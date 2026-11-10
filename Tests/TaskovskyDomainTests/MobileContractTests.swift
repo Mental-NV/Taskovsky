@@ -1152,6 +1152,46 @@ final class MobileContractTests: XCTestCase {
         XCTAssertNil(RichBodyClipboard.fragment(from: body, selection: NSRange(location: emoji.location + 1, length: 1)))
     }
 
+    func testSavedRichListContinuesAndExitsWithoutChangingNeighboringContent() throws {
+        let first = "First 🧩\r\n"
+        let second = "Second\r\n"
+        let text = first + second + "After"
+        let start = first.utf16.count
+        let body = RichBody(text: text, runs: [.init(location: 6, length: 2, bold: true)], blocks: [
+            .init(location: 0, length: start, list: .numbered),
+            .init(location: start, length: second.utf16.count, list: .numbered)
+        ])
+        let split = try XCTUnwrap(RichMarkdownTyping.listContinuation(for: "\n", at: NSRange(location: 8, length: 0), in: body))
+        let splitBody = try RichBodyEdit.applying([split.edit], to: text, rich: body)
+        XCTAssertEqual(splitBody.text, first + "\r\n" + second + "After")
+        XCTAssertEqual(splitBody.runs, body.runs)
+        XCTAssertEqual(RichDescriptionPreview(body: splitBody.text, rich: splitBody)?.paragraphs.map(\.marker),
+                       [.number(1), .number(2), .number(3), nil])
+        let exit = try XCTUnwrap(RichMarkdownTyping.listContinuation(for: "\n", at: split.caret, in: splitBody))
+        let exited = try RichBodyEdit.applying([exit.edit], to: splitBody.text, rich: splitBody)
+        XCTAssertEqual(exited.text, splitBody.text)
+        XCTAssertEqual(RichDescriptionPreview(body: exited.text, rich: exited)?.paragraphs.map(\.marker),
+                       [.number(1), nil, .number(1), nil])
+
+        for style: RichListStyle in [.bullet, .numbered, .checklist] {
+            let list = RichBody(text: "Finish", blocks: [.init(location: 0, length: 6, list: style, checked: style == .checklist ? true : nil)])
+            let append = try XCTUnwrap(RichMarkdownTyping.listContinuation(for: "\n", at: NSRange(location: 6, length: 0), in: list))
+            let opened = try RichBodyEdit.applying([append.edit], to: list.text, rich: list)
+            XCTAssertEqual(opened.text, "Finish\n\n")
+            XCTAssertEqual(opened.blocks.map(\.list), [style, style])
+            XCTAssertEqual(opened.blocks.map(\.checked), [list.blocks[0].checked, nil])
+            let fill = try XCTUnwrap(RichMarkdownTyping.listContinuation(for: "Next", at: append.caret, in: opened))
+            let filled = try RichBodyEdit.applying([fill.edit], to: opened.text, rich: opened)
+            XCTAssertEqual(filled.text, "Finish\nNext")
+            XCTAssertEqual(filled.blocks.map(\.list), [style, style])
+            let exitBlank = try XCTUnwrap(RichMarkdownTyping.listContinuation(for: "\n", at: append.caret, in: opened))
+            let plainTail = try RichBodyEdit.applying([exitBlank.edit], to: opened.text, rich: opened)
+            XCTAssertEqual(plainTail.text, "Finish\n")
+            XCTAssertEqual(plainTail.blocks.count, 1)
+            XCTAssertNil(RichMarkdownTyping.listContinuation(for: "P", at: exitBlank.caret, in: plainTail))
+        }
+    }
+
     func testTypedMarkdownInlineKeepsUnicodeAndExistingStyles() throws {
         let text = "**e\u{301} 🧩**"
         let interior = "e\u{301} 🧩"

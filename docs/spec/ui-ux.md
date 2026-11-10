@@ -278,6 +278,8 @@ Space after a supported Markdown prefix or a completed inline span applies the m
 
 Type `/` at the start of an editable description or after whitespace to open the native formatting menu. Choose a style to apply it through the toolbar’s edit path. Dismissing the menu in the same editor inserts a literal slash. [Slash menu verification](verification.md#mac-rich-slash).
 
+Return in a saved list item continues the list with the caret in the new item. Return on a blank item exits the list. The editor uses the stored list style and includes these edits in its document history. [List continuation](../changes/rich-list-continuation-2026-11-10.md).
+
 The editor owns document-scoped undo. Switching task IDs, even with identical text, resets that editor's history and pending state; it does not clear title-field/window history. External body replacement rebuilds text storage and invalidates stale undo. Normal keystrokes avoid rebuilding storage and disturbing the caret. These mechanisms are code-derived, not evidence of all native text-input paths having been exercised.
 
 **Corrected behavior:** block formatting expands the actual UTF-16 selection, excluding a following unselected paragraph; empty-editor Quote toggles off to plain typing state. PR #2 retains `BlockRangeTests` and `QuoteToggleTests`. Native app Undo/Redo and the live paragraph-selection scenario remain unverified in the retained report, so these corrections are not a blanket native-editor certification.
