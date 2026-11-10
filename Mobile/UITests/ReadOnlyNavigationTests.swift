@@ -2786,6 +2786,72 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["calendarPreferencesDone"].waitForExistence(timeout: 5))
     }
 
+    @MainActor func testCalendarSourceColorSavesAndResetCanBeCancelled() {
+        let app = launch(qaCase: "calendar-options")
+        app.buttons["Calendar"].tap()
+        let openColors = app.buttons["calendarSourceColors"]
+        let nav = app.navigationBars["Calendar List Colors"]
+        let reset = app.buttons["Use default color for Inbox"]
+        let inboxColor = app.buttons["Inbox"]
+        func listColors() {
+            openCalendarViewOptions(app)
+            XCTAssertTrue(openColors.waitForExistence(timeout: 5))
+            openColors.tap()
+            XCTAssertTrue(nav.waitForExistence(timeout: 5))
+        }
+        func back(_ bar: XCUIElement) { bar.buttons.firstMatch.tap(); waitGone(bar) }
+        func pick(_ button: XCUIElement, from original: String, to color: String) {
+            button.tap()
+            let sliders = app.buttons["Sliders"]
+            XCTAssertTrue(sliders.waitForExistence(timeout: 5))
+            sliders.tap()
+            let hex = app.textFields.matching(NSPredicate(format: "value == %@", original)).firstMatch
+            XCTAssertTrue(hex.waitForExistence(timeout: 5))
+            hex.tap()
+            hex.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + color + "\n")
+            app.buttons["close"].tap()
+            XCTAssertEqual(button.value as? String, "#" + color)
+        }
+        listColors()
+        XCTAssertFalse(reset.isEnabled)
+        pick(inboxColor, from: "7C6CF2", to: "1C62AE")
+        XCTAssertTrue(reset.isEnabled)
+        XCTAssertEqual(inboxColor.value as? String, "#1C62AE")
+        back(nav)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        app.terminate(); app.launch()
+        app.buttons["Calendar"].tap()
+        listColors()
+        XCTAssertEqual(inboxColor.value as? String, "#1C62AE")
+        XCTAssertTrue(reset.isEnabled)
+        reset.tap()
+        XCTAssertFalse(reset.isEnabled)
+        back(nav)
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        listColors()
+        XCTAssertTrue(reset.isEnabled)
+        attach(app, "Saved Inbox Calendar color")
+        reset.tap()
+        back(nav)
+        app.buttons["calendarColor"].tap()
+        app.buttons["Priority"].tap()
+        XCTAssertFalse(openColors.exists)
+        app.buttons["calendarColor"].tap()
+        app.buttons["Tag"].tap()
+        openColors.tap()
+        let tags = app.navigationBars["Calendar Tag Colors"]
+        XCTAssertTrue(tags.waitForExistence(timeout: 5))
+        let planning = app.buttons["Planning"]
+        pick(planning, from: "E6A53A", to: "008122")
+        XCTAssertTrue(app.buttons["Use default color for Planning"].isEnabled)
+        attach(app, "Custom Calendar tag color")
+        back(tags)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+    }
+
     @MainActor private func setSwitch(_ id: String, to state: Bool, app: XCUIApplication) {
         let toggle = app.switches[id]
         reveal(toggle, in: app)

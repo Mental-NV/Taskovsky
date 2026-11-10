@@ -1565,3 +1565,19 @@ Final source-manifest SHA-256 `b1e0cc1f1133e75a96df5965e0cec6a0c031878fe68b199f4
 ### Mac pointer follow-up on merged main
 
 The signed Mac app from [PR #24 CI](https://github.com/Mental-NV/Taskovsky/actions/runs/42810287633) matches the source tree merged at `aba0b9b78a2b6af3dede10542234ba3eed0bc805`. In the guarded app, dragging Travel bag by its grip onto the open lower portion of the Weekly setup card moved Travel bag to the middle. Releasing outside the card grid preserved the new order. The saved workspace changed only in template order. Template IDs and values, unrelated workspace records and settings matched the fixture. The previous guarded app, preferences and disposable fixture were restored. Source-manifest SHA-256 `739579adb07c281ce836c591607bf4eca92d9f8f137504ab402ad48852419aa0`.
+
+<a id="calendar-source-colors"></a>
+
+## Local Calendar source colors — November 10, 2026
+
+[Change contract](../changes/calendar-source-colors-2026-11-10.md). The isolated `codex/calendar-source-colors` branch starts from `main` at `aba0b9b78a2b6af3dede10542234ba3eed0bc805`. The source manifest has SHA-256 `bccb1b7d4314812aba0e2d7d0e1335c329408f6d1365402274be0ad5ae4ee57e`. The guarded Mac manifest has SHA-256 `6d68d498e236d223b55c8051da089fe79697cd9f505ff6584e1b40db1a6dc714`.
+
+| Evidence | Result |
+| --- | --- |
+| TickTick 8.2.20 build 922 on Mac | View Options → Color showed List mode with swatches for Inbox and named lists. The prior list view was restored. No reference color was edited. The official guide documents editing both list and tag swatches. The effect on list and tag colors outside Calendar remains unverified. |
+| macOS 27.0.1, Xcode 27.0 | **683 tests passed.** New cases cover round trips, Inbox/list/tag resolution, priority colors, invalid input and stale or failed Mac writes. The workspace preference test exercises the existing settings patch with a color override and preserves adjacent fields. The release build and strict signature verification passed. |
+| Guarded native Mac | The editor aligned the Inbox and active-list swatches. Invalid hex disabled Apply. A valid hex color staged successfully and Cancel discarded it. Saving a preset recolored timed and all-day Calendar Work cards. Default restored the draft color, and cancelling that reset kept the saved preset. |
+| iPhone 13 Pro simulator, iOS 26.5, Xcode 27.0 | **Three workflows passed on the final build.** The system picker saved an Inbox color, relaunch showed it, a cancelled reset kept it and a confirmed reset removed it. Priority hid the customization link, and Tag accepted a custom Planning color. The existing View Options persistence and failed-save retry workflows also passed. |
+| Saved files and restoration | Mac and iPhone workspace files were byte-identical to their controls. The Mac save retained the seed's existing settings values and encoded defaults omitted by the seed. The iPhone comparison found only color preference changes after treating Smart List visibility pairs as an unordered dictionary. The original guarded Mac app and preferences were restored and the disposable iPhone simulator was removed. |
+
+Physical iPhone, dark appearance, VoiceOver and other Calendar modes were outside the new native color checks.

@@ -66,6 +66,11 @@ struct PhoneCalendarPreferences: View {
             Picker("Color by", selection: $draft.colorBy) {
                 ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }.accessibilityIdentifier("calendarColor")
+            if draft.colorBy != .priority, let data = model.document?.snapshot.workspace {
+                NavigationLink(draft.colorBy == .list ? "Customize List Colors" : "Customize Tag Colors") {
+                    PhoneCalendarSourceColors(mode: draft.colorBy, data: data, colors: $draft.sourceColors)
+                }.accessibilityIdentifier("calendarSourceColors")
+            }
             Picker("Style", selection: $draft.itemStyle) {
                 ForEach(CalendarItemStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }.accessibilityIdentifier("calendarStyle")
@@ -186,6 +191,37 @@ struct PhoneCalendarPreferences: View {
             error = await model.saveCalendarOptions(draft, expected: route.expected)
             if error == nil { dismiss() }
         }
+    }
+}
+
+private struct PhoneCalendarSourceColors: View {
+    let mode: CalendarColorMode
+    let data: WorkspaceData
+    @Binding var colors: CalendarColorSource.Overrides
+
+    var body: some View {
+        let rows = CalendarColorSource.swatches(in: data, by: mode)
+        Form {
+            Section {
+                if rows.isEmpty { Text("No tags to customize.").foregroundStyle(.secondary) }
+                ForEach(rows) { row in
+                    HStack {
+                        ColorPicker(row.name, selection: selection(for: row), supportsOpacity: false)
+                            .accessibilityValue(colors[row.id] ?? "Default")
+                        Button("Default") { colors[row.id] = nil }
+                            .buttonStyle(.borderless).disabled(colors[row.id] == nil)
+                            .accessibilityLabel("Use default color for " + row.name)
+                    }
+                }
+            } footer: { Text("These colors apply only in Calendar. Changes save when you tap Done in View Options.") }
+        }.navigationTitle(mode == .list ? "Calendar List Colors" : "Calendar Tag Colors")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func selection(for row: CalendarColorSource.Swatch) -> Binding<Color> {
+        Binding(get: { PhoneEntityColor.read(colors[row.id] ?? row.defaultColor) }, set: { color in
+            if let hex = PhoneEntityColor.encode(color) { colors[row.id] = hex }
+        })
     }
 }
 

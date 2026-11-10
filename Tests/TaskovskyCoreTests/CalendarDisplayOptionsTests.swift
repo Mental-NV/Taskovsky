@@ -99,4 +99,61 @@ final class CalendarDisplayOptionsTests: XCTestCase {
         XCTAssertEqual(changed.entries, original.entries)
         XCTAssertEqual(changed.entries.first?.due, instant)
     }
+
+    func testCalendarSourceColorsRoundTripAndKeepProjectionRules() throws {
+        let list = TaskList(name: "Work", color: "#123456")
+        let archive = TaskList(name: "Archive", color: "#987654", isArchived: true)
+        let tag = TaskTag(name: "Planning", color: "#234567")
+        let day = Date(timeIntervalSince1970: 1_700_000_000)
+        let task = TaskItem(title: "Task", listID: list.id, tagIDs: [UUID(), tag.id], dueDate: day, priority: .high)
+        let inbox = TaskItem(title: "Inbox task", dueDate: day)
+        let data = WorkspaceData(tasks: [task, inbox], lists: [list, archive], tags: [tag])
+        var options = try decode("{}")
+        XCTAssertEqual(CalendarColorSource.swatches(in: data, by: .list).map(\.id), [.inbox, .list(list.id)])
+        XCTAssertEqual(CalendarColorSource.swatches(in: data, by: .tag).map(\.id), [.tag(tag.id)])
+        XCTAssertTrue(CalendarColorSource.swatches(in: data, by: .priority).isEmpty)
+        XCTAssertEqual(TaskCalendarProjection.color(for: task, data: data, by: .list), "#123456")
+        XCTAssertEqual(TaskCalendarProjection.color(for: task, data: data, by: .tag), "#234567")
+        options.sourceColors[.list(list.id)] = "#abcdef"
+        options.sourceColors[.inbox] = "#445566"
+        options.sourceColors[.tag(tag.id)] = "#AABBCC"
+        options.sourceColors[.tag(tag.id)] = "#zzzzzz"
+        let restored = try JSONDecoder().decode(TaskCalendarOptions.self, from: JSONEncoder().encode(options))
+        XCTAssertEqual(options, restored)
+        XCTAssertEqual(restored.sourceColors[.list(list.id)], "#ABCDEF")
+        let range = DateInterval(start: day.addingTimeInterval(-86_400), duration: 172_800)
+        func colors(_ mode: CalendarColorMode) -> [UUID: String] {
+            options.colorBy = mode
+            return Dictionary(uniqueKeysWithValues: TaskCalendarProjection.project(data: data, range: range,
+                options: options, calendar: .current).entries.map { ($0.taskID, $0.color) })
+        }
+        XCTAssertEqual(colors(.list), [task.id: "#ABCDEF", inbox.id: "#445566"])
+        XCTAssertEqual(colors(.tag), [task.id: "#AABBCC", inbox.id: "#445566"])
+        XCTAssertEqual(colors(.priority), [task.id: "#E65757", inbox.id: "#7C6CF2"])
+        options.sourceColors[.list(list.id)] = nil
+        XCTAssertEqual(colors(.list)[task.id], "#123456")
+    }
+
+    @MainActor func testMacCalendarSourceColorSaveRefusesStaleAndUnwritableSettings() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let workspace = dir.appendingPathComponent("workspace.json")
+        let settings = dir.appendingPathComponent("settings.json")
+        let bytes = try JSONEncoder().encode(WorkspaceData(tasks: [TaskItem(title: "Keep exact")]))
+        try bytes.write(to: workspace)
+        let store = TaskStore(fileURL: workspace, settingsURL: settings, seed: false)
+        let original = store.settings.calendarOptions.sourceColors
+        var colors = original
+        colors[.inbox] = "#123456"
+        try FileManager.default.createDirectory(at: settings, withIntermediateDirectories: false)
+        XCTAssertFalse(store.saveCalendarSourceColors(colors, expected: original))
+        XCTAssertEqual(store.settings.calendarOptions.sourceColors, original)
+        try FileManager.default.removeItem(at: settings)
+        XCTAssertTrue(store.saveCalendarSourceColors(colors, expected: original))
+        XCTAssertFalse(store.saveCalendarSourceColors(original, expected: original))
+        XCTAssertEqual(try JSONDecoder().decode(AppSettings.self, from: Data(contentsOf: settings)).calendarOptions.sourceColors, colors)
+        XCTAssertEqual(try Data(contentsOf: workspace), bytes)
+    }
+
 }
