@@ -2908,6 +2908,315 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(card.exists)
     }
 
+    @MainActor func testTimelineMovesResizesAndCapturesOnTheAxis() {
+        let app = launch(qaCase: "all-day-spans")
+        goTo("Work", in: app)
+        app.segmentedControls["listViewMode"].buttons["Timeline"].tap()
+        let move = app.buttons["Move Three-day workshop"]
+        let resize = app.buttons["Resize end of Three-day workshop"]
+        XCTAssertTrue(move.waitForExistence(timeout: 5))
+        XCTAssertTrue(resize.isHittable)
+        let baselineMoveX = move.frame.minX, baselineEndX = resize.frame.minX
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        func drag(_ handle: XCUIElement, by points: CGFloat) {
+            let grip = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            grip.press(forDuration: 0.06, thenDragTo: grip.withOffset(CGVector(dx: points, dy: 0)))
+        }
+        drag(move, by: 6)
+        XCTAssertFalse(notice.exists)
+        XCTAssertEqual(move.frame.minX, baselineMoveX, accuracy: 2)
+        drag(move, by: 36)
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertEqual(move.frame.minX, baselineMoveX + 36, accuracy: 3)
+        XCTAssertEqual(resize.frame.minX, baselineEndX + 36, accuracy: 3)
+        attach(app, "Timeline drag moved both endpoints")
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertEqual(notice.label, "Schedule restored")
+        XCTAssertEqual(move.frame.minX, baselineMoveX, accuracy: 2)
+
+        drag(resize, by: 36)
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertEqual(move.frame.minX, baselineMoveX, accuracy: 2)
+        XCTAssertEqual(resize.frame.minX, baselineEndX + 36, accuracy: 3)
+        attach(app, "Timeline end resize kept the start fixed")
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertEqual(notice.label, "Schedule restored")
+        XCTAssertEqual(resize.frame.minX, baselineEndX, accuracy: 2)
+
+        let axis = app.scrollViews["taskTimelineAxis"]
+        let rail = app.buttons["timelineCaptureRail"]
+        app.segmentedControls["taskTimelineScale"].buttons["Day"].tap()
+        XCTAssertTrue(rail.waitForExistence(timeout: 5))
+        let blank = axis.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: 168, dy: rail.frame.midY - axis.frame.minY))
+        blank.press(forDuration: 0.6)
+        let title = app.textViews["captureTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        app.buttons["captureCancel"].tap()
+        waitGone(title)
+        blank.press(forDuration: 0.6)
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("Timeline capture tomorrow")
+        finishCapture(app)
+        if app.buttons["taskDetailDone"].exists { app.buttons["taskDetailDone"].tap() }
+        XCTAssertTrue(app.buttons["Move Timeline capture tomorrow"].waitForExistence(timeout: 5))
+        attach(app, "Timeline date capture retained the typed title")
+    }
+
+    @MainActor func testTimelinePinchKeepsTheDateUnderTheGesture() {
+        let app = launch(qaCase: "all-day-spans")
+        goTo("Work", in: app)
+        app.segmentedControls["listViewMode"].buttons["Timeline"].tap()
+        let axis = app.scrollViews["taskTimelineAxis"]
+        let reset = app.buttons["taskTimelineZoom"]
+        let mark = app.staticTexts["taskTimelineMark-1"]
+        let period = app.staticTexts["taskTimelinePeriod"]
+        XCTAssertTrue(mark.waitForExistence(timeout: 5))
+        let originalPeriod = period.label
+        let center = axis.frame.midX
+        let originalX = mark.frame.minX
+        axis.pinch(withScale: 1.55, velocity: 1)
+        let value = reset.value as? String ?? ""
+        let percent = Int(value.split(separator: " ").first ?? "0") ?? 0
+        XCTAssertGreaterThan(percent, 115)
+        let expected = center + (originalX - center) * CGFloat(percent) / 100
+        XCTAssertEqual(mark.frame.minX, expected, accuracy: 16)
+        XCTAssertEqual(period.label, originalPeriod)
+        attach(app, "Timeline pinch keeps the date near the gesture center")
+
+        app.buttons["Zoom task timeline in"].tap()
+        XCTAssertNotEqual(reset.value as? String, value)
+        XCTAssertEqual(period.label, originalPeriod)
+        reset.tap()
+        XCTAssertEqual(reset.value as? String, "100 percent")
+        app.buttons["Zoom task timeline out"].tap()
+        XCTAssertEqual(reset.value as? String, "80 percent")
+        app.segmentedControls["taskTimelineScale"].buttons["Day"].tap()
+        XCTAssertEqual(reset.value as? String, "100 percent")
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+    }
+
+    @MainActor func testTimelineColorsChangeWithoutChangingTheSchedule() {
+        let app = launch(qaCase: "timeline")
+        goTo("Work", in: app)
+        app.segmentedControls["listViewMode"].buttons["Timeline"].tap()
+        let color = app.buttons["taskTimelineColor"]
+        let schedule = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(color.waitForExistence(timeout: 5))
+        let original = schedule.value as? String
+        XCTAssertNotNil(original)
+        func choose(_ option: String) {
+            color.tap()
+            let submenu = app.buttons["Color by"]
+            if !app.buttons[option].exists && submenu.exists { submenu.tap() }
+            let choice = app.buttons[option]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5))
+            choice.tap()
+            XCTAssertEqual(color.value as? String, option)
+            XCTAssertEqual(schedule.value as? String, original)
+            attach(app, "Timeline colored by " + option)
+        }
+        choose("Tag")
+        choose("Priority")
+    }
+
+    @MainActor func testTimelineArrangesAnUndatedTaskByDroppingOnTheAxis() {
+        let app = launch(qaCase: "timeline-arrange")
+        goTo("Work", in: app)
+        app.segmentedControls["listViewMode"].buttons["Timeline"].tap()
+        let grip = app.images["timelineArrangeDrag-00000000-0000-0000-0000-000000000008"]
+        let undated = app.buttons["timelineUndated-00000000-0000-0000-0000-000000000008"]
+        let scheduled = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000008"]
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        let axis = app.scrollViews["taskTimelineAxis"], rail = app.buttons["timelineCaptureRail"]
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        func drag(to target: XCUICoordinate) {
+            grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.55, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.25)
+        }
+        func date(at offset: CGFloat) -> XCUICoordinate {
+            axis.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: offset, dy: rail.frame.midY - axis.frame.minY))
+        }
+        drag(to: app.buttons["Previous Timeline period"].coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+        XCTAssertTrue(undated.exists)
+        XCTAssertFalse(notice.exists)
+        drag(to: date(at: 46))
+        XCTAssertTrue(scheduled.waitForExistence(timeout: 5))
+        XCTAssertFalse(undated.exists)
+        XCTAssertEqual(notice.label, "Schedule updated")
+        attach(app, "Undated task dropped onto a Week date")
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertTrue(undated.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule restored")
+
+        app.segmentedControls["taskTimelineScale"].buttons["Day"].tap()
+        drag(to: date(at: 108))
+        XCTAssertTrue(scheduled.waitForExistence(timeout: 5))
+        XCTAssertFalse(undated.exists)
+        attach(app, "Undated task dropped onto a Day time")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertTrue(scheduled.waitForExistence(timeout: 5))
+        XCTAssertFalse(undated.exists)
+    }
+
+    @MainActor func testTimelineUsesSavedSectionsAndListHeadings() {
+        let app = launch(qaCase: "timeline")
+        goTo("Work", in: app)
+        app.segmentedControls["listViewMode"].buttons["Timeline"].tap()
+        let build = app.staticTexts["Build"], review = app.staticTexts["Review"]
+        XCTAssertTrue(build.waitForExistence(timeout: 5))
+        XCTAssertTrue(review.exists)
+        let outline = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000001"]
+        let plan = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(outline.exists && plan.exists)
+        XCTAssertLessThan(build.frame.midY, outline.frame.midY)
+        XCTAssertLessThan(outline.frame.midY, review.frame.midY)
+        XCTAssertLessThan(review.frame.midY, plan.frame.midY)
+        attach(app, "Timeline section headings and scheduled tasks")
+        goTo("Work and Personal", in: app)
+        app.segmentedControls["taskDestinationViewMode"].buttons["Timeline"].tap()
+        XCTAssertTrue(app.staticTexts["Work · Build"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Work · Review"].exists)
+        XCTAssertTrue(app.staticTexts["Personal"].exists)
+        XCTAssertFalse(app.staticTexts["Old projects"].exists)
+    }
+
+    @MainActor func testTimelineScopesScaleAndUndatedScheduleUndo() {
+        let app = launch(qaCase: "timeline")
+        goTo("Work", in: app)
+        let listMode = app.segmentedControls["listViewMode"]
+        listMode.buttons["Timeline"].tap()
+        let scales = app.segmentedControls["taskTimelineScale"]
+        XCTAssertTrue(scales.waitForExistence(timeout: 5))
+        let workRange = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000002"]
+        let undated = app.buttons["timelineUndated-00000000-0000-0000-0000-000000000008"]
+        let personal = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000006"]
+        let archived = app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000005"]
+        XCTAssertTrue(workRange.exists)
+        XCTAssertTrue(undated.exists)
+        XCTAssertFalse(personal.exists)
+        XCTAssertFalse(archived.exists)
+        attach(app, "Work Timeline with range and undated task")
+
+        scales.buttons["Day"].tap()
+        XCTAssertTrue(scales.buttons["Day"].isSelected)
+        let period = app.staticTexts["taskTimelinePeriod"]
+        let currentPeriod = period.label
+        app.buttons["Next Timeline period"].tap()
+        XCTAssertNotEqual(period.label, currentPeriod)
+        XCTAssertFalse(workRange.exists)
+        app.buttons["Today"].tap()
+        XCTAssertTrue(workRange.waitForExistence(timeout: 5))
+        scales.buttons["Month"].tap()
+        XCTAssertTrue(scales.buttons["Month"].isSelected)
+        scales.buttons["Week"].tap()
+
+        let schedule = app.buttons["Schedule Review the draft"]
+        reveal(schedule, in: app)
+        schedule.tap()
+        let cancel = app.buttons["calendarEditCancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5)); cancel.tap()
+        waitGone(cancel)
+        XCTAssertTrue(undated.exists)
+        schedule.tap()
+        app.buttons["calendarEditDone"].tap()
+        XCTAssertTrue(app.buttons["timelineScheduled-00000000-0000-0000-0000-000000000008"].waitForExistence(timeout: 5))
+        XCTAssertFalse(undated.exists)
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertTrue(undated.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["calendarScheduleNotice"].label, "Schedule restored")
+
+        goTo("Personal", in: app)
+        XCTAssertTrue(listMode.buttons["List"].isSelected)
+        goTo("Open Launch projects", in: app)
+        app.segmentedControls["taskDestinationViewMode"].buttons["Timeline"].tap()
+        XCTAssertTrue(workRange.waitForExistence(timeout: 5))
+        XCTAssertTrue(undated.exists)
+        XCTAssertFalse(personal.exists)
+        XCTAssertFalse(archived.exists)
+
+        goTo("Work and Personal", in: app)
+        app.segmentedControls["taskDestinationViewMode"].buttons["Timeline"].tap()
+        XCTAssertTrue(personal.waitForExistence(timeout: 5))
+        XCTAssertTrue(workRange.exists)
+        XCTAssertFalse(archived.exists)
+        attach(app, "Saved filter Timeline")
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertTrue(listMode.buttons["Timeline"].isSelected)
+        XCTAssertTrue(undated.waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testScopedBoardMovesDateAndUndoesRange() {
+        let app = launch(qaCase: "all-day-spans")
+        goTo("Next 7 Days", in: app)
+        app.segmentedControls["taskDestinationViewMode"].buttons["Board"].tap()
+        let grouping = app.segmentedControls["scopedBoardGrouping"]
+        XCTAssertTrue(grouping.waitForExistence(timeout: 5))
+        XCTAssertTrue(grouping.buttons["Date"].isSelected)
+        let original = app.buttons["scopedBoardColumn-2"]
+        let next = app.buttons["scopedBoardColumn-3"]
+        XCTAssertTrue(original.waitForExistence(timeout: 5))
+        original.tap()
+        let move = app.buttons["Move Three-day workshop"]
+        XCTAssertTrue(move.waitForExistence(timeout: 5))
+        let nextTitle = next.label
+        move.tap()
+        let target = app.buttons["Move to " + nextTitle]
+        XCTAssertTrue(target.waitForExistence(timeout: 5))
+        target.tap()
+        let undo = app.buttons["undoCalendarSchedule"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5))
+        XCTAssertTrue(next.isSelected)
+        XCTAssertTrue(move.exists)
+        attach(app, "Date column after moving an inclusive range")
+        undo.tap()
+        original.tap()
+        XCTAssertTrue(move.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts["calendarScheduleNotice"].label, "Schedule restored")
+    }
+
+    @MainActor func testScopedBoardFolderAndTagListMove() {
+        let app = launch(qaCase: "timeline")
+        let mode = app.segmentedControls["taskDestinationViewMode"]
+        let work = app.buttons["scopedBoardColumn-0"]
+        let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
+        goTo("Open Launch projects", in: app)
+        mode.buttons["Board"].tap()
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertEqual(work.label, "Work")
+        XCTAssertFalse(app.buttons["scopedBoardColumn-1"].exists)
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let grouping = app.segmentedControls["scopedBoardGrouping"]
+        grouping.buttons["Date"].tap()
+        XCTAssertTrue(grouping.buttons["Date"].isSelected)
+        grouping.buttons["List"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+
+        goTo("drawerTag-00000000-0000-0000-0000-000000000200", in: app)
+        mode.buttons["Board"].tap()
+        let workTab = app.buttons["scopedBoardColumn-1"]
+        let personal = app.buttons["scopedBoardColumn-2"]
+        XCTAssertTrue(workTab.waitForExistence(timeout: 5))
+        workTab.tap()
+        let move = app.buttons["Move Prepare the weekly plan"]
+        XCTAssertTrue(move.waitForExistence(timeout: 5))
+        move.tap()
+        app.buttons["Move to Personal"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertTrue(personal.isSelected)
+        attach(app, "Tag Board with the card in its new list")
+        goTo("Open Launch projects", in: app)
+        XCTAssertTrue(mode.buttons["Board"].isSelected)
+        XCTAssertFalse(card.exists)
+    }
+
     @MainActor func testBoardModeIsPerListAndSurvivesRelaunch() {
         let app = launch(qaCase: "board")
         goTo("Work", in: app)

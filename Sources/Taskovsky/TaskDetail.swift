@@ -480,6 +480,7 @@ struct EntitySheet: View {
                 Picker("View", selection: $viewMode) {
                     Text("List").tag(TaskListViewMode.list)
                     Text("Board").tag(TaskListViewMode.board)
+                    Text("Timeline").tag(TaskListViewMode.timeline)
                 }
                 .pickerStyle(.segmented)
                 .help("This list's center view: rows or a status-column Kanban board")

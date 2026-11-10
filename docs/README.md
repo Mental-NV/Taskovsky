@@ -45,4 +45,4 @@ The isolated mobile follow-up is based on merged PR #4 at `6ee96ee`, with the ve
 
 Keep these labels stable once referenced. A change can touch several contracts; link them rather than duplicating their content. Component and iPhone proposals must be explicitly selected for implementation before future agents treat them as assigned work.
 
-
+The isolated [Tasks Timeline](changes/task-timeline-2026-11-09.md) adds a horizontal schedule for active lists, folders and filters. See the [verification ledger](spec/verification.md#task-timeline) for exact scope.

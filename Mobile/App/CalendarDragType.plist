@@ -14,6 +14,14 @@
         </dict>
         <dict>
             <key>UTTypeIdentifier</key>
+            <string>local.taskovsky.timeline-arrange</string>
+            <key>UTTypeDescription</key>
+            <string>Taskovsky Timeline Arrange Drag</string>
+            <key>UTTypeConformsTo</key>
+            <array><string>public.data</string></array>
+        </dict>
+        <dict>
+            <key>UTTypeIdentifier</key>
             <string>local.taskovsky.board-card</string>
             <key>UTTypeDescription</key>
             <string>Taskovsky Board Card</string>

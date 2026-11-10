@@ -218,6 +218,17 @@ public final class TaskStore: ObservableObject {
         return persistSectionTask(result.task, tags: result.addedTags, sectionID: sectionID, resolveTitle: true)
     }
 
+    public func createTimelineTask(title: String, on date: Date, listID: UUID?) -> UUID? {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              listID == nil || data.lists.contains(where: { $0.id == listID && !$0.isArchived && $0.kind == .task })
+        else { return nil }
+        let day = settings.calendar.startOfDay(for: date)
+        let result = TaskCreation.make(workspace: data, settings: settings, title: title, listID: listID,
+                                       dueDate: day, useDefaultList: false, recognizeDates: false, calendar: settings.calendar)
+        guard !result.task.title.isEmpty else { return nil }
+        return persistCreatedTaskAtomically(result.task, tags: result.addedTags, resolveTitle: false)
+    }
+
     private func persistCreatedTask(_ result: TaskCreationResult) -> UUID {
         insertCreatedTask(result.task, tags: result.addedTags, into: &data)
         save()
@@ -228,6 +239,10 @@ public final class TaskStore: ObservableObject {
     private func persistSectionTask(_ item: TaskItem, tags: [TaskTag], sectionID: UUID, resolveTitle: Bool) -> UUID? {
         var task = item
         task.sectionID = sectionID
+        return persistCreatedTaskAtomically(task, tags: tags, resolveTitle: resolveTitle)
+    }
+
+    private func persistCreatedTaskAtomically(_ task: TaskItem, tags: [TaskTag], resolveTitle: Bool) -> UUID? {
         var draft = data
         insertCreatedTask(task, tags: tags, into: &draft)
         guard writeWorkspace(draft) else { return nil }

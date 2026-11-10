@@ -3,7 +3,7 @@ import Foundation
 /// Shared destination membership. Defaults retain the macOS behavior; tests and
 /// other clients supply a frozen clock and fallback calendar explicitly.
 public enum TaskDestination: Hashable, Sendable {
-    case all, today, tomorrow, week, inbox, notes, reminders, completed, wontDo, summary, search, trash, list(UUID), tag(UUID), filter(UUID)
+    case all, today, tomorrow, week, inbox, notes, reminders, completed, wontDo, summary, search, trash, list(UUID), folder(UUID), tag(UUID), filter(UUID)
 
     public var smartKey: SmartListKey? {
         switch self {
@@ -53,7 +53,7 @@ public enum TaskDestination: Hashable, Sendable {
             guard !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists) else { return false }
         case .reminders:
             guard !SmartListEligibility.isArchived(task, lists: data.lists) else { return false }
-        case .inbox, .list, .tag, .completed, .trash, .wontDo, .summary, .search, .filter:
+        case .inbox, .list, .folder, .tag, .completed, .trash, .wontDo, .summary, .search, .filter:
             break
         }
         switch self {
@@ -65,6 +65,10 @@ public enum TaskDestination: Hashable, Sendable {
         case .notes: return task.kind == .note
         case .reminders: return task.reminderDate != nil
         case .list(let id): return task.listID == id
+        case .folder(let id):
+            return data.folders.contains { $0.id == id } && data.lists.contains {
+                $0.id == task.listID && $0.folderID == id && !$0.isArchived
+            }
         case .tag(let id):
             return SmartListEligibility.taskMatchesTag(task, tagID: id, tags: data.tags)
         case .completed, .trash, .wontDo, .summary, .search, .filter: return false

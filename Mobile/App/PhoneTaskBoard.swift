@@ -13,8 +13,8 @@ struct PhoneListModeControl: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Picker("List view", selection: Binding(get: { list.viewMode }, set: select)) {
-                    ForEach(TaskListViewMode.allCases, id: \.self) { mode in
+                Picker("List view", selection: Binding(get: { list.isArchived && list.viewMode == .timeline ? .list : list.viewMode }, set: select)) {
+                    ForEach(list.isArchived ? [.list, .board] : TaskListViewMode.allCases, id: \.self) { mode in
                         Text(mode.label).tag(mode)
                     }
                 }
@@ -44,8 +44,9 @@ struct PhoneListModeControl: View {
 
 struct PhoneBoardDrag: Codable, Transferable {
     let session: UUID
-    let listID: UUID
+    let listID: UUID?
     let taskID: UUID
+    var revision: WorkspaceRevision? = nil
 
     static var transferRepresentation: some TransferRepresentation {
         CodableRepresentation(contentType: UTType(exportedAs: "local.taskovsky.board-card"))
@@ -193,6 +194,149 @@ struct PhoneTaskBoard: View {
             }
         }
         return true
+    }
+}
+
+struct PhoneScopedTaskBoard: View {
+    @ObservedObject var model: PhoneWorkspaceModel
+    let destination: TaskDestination
+    let data: WorkspaceData
+    let open: (UUID) -> Void
+    let schedule: (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool
+    @State private var grouping: ScopedBoardGrouping
+    @State private var selected: ScopedBoardColumn.ID?
+    @State private var targeted: ScopedBoardColumn.ID?
+    @State private var dragSession = UUID()
+    @State private var choosingTask: (id: UUID, revision: WorkspaceRevision)?
+
+    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData,
+         open: @escaping (UUID) -> Void, schedule: @escaping (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool) {
+        self.model = model
+        self.destination = destination
+        self.data = data
+        self.open = open
+        self.schedule = schedule
+        _grouping = State(initialValue: ScopedBoardProjection.defaultGrouping(for: destination))
+    }
+
+    private func projection(in workspace: WorkspaceData) -> ScopedBoardProjection {
+        ScopedBoardProjection(destination: destination, grouping: grouping, in: workspace,
+                              now: model.now, calendar: model.calendar)
+    }
+
+    var body: some View {
+        let board = projection(in: data)
+        let visible = board.columns.contains(where: { $0.id == selected }) ? selected : board.columns.first?.id
+        VStack(spacing: 8) {
+            Picker("Group board by", selection: $grouping) {
+                ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
+            }.pickerStyle(.segmented).accessibilityIdentifier("scopedBoardGrouping").padding(.horizontal, 16)
+            PhoneCalendarFeedback(model: model).padding(.horizontal, 16)
+            ScrollViewReader { reader in
+                ScrollView(.horizontal) {
+                    HStack(spacing: 4) {
+                        ForEach(Array(board.columns.enumerated()), id: \.element.id) { index, column in
+                            columnTab(column, index: index, selected: visible == column.id)
+                                .id(column.id)
+                        }
+                    }.padding(.horizontal, 16)
+                }.scrollIndicators(.hidden)
+                    .onChange(of: visible) { _, column in
+                        if let column { reader.scrollTo(column, anchor: .center) }
+                    }
+            }
+            TabView(selection: Binding(get: { visible }, set: { selected = $0 })) {
+                ForEach(board.columns) { column in
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            if column.tasks.isEmpty {
+                                ContentUnavailableView("No items in " + column.title, systemImage: "rectangle.stack")
+                            }
+                            ForEach(column.tasks) { card($0, board: board) }
+                            Color.clear.frame(height: 90).accessibilityHidden(true)
+                        }.padding(.horizontal, 16)
+                    }.tag(Optional(column.id))
+                }
+            }.tabViewStyle(.page(indexDisplayMode: .never))
+        }
+        .onChange(of: grouping) { _, _ in
+            selected = nil
+            targeted = nil
+            dragSession = UUID()
+        }
+        .confirmationDialog("Move task", isPresented: Binding(get: { choosingTask != nil }, set: {
+            if !$0 { choosingTask = nil }
+        }), titleVisibility: .visible, presenting: choosingTask) { choice in
+            ForEach(board.columns) { column in
+                if board.move(choice.id, to: column.id) != nil {
+                    Button("Move to " + column.title) {
+                        _ = move(choice.id, to: column.id, expected: choice.revision)
+                    }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    private func columnTab(_ column: ScopedBoardColumn, index: Int, selected isSelected: Bool) -> some View {
+        Button { selected = column.id } label: {
+            VStack(spacing: 3) {
+                Text(column.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(column.tasks.count.formatted()).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+            }.padding(.horizontal, 10).frame(minWidth: 90, minHeight: 48)
+                .background(targeted == column.id ? Color.accentColor.opacity(0.2) :
+                            isSelected ? Color.primary.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: 11))
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel(column.title).accessibilityValue(column.tasks.count.formatted())
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+            .accessibilityIdentifier("scopedBoardColumn-\(index)")
+            .dropDestination(for: PhoneBoardDrag.self) { payloads, _ in
+                guard payloads.count == 1, let drag = payloads.first, drag.session == dragSession,
+                      let revision = drag.revision else { return false }
+                return move(drag.taskID, to: column.id, expected: revision)
+            } isTargeted: { hovering in
+                if hovering && model.canBeginEditing { targeted = column.id }
+                else if targeted == column.id { targeted = nil }
+            }
+    }
+
+    private func card(_ task: TaskItem, board: ScopedBoardProjection) -> some View {
+        let canMove = model.canBeginEditing && board.columns.contains { board.move(task.id, to: $0.id) != nil }
+        return HStack(spacing: 0) {
+            PhoneCompletionButton(model: model, task: task, lists: data.lists)
+            PhoneBoardTaskTitle(task: task, open: open)
+            if canMove, let revision = model.document?.revision {
+                Image(systemName: "line.3.horizontal").foregroundStyle(.secondary)
+                    .frame(width: 36, height: 44).contentShape(Rectangle())
+                    .accessibilityLabel("Drag " + task.title)
+                    .draggable(PhoneBoardDrag(session: dragSession, listID: task.listID, taskID: task.id, revision: revision))
+                Button { choosingTask = (task.id, revision) } label: {
+                    Image(systemName: "ellipsis").frame(width: 44, height: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("Move " + task.title)
+            }
+        }.padding(.vertical, 6)
+            .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private func move(_ taskID: UUID, to target: ScopedBoardColumn.ID, expected: WorkspaceRevision) -> Bool {
+        guard model.canBeginEditing, let document = model.document, expected == document.revision,
+              let operation = projection(in: document.snapshot.workspace).move(taskID, to: target) else { return false }
+        switch operation {
+        case .list(let id):
+            Task {
+                if await model.performLifecycle(.move(id), taskID: taskID, expected: expected) {
+                    selected = target
+                }
+            }
+            return true
+        case .schedule(let operation):
+            let accepted = schedule(taskID, operation, expected)
+            if accepted, let task = data.tasks.first(where: { $0.id == taskID }),
+               !CalendarScheduling.canRescheduleCurrentOccurrence(task, in: data.tasks) {
+                selected = target
+            }
+            return accepted
+        }
     }
 }
 
