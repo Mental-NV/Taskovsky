@@ -6,6 +6,6 @@ Taskovsky copies the selected text and its supported formatting. Paste into anot
 
 The plain text representation stays available to other editors. Taskovsky validates its clipboard fragment against that exact text before using the ranges. Mac retains the normal paste behavior for other representations. iPhone uses plain text when a supported fragment is unavailable. The iPhone editor also offers a Paste as Plain Text button beside Undo and Redo. The draft stores a rich paste as a single edit that can be undone, redone, or resumed after relaunch.
 
-The Mac QA bundle uses a unique named pasteboard. iPhone QA sessions each use a named pasteboard on the disposable simulator. The verification uses synthetic task descriptions. The later [plain-text paste change](rich-description-markdown-paste-2026-11-10.md) adds supported Markdown recognition to ordinary paste. Foreign rich-text conversion and media remain separate parity gaps.
+The Mac QA bundle uses a unique named pasteboard. iPhone QA sessions each use a named pasteboard on the disposable simulator. The verification uses synthetic task descriptions. The later [plain-text paste change](rich-description-markdown-paste-2026-11-10.md) adds supported Markdown recognition to ordinary paste. The later [foreign rich-text change](rich-description-foreign-paste-2026-11-10.md) covers supported inline formats from HTML and RTF. Media remains a separate parity gap.
 
 [Verification record](../spec/verification.md#rich-description-clipboard)

@@ -630,6 +630,29 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(week.count, 7)
     }
 
+    func testMonthBrowseWindowKeepsCivilWeeksAndRebasesAtBothEdges() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let anchor = date("2026-03-02T05:00:00Z")
+        let window = CalendarMonthBrowseWindow(around: anchor, calendar: local)
+        let days = window.days(calendar: local)
+        XCTAssertEqual(days.count, 119)
+        XCTAssertEqual(days[56], anchor)
+        XCTAssertEqual(days[63], date("2026-03-09T04:00:00Z"))
+        XCTAssertEqual(window.keeping(days[14], in: local), window)
+        XCTAssertEqual(window.keeping(days[77], in: local), window)
+        for edge in [days[7], days[84]] {
+            let shifted = window.keeping(edge, in: local)
+            XCTAssertNotEqual(shifted, window)
+            XCTAssertEqual(shifted.days(calendar: local)[56], edge)
+        }
+        let distant = date("2027-01-04T05:00:00Z")
+        XCTAssertEqual(window.keeping(distant, in: local).days(calendar: local)[56], distant)
+        XCTAssertEqual(CalendarMonthBrowseWindow.focus(forWeek: date("2026-12-28T05:00:00Z"), calendar: local),
+                       date("2027-01-01T05:00:00Z"))
+        XCTAssertEqual(CalendarMonthBrowseWindow.focus(forWeek: anchor, calendar: local), anchor)
+    }
+
     func testDescriptionHeadingFoldsKeepNestedStateAndExactVisibleFormatting() throws {
         let text = "Parent\nCafé\nChild\ne\u{301} 🧩 hidden\nPeer\nVisible 🧩\nLast"
         let string = text as NSString
@@ -1729,5 +1752,138 @@ extension MobileContractTests {
         XCTAssertTrue(output().contains("\n- First High\n- First Low\n- Second High\n\nNext Period Tasks\n- Upcoming Low\n- Upcoming High"))
         opts.sort = .workspace
         XCTAssertTrue(output().contains("\n- First Low\n- First High\n- Second High\n"))
+    }
+}
+
+
+extension MobileContractTests {
+    func testBatchMetadataAndMovePreserveUnownedFieldsAndRejectInvalidSelections() throws {
+        let source = TaskList(name: "Source", color: "#445566")
+        let target = TaskList(name: "Target", color: "#556677")
+        let archived = TaskList(name: "Archived", color: "#667788", isArchived: true)
+        let tag = TaskTag(name: "Review", color: "#445566")
+        let unknownTag = UUID()
+        let root = TaskItem(title: "Root", body: "Styled", listID: source.id, tagIDs: [unknownTag], dueDate: now,
+                            richBody: .init(text: "Styled", runs: [.init(location: 0, length: 6, bold: true)]))
+        var child = TaskItem(title: "Child", listID: source.id, tagIDs: [tag.id])
+        child.parentID = root.id
+        let locked = TaskItem(title: "Archived", listID: archived.id)
+        let workspace = WorkspaceData(tasks: [child, root, locked], lists: [source, target, archived], tags: [tag])
+        let engine = TaskLifecycle(data: workspace)
+        func edit(_ ids: [UUID], _ action: TaskBatchEdit.Action, _ baseline: TaskLifecycle) throws -> TaskLifecycle? {
+            try TaskBatchEdit(ids: ids, action: action).applying(to: baseline, settings: AppSettings(), now: now + 1, calendar: calendar)
+        }
+
+        let changed = try XCTUnwrap(edit([child.id, root.id], .priority(.high), engine))
+        var expectedRoot = root
+        var expectedChild = child
+        expectedRoot.priority = .high
+        expectedRoot.updatedAt = now + 1
+        expectedChild.priority = .high
+        expectedChild.updatedAt = now + 1
+        XCTAssertEqual(changed.data.tasks, [expectedChild, expectedRoot, locked])
+        XCTAssertNil(try edit([root.id, child.id], .priority(.high), changed))
+        XCTAssertThrowsError(try edit([root.id, UUID()], .priority(.high), engine))
+        XCTAssertThrowsError(try edit([root.id, root.id], .priority(.high), engine))
+        XCTAssertThrowsError(try edit([root.id, locked.id], .priority(.high), engine))
+        XCTAssertThrowsError(try edit([root.id, child.id], .move(archived.id), engine))
+        XCTAssertThrowsError(try edit([root.id, child.id], .tags([UUID()], remove: false), engine))
+        let tagged = try XCTUnwrap(edit([root.id, child.id], .tags([tag.id], remove: false), changed))
+        XCTAssertEqual(tagged.data.tasks.map(\.tagIDs), [[tag.id], [unknownTag, tag.id], []])
+        let untagged = try XCTUnwrap(edit([root.id, child.id], .tags([tag.id], remove: true), tagged))
+        XCTAssertEqual(untagged.data.tasks.map(\.tagIDs), [[], [unknownTag], []])
+        let moved = try XCTUnwrap(edit([root.id, locked.id], .move(target.id), untagged))
+        XCTAssertEqual(moved.data.tasks.map(\.listID), [target.id, target.id, target.id])
+        XCTAssertEqual(moved.data.tasks.first?.parentID, root.id)
+        XCTAssertEqual(engine.data, workspace)
+    }
+
+    func testBatchScheduleUsesCalendarShapeAndRejectsWholeSelectionOnInvalidMember() throws {
+        let due = date("2026-11-09T12:30:00Z")
+        let reminder = due - 900
+        let timed = TaskItem(title: "Timed", dueDate: due, hasDueTime: true, reminderDate: reminder,
+                             recurrence: .daily, scheduledDuration: .init(start: due - 3_600, end: due))
+        let undated = TaskItem(title: "Undated")
+        let invalid = TaskItem(title: "Unknown zone", timeZoneID: "Not/AZone")
+        let data = WorkspaceData(tasks: [timed, undated, invalid])
+        let engine = TaskLifecycle(data: data), settings = AppSettings()
+        let day = date("2026-11-12T00:00:00Z")
+        let move = TaskBatchEdit(ids: [timed.id, undated.id], action: .schedule(day))
+        let result = try XCTUnwrap(move.applying(to: engine, settings: settings, now: now, calendar: calendar))
+        let relocated = result.data.tasks[0]
+        XCTAssertEqual(relocated.dueDate, due + 3 * 86_400)
+        XCTAssertEqual(relocated.scheduledDuration?.start, due + 3 * 86_400 - 3_600)
+        XCTAssertEqual(relocated.reminderDates, [reminder + 3 * 86_400])
+        XCTAssertEqual(relocated.recurrence, .daily)
+        XCTAssertEqual(result.data.tasks[1].dueDate, day)
+        XCTAssertFalse(result.data.tasks[1].hasDueTime)
+        XCTAssertEqual(result.data.tasks[2], invalid)
+        let unsafe = TaskBatchEdit(ids: [timed.id, invalid.id], action: .schedule(day))
+        XCTAssertThrowsError(try unsafe.applying(to: engine, settings: settings, now: now, calendar: calendar)) {
+            XCTAssertEqual($0 as? TaskBatchRefusal, .invalidSchedule)
+        }
+        let clear = TaskBatchEdit(ids: [timed.id, undated.id], action: .schedule(nil))
+        let cleared = try XCTUnwrap(clear.applying(to: result, settings: settings, now: now, calendar: calendar))
+        XCTAssertTrue(cleared.data.tasks.prefix(2).allSatisfy {
+            $0.dueDate == nil && $0.scheduledDuration == nil && $0.reminderDates.isEmpty && !$0.isRepeating
+        })
+        XCTAssertEqual(engine.data, data)
+    }
+
+    func testBatchLifecycleOrdersParentBeforeSelectedChildAndDoesNotSpawnTwice() throws {
+        let parent = TaskItem(title: "Parent", dueDate: now, recurrence: .daily)
+        var child = TaskItem(title: "Child", dueDate: now, recurrence: .daily)
+        child.parentID = parent.id
+        let other = TaskItem(title: "Other")
+        let engine = TaskLifecycle(data: WorkspaceData(tasks: [child, other, parent]))
+        let selected = [child.id, parent.id]
+        let complete = TaskBatchEdit(ids: selected, action: .complete)
+        let finished = try XCTUnwrap(complete.applying(to: engine, settings: AppSettings(), now: now, calendar: calendar))
+        XCTAssertEqual(finished.data.tasks.count, 5)
+        XCTAssertEqual(finished.data.tasks.filter { $0.completedAt == now }.map(\.id), [child.id, parent.id])
+        XCTAssertEqual(finished.data.tasks.filter { $0.recurrenceSourceID == child.id }.count, 1)
+        XCTAssertNil(try complete.applying(to: finished, settings: AppSettings(), now: now, calendar: calendar))
+        let trash = TaskBatchEdit(ids: selected, action: .trash)
+        var removed = try XCTUnwrap(trash.applying(to: engine, settings: AppSettings(), now: now, calendar: calendar))
+        XCTAssertEqual(removed.data.trashCascades.count, 1)
+        XCTAssertEqual(removed.data.trashCascades.first?.parentID, parent.id)
+        XCTAssertTrue(removed.restoreTask(id: parent.id, now: now + 1))
+        XCTAssertTrue(removed.data.tasks.allSatisfy { $0.deletedAt == nil })
+        XCTAssertEqual(removed.data.tasks[1], other)
+    }
+}
+
+extension MobileContractTests {
+    func testCalendarCardDetailsFollowDisplayZoneWithoutChangingProjection() throws {
+        var display = calendar
+        display.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Moscow"))
+        let work = TaskList(name: "Work", color: "#445566")
+        let start = date("2026-11-09T20:00:00Z"), end = date("2026-11-09T21:30:00Z")
+        let timed = TaskItem(title: "Late workshop", listID: work.id, dueDate: end, hasDueTime: true,
+                             timeZoneID: "America/New_York", scheduledDuration: .init(start: start, end: end))
+        let point = TaskItem(title: "Point", dueDate: date("2026-11-09T08:00:00Z"), hasDueTime: true)
+        let allDay = TaskItem(title: "All-day note", kind: .note, dueDate: now)
+        let data = WorkspaceData(tasks: [timed, point, allDay], lists: [work])
+        let range = DateInterval(start: now - 86_400, duration: 3 * 86_400)
+        let baseline = TaskCalendarProjection.project(data: data, range: range, options: .init(), calendar: display)
+        var options = TaskCalendarOptions()
+        options.showDetails = true
+        let projected = TaskCalendarProjection.project(data: data, range: range, options: options, calendar: display)
+        XCTAssertEqual(projected.entries, baseline.entries)
+        let locale = Locale(identifier: "en_GB")
+        let names = [work.id: work.name]
+        func details(_ id: UUID) throws -> CalendarEntryDetails {
+            let entry = try XCTUnwrap(projected.entries.first { $0.taskID == id })
+            return .init(entry: entry, listNames: names, calendar: display, locale: locale)
+        }
+        let workshop = try details(timed.id)
+        XCTAssertEqual(workshop.compact, "23:00")
+        XCTAssertTrue(workshop.text.contains("23:00") && workshop.text.contains("0:30") && workshop.text.hasSuffix(" · Work"))
+        XCTAssertTrue(workshop.text.contains("9 Nov") && workshop.text.contains("10 Nov"))
+        XCTAssertEqual(try details(point.id).text, "11:00 · Inbox")
+        XCTAssertEqual(try details(allDay.id).text, "All day · Inbox")
+        var missing = try XCTUnwrap(projected.entries.first { $0.taskID == allDay.id })
+        missing.listID = UUID()
+        XCTAssertEqual(CalendarEntryDetails(entry: missing, listNames: names, calendar: display).text, "All day · List unavailable")
     }
 }

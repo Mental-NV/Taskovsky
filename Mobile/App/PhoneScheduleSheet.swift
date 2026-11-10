@@ -20,12 +20,48 @@ struct PhoneScheduleRequest: Identifiable {
     }
 }
 
+struct PhoneScheduleFeedback: View {
+    @ObservedObject var model: PhoneWorkspaceModel
+    let surface: PhoneScheduleSurface
+
+    var body: some View {
+        if let notice = model.scheduleNotice(in: surface) {
+            HStack {
+                Text(notice).font(.footnote)
+                    .accessibilityIdentifier(surface == .calendar ? "calendarScheduleNotice" : "taskScheduleNotice")
+                if model.canUndoSchedule(in: surface) {
+                    Button("Undo") { Task { await model.undoSchedule(in: surface) } }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier(surface == .calendar ? "undoCalendarSchedule" : "undoTaskSchedule")
+                }
+            }
+        }
+    }
+}
+
+struct PhoneOccurrenceSkipStage: View {
+    var explainsSavedSchedule = false
+    let keepEditing: () -> Void
+
+    var body: some View {
+        Section {
+            Text("Done moves this open task to its next scheduled occurrence.")
+            if explainsSavedSchedule {
+                Text("Skipping uses the saved schedule. Keep editing returns to your date and repeat changes.")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Button("Keep editing", action: keepEditing)
+        }
+    }
+}
+
 struct PhoneScheduleSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: PhoneWorkspaceModel
     let request: PhoneScheduleRequest
     @State private var edit: TaskScheduleEdit
     @State private var error: String?
+    @State private var skipOccurrence = false
     @State private var showZones = false
     @State private var showCustom = false
     @State private var showReplace = false
@@ -33,6 +69,10 @@ struct PhoneScheduleSheet: View {
     private var settings: AppSettings { request.document.snapshot.settings }
     private var due: Date { edit.schedule.effectiveDue }
     private var calendar: Calendar { edit.calendar }
+    private var canSkipOccurrence: Bool {
+        CalendarScheduling.canSkipCurrentOccurrence(request.task, in: request.document.snapshot.workspace.tasks,
+                                                    calendar: request.calendar)
+    }
 
     init(model: PhoneWorkspaceModel, request: PhoneScheduleRequest) {
         self.model = model
@@ -44,22 +84,26 @@ struct PhoneScheduleSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                dateSection
-                if edit.hasDate {
-                    Section("Time Zone") {
-                        Button {
-                            showZones = true
-                        } label: {
-                            LabeledContent("Time zone", value: edit.zoneID.map(Self.zoneLabel) ?? "Device time zone")
+                if skipOccurrence {
+                    PhoneOccurrenceSkipStage(explainsSavedSchedule: true) { skipOccurrence = false; error = nil }
+                } else {
+                    dateSection
+                    if edit.hasDate {
+                        Section("Time Zone") {
+                            Button {
+                                showZones = true
+                            } label: {
+                                LabeledContent("Time zone", value: edit.zoneID.map(Self.zoneLabel) ?? "Device time zone")
+                            }
+                            .accessibilityIdentifier("scheduleZone")
+                            if !edit.hasKnownZone {
+                                Text("This time zone is unavailable. Choose a supported zone before saving changes.")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
                         }
-                        .accessibilityIdentifier("scheduleZone")
-                        if !edit.hasKnownZone {
-                            Text("This time zone is unavailable. Choose a supported zone before saving changes.")
-                                .font(.footnote).foregroundStyle(.secondary)
-                        }
+                        reminderSection
+                        repeatSection
                     }
-                    reminderSection
-                    repeatSection
                 }
             }
             .safeAreaInset(edge: .bottom) {
@@ -82,7 +126,11 @@ struct PhoneScheduleSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") {
                         Task {
-                            error = await model.saveSchedule(edit, expected: request.document.revision)
+                            if skipOccurrence {
+                                error = await model.skipTaskOccurrence(taskID: request.task.id, expected: request.document.revision)
+                            } else {
+                                error = await model.saveSchedule(edit, expected: request.document.revision)
+                            }
                             if error == nil { dismiss() }
                         }
                     }
@@ -209,6 +257,10 @@ struct PhoneScheduleSheet: View {
                     }
                 }
                 Button("Custom repeat") { showCustom = true }.accessibilityIdentifier("scheduleCustom")
+            }
+            if canSkipOccurrence {
+                Button("Skip this occurrence") { skipOccurrence = true; error = nil }
+                    .accessibilityIdentifier("scheduleSkipOccurrence")
             }
         }
     }

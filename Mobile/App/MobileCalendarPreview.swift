@@ -67,26 +67,140 @@ struct MobileCalendarPreview: View {
     let today: Date
     @Binding var focus: Date
     let options: TaskCalendarOptions
+    let monthInteractionActive: Bool
     let controls: PhoneCalendarControls
     let select: (TaskCalendarMode, Date) -> Void
     let open: (UUID) -> Void
     @State private var agendaWindow = CalendarAgendaWindow()
     @State private var monthZoom = CalendarMonthZoom.full
+    @State private var monthWindow: CalendarMonthBrowseWindow?
+    @State private var monthWeek: Date?
+    @State private var requestedMonthWeek: Date?
+    @State private var focusFromMonthScroll: Date?
+    @State private var heldMonthWeek: Date?
+    @State private var monthViewportRevision = 0
+    private var browsesFullMonth: Bool { options.mode == .month && monthZoom == .full }
+    private var firstWeekOfMonth: Date {
+        CalendarDates.weekStart(CalendarDates.monthStart(focus, calendar: calendar), calendar: calendar)
+    }
+    private var monthBrowseWindow: CalendarMonthBrowseWindow {
+        monthWindow ?? CalendarMonthBrowseWindow(around: firstWeekOfMonth, calendar: calendar)
+    }
+
     var body: some View {
-        let days = CalendarDates.visibleDays(focus: focus, mode: options.mode, options: options, calendar: calendar,
-                                            agendaWindow: agendaWindow, monthZoom: monthZoom)
+        let window = browsesFullMonth ? monthBrowseWindow : nil
+        let days = window?.days(calendar: calendar)
+            ??
+            CalendarDates.visibleDays(focus: focus, mode: options.mode, options: options, calendar: calendar,
+                                        agendaWindow: agendaWindow, monthZoom: monthZoom)
         let result = CalendarDates.interval(for: days, calendar: calendar).map {
             TaskCalendarProjection.project(data: data, range: $0, options: options, calendar: calendar).entries
         } ?? []
-        return MobileCalendarContent(calendar: calendar, today: today, days: days, entries: result,
-                                     focus: $focus, options: options, monthZoom: $monthZoom, controls: controls, select: select, open: open,
+        let showsDetails = options.showDetails && (options.mode == .agenda || options.mode == .month)
+        let listNames = showsDetails
+            ? Dictionary(data.lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+            : [:]
+        return MobileCalendarContent(calendar: calendar, days: days, entries: result,
+                                     scheduleSwipeIDs: scheduleSwipeIDs(in: result),
+                                     listNames: listNames, showsDetails: showsDetails,
+                                     focus: $focus, options: options, monthZoom: $monthZoom,
+                                     monthWindow: window, monthPosition: window.map(monthPosition),
+                                     monthViewportRevision: monthViewportRevision,
+                                     controls: controls, select: select, open: open,
                                      canExtendAgenda: agendaWindow.canExtend, showMoreAgenda: { agendaWindow.extend() },
-                                     resetAgenda: { agendaWindow = CalendarAgendaWindow() })
-            .onChange(of: focus) { _, _ in agendaWindow = CalendarAgendaWindow() }
+                                     showToday: showToday, holdMonthForCapture: holdMonthPosition)
+            .onChange(of: focus) { _, date in
+                agendaWindow = CalendarAgendaWindow()
+                if date == focusFromMonthScroll {
+                    focusFromMonthScroll = nil
+                } else if browsesFullMonth {
+                    positionMonth(at: CalendarDates.weekStart(date, calendar: calendar))
+                }
+            }
             .onChange(of: options.mode) { _, _ in
                 agendaWindow = CalendarAgendaWindow()
                 monthZoom = .full
             }
+            .onChange(of: browsesFullMonth, initial: true) { _, active in
+                if active { positionMonth(at: firstWeekOfMonth) }
+                else {
+                    monthWindow = nil
+                    monthWeek = nil
+                    requestedMonthWeek = nil
+                    heldMonthWeek = nil
+                }
+            }
+            .onChange(of: monthWeek) { _, week in
+                guard browsesFullMonth, let week else { return }
+                if week == requestedMonthWeek {
+                    requestedMonthWeek = nil
+                    return
+                }
+                monthWindow = monthBrowseWindow.keeping(week, in: calendar)
+                let date = CalendarMonthBrowseWindow.focus(forWeek: week, calendar: calendar)
+                if date != focus {
+                    focusFromMonthScroll = date
+                    focus = date
+                }
+            }
+            .onChange(of: calendar) { _, _ in
+                guard browsesFullMonth else { return }
+                monthWindow = nil
+                positionMonth(at: firstWeekOfMonth)
+            }
+            .onChange(of: monthInteractionActive) { _, active in
+                if active { holdMonthPosition() }
+                else { restoreMonthPosition() }
+            }
+            .onChange(of: controls.createRange != nil) { _, canCapture in
+                if canCapture && !monthInteractionActive { restoreMonthPosition() }
+            }
+    }
+
+    private func scheduleSwipeIDs(in entries: [CalendarEntry]) -> Set<UUID> {
+        guard options.mode == .month || options.mode == .agenda else { return [] }
+        let visible = Set(entries.lazy.filter(\.canSchedule).map(\.taskID))
+        return Set(data.tasks.lazy.filter {
+            visible.contains($0.id) && CalendarScheduling.canSkipCurrentOccurrence($0, in: data.tasks, calendar: calendar)
+        }.map(\.id))
+    }
+
+    private func monthPosition(in window: CalendarMonthBrowseWindow) -> Binding<Date?> {
+        let revision = monthViewportRevision
+        return Binding(get: { monthWeek ?? firstWeekOfMonth }, set: { newWeek in
+            guard browsesFullMonth, !monthInteractionActive, heldMonthWeek == nil, monthBrowseWindow == window, let newWeek,
+                  revision == monthViewportRevision, window.contains(newWeek, calendar: calendar) else { return }
+            monthWeek = newWeek
+        })
+    }
+
+    private func holdMonthPosition() {
+        if browsesFullMonth && heldMonthWeek == nil { heldMonthWeek = monthWeek ?? firstWeekOfMonth }
+    }
+
+    private func restoreMonthPosition() {
+        guard let week = heldMonthWeek else { return }
+        heldMonthWeek = nil
+        positionMonth(at: week)
+        monthViewportRevision += 1
+    }
+
+    private func positionMonth(at week: Date) {
+        monthWindow = monthBrowseWindow.keeping(week, in: calendar)
+        if week != monthWeek {
+            requestedMonthWeek = week
+            monthWeek = week
+        }
+    }
+
+    private func showToday() {
+        agendaWindow = CalendarAgendaWindow()
+        if browsesFullMonth {
+            let month = CalendarDates.monthStart(today, calendar: calendar)
+            positionMonth(at: CalendarDates.weekStart(month, calendar: calendar))
+            if focus != today { focusFromMonthScroll = today }
+        }
+        focus = today
     }
 }
 
@@ -94,25 +208,38 @@ struct MobileCalendarPreview: View {
 /// Binding in init (which can remain stale when only that binding changes).
 private struct MobileCalendarContent: View {
     let calendar: Calendar
-    let today: Date
     let days: [Date]
     let entries: [CalendarEntry]
+    let scheduleSwipeIDs: Set<UUID>
+    let listNames: [UUID: String]
+    let showsDetails: Bool
+    @Environment(\.locale) private var locale
+    @Environment(\.layoutDirection) private var layoutDirection
     @Binding var focus: Date
     let options: TaskCalendarOptions
     @Binding var monthZoom: CalendarMonthZoom
+    let monthWindow: CalendarMonthBrowseWindow?
+    let monthPosition: Binding<Date?>?
+    let monthViewportRevision: Int
     let controls: PhoneCalendarControls
     let select: (TaskCalendarMode, Date) -> Void
     let open: (UUID) -> Void
     let canExtendAgenda: Bool
     let showMoreAgenda: () -> Void
-    let resetAgenda: () -> Void
-    @ScaledMetric(relativeTo: .caption2) private var allDayRowHeight = 17.0
+    let showToday: () -> Void
+    let holdMonthForCapture: () -> Void
+    @ScaledMetric(relativeTo: .caption2) private var compactRowHeight = 17.0
+    @ScaledMetric(relativeTo: .caption2) private var detailedRowHeight = 30.0
+    private var allDayRowHeight: CGFloat { showsDetails ? detailedRowHeight : compactRowHeight }
     @ScaledMetric(relativeTo: .caption) private var monthDateHeight = 17.0
     @State private var expansion = CalendarHourlyWindow()
     @GestureState private var previewCutoffs: CalendarFoldedHours?
     @State private var monthWeekFrames: [Date: CGRect] = [:]
+    @State private var monthWeekAnchors = PhoneMonthWeekAnchors()
     @State private var monthSelection: ClosedRange<Date>?
     private let hourHeight: CGFloat = 52
+    private let primaryRulerWidth: CGFloat = 42
+    private let secondaryRulerWidth: CGFloat = 48
     private var hourWindow: CalendarHourlyWindow { expansion.using(options.foldedHours) }
     private func entries(on day: Date) -> [CalendarEntry] {
         let next = calendar.date(byAdding: .day, value: 1, to: day)!
@@ -123,7 +250,7 @@ private struct MobileCalendarContent: View {
             HStack {
                 Button { focus = CalendarDates.navigate(focus, direction: -1, mode: options.mode, options: options, calendar: calendar, monthZoom: monthZoom) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.accessibilityLabel("Previous Calendar period")
                 Spacer(); Text(options.mode.title).font(.subheadline)
-                Button("Today") { resetAgenda(); focus = today }.frame(minHeight: 44)
+                Button("Today", action: showToday).frame(minHeight: 44)
                 Spacer()
                 Button { focus = CalendarDates.navigate(focus, direction: 1, mode: options.mode, options: options, calendar: calendar, monthZoom: monthZoom) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.accessibilityLabel("Next Calendar period")
             }.padding(.horizontal, 16)
@@ -135,7 +262,7 @@ private struct MobileCalendarContent: View {
             else if options.mode == .agenda { agenda.id(calendar.startOfDay(for: focus)) }
             else if options.mode == .month {
                 monthZoomControls
-                zoomableMonth.id(monthZoom)
+                zoomableMonth.id(monthZoom).id(monthWindow).id(monthViewportRevision)
             }
             else {
                 ScrollView {
@@ -154,13 +281,18 @@ private struct MobileCalendarContent: View {
                       resizeDay: ((DragGesture.Value) -> Date?)? = nil) -> some View {
         let payload = controls.drag(entry)
         let color = cardColor(entry.color)
+        let gridCard = options.mode == .month || options.mode == .multiWeek
+        let weekCard = options.mode == .week
         let usesCompactGrips = compactResize && entry.canResizeAllDayRange && (resizeStartDay != nil || resizeDay != nil)
+        let compactMoveGrip = usesCompactGrips || (gridCard && compactResize) || weekCard
         let completion = entry.canChangeCompletion ? controls.complete : nil
         let hasCompletionButton = agendaRow && completion != nil && options.showsIcon(for: entry)
+        let details = showsDetails ? CalendarEntryDetails(entry: entry, listNames: listNames, calendar: calendar, locale: locale) : nil
         return HStack(alignment: .top, spacing: 0) {
             if let payload, let resizeStartDay, entry.canResizeAllDayRange {
                 PhoneAllDayResizeHandle(entry: entry, edge: .start, calendar: calendar, dateAt: resizeStartDay,
                                         width: usesCompactGrips ? 12 : 15,
+                                        nativeDateAt: monthPosition == nil ? nil : monthDate,
                                         save: { controls.resize(payload, .resizeStart($0)) },
                                         edit: { controls.edit(entry, .resizeStart) })
             }
@@ -174,13 +306,13 @@ private struct MobileCalendarContent: View {
                 }
                 .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
             }
-            cardButton(entry, color: color, canEdit: payload != nil, completion: completion, fillsHeight: fillsHeight,
-                       compact: usesCompactGrips, agendaRow: agendaRow, hasCompletionButton: hasCompletionButton)
+            cardButton(entry, details: details, color: color, canEdit: payload != nil, completion: completion, fillsHeight: fillsHeight,
+                       compact: usesCompactGrips, clipsTitle: gridCard || weekCard, agendaRow: agendaRow, hasCompletionButton: hasCompletionButton)
             if let payload {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: fillsHeight ? 11 : 8, weight: .semibold))
                     .foregroundStyle(.secondary)
-                    .frame(width: fillsHeight ? 28 : usesCompactGrips ? 12 : 16,
+                    .frame(width: fillsHeight && !weekCard ? 28 : compactMoveGrip ? 12 : 16,
                            height: agendaRow ? 44 : fillsHeight ? 28 : 17)
                     .contentShape(Rectangle())
                     .accessibilityLabel("Drag " + entry.title)
@@ -188,6 +320,7 @@ private struct MobileCalendarContent: View {
                 if let resizeDay, entry.canResizeAllDayRange {
                     PhoneAllDayResizeHandle(entry: entry, edge: .end, calendar: calendar, dateAt: resizeDay,
                                             width: usesCompactGrips ? 12 : 18,
+                                            nativeDateAt: monthPosition == nil ? nil : monthDate,
                                             save: { controls.resize(payload, .resizeEnd($0)) },
                                             edit: { controls.edit(entry, .resize) })
                 }
@@ -198,6 +331,11 @@ private struct MobileCalendarContent: View {
         .overlay {
             if options.itemStyle == .outline {
                 RoundedRectangle(cornerRadius: 3).strokeBorder(color.opacity(0.7)).allowsHitTesting(false)
+            }
+        }
+        .overlay(alignment: .bottomLeading) {
+            if let details, !agendaRow {
+                detailLine(details).padding(.horizontal, 3).padding(.bottom, 1).allowsHitTesting(false)
             }
         }
         .opacity(entry.isCompleted ? 0.58 : entry.isProjected ? 0.72 : 1)
@@ -213,13 +351,14 @@ private struct MobileCalendarContent: View {
         entry.isCompleted ? "checkmark.square" : "square"
     }
 
-    @ViewBuilder private func cardButton(_ entry: CalendarEntry, color: Color, canEdit: Bool,
+    @ViewBuilder private func cardButton(_ entry: CalendarEntry, details: CalendarEntryDetails?, color: Color, canEdit: Bool,
                                          completion: ((CalendarEntry) -> Void)?, fillsHeight: Bool,
-                                         compact: Bool, agendaRow: Bool, hasCompletionButton: Bool) -> some View {
+                                         compact: Bool, clipsTitle: Bool, agendaRow: Bool, hasCompletionButton: Bool) -> some View {
         let completionAction = (entry.isCompleted ? "Reopen " : "Complete ") +
             (entry.checklistID == nil ? "task" : "checklist item")
+        let detailedMonthCard = details != nil && !agendaRow
         let button = Button { open(entry.taskID) } label: {
-            HStack(spacing: 3) {
+            HStack(alignment: detailedMonthCard ? .top : .center, spacing: clipsTitle ? 1 : 3) {
                 if !hasCompletionButton {
                     Rectangle().fill(color).frame(width: 2)
                     if options.showsIcon(for: entry) {
@@ -227,17 +366,42 @@ private struct MobileCalendarContent: View {
                             .font(.system(size: 8)).foregroundStyle(color).accessibilityHidden(true)
                     }
                 }
-                Text(entry.title).font(.caption2).lineLimit(1).foregroundStyle(.primary)
-                    .strikethrough(entry.isCompleted)
-                Spacer(minLength: 0)
+                if clipsTitle {
+                    GeometryReader { geometry in
+                        cardTitle(entry)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+                            .clipped()
+                    }.frame(height: compactRowHeight)
+                } else if let details, agendaRow {
+                    VStack(alignment: .leading, spacing: 1) {
+                        cardTitle(entry)
+                        detailLine(details)
+                    }
+                } else {
+                    cardTitle(entry)
+                }
+                if !clipsTitle { Spacer(minLength: 0) }
             }
-            .frame(minWidth: compact ? 0 : nil, maxWidth: compact ? .infinity : nil,
-                   minHeight: agendaRow ? 44 : 17, maxHeight: fillsHeight ? .infinity : nil,
+            .frame(minWidth: compact || clipsTitle ? 0 : nil, maxWidth: compact || clipsTitle ? .infinity : nil,
+                   minHeight: agendaRow ? 44 : detailedMonthCard ? allDayRowHeight : 17,
+                   maxHeight: fillsHeight ? .infinity : nil,
                    alignment: agendaRow ? .leading : .topLeading)
             .clipped()
             .contentShape(Rectangle())
         }
         .accessibilityLabel(entry.title + (entry.isProjected ? ", recurring preview" : ""))
+        .accessibilityValue(details?.text ?? "")
+        .background {
+            if options.mode == .month || options.mode == .agenda {
+                PhoneRowHorizontalPan { distance, state in
+                    let movement = layoutDirection == .leftToRight ? distance : -distance
+                    if state == .ended, movement >= 36, canEdit, scheduleSwipeIDs.contains(entry.taskID) {
+                        controls.edit(entry, .schedule)
+                    }
+                }
+            }
+        }
         if canEdit || completion != nil {
             button
                 .contextMenu {
@@ -271,6 +435,18 @@ private struct MobileCalendarContent: View {
         } else { button }
     }
 
+    private func cardTitle(_ entry: CalendarEntry) -> some View {
+        Text(entry.title).font(.caption2).lineLimit(1).foregroundStyle(.primary)
+            .strikethrough(entry.isCompleted)
+    }
+
+    private func detailLine(_ details: CalendarEntryDetails) -> some View {
+        ViewThatFits(in: .horizontal) {
+            Text(details.text).fixedSize(horizontal: true, vertical: false)
+            Text(details.compact).lineLimit(1)
+        }.font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
+    }
+
     private var hourFoldControls: some View {
         HStack(spacing: 8) {
             ForEach(CalendarHourBand.allCases, id: \.self) { band in
@@ -289,16 +465,30 @@ private struct MobileCalendarContent: View {
         }.font(.caption).padding(.horizontal, 16)
     }
 
-    private var hourly: some View {
+    @ViewBuilder private var hourly: some View {
+        if options.mode == .week {
+            GeometryReader { viewport in hourlyGrid(weekViewportWidth: viewport.size.width) }
+        } else {
+            hourlyGrid(weekViewportWidth: nil)
+        }
+    }
+
+    private func hourlyGrid(weekViewportWidth: CGFloat?) -> some View {
         let byDay = Dictionary(uniqueKeysWithValues: days.map { ($0, entries(on: $0)) })
         let placements = CalendarAllDayLayout.placements(entries: entries, days: days, calendar: calendar)
         let rowCount = (placements.map(\.lane).max() ?? -1) + 1
         let allDayHeight = options.allDayRows.map { Double($0) * (allDayRowHeight + 2) - 2 }
             ?? max(36, Double(rowCount) * (allDayRowHeight + 2))
-        let columnWidth: CGFloat = days.count == 1 ? 300 : 64
+        let secondary = options.visibleTimeZones(primary: calendar.timeZone)
+        let rulerWidth = primaryRulerWidth + CGFloat(secondary.count) * secondaryRulerWidth
+        let columnWidth: CGFloat = if let weekViewportWidth {
+            min(64, max(46, (weekViewportWidth - rulerWidth) / 7))
+        } else {
+            days.count == 1 ? 300 : 64
+        }
         return ScrollView([.horizontal, .vertical]) {
             HStack(alignment: .top, spacing: 0) {
-                hourRulers(headerHeight: 52 + allDayHeight)
+                hourRulers(headerHeight: 52 + allDayHeight, secondary: secondary)
                 if placements.contains(where: { $0.dayCount > 1 || $0.continuesBefore || $0.continuesAfter }) {
                     VStack(spacing: 0) {
                         HStack(spacing: 0) {
@@ -334,7 +524,14 @@ private struct MobileCalendarContent: View {
                         }.frame(width: columnWidth).overlay(alignment: .leading) { hourlyDayBoundary }
                     }
                 }
-            }.padding(.bottom, 100)
+            }
+            .padding(.bottom, 100)
+            .background {
+                if weekViewportWidth != nil {
+                    PhoneWeekSwipe(layoutDirection: layoutDirection, page: pageWeek)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
         }
         .background(Color(uiColor: .systemBackground))
         .overlay {
@@ -435,16 +632,15 @@ private struct MobileCalendarContent: View {
             cards
         }
     }
-    private func hourRulers(headerHeight: CGFloat) -> some View {
-        let secondary = options.visibleTimeZones(primary: calendar.timeZone)
+    private func hourRulers(headerHeight: CGFloat, secondary: [CalendarTimeZone]) -> some View {
         let reference = days.first ?? focus
         return HStack(spacing: 0) {
             VStack(spacing: 0) {
                 Text(calendar.timeZone.abbreviation(for: reference) ?? calendar.timeZone.identifier)
-                    .lineLimit(1).frame(width: 42, height: headerHeight)
+                    .lineLimit(1).frame(width: primaryRulerWidth, height: headerHeight)
                     .accessibilityLabel("Primary time zone " + calendar.timeZone.identifier)
                 ForEach(hourWindow.hours, id: \.self) { hour in
-                    Text(String(format: "%02d", hour)).frame(width: 42, height: hourHeight, alignment: .top)
+                    Text(String(format: "%02d", hour)).frame(width: primaryRulerWidth, height: hourHeight, alignment: .top)
                 }
             }.overlay(alignment: .top) {
                 if hourWindow.canAdjustFolds {
@@ -456,13 +652,13 @@ private struct MobileCalendarContent: View {
                     let formatter = Date.FormatStyle(date: .omitted, time: .shortened, calendar: calendar, timeZone: zone)
                     VStack(spacing: 0) {
                         Text(ruler.title(at: reference)).lineLimit(2).minimumScaleFactor(0.7)
-                            .frame(width: 48, height: headerHeight)
+                            .frame(width: secondaryRulerWidth, height: headerHeight)
                             .accessibilityLabel("Time zone " + ruler.title(at: reference) + ", " + ruler.identifier)
                             .accessibilityIdentifier("calendarRuler-" + ruler.identifier)
                         ForEach(hourWindow.hours, id: \.self) { hour in
                             let instant = CalendarDates.instant(on: reference, minute: hour * 60, calendar: calendar)
                             Text(instant.formatted(formatter)).lineLimit(1).minimumScaleFactor(0.7)
-                                .frame(width: 48, height: hourHeight, alignment: .top)
+                                .frame(width: secondaryRulerWidth, height: hourHeight, alignment: .top)
                         }
                     }
                 }
@@ -546,7 +742,7 @@ private struct MobileCalendarContent: View {
     }
 
     private var zoomableMonth: some View {
-        ScrollView {
+        let scroll = ScrollView {
             monthGrid(days, zoom: monthZoom)
                 .contentShape(Rectangle())
                 .simultaneousGesture(MagnifyGesture().onEnded { gesture in
@@ -554,9 +750,18 @@ private struct MobileCalendarContent: View {
                 })
                 .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("calendarMonthDays")
-            Color.clear.frame(height: 100)
+            if monthPosition != nil {
+                // Leave room to align the last buffered week at the top.
+                Color.clear.containerRelativeFrame(.vertical).accessibilityHidden(true)
+            } else {
+                Color.clear.frame(height: 100)
+            }
         }
         .accessibilityIdentifier("calendarMonthGrid")
+        return Group {
+            if let monthPosition { scroll.scrollPosition(id: monthPosition, anchor: .top) }
+            else { scroll }
+        }
     }
 
     private func monthGrid(_ visible: [Date], zoom: CalendarMonthZoom) -> some View {
@@ -566,11 +771,14 @@ private struct MobileCalendarContent: View {
         case .twoWeeks: 144
         case .oneWeek: 186
         }
+        let weeks = stride(from: 0, to: visible.count, by: 7).map { visible[$0] }
         return LazyVStack(spacing: 1) {
-            ForEach(Array(stride(from: 0, to: visible.count, by: 7)), id: \.self) { start in
-                monthWeek(Array(visible.dropFirst(start).prefix(7)), capacity: zoom.itemLimit, cellHeight: cellHeight)
+            ForEach(weeks, id: \.self) { week in
+                monthWeek(CalendarDates.days(from: week, count: 7, calendar: calendar), capacity: zoom.itemLimit,
+                          cellHeight: cellHeight + CGFloat(zoom.itemLimit) * (allDayRowHeight - compactRowHeight))
             }
         }
+        .scrollTargetLayout(isEnabled: monthPosition != nil)
         .onPreferenceChange(PhoneMonthWeekFrames.self) { monthWeekFrames = $0 }
         .padding(.horizontal, 8)
     }
@@ -583,10 +791,15 @@ private struct MobileCalendarContent: View {
             }
         }
         .background {
-            GeometryReader { geometry in
-                if let first = dates.first {
-                    Color.clear.preference(key: PhoneMonthWeekFrames.self,
-                                           value: [first: geometry.frame(in: .global)])
+            if let first = dates.first {
+                if monthPosition != nil {
+                    PhoneMonthWeekAnchor(week: first, anchors: monthWeekAnchors)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                } else {
+                    GeometryReader { geometry in
+                        Color.clear.preference(key: PhoneMonthWeekFrames.self,
+                                               value: [first: geometry.frame(in: .global)])
+                    }
                 }
             }
         }
@@ -615,8 +828,21 @@ private struct MobileCalendarContent: View {
 
     private func monthCell(_ day: Date, layout: CalendarMonthWeekLayout.Day, height: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(calendar.component(.day, from: day))").font(.caption)
-                .frame(height: monthDateHeight).padding(.bottom, 3)
+            let year = calendar.component(.year, from: day)
+            let month = calendar.component(.month, from: day)
+            let number = calendar.component(.day, from: day)
+            HStack(spacing: 2) {
+                Text("\(number)").font(.caption)
+                    .accessibilityLabel(day.formatted(Date.FormatStyle(date: .complete, time: .omitted, locale: locale,
+                                                                       calendar: calendar, timeZone: calendar.timeZone)))
+                    .accessibilityIdentifier("calendarMonthDay-\(year)-\(month)-\(number)")
+                if number == 1, monthPosition != nil {
+                    Text(day.formatted(Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated)))
+                        .font(.system(size: 9)).foregroundStyle(.secondary)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .accessibilityHidden(true)
+                }
+            }.frame(height: monthDateHeight).padding(.bottom, 3)
             ForEach(layout.slots.indices, id: \.self) { index in
                 if let entry = layout.slots[index] {
                     card(entry, resizeStartDay: monthResizeDay, compactResize: true, resizeDay: monthResizeDay)
@@ -640,10 +866,11 @@ private struct MobileCalendarContent: View {
                     Color(uiColor: .systemBackground)
                         .overlay(selected ? Color.accentColor.opacity(0.16) : .clear)
                     if let createRange = controls.createRange {
-                        PhoneMonthRangeTarget { point, finished in
+                        PhoneMonthGridGesture { point, finished in
                             let dates = point.flatMap { monthRange(from: day, to: $0) }
                             monthSelection = finished ? nil : dates
                             if finished, let dates, dates.lowerBound != dates.upperBound {
+                                holdMonthForCapture()
                                 createRange(dates)
                             }
                         }.accessibilityHidden(true)
@@ -657,7 +884,9 @@ private struct MobileCalendarContent: View {
     }
 
     private func monthDate(at point: CGPoint) -> Date? {
-        guard let (first, frame) = monthWeekFrames.first(where: { $0.value.contains(point) }) else { return nil }
+        let match = monthPosition == nil ? monthWeekFrames.first(where: { $0.value.contains(point) })
+            : monthWeekAnchors.week(at: point)
+        guard let (first, frame) = match, frame.width > 0 else { return nil }
         let column = min(6, Int((point.x - frame.minX) / ((frame.width + 1) / 7)))
         guard let end = calendar.date(byAdding: .day, value: column, to: first), days.contains(end) else { return nil }
         return end
@@ -738,41 +967,144 @@ private struct MobileCalendarContent: View {
 }
 
 
-/// A long press on the empty cell defers to a normal scroll until it
-/// recognizes. The continuous UIKit gesture then tracks the selected dates.
-private struct PhoneMonthRangeTarget: UIViewRepresentable {
+/// Empty cells defer to a normal scroll until a long press recognizes.
+/// An endpoint handle owns the touch immediately and also supports a tap.
+private struct PhoneMonthGridGesture: UIViewRepresentable {
+    var tap: (() -> Void)? = nil
     let update: (CGPoint?, Bool) -> Void
 
-    func makeCoordinator() -> Coordinator { Coordinator(update: update) }
+    func makeCoordinator() -> Coordinator { Coordinator(tap: tap, update: update) }
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
         let press = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.track))
-        press.minimumPressDuration = 0.35
+        press.minimumPressDuration = tap == nil ? 0.35 : 0
         view.addGestureRecognizer(press)
         return view
     }
 
     func updateUIView(_ view: UIView, context: Context) {
+        context.coordinator.tap = tap
         context.coordinator.update = update
     }
 
-    final class Coordinator: NSObject {
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
+        coordinator.releaseScrollPan()
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var tap: (() -> Void)?
         var update: (CGPoint?, Bool) -> Void
-        init(update: @escaping (CGPoint?, Bool) -> Void) { self.update = update }
+        private weak var scrollPan: UIPanGestureRecognizer?
+        private var start: CGPoint = .zero
+        private var hasMoved = false
+
+        init(tap: (() -> Void)?, update: @escaping (CGPoint?, Bool) -> Void) {
+            self.tap = tap
+            self.update = update
+        }
 
         @objc func track(_ press: UILongPressGestureRecognizer) {
+            let point = press.location(in: press.view?.window)
             switch press.state {
-            case .began, .changed:
-                update(press.location(in: press.view?.window), false)
+            case .began:
+                start = point
+                hasMoved = false
+                claimScrollPan(in: press.view)
+                if tap == nil { update(point, false) }
+            case .changed:
+                recordMovement(to: point)
+                if tap == nil || hasMoved { update(point, false) }
             case .ended:
-                update(press.location(in: press.view?.window), true)
+                recordMovement(to: point)
+                if let tap, !hasMoved { tap() }
+                else { update(point, true) }
+                releaseScrollPan()
             case .cancelled, .failed:
                 update(nil, false)
+                releaseScrollPan()
             default:
                 break
             }
         }
+
+        private func recordMovement(to point: CGPoint) {
+            hasMoved = hasMoved || hypot(point.x - start.x, point.y - start.y) >= 5
+        }
+
+        private func claimScrollPan(in view: UIView?) {
+            var ancestor = view?.superview
+            while let current = ancestor {
+                if let scrollView = current as? UIScrollView {
+                    let pan = scrollView.panGestureRecognizer
+                    if pan.isEnabled {
+                        scrollPan = pan
+                        pan.isEnabled = false
+                    }
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
+
+        func releaseScrollPan() {
+            scrollPan?.isEnabled = true
+            scrollPan = nil
+        }
+    }
+}
+
+/// Resolve a touch against the row's current position in the UIKit window.
+/// Lazy scroll targets can update their reported SwiftUI frames before the
+/// visible content finishes settling at its new offset.
+@MainActor private final class PhoneMonthWeekAnchors {
+    private final class Anchor {
+        weak var view: UIView?
+        init(_ view: UIView) { self.view = view }
+    }
+
+    private var rows: [Date: Anchor] = [:]
+
+    func register(_ view: UIView, week: Date) {
+        rows[week] = Anchor(view)
+    }
+
+    func remove(_ view: UIView, week: Date) {
+        if rows[week]?.view === view { rows[week] = nil }
+    }
+
+    func week(at point: CGPoint) -> (key: Date, value: CGRect)? {
+        for (week, anchor) in rows {
+            guard let view = anchor.view, let window = view.window else { continue }
+            let frame = view.convert(view.bounds, to: window)
+            if frame.contains(point) { return (week, frame) }
+        }
+        return nil
+    }
+}
+
+private struct PhoneMonthWeekAnchor: UIViewRepresentable {
+    let week: Date
+    let anchors: PhoneMonthWeekAnchors
+
+    func makeCoordinator() -> Coordinator { Coordinator(week: week, anchors: anchors) }
+
+    func makeUIView(context: Context) -> UIView {
+        let view = UIView()
+        view.isUserInteractionEnabled = false
+        anchors.register(view, week: week)
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {}
+
+    static func dismantleUIView(_ view: UIView, coordinator: Coordinator) {
+        coordinator.anchors.remove(view, week: coordinator.week)
+    }
+
+    struct Coordinator {
+        let week: Date
+        let anchors: PhoneMonthWeekAnchors
     }
 }
 
@@ -780,6 +1112,101 @@ private struct PhoneMonthWeekFrames: PreferenceKey {
     static let defaultValue: [Date: CGRect] = [:]
     static func reduce(value: inout [Date: CGRect], nextValue: () -> [Date: CGRect]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+/// Observe the grid's own pan so a card's drag recognizer remains independent.
+private struct PhoneWeekSwipe: UIViewRepresentable {
+    let layoutDirection: LayoutDirection
+    let page: (Int) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> AnchorView {
+        let view = AnchorView()
+        view.isUserInteractionEnabled = false
+        view.attached = { [weak coordinator = context.coordinator] view in
+            coordinator?.attach(from: view)
+        }
+        return view
+    }
+
+    func updateUIView(_ view: AnchorView, context: Context) {
+        context.coordinator.layoutDirection = layoutDirection
+        context.coordinator.page = page
+        context.coordinator.attach(from: view)
+    }
+
+    static func dismantleUIView(_ view: AnchorView, coordinator: Coordinator) {
+        view.attached = nil
+        coordinator.detach()
+    }
+
+    final class AnchorView: UIView {
+        var attached: ((UIView) -> Void)?
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            attached?(self)
+        }
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var layoutDirection: LayoutDirection = .leftToRight
+        var page: ((Int) -> Void)?
+        private weak var scroll: UIScrollView?
+        private var previousBounce = false
+        private var startX: CGFloat?
+
+        func attach(from view: UIView) {
+            var ancestor = view.superview
+            while let current = ancestor, !(current is UIScrollView) { ancestor = current.superview }
+            let grid = ancestor as? UIScrollView
+            guard grid !== scroll else { return }
+            detach()
+            guard let grid else { return }
+            scroll = grid
+            previousBounce = grid.alwaysBounceHorizontal
+            grid.alwaysBounceHorizontal = true
+            grid.panGestureRecognizer.addTarget(self, action: #selector(didPan))
+        }
+
+        func detach() {
+            scroll?.panGestureRecognizer.removeTarget(self, action: #selector(didPan))
+            scroll?.alwaysBounceHorizontal = previousBounce
+            scroll = nil
+            startX = nil
+        }
+
+        @objc private func didPan(_ gesture: UIPanGestureRecognizer) {
+            guard let grid = scroll else { return }
+            switch gesture.state {
+            case .began:
+                startX = gesture.numberOfTouches == 1 ? grid.contentOffset.x : nil
+            case .changed:
+                if gesture.numberOfTouches != 1 { startX = nil }
+            case .ended:
+                defer { startX = nil }
+                guard let startX else { return }
+                let movement = gesture.translation(in: nil)
+                guard abs(movement.x) >= 44, abs(movement.x) > abs(movement.y) * 1.5 else { return }
+                let left = -grid.adjustedContentInset.left
+                let right = max(left, grid.contentSize.width - grid.bounds.width + grid.adjustedContentInset.right)
+                let swipedLeft = movement.x < 0
+                let origin = swipedLeft ? right : left
+                guard abs(startX - origin) <= 8 else { return }
+                let destination = swipedLeft ? left : right
+                let future = swipedLeft == (layoutDirection == .leftToRight)
+                Task { @MainActor [weak self, weak grid] in
+                    guard let self, let grid, grid === scroll else { return }
+                    grid.setContentOffset(CGPoint(x: destination, y: grid.contentOffset.y), animated: false)
+                    page?(future ? 1 : -1)
+                }
+            case .cancelled, .failed:
+                startX = nil
+            default:
+                break
+            }
+        }
     }
 }
 
@@ -885,13 +1312,15 @@ private struct PhoneAllDayResizeHandle: View {
     let calendar: Calendar
     let dateAt: (DragGesture.Value) -> Date?
     let width: CGFloat
+    let nativeDateAt: ((CGPoint) -> Date?)?
     let save: (Date) -> Void
     let edit: () -> Void
     @GestureState private var preview: Date?
+    @State private var nativePreview: Date?
     private var endpoint: String { edge == .start ? "start" : "end" }
 
     var body: some View {
-        Button(action: edit) {
+        let button = Button(action: edit) {
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
@@ -901,22 +1330,34 @@ private struct PhoneAllDayResizeHandle: View {
         .buttonStyle(.plain)
         .accessibilityLabel("Resize " + endpoint + " of " + entry.title)
         .accessibilityIdentifier("calendarAllDay" + endpoint.capitalized + "Handle-" + entry.taskID.uuidString)
-        .highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .global)
-            .updating($preview) { value, state, _ in
-                state = dateAt(value).flatMap { entry.allDayResizeTarget(on: $0, edge: edge, calendar: calendar) }
+        Group {
+            if let nativeDateAt {
+                button.overlay {
+                    PhoneMonthGridGesture(tap: edit) { point, finished in
+                        let target = point.flatMap(nativeDateAt).flatMap(resizeTarget)
+                        nativePreview = finished ? nil : target
+                        if finished, let target { save(target) }
+                    }.accessibilityHidden(true)
+                }
+            } else {
+                button.highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .global)
+                    .updating($preview) { value, state, _ in state = dateAt(value).flatMap(resizeTarget) }
+                    .onEnded { value in
+                        if let target = dateAt(value).flatMap(resizeTarget) { save(target) }
+                    })
             }
-            .onEnded { value in
-                guard let day = dateAt(value),
-                      let target = entry.allDayResizeTarget(on: day, edge: edge, calendar: calendar) else { return }
-                save(target)
-            })
+        }
         .overlay(alignment: .topTrailing) {
-            if let preview {
+            if let preview = nativePreview ?? preview {
                 Text(preview.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)))
                     .font(.caption2).fixedSize().padding(3).background(.regularMaterial, in: Capsule())
                     .offset(y: -19).allowsHitTesting(false).accessibilityHidden(true)
             }
         }
+    }
+
+    private func resizeTarget(_ day: Date) -> Date? {
+        entry.allDayResizeTarget(on: day, edge: edge, calendar: calendar)
     }
 }
 

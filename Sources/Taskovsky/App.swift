@@ -229,6 +229,15 @@ private struct DisplayedTaskGroup: Identifiable {
 }
 
 struct WorkspaceView: View {
+    private struct BatchRequest: Identifiable {
+        let id = UUID()
+        let scope: String
+        let tasks: [TaskItem]
+        let data: WorkspaceData
+        let settings: AppSettings
+        let now: Date
+    }
+
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
     @ObservedObject var actions: TaskActionCenter
@@ -237,6 +246,7 @@ struct WorkspaceView: View {
     // sidebar and the compact popover, which share the same sidebar view.
     @StateObject private var sidebarDrag = SidebarDragCoordinator()
     @State private var destination: Destination = .today
+    @State private var batchRequest: BatchRequest?
     @State private var quickTitle = ""
     @State private var quickKind: TaskKind = .task
     // Persisted: a Manual order would otherwise appear lost whenever the app
@@ -295,6 +305,7 @@ struct WorkspaceView: View {
     @State private var creatingFilter = false
     @State private var templatePicker = false
     @State private var purgeCandidate: UUID?
+    @State private var occurrenceSkip: TaskOccurrenceSkipRequest?
     @AppStorage("Taskovsky.collapsedSidebarSections", store: IsolatedDefaults.store) private var collapsedSidebarSections = ""
     @AppStorage("Taskovsky.sidebarWidth", store: IsolatedDefaults.store) private var sidebarWidth = 215.0
     @AppStorage("Taskovsky.sidebarCollapsed", store: IsolatedDefaults.store) private var sidebarCollapsed = false
@@ -593,6 +604,7 @@ struct WorkspaceView: View {
         }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(store: store) }
         .sheet(isPresented: $viewOptions) { ViewOptionsView(layout: $detailLayout) }
+        .sheet(item: $batchRequest) { request in batchSheet(request) }
         .sheet(isPresented: $boardDisplaySettings) {
             BoardDisplaySettings(size: $boardColumnSize, showsTaskInput: $showBoardTaskInput)
         }
@@ -629,6 +641,7 @@ struct WorkspaceView: View {
             if let task = selectedTask, !destination.includes(task, data: store.data) { detailState.clear() }
             quickKind = nextCreationKind ?? (activeList?.kind == .note ? .note : .task); nextCreationKind = nil
         }
+        .taskOccurrenceSkipPrompt($occurrenceSkip, store: store, actions: actions)
         .alert("Delete Forever?", isPresented: isPurgeAlertPresented, presenting: purgeCandidate) { id in
             Button("Delete Forever", role: .destructive) { _ = store.purgeTask(id: id); purgeCandidate = nil }
             Button("Cancel", role: .cancel) { purgeCandidate = nil }
@@ -739,12 +752,12 @@ struct WorkspaceView: View {
     private var detailDock: some View {
         Group {
             if let task = selectedTask {
-                TaskDetail(store: store, drafts: drafts, id: task.id, onTrash: { trash(task.id) }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: nil, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
+                TaskDetail(store: store, drafts: drafts, actions: actions, id: task.id, onTrash: { trash(task.id) }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: nil, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
             } else { DetailPlaceholder() }
         }
     }
     private func drawer(task: TaskItem) -> some View {
-        TaskDetail(store: store, drafts: drafts, id: task.id, onTrash: { trash(task.id); closeDrawer() }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: closeDrawer, compact: true, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
+        TaskDetail(store: store, drafts: drafts, actions: actions, id: task.id, onTrash: { trash(task.id); closeDrawer() }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: closeDrawer, compact: true, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
             .frame(width: ResponsiveLayout.drawerWidth).frame(maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor))
             .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1) }
@@ -1072,6 +1085,24 @@ struct WorkspaceView: View {
             }
         }
     }
+
+    private func batchSheet(_ request: BatchRequest) -> some View {
+        TaskBatchSheet(scope: request.scope, tasks: request.tasks, lists: request.data.lists,
+                       tags: request.data.tags, calendar: request.settings.calendar, today: request.now) { edit in
+            guard store.data == request.data, store.settings == request.settings else {
+                return "The workspace changed. Close this sheet and select tasks again."
+            }
+            do {
+                guard try store.applyBatch(edit) else { return store.storageError ?? "Could not save the batch change." }
+                actions.notice("Batch change applied.")
+                return nil
+            } catch let reason as TaskBatchRefusal {
+                return reason.batchMessage
+            } catch {
+                return "The selected tasks could not be changed."
+            }
+        }
+    }
     @State private var listsHeadingHovered = false
     private func folderSection(_ folder: ListFolder, now: Date, registrationActive: Bool = true) -> some View {
         let isCollapsed = collapsedFolderIDs.contains(folder.id)
@@ -1396,6 +1427,13 @@ struct WorkspaceView: View {
                     }
                 }
                 Menu {
+                    if mode == .list && destination != .trash && destination != .summary {
+                        Button("Select Tasks…") {
+                            batchRequest = BatchRequest(scope: destination.title(store.data), tasks: tasks,
+                                                        data: store.data, settings: store.settings, now: now)
+                        }.disabled(tasks.isEmpty)
+                        Divider()
+                    }
                     if destination != .completed && destination != .trash && destination != .wontDo && destination != .summary {
                         Button(showCompleted ? "Hide Completed" : "Show Completed") { showCompleted.toggle() }
                         Divider()
@@ -1598,6 +1636,9 @@ struct WorkspaceView: View {
             Menu("Priority") { ForEach(TaskPriority.allCases, id: \.self) { value in Button(value.label) { var t = task; t.priority = value; store.updateTask(t) } } }
             Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
             taskSectionMoveMenu(task)
+            if CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) {
+                Button("Skip this occurrence…") { occurrenceSkip = TaskOccurrenceSkipRequest(task) }
+            }
             Button("Duplicate") { if let id = store.duplicateTask(id: task.id) { selectTask(id) } }
             Button("Save as Template") { _ = store.saveTemplate(from: task.id) }
             if task.kind == .task {
@@ -2476,7 +2517,7 @@ struct TaskDetailWindow: View {
     var body: some View {
         Group {
             if store.data.tasks.contains(where: { $0.id == currentID }) {
-                TaskDetail(store: store, drafts: drafts, id: currentID, onTrash: { NotificationCenter.default.post(name: .trashTask, object: currentID); dismiss() }, onComplete: { actions.complete(store: store, id: currentID) }, onWontDo: { actions.abandon(store: store, id: currentID) }, onClose: nil, compact: true, standalonePopup: true, onRestore: { actions.restore(store: store, id: currentID) }, onPurge: { NotificationCenter.default.post(name: .requestPurge, object: currentID) }, onNavigateToTask: { currentID = $0 }).id(currentID)
+                TaskDetail(store: store, drafts: drafts, actions: actions, id: currentID, onTrash: { NotificationCenter.default.post(name: .trashTask, object: currentID); dismiss() }, onComplete: { actions.complete(store: store, id: currentID) }, onWontDo: { actions.abandon(store: store, id: currentID) }, onClose: nil, compact: true, standalonePopup: true, onRestore: { actions.restore(store: store, id: currentID) }, onPurge: { NotificationCenter.default.post(name: .requestPurge, object: currentID) }, onNavigateToTask: { currentID = $0 }).id(currentID)
             } else {
                 Text("This item is no longer available.").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }

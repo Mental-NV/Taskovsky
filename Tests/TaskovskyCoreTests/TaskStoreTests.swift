@@ -369,3 +369,27 @@ final class TaskStoreTests: XCTestCase {
         XCTAssertEqual(nextYear, date(2025, 2, 28))
     }
 }
+
+extension TaskStoreTests {
+    @MainActor func testDesktopTaskBatchDoesNotPublishWhenDiskWriteFails() throws {
+        let url = temporaryURL()
+        let directory = url.deletingLastPathComponent()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = TaskStore(fileURL: url, seed: false)
+        let first = store.createTask(title: "First")
+        let second = store.createTask(title: "Second")
+        let initial = store.data
+        let initialBytes = try Data(contentsOf: url)
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        let change = TaskBatchEdit(ids: [first, second], action: .priority(.high))
+        XCTAssertFalse(try store.applyBatch(change))
+        XCTAssertEqual(store.data, initial)
+        try FileManager.default.removeItem(at: url)
+        try initialBytes.write(to: url)
+        XCTAssertTrue(try store.applyBatch(change))
+        let saved = try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: url))
+        XCTAssertEqual(saved, store.data)
+        XCTAssertTrue(saved.tasks.allSatisfy { $0.priority == .high })
+    }
+}

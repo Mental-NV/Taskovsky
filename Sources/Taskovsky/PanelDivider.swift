@@ -32,6 +32,7 @@ struct PanelDivider: View {
     @Published var feedback: TaskFeedback?
     private let coordinator = UndoCoordinator()
     private var activeToken: UUID?
+    private var scheduleUndo: CalendarScheduleUndo?
     private var expiry: Task<Void, Never>?
 
     func complete(store: TaskStore, id: UUID) {
@@ -57,7 +58,29 @@ struct PanelDivider: View {
         show(taskID: id, kind: .restored, message: "Restored to \"\(name)\"")
     }
     func notice(_ message: String) { show(taskID: UUID(), kind: .info, message: message) }
+    func skipOccurrence(store: TaskStore, request: TaskOccurrenceSkipRequest) {
+        guard let task = store.data.tasks.first(where: { $0.id == request.taskID }),
+              CalendarScheduleSnapshot(task) == request.schedule,
+              !SmartListEligibility.isArchived(task, lists: store.data.lists),
+              CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) else {
+            notice("Schedule changed. Open the current task and try again.")
+            return
+        }
+        guard let undo = store.scheduleOnCalendar(id: task.id, operation: .skipOccurrence) else {
+            notice(store.storageError ?? "Could not skip this occurrence.")
+            return
+        }
+        show(taskID: task.id, kind: .schedule, message: "Occurrence skipped", scheduleUndo: undo)
+    }
     func undo(store: TaskStore) {
+        if let scheduleUndo {
+            if store.undoCalendarSchedule(scheduleUndo) {
+                notice("Schedule restored")
+            } else {
+                notice(store.storageError ?? "Schedule changed since this edit.")
+            }
+            return
+        }
         guard let value = feedback, let token = activeToken, let claim = coordinator.consume(token: token), claim.taskID == value.taskID else { return }
         activeToken = nil
         feedback = nil
@@ -68,13 +91,14 @@ struct PanelDivider: View {
         case .restore: break
         }
     }
-    private func show(taskID: UUID, kind: TaskFeedback.Kind, message: String) {
+    private func show(taskID: UUID, kind: TaskFeedback.Kind, message: String, scheduleUndo: CalendarScheduleUndo? = nil) {
+        self.scheduleUndo = scheduleUndo
         let undoKind: UndoKind? = switch kind {
         case .complete: .complete
         case .wontDo: .wontDo
         case .trash: .trash
         case .restored: .restore
-        case .info: nil
+        case .schedule, .info: nil
         }
         let claim = undoKind.map { coordinator.record(taskID: taskID, kind: $0) }
         activeToken = claim?.token
@@ -91,16 +115,47 @@ struct PanelDivider: View {
     }
     private func expire(token: UUID?, valueID: UUID?) {
         if let token { coordinator.expire(token: token) }
-        if activeToken == token, feedback?.id == valueID { activeToken = nil; feedback = nil }
+        if activeToken == token, feedback?.id == valueID {
+            activeToken = nil
+            scheduleUndo = nil
+            feedback = nil
+        }
     }
 }
 
 struct TaskFeedback: Identifiable {
-    enum Kind { case complete, wontDo, trash, restored, info }
+    enum Kind { case complete, wontDo, trash, restored, schedule, info }
     let id = UUID()
     let taskID: UUID
     let kind: Kind
     let message: String
+}
+
+struct TaskOccurrenceSkipRequest {
+    let taskID: UUID
+    let title: String
+    let schedule: CalendarScheduleSnapshot
+
+    init(_ task: TaskItem) {
+        taskID = task.id
+        title = task.title.isEmpty ? "Untitled" : task.title
+        schedule = CalendarScheduleSnapshot(task)
+    }
+}
+
+extension View {
+    func taskOccurrenceSkipPrompt(_ request: Binding<TaskOccurrenceSkipRequest?>,
+                                  store: TaskStore, actions: TaskActionCenter) -> some View {
+        alert("Skip this occurrence?", isPresented: Binding(
+            get: { request.wrappedValue != nil },
+            set: { if !$0 { request.wrappedValue = nil } }
+        ), presenting: request.wrappedValue) { pending in
+            Button("Skip") { actions.skipOccurrence(store: store, request: pending) }
+            Button("Cancel", role: .cancel) {}
+        } message: { pending in
+            Text("“\(pending.title)” will move to its next scheduled date.")
+        }
+    }
 }
 
 /// One shared feedback toast for every surface (main, drawer, pop-up, search):
@@ -120,7 +175,7 @@ struct FeedbackToast: View {
                     Button { onNavigateToList(listID, feedback.taskID) } label: { Image(systemName: "chevron.right").font(.system(size: 16, weight: .semibold)).foregroundStyle(.orange) }.buttonStyle(.plain).help("Open original list").accessibilityLabel("Open original list")
                 case .info: EmptyView()
                 default:
-                    Button { actions.undo(store: store) } label: { Image(systemName: "arrow.uturn.backward").font(.system(size: 16, weight: .semibold)).foregroundStyle(.orange) }.buttonStyle(.plain).help("Undo").accessibilityLabel("Undo \(feedback.message)")
+                    Button { actions.undo(store: store) } label: { Image(systemName: "arrow.uturn.backward").font(.system(size: 16, weight: .semibold)).foregroundStyle(.orange) }.buttonStyle(.plain).help("Undo").accessibilityLabel(feedback.kind == .schedule ? "Undo schedule change" : "Undo \(feedback.message)")
                 }
             }.padding(.horizontal, 16).padding(.vertical, 12).background(Color(white: 0.15), in: RoundedRectangle(cornerRadius: 9)).shadow(color: .black.opacity(0.2), radius: 12, y: 4).padding(.bottom, 60).transition(.move(edge: .bottom).combined(with: .opacity))
         }
