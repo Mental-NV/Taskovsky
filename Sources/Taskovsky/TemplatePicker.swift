@@ -5,21 +5,24 @@ struct TemplatePicker: View {
     @ObservedObject var store: TaskStore
     let onChoose: (TaskTemplate) -> Void
     @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
 
     var body: some View {
+        let matches = TaskTemplate.matching(query, in: store.data.templates)
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("Task Templates").font(.system(size: 16, weight: .bold))
                 Spacer()
                 Button("Close") { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            if store.data.templates.isEmpty {
-                Text("No templates yet. Create one in Settings.")
+            TemplateSearchField(query: $query)
+            if matches.isEmpty {
+                Text(store.data.templates.isEmpty ? "No templates yet. Create one in Settings." : "No matching templates")
                     .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 160), spacing: 12), count: 3), spacing: 12) {
-                        ForEach(store.data.templates) { template in
+                        ForEach(matches) { template in
                             VStack(alignment: .leading, spacing: 8) {
                                 Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2)
                                 if !template.checklist.isEmpty {
@@ -41,5 +44,23 @@ struct TemplatePicker: View {
                 }
             }
         }.padding(24).frame(width: 600, height: 420).tint(accent)
+    }
+}
+
+
+struct TemplateSearchField: View {
+    @Binding var query: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+            TextField("Search templates", text: $query)
+                .textFieldStyle(.plain).accessibilityIdentifier("templateSearch")
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary).accessibilityLabel("Clear template search")
+            }
+        }.padding(8)
+            .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 7))
     }
 }

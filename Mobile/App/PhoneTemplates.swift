@@ -6,30 +6,79 @@ struct PhoneTemplateManager: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: PhoneWorkspaceModel
     @State private var request: PhoneTemplateRequest?
+    @State private var query = ""
+    @State private var editMode = EditMode.inactive
+    @State private var reorderRevision: WorkspaceRevision?
+    @State private var orderError: String?
+
+    private var templates: [TaskTemplate] { model.document?.snapshot.workspace.templates ?? [] }
+    private var canReorder: Bool {
+        templates.count > 1 && query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
+        let matches = TaskTemplate.matching(query, in: templates)
         NavigationStack {
             List {
+                PhoneTemplateSearchField(query: $query).disabled(editMode.isEditing)
                 Button("New Template", systemImage: "plus") { open(nil) }
                     .accessibilityIdentifier("newTemplate")
-                ForEach(model.document?.snapshot.workspace.templates ?? []) { template in
+                    .disabled(!model.canBeginEditing || editMode.isEditing)
+                if matches.isEmpty && !templates.isEmpty {
+                    Text("No matching templates").foregroundStyle(.secondary)
+                }
+                ForEach(matches) { template in
                     Button { open(template) } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(template.name)
                             Text(template.title).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                         }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }.accessibilityLabel(template.name)
-                }
+                        .disabled(!model.canBeginEditing)
+                }.onMove(perform: canReorder ? reorder : nil)
             }
-            .disabled(!model.canBeginEditing)
+            .disabled(model.isBusy)
+            .environment(\.editMode, $editMode)
             .navigationTitle("Templates").navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .top, spacing: 0) { PhoneTemplateError(message: orderError) }
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(editMode.isEditing ? "Finish Reordering" : "Reorder") {
+                        orderError = nil
+                        if editMode.isEditing {
+                            editMode = .inactive
+                            reorderRevision = nil
+                        } else {
+                            reorderRevision = model.document?.revision
+                            editMode = .active
+                        }
+                    }.disabled(model.isBusy || (!editMode.isEditing && (!model.canBeginEditing || !canReorder)))
+                        .accessibilityIdentifier("templateReorder")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }.disabled(model.isBusy).accessibilityIdentifier("templateManagerDone")
                 }
             }
         }
+        .interactiveDismissDisabled(model.isBusy)
         .sheet(item: $request) { PhoneTemplateEditor(model: model, request: $0) }
+    }
+
+    private func reorder(from offsets: IndexSet, to destination: Int) {
+        guard canReorder, model.canBeginEditing, let document = model.document else { return }
+        guard document.revision == reorderRevision else {
+            editMode = .inactive
+            orderError = "The workspace changed. Open Reorder again."
+            return
+        }
+        let order = document.snapshot.workspace.templates.map(\.id)
+        guard offsets.allSatisfy(order.indices.contains), (0...order.count).contains(destination) else { return }
+        var ids = order
+        ids.move(fromOffsets: offsets, toOffset: destination)
+        Task {
+            orderError = await model.saveTemplate(.reorder(ids: ids, expectedOrder: order), expected: document.revision)
+            if orderError == nil { reorderRevision = model.document?.revision }
+        }
     }
 
     private func open(_ template: TaskTemplate?) {
@@ -198,15 +247,24 @@ struct PhoneApplyTaskTemplate: View {
     let onApplied: () -> Void
     @State private var selection: TaskTemplate?
     @State private var error: String?
+    @State private var query = ""
 
     var body: some View {
-        List(model.document?.snapshot.workspace.templates ?? []) { template in
-            Button { selection = template } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(template.name)
-                    Text(template.title).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-            }.accessibilityLabel(template.name).accessibilityIdentifier("applyTaskTemplate-" + template.id.uuidString)
+        let templates = model.document?.snapshot.workspace.templates ?? []
+        let matches = TaskTemplate.matching(query, in: templates)
+        List {
+            PhoneTemplateSearchField(query: $query)
+            if matches.isEmpty && !templates.isEmpty {
+                Text("No matching templates").foregroundStyle(.secondary)
+            }
+            ForEach(matches) { template in
+                Button { selection = template } label: {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(template.name)
+                        Text(template.title).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                    }.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                }.accessibilityLabel(template.name).accessibilityIdentifier("applyTaskTemplate-" + template.id.uuidString)
+            }
         }
         .disabled(model.isBusy)
         .navigationTitle("Apply Template")
@@ -220,6 +278,23 @@ struct PhoneApplyTaskTemplate: View {
                           if error == nil { onApplied() }
                       }
                   }, secondaryButton: .cancel())
+        }
+    }
+}
+
+struct PhoneTemplateSearchField: View {
+    @Binding var query: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+            TextField("Search templates", text: $query)
+                .textInputAutocapitalization(.never)
+                .accessibilityIdentifier("templateSearch")
+            if !query.isEmpty {
+                Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.borderless).foregroundStyle(.secondary).accessibilityLabel("Clear template search")
+            }
         }
     }
 }

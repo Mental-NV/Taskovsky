@@ -4564,6 +4564,64 @@ extension ReadOnlyNavigationTests {
         attach(app, "Calendar begins on saved Sunday")
     }
 
+    @MainActor func testTemplateSearchAndNativeReorderSurviveRelaunch() {
+        let app = launch(qaCase: "template-order")
+        openTemplateManager(app)
+        let search = app.textFields["templateSearch"]
+        let styled = app.buttons["Styled project"]
+        let weekly = app.buttons["Weekly setup"]
+        let travel = app.buttons["Travel bag"]
+        let reorder = app.buttons["templateReorder"]
+        XCTAssertTrue(styled.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("CAFE")
+        XCTAssertTrue(weekly.exists)
+        XCTAssertFalse(styled.exists)
+        XCTAssertFalse(travel.exists)
+        XCTAssertFalse(reorder.isEnabled)
+        app.buttons["Clear template search"].tap()
+        XCTAssertTrue(styled.waitForExistence(timeout: 5))
+        XCTAssertLessThan(styled.frame.minY, travel.frame.minY)
+        reorder.tap()
+
+        let grip = app.descendants(matching: .any).matching(
+            NSPredicate(format: "label BEGINSWITH %@", "Reorder Styled project")
+        ).firstMatch
+        guard grip.waitForExistence(timeout: 5) else {
+            attach(app, "Template manager edit mode")
+            return XCTFail("The native template reorder control is unavailable.")
+        }
+        grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            .press(forDuration: 0.3, thenDragTo: travel.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.85)))
+        reorder.tap()
+        let moved = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in travel.frame.minY < styled.frame.minY }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [moved], timeout: 5), .completed)
+        attach(app, "Templates in saved order")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openTemplateManager(app)
+        XCTAssertTrue(styled.waitForExistence(timeout: 5))
+        XCTAssertLessThan(travel.frame.minY, styled.frame.minY)
+
+        app.buttons["templateManagerDone"].tap()
+        waitGone(app.buttons["templateManagerDone"])
+        app.buttons["drawerDone"].tap()
+        waitGone(app.buttons["drawerDone"])
+        _ = openCapture(app)
+        let chooser = app.buttons["captureTemplatePicker"]
+        reveal(chooser, in: app)
+        chooser.tap()
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("passport")
+        XCTAssertTrue(travel.exists)
+        XCTAssertFalse(styled.exists)
+        travel.tap()
+        waitGone(search)
+        let title = app.textViews["captureTitle"]
+        reveal(title, in: app, towardTop: true)
+        XCTAssertEqual(title.value as? String, "Pack the bag")
+    }
+
     @MainActor func testTemplateManagerCreatesRenamesAndDeletesPlainTemplate() {
         let app = launch()
         openTemplateManager(app)
@@ -4621,6 +4679,9 @@ extension ReadOnlyNavigationTests {
         let apply = app.buttons["Apply Template"]
         reveal(apply, in: app)
         apply.tap()
+        let search = app.textFields["templateSearch"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap(); search.typeText("OUTLINE")
         let saved = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label == %@",
                                                        "applyTaskTemplate-", "Review the project outline")).firstMatch
         XCTAssertTrue(saved.waitForExistence(timeout: 5))

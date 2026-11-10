@@ -3,7 +3,7 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneScheduleSurface: Hashable { case tasks, calendar }
 
@@ -181,12 +181,17 @@ final class PhoneWorkspaceModel: ObservableObject {
                 }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
-            if isQA && qaCase == .captureTemplate {
+            if isQA && (qaCase == .captureTemplate || qaCase == .templateOrder) {
                 var data = initial.workspace; let source = data.tasks[0]
                 data.templates = [TaskTemplate(name: "Styled project", title: "Template project", body: source.body,
                                                checklist: [.init(title: "Review the plan", isCompleted: true)], priority: .high,
                                                richBody: source.richBody, customRecurrence: CustomRecurrence(),
                                                scheduledDuration: data.tasks[1].scheduledDuration)]
+                if qaCase == .templateOrder {
+                    data.templates.append(TaskTemplate(name: "Weekly setup", title: "Café planning"))
+                    data.templates.append(TaskTemplate(name: "Travel bag", title: "Pack the bag",
+                                                       checklist: [ChecklistItem(title: "Passport")]))
+                }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && qaCase == .lifecycle {

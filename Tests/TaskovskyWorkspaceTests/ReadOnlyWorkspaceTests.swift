@@ -182,6 +182,40 @@ extension ReadOnlyWorkspaceTests {
         XCTAssertEqual(try Data(contentsOf: files.workspace), workspace.snapshot.workspaceBytes)
     }
 
+    func testTemplateSearchAndOrderPreserveStoredRecords() async throws {
+        let body = "Résumé details"
+        let first = TaskTemplate(name: "Plan", title: "Café follow-up", body: body,
+                                 richBody: RichBody(text: body, runs: [.init(location: 0, length: 6, bold: true)]))
+        let second = TaskTemplate(name: "Travel", title: "Pack", checklist: [ChecklistItem(title: "Passport")])
+        let templates = [first, second]
+        XCTAssertEqual(TaskTemplate.matching("  CAFE ", in: templates), [first])
+        XCTAssertEqual(TaskTemplate.matching("resume", in: templates), [first])
+        XCTAssertEqual(TaskTemplate.matching("passport", in: templates), [second])
+        XCTAssertEqual(TaskTemplate.matching("PLAN", in: templates), [first])
+        XCTAssertEqual(TaskTemplate.matching(" ", in: templates), templates)
+        XCTAssertTrue(TaskTemplate.matching("unavailable", in: templates).isEmpty)
+
+        let task = TaskItem(title: "Existing")
+        let files = try fixture(WorkspaceData(tasks: [task], templates: templates))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        let ids = templates.map(\.id)
+        guard case .refused = await repo.apply(.reorder(ids: [first.id, first.id], expectedOrder: ids), expected: initial.revision),
+              case .unchanged = await repo.apply(.reorder(ids: ids, expectedOrder: ids), expected: initial.revision)
+        else { return XCTFail("Expected duplicate refusal and unchanged order.") }
+        let order = Array(ids.reversed())
+        guard case .saved(let moved) = await repo.apply(.reorder(ids: order, expectedOrder: ids), expected: initial.revision),
+              case .refused(.stale) = await repo.apply(.reorder(ids: ids, expectedOrder: order), expected: initial.revision),
+              case .refused = await repo.apply(.reorder(ids: ids, expectedOrder: ids), expected: moved.revision)
+        else { return XCTFail("Expected a saved reorder and stale-order refusals.") }
+        let reloaded = try await repository(files).load()
+        XCTAssertEqual(reloaded.snapshot.workspace.templates, [second, first])
+        XCTAssertEqual(reloaded.snapshot.workspace.tasks, [task])
+        XCTAssertEqual(reloaded.snapshot.workspaceBytes, moved.snapshot.workspaceBytes)
+        XCTAssertEqual(reloaded.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+    }
+
     func testTemplateReducedEditPreservesRichContentAndUnownedFields() async throws {
         let body = "e\u{301} 🧩"
         let rich = RichBody(text: body, runs: [.init(location: 0, length: 2, bold: true)])
