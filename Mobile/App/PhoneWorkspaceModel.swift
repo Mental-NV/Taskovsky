@@ -2,7 +2,7 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private enum PhoneQACase: String { case known, taskSort = "task-sort", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
@@ -10,6 +10,7 @@ final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var failure: String?
     @Published private(set) var recentSearches: [String] = []
     @Published private(set) var taskTimestampSort: TaskTimestampSort?
+    @Published private(set) var groupsByCreationDate = false
     @Published private(set) var activeDraft: TaskFieldDraft?
     @Published private(set) var recoveredDraft: TaskFieldDraft?
     @Published private(set) var protectedDraft = false
@@ -102,6 +103,17 @@ final class PhoneWorkspaceModel: ObservableObject {
         UserDefaults.standard.set(value?.rawValue, forKey: key)
     }
 
+    private var taskCreatedGroupingKey: String? {
+        guard let directory else { return nil }
+        return isQA ? "TaskovskyMobile.qaCreatedGrouping." + directory.lastPathComponent : "TaskovskyMobile.taskGroupByCreated"
+    }
+
+    func setTaskCreatedGrouping(_ enabled: Bool) {
+        guard let key = taskCreatedGroupingKey, enabled != groupsByCreationDate else { return }
+        groupsByCreationDate = enabled
+        UserDefaults.standard.set(enabled, forKey: key)
+    }
+
     func rememberSearch(_ query: String) {
         guard let key = searchHistoryKey, !query.isEmpty else { return }
         recentSearches.removeAll { $0.localizedCaseInsensitiveCompare(query) == .orderedSame }
@@ -123,10 +135,11 @@ final class PhoneWorkspaceModel: ObservableObject {
         if let key = taskTimestampSortKey, let raw = UserDefaults.standard.string(forKey: key) {
             taskTimestampSort = TaskTimestampSort(rawValue: raw)
         }
+        if let key = taskCreatedGroupingKey { groupsByCreationDate = UserDefaults.standard.bool(forKey: key) }
         readTicket = UUID(); isBusy = true
         do {
             var initial = try MobilePreviewFixture.session(samples: isQA && qaCase != .captureEmpty, unknownData: qaCase == .unknownWorkspace)
-            if isQA && qaCase == .taskSort {
+            if isQA && (qaCase == .taskSort || qaCase == .createdGrouping) {
                 var data = initial.workspace
                 guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
                 let stamp = MobilePreviewFixture.now.addingTimeInterval(-86_400)
@@ -138,6 +151,14 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[7].createdAt = stamp.addingTimeInterval(-3600)
                 data.tasks[7].updatedAt = stamp.addingTimeInterval(3600)
                 data.tasks[5].isPinned = true
+                if qaCase == .createdGrouping {
+                    data.tasks[0].createdAt = stamp.addingTimeInterval(-86_400)
+                    let section = TaskSection(name: "Review section")
+                    let create = TaskSectionChange(listID: work.id, operation: .create(section))
+                    let assign = TaskSectionChange(listID: work.id, operation: .assign(taskID: data.tasks[0].id, sectionID: section.id))
+                    guard create.apply(to: &data, now: stamp) == true,
+                          assign.apply(to: &data, now: stamp) == true else { throw CocoaError(.fileReadCorruptFile) }
+                }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && qaCase == .captureTemplate {
@@ -171,11 +192,21 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
-            if isQA && qaCase == .occurrence {
+            if isQA && (qaCase == .occurrence || qaCase == .skipOccurrence) {
                 var data = initial.workspace
                 guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 data.tasks[0].recurrence = .weekly
-                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+                var settingsBytes = initial.settingsBytes
+                if qaCase == .skipOccurrence {
+                    guard let due = data.tasks[0].dueDate else { throw CocoaError(.fileReadCorruptFile) }
+                    data.tasks[0].recurrenceEndDate = due.addingTimeInterval(7 * 86_400)
+                    data.tasks[0].reminderDates = [due - 3_600]
+                    data.tasks[0].reminderFollowsSchedule = false
+                    var settings = initial.settings
+                    settings.calendarOptions.mode = .month
+                    settingsBytes = try JSONEncoder().encode(settings)
+                }
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: settingsBytes)
             }
             if isQA && qaCase == .agenda {
                 var data = initial.workspace
@@ -220,14 +251,34 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[3].hasDueTime = true
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
-            if isQA && (qaCase == .summary || qaCase == .summarySaveFailure) {
+            if isQA && (qaCase == .summary || qaCase == .summaryFields || qaCase == .summarySaveFailure) {
                 var settings = initial.settings
                 settings.smartListVisibility[.summary] = .show
                 settings.defaultListID = initial.workspace.lists.first?.id
                 settings.defaultTagID = initial.workspace.tags.first?.id
                 settings.defaultDate = .today
                 settings.defaultPriority = .high
-                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: initial.workspaceBytes, settingsBytes: JSONEncoder().encode(settings))
+                var data = initial.workspace
+                if qaCase == .summaryFields {
+                    guard data.tasks.count >= 4, let parent = data.tags.first else { throw CocoaError(.fileReadCorruptFile) }
+                    let nested = TaskTag(id: UUID(uuidString: "00000000-0000-0000-0000-000000000209")!,
+                                         name: "Nested planning", color: "#445566", parentID: parent.id)
+                    data.tags.append(nested)
+                    data.tasks[0] = try TaskMetadataChange.progress(40).applying(to: data.tasks[0], availableTags: data.tags) ?? data.tasks[0]
+                    data.tasks[0].completedAt = MobilePreviewFixture.now
+                    data.tasks[0].priority = .high
+                    data.tasks[0].tagIDs = [nested.id]
+                    data.tasks[1].checklist = (1...4).map { ChecklistItem(title: "Step \($0)", isCompleted: $0 == 1) }
+                    data.tasks[1].priority = .high
+                    data.tasks[1].tagIDs = [parent.id]
+                    data.tasks[2].dueDate = MobilePreviewFixture.now
+                    data.tasks[2].priority = .medium
+                    data.tasks[2].tagIDs = [parent.id]
+                    data.tasks[3].priority = .high
+                    data.tasks[3].tagIDs = []
+                }
+                let bytes = qaCase == .summaryFields ? try JSONEncoder().encode(data) : initial.workspaceBytes
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: bytes, settingsBytes: JSONEncoder().encode(settings))
             }
             if isQA && qaCase == .board {
                 var data = initial.workspace
@@ -320,7 +371,7 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.filters[0].tagIDs = []
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
-            if isQA && qaCase == .calendarOptions {
+            if isQA && (qaCase == .calendarOptions || qaCase == .calendarCompletion) {
                 var data = initial.workspace
                 var settings = initial.settings
                 guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
@@ -328,6 +379,16 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[0].checklist = [ChecklistItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000501")!, title: "Review the first step")]
                 data.tasks[3].completedAt = MobilePreviewFixture.now
                 settings.calendarOptions.additionalTimeZones = Array(settings.calendarOptions.additionalTimeZones.prefix(2))
+                if qaCase == .calendarCompletion {
+                    data.tasks[0].checklist.append(ChecklistItem(
+                        id: UUID(uuidString: "00000000-0000-0000-0000-000000000502")!,
+                        title: "Keep the second step"))
+                    data.tasks[7].kind = .note
+                    settings.calendarOptions.mode = .agenda
+                    settings.calendarOptions.showChecklistItems = true
+                    settings.calendarOptions.showCompleted = true
+                    settings.calendarOptions.showRepeatCycles = true
+                }
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.sortedKeys]
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: encoder.encode(data), settingsBytes: encoder.encode(settings))
@@ -383,7 +444,7 @@ final class PhoneWorkspaceModel: ObservableObject {
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
                 pasteboard.string = String(word)
             }
-            if isQA && qaCase == .richMarkdownPaste {
+            if isQA && (qaCase == .richMarkdownPaste || qaCase == .richCodePaste) {
                 var data = initial.workspace
                 guard data.tasks.count > 1,
                       let pasteboard = RichEditorTextView.pasteboard(for: directory.lastPathComponent) else {
@@ -393,7 +454,33 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[0].richBody = nil
                 data.tasks[1].body = "Prior"
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
-                pasteboard.string = "## Plan **e\u{301} 🧩**\n- First\n1. Open\n2. Review\n> Reference\nhttps://example.test/task *literal*"
+                pasteboard.string = qaCase == .richCodePaste
+                    ? "```\n  let value = **e\u{301} 🧩**\nprint(value)\n```"
+                    : "## Plan **e\u{301} 🧩**\n- First\n1. Open\n2. Review\n> Reference\nhttps://example.test/task *literal*"
+            }
+            if isQA && qaCase == .richHighlightColors {
+                var data = initial.workspace
+                guard data.tasks.count > 1 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[0].body = "Alpha Beta"
+                data.tasks[0].richBody = RichBody(text: data.tasks[0].body, runs: [
+                    .init(location: 0, length: 5, bold: true), .init(location: 6, length: 4, highlight: true),
+                ])
+                data.tasks[1].body = "Prior"
+                data.tasks[1].richBody = nil
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .richChecklistToggle {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                let first = "First 🧩\n", second = "Second e\u{301}\n", plain = "Ordinary text\n", bullet = "Bullet"
+                let text = first + second + plain + bullet
+                data.tasks[0].body = text
+                data.tasks[0].richBody = RichBody(text: text, runs: [.init(location: 0, length: 5, bold: true)], blocks: [
+                    .init(location: 0, length: first.utf16.count, list: .checklist),
+                    .init(location: first.utf16.count, length: second.utf16.count, list: .checklist, checked: true),
+                    .init(location: (first + second + plain).utf16.count, length: bullet.utf16.count, list: .bullet),
+                ])
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             #endif
             let wasNew = !FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspace.json").path) &&
@@ -523,6 +610,10 @@ final class PhoneWorkspaceModel: ObservableObject {
             return "Enter a title for each changed checklist item."
         case .refused(.metadata(.unavailableTag)):
             return "Select available tags before saving."
+        case .refused(.metadata(.unavailableProgress)):
+            return "This task no longer supports manual progress."
+        case .refused(.metadata(.invalidProgress)):
+            return "Choose a percentage from 0 to 100."
         case .refused(.metadata(.ambiguousChecklist)):
             return "This checklist contains ambiguous item identities."
         case .refused(.metadata(.missingChecklistItem)), .refused(.missing), .refused(.readOnlyRecord):
@@ -637,7 +728,9 @@ final class PhoneWorkspaceModel: ObservableObject {
 
     func saveCalendarSchedule(_ operation: CalendarScheduleOperation, taskID: UUID,
                               expected: WorkspaceRevision, scope: CalendarScheduleScope = .series) async -> String? {
-        let message = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated"
+        let message: String
+        if case .skipOccurrence = operation { message = "Occurrence skipped" }
+        else { message = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated" }
         return await commitSchedule(calendarMessage: message) {
             await $0.apply(operation, to: taskID, expected: expected, calendar: calendar, scope: scope, now: now)
         }

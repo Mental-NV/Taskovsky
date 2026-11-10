@@ -8,6 +8,7 @@ public enum CalendarScheduleOperation: Sendable {
     case setPoint(date: Date, allDay: Bool)
     case unschedule
     case restoreOccurrence
+    case skipOccurrence
 }
 
 public enum CalendarScheduleScope: Hashable, Sendable { case series, currentOccurrence }
@@ -23,11 +24,38 @@ public enum CalendarScheduling {
             !tasks.contains { $0.recurrenceSourceID == task.id }
     }
 
+    public static func canSkipCurrentOccurrence(_ task: TaskItem, in tasks: [TaskItem], calendar: Calendar) -> Bool {
+        advancingCurrentOccurrence(task, in: tasks, calendar: calendar) != nil
+    }
+
+    private static func advancingCurrentOccurrence(_ task: TaskItem, in tasks: [TaskItem], calendar: Calendar) -> TaskItem? {
+        guard canRescheduleCurrentOccurrence(task, in: tasks), task.customRecurrence?.isValid != false,
+              task.timeZoneID.map({ TimeZone(identifier: $0) != nil }) ?? true,
+              let due = task.recurrenceSchedule.dueDate, due.timeIntervalSinceReferenceDate.isFinite else { return nil }
+        let local = TaskCalendarProjection.taskCalendar(task, fallback: calendar)
+        guard task.recurrenceSchedule.scheduledDuration.map({ $0.validated(in: local) != nil }) ?? true,
+              let advanced = TaskLifecycle.advancingRecurrenceSchedule(of: task, now: due, calendar: local),
+              let next = advanced.dueDate, next > due else { return nil }
+        return advanced
+    }
+
     /// Prepare the exact schedule both stores persist, including reminder
     /// provenance and recurring series position. Invalid commands return nil.
     public static func prepared(_ operation: CalendarScheduleOperation, to original: TaskItem,
                                 displayCalendar: Calendar, settings: AppSettings, policyCalendar: Calendar,
                                 scope: CalendarScheduleScope = .series, in tasks: [TaskItem] = []) -> TaskItem? {
+        if case .skipOccurrence = operation {
+            guard scope == .series,
+                  var advanced = advancingCurrentOccurrence(original, in: tasks, calendar: policyCalendar),
+                  let due = advanced.dueDate else { return nil }
+            if TaskSchedulePolicy.usesDefaultReminder(original.recurrenceSchedule, settings: settings, calendar: policyCalendar) {
+                let local = TaskCalendarProjection.taskCalendar(advanced, fallback: policyCalendar)
+                advanced.reminderDates = TaskSchedulePolicy.defaultReminderDates(due: due, hasTime: advanced.hasDueTime,
+                                                                                 settings: settings, calendar: local)
+                advanced.reminderFollowsSchedule = true
+            }
+            return advanced
+        }
         if case .restoreOccurrence = operation {
             guard canRescheduleCurrentOccurrence(original, in: tasks), original.originalOccurrenceSchedule != nil else { return nil }
             return original.recurrenceSchedule
@@ -90,7 +118,7 @@ public enum CalendarScheduling {
         let oldWindow = original.scheduledDuration?.validated(in: local)
         let duration = Double(min(10_080, max(15, defaultMinutes))) * 60
         switch operation {
-        case .restoreOccurrence:
+        case .restoreOccurrence, .skipOccurrence:
             return nil  // Requires the scope and eligibility checks in prepared().
         case .unschedule:
             task.dueDate = nil; task.hasDueTime = false; task.scheduledDuration = nil; task.reminderDates = []
@@ -209,19 +237,23 @@ public struct CalendarScheduleUndo: Sendable {
     public var after: CalendarScheduleSnapshot
     public var completedAt: Date?
     public var wontDoAt: Date?
+    private var requiresNoSuccessor: Bool
     public init(taskID: UUID, before: CalendarScheduleSnapshot, after: CalendarScheduleSnapshot,
-                completedAt: Date? = nil, wontDoAt: Date? = nil) {
+                completedAt: Date? = nil, wontDoAt: Date? = nil, operation: CalendarScheduleOperation? = nil) {
         self.taskID = taskID; self.before = before; self.after = after
         self.completedAt = completedAt; self.wontDoAt = wontDoAt
+        if case .skipOccurrence? = operation { requiresNoSuccessor = true }
+        else { requiresNoSuccessor = false }
     }
 
-    public func canRestore(_ task: TaskItem, lists: [TaskList]) -> Bool {
+    public func canRestore(_ task: TaskItem, lists: [TaskList], tasks: [TaskItem]? = nil) -> Bool {
         task.id == taskID && task.deletedAt == nil && !SmartListEligibility.isArchived(task, lists: lists) &&
-            task.completedAt == completedAt && task.wontDoAt == wontDoAt && CalendarScheduleSnapshot(task) == after
+            task.completedAt == completedAt && task.wontDoAt == wontDoAt && CalendarScheduleSnapshot(task) == after &&
+            (!requiresNoSuccessor || tasks?.contains(where: { $0.recurrenceSourceID == taskID }) == false)
     }
 
-    public func restoring(on task: TaskItem, lists: [TaskList]) -> TaskItem? {
-        guard canRestore(task, lists: lists) else { return nil }
+    public func restoring(on task: TaskItem, lists: [TaskList], tasks: [TaskItem]? = nil) -> TaskItem? {
+        guard canRestore(task, lists: lists, tasks: tasks) else { return nil }
         return before.restoring(on: task)
     }
 

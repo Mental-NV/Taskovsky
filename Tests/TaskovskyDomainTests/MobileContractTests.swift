@@ -674,6 +674,24 @@ final class MobileContractTests: XCTestCase {
         XCTAssertFalse(TaskSortPolicy.canReorder(TaskTimestampSort.modifiedNewest.rawValue))
     }
 
+    func testTaskCreationDayGroupsUseLocalMidnightAndKeepIncomingRowOrder() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Moscow"))
+        let midnight = try XCTUnwrap(calendar.date(from: DateComponents(year: 2027, month: 1, day: 1)))
+        let priorDay = try XCTUnwrap(calendar.date(byAdding: .day, value: -1, to: midnight))
+        let older = TaskItem(title: "Older", dueDate: midnight, createdAt: midnight.addingTimeInterval(-1))
+        let atMidnight = TaskItem(title: "Midnight", createdAt: midnight)
+        let later = TaskItem(title: "Later", createdAt: midnight.addingTimeInterval(60))
+        let input = [later, older, atMidnight]
+        let newestGroups = TaskCreationDayGroup.group(input, calendar: calendar, sort: .modifiedOldest)
+        XCTAssertEqual(newestGroups.map(\.day), [midnight, priorDay])
+        XCTAssertEqual(newestGroups.map { $0.tasks.map(\.id) }, [[later.id, atMidnight.id], [older.id]])
+        let oldestGroups = TaskCreationDayGroup.group(input, calendar: calendar, sort: .createdOldest)
+        XCTAssertEqual(oldestGroups.map(\.day), [priorDay, midnight])
+        XCTAssertEqual(oldestGroups.last?.tasks.map(\.id), [later.id, atMidnight.id])
+        XCTAssertTrue(TaskCreationDayGroup.group([], calendar: calendar, sort: nil).isEmpty)
+    }
+
     func testCalendarIconChoicesSeparateTasksAndNotesWithoutChangingEntries() throws {
         let task = TaskItem(title: "Task", dueDate: now, hasDueTime: true)
         let note = TaskItem(title: "Note", kind: .note, dueDate: now, hasDueTime: true)
@@ -779,6 +797,63 @@ final class MobileContractTests: XCTestCase {
         let bounded = CalendarDates.visibleDays(focus: focus, mode: .agenda, options: options, calendar: local, agendaWindow: window)
         XCTAssertEqual(CalendarDates.interval(for: bounded, calendar: local)?.end, date("2028-04-05T04:00:00Z"))
         XCTAssertEqual(CalendarDates.visibleDays(focus: focus, mode: .week, options: options, calendar: local, agendaWindow: window).count, 7)
+    }
+
+    func testSkipOccurrenceUsesTheSeriesBaselineAndPreservesTheOpenTask() throws {
+        let due = date("2026-11-09T09:00:00Z"), next = date("2026-11-10T09:00:00Z")
+        let rule = CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days, maxOccurrences: 2)
+        let task = TaskItem(title: "Recurring", dueDate: due, hasDueTime: true, reminderDate: due - 900,
+                            checklist: [.init(title: "Keep checked", isCompleted: true)], reminderFollowsSchedule: false,
+                            customRecurrence: rule, scheduledDuration: .init(start: due - 1_800, end: due))
+        let settings = AppSettings()
+        let moved = try XCTUnwrap(CalendarScheduling.prepared(.setPoint(date: date("2026-11-30T09:00:00Z"), allDay: false),
+            to: task, displayCalendar: calendar, settings: settings, policyCalendar: calendar, scope: .currentOccurrence))
+        let advanced = try XCTUnwrap(CalendarScheduling.prepared(.skipOccurrence, to: moved,
+            displayCalendar: calendar, settings: settings, policyCalendar: calendar))
+        XCTAssertEqual(advanced.id, moved.id)
+        XCTAssertEqual(advanced.title, moved.title)
+        XCTAssertEqual(advanced.checklist, moved.checklist)
+        XCTAssertNil(advanced.completedAt)
+        XCTAssertNil(advanced.originalOccurrenceSchedule)
+        XCTAssertEqual(advanced.dueDate, next)
+        XCTAssertEqual(advanced.scheduledDuration, .init(start: next - 1_800, end: next))
+        XCTAssertEqual(advanced.reminderDates, [next - 900])
+        XCTAssertEqual(advanced.occurrenceIndex, 2)
+        XCTAssertFalse(CalendarScheduling.canSkipCurrentOccurrence(advanced, in: [advanced], calendar: calendar))
+        XCTAssertNil(CalendarScheduling.prepared(.skipOccurrence, to: moved, displayCalendar: calendar,
+            settings: settings, policyCalendar: calendar, scope: .currentOccurrence))
+
+        let undo = CalendarScheduleUndo(taskID: task.id, before: CalendarScheduleSnapshot(moved),
+                                        after: CalendarScheduleSnapshot(advanced), operation: .skipOccurrence)
+        var renamed = advanced
+        renamed.title = "Later title"
+        let restored = try XCTUnwrap(undo.restoring(on: renamed, lists: [], tasks: [renamed]))
+        XCTAssertEqual(restored.title, renamed.title)
+        XCTAssertEqual(CalendarScheduleSnapshot(restored), CalendarScheduleSnapshot(moved))
+        var successor = TaskItem(title: "Later occurrence", dueDate: next + 86_400)
+        successor.recurrenceSourceID = task.id
+        XCTAssertFalse(CalendarScheduling.canSkipCurrentOccurrence(moved, in: [moved, successor], calendar: calendar))
+        XCTAssertNil(undo.restoring(on: renamed, lists: [], tasks: [renamed, successor]))
+    }
+
+    func testSkipOccurrenceKeepsMonthlyAnchorAndUsesTheForecastCompletionAnchor() throws {
+        let settings = AppSettings()
+        func skip(_ task: TaskItem) throws -> TaskItem {
+            try XCTUnwrap(CalendarScheduling.prepared(.skipOccurrence, to: task, displayCalendar: calendar,
+                settings: settings, policyCalendar: calendar))
+        }
+        let jan31 = date("2026-01-31T09:00:00Z")
+        let task = TaskItem(title: "Monthly", dueDate: jan31, hasDueTime: true, recurrence: .monthly)
+        let february = try skip(task)
+        XCTAssertEqual(february.dueDate, date("2026-02-28T09:00:00Z"))
+        XCTAssertEqual(february.recurrenceAnchorDay, 31)
+        XCTAssertEqual(try skip(february).dueDate, date("2026-03-31T09:00:00Z"))
+
+        let completion = TaskItem(title: "After completion", dueDate: jan31, hasDueTime: true,
+                                  customRecurrence: .init(anchor: .completionDate, interval: 2, unit: .days))
+        let next = try skip(completion)
+        XCTAssertEqual(next.dueDate, date("2026-02-02T09:00:00Z"))
+        XCTAssertNil(next.recurrenceNominalDate)
     }
 
     func testCurrentOccurrenceMoveKeepsEarlierForecastsAndDistinctOverlappingCards() throws {
@@ -1072,6 +1147,157 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(RichBodyClipboard.decode(encoded, matching: plain.text), plain)
     }
 
+    func testRichHighlightColorsPreserveInlineStylesAndProtectClipboardAndWorkspace() throws {
+        let text = "e\u{301}🧩 yellow"
+        let first = NSRange(location: 0, length: 4)
+        let second = NSRange(location: 5, length: 6)
+        let rich = RichBody(text: text, runs: [
+            .init(location: first.location, length: first.length, bold: true, code: true),
+            .init(location: second.location, length: second.length, highlight: true),
+        ])
+        let colored = try RichBodyEdit.applying([.setHighlight(.blue, first), .setHighlight(.pink, first)], to: text, rich: rich)
+        XCTAssertTrue(RichBody.sameCodeUnits(colored.text, text))
+        XCTAssertEqual(colored.runs.map(\.effectiveHighlight), [.pink, .yellow])
+        XCTAssertTrue(colored.runs[0].bold && colored.runs[0].code)
+        XCTAssertNil(colored.runs[1].highlightColor)
+        let removed = try RichBodyEdit.applying([.setHighlight(nil, first)], to: text, rich: colored)
+        XCTAssertEqual(removed, rich)
+
+        let payload = try XCTUnwrap(RichBodyClipboard.encode(colored))
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: payload) as? [String: Any])
+        XCTAssertEqual(object["version"] as? Int, 3)
+        let decoded = try XCTUnwrap(RichBodyClipboard.decode(payload, matching: text))
+        XCTAssertEqual(decoded, colored)
+        let pasted = try RichBodyEdit.applying([.paste(NSRange(location: 0, length: 5), fragment: decoded)],
+                                               to: "Prior", rich: nil)
+        XCTAssertEqual(pasted, colored)
+        object["version"] = 1
+        XCTAssertNil(RichBodyClipboard.decode(try JSONSerialization.data(withJSONObject: object), matching: text))
+
+        let workspace = WorkspaceData(tasks: [.init(title: "Highlighted", body: text, richBody: colored)])
+        let bytes = try JSONEncoder().encode(workspace)
+        let saved = try XCTUnwrap(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        XCTAssertEqual((saved["tasks"] as? [String: Any])?["format"] as? String, "richHighlightColorsV1")
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceData.self, from: bytes), workspace)
+        let legacy = WorkspaceData(tasks: [.init(title: "Yellow", body: text, richBody: rich)])
+        let legacyBytes = try JSONEncoder().encode(legacy)
+        let legacyObject = try XCTUnwrap(JSONSerialization.jsonObject(with: legacyBytes) as? [String: Any])
+        XCTAssertNotNil(legacyObject["tasks"] as? [[String: Any]])
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceData.self, from: legacyBytes), legacy)
+    }
+
+    func testFencedCodePastePreservesExactBytesAndSeparateBlockIdentity() throws {
+        let first = "  let value = **e\u{301} 🧩**\r\n\tprint(value)\r\n"
+        let second = "# literal\r\n"
+        let source = "```\r\n" + first + "```\r\n```\r\n" + second + "```"
+        let fragment = try XCTUnwrap(RichBodyClipboard.formattedPlainText(source, replacing: NSRange(), in: ""))
+        let body = try RichBodyEdit.applying([.paste(NSRange(), fragment: fragment)], to: "", rich: nil)
+        XCTAssertTrue(RichBody.sameCodeUnits(body.text, first + second))
+        XCTAssertTrue(body.runs.isEmpty)
+        let preview = try XCTUnwrap(RichDescriptionPreview(body: body.text, rich: body))
+        XCTAssertEqual(preview.codeBlocks.map(\.text), [first, second])
+        XCTAssertNil(RichMarkdownTyping.change(for: " ", at: NSRange(location: first.utf16.count + 1, length: 0), in: body))
+        let encoded = try XCTUnwrap(RichBodyClipboard.encode(body))
+        let pasted = try XCTUnwrap(RichBodyClipboard.decode(encoded, matching: body.text))
+        XCTAssertNotEqual(pasted.blocks[0].codeBlockID, body.blocks[0].codeBlockID)
+        XCTAssertEqual(pasted.blocks[0].codeBlockID, pasted.blocks[1].codeBlockID)
+        XCTAssertNotEqual(pasted.blocks[1].codeBlockID, pasted.blocks[2].codeBlockID)
+        XCTAssertNil(RichBodyClipboard.formattedPlainText("```\nbody", replacing: NSRange(), in: ""))
+        XCTAssertNil(RichBodyClipboard.formattedPlainText("```\n```", replacing: NSRange(), in: ""))
+        XCTAssertNil(RichBodyClipboard.formattedPlainText("```\nbody\n```", replacing: NSRange(location: 3, length: 0), in: "pre"))
+    }
+
+    func testTypedCodeFenceContinuesAndClosesBeforeExistingText() throws {
+        let initial = "Before\r\n```\r\nAfter"
+        var body = RichBody(text: initial)
+        var caret = NSRange(location: "Before\r\n```".utf16.count, length: 0)
+        func pressReturn() throws {
+            let change = try XCTUnwrap(RichMarkdownTyping.change(for: "\n", at: caret, in: body))
+            body = try RichBodyEdit.applying([change.edit], to: body.text, rich: body)
+            caret = change.caret
+        }
+        func type(_ text: String) throws {
+            body = try RichBodyEdit.applying([.replace(caret, with: text, style: .inherit)], to: body.text, rich: body)
+            caret.location += text.utf16.count
+        }
+        try pressReturn()
+        XCTAssertTrue(RichBody.sameCodeUnits(body.text, "Before\r\n\r\nAfter"))
+        let blockID = try XCTUnwrap(body.blocks.first?.codeBlockID)
+        XCTAssertTrue(body.isInCodeParagraph(at: caret.location))
+        try type("  let é = 🧩")
+        try pressReturn()
+        try type("#")
+        XCTAssertNil(RichMarkdownTyping.change(for: " ", at: caret, in: body))
+        try type(" literal")
+        try pressReturn()
+        try type("```swift")
+        try pressReturn()
+        try type("```")
+        try pressReturn()
+        XCTAssertFalse(body.isInCodeParagraph(at: caret.location))
+        try type("#")
+        let heading = try XCTUnwrap(RichMarkdownTyping.change(for: " ", at: caret, in: body))
+        body = try RichBodyEdit.applying([heading.edit], to: body.text, rich: body)
+        caret = heading.caret
+        let content = try XCTUnwrap(heading.armedParagraph?.inserting("P", at: caret, in: body))
+        body = try RichBodyEdit.applying([content.edit], to: body.text, rich: body)
+        caret = content.caret
+        try type("lain")
+        let code = "  let é = 🧩\r\n# literal\r\n```swift\r\n"
+        XCTAssertTrue(RichBody.sameCodeUnits(body.text, "Before\r\n" + code + "Plain\r\nAfter"))
+        XCTAssertEqual(body.blocks.compactMap(\.codeBlockID), [blockID, blockID, blockID])
+        XCTAssertEqual(body.blocks.last?.heading, 1)
+        XCTAssertEqual(try XCTUnwrap(RichDescriptionPreview(body: body.text, rich: body)).codeBlocks.map(\.text), [code])
+    }
+
+    func testTypedCodeFenceHandlesFinalAndLiteralParagraphs() throws {
+        let raw = RichBody(text: "```")
+        let start = try XCTUnwrap(RichMarkdownTyping.change(for: "\n", at: NSRange(location: 3, length: 0), in: raw))
+        let opened = try RichBodyEdit.applying([start.edit], to: raw.text, rich: raw)
+        XCTAssertEqual(start.caret, NSRange(location: 0, length: 0))
+        XCTAssertEqual(opened.text, "\n")
+        XCTAssertTrue(opened.isInCodeParagraph(at: 0))
+        let final = RichBody(text: "print()", blocks: [.init(location: 0, length: 7, codeBlockID: UUID())])
+        let next = try XCTUnwrap(RichMarkdownTyping.change(for: "\n", at: NSRange(location: 7, length: 0), in: final))
+        let continued = try RichBodyEdit.applying([next.edit], to: final.text, rich: final)
+        XCTAssertEqual(continued.text, "print()\n\n")
+        XCTAssertTrue(continued.isInCodeParagraph(at: next.caret.location))
+        let closing = try RichBodyEdit.applying([.replace(next.caret, with: "```", style: .inherit)], to: continued.text, rich: continued)
+        let finish = try XCTUnwrap(RichMarkdownTyping.change(for: "\n", at: NSRange(location: 11, length: 0), in: closing))
+        let closed = try RichBodyEdit.applying([finish.edit], to: closing.text, rich: closing)
+        XCTAssertEqual(closed.text, "print()\n")
+        XCTAssertFalse(closed.isInCodeParagraph(at: finish.caret.location))
+        for literal in [" ```", "```swift", "x```", "~~~", "```swift\n```"] {
+            let caret = NSRange(location: literal.utf16.count, length: 0)
+            XCTAssertNil(RichMarkdownTyping.change(for: "\n", at: caret, in: RichBody(text: literal)))
+        }
+    }
+
+    func testCodeBlockStyleCanClearAndWorkspaceProtectsTheCompanion() throws {
+        let text = "echo a\necho b\nPlain"
+        let selected = NSRange(location: 0, length: 14)
+        let plain = RichBody(text: text)
+        let edit = try XCTUnwrap(RichBodyEdit.togglingCodeBlock(in: plain, selection: selected))
+        let styled = try RichBodyEdit.applying([edit], to: text, rich: nil)
+        let merged = try RichBodyEdit.applying([.replace(NSRange(location: 6, length: 1), with: "; ", style: .inherit)],
+                                               to: text, rich: styled)
+        let preview = try XCTUnwrap(RichDescriptionPreview(body: merged.text, rich: merged))
+        XCTAssertEqual(preview.codeBlocks.map(\.text), ["echo a; echo b\n"])
+        let clear = try XCTUnwrap(RichBodyEdit.togglingCodeBlock(in: styled, selection: selected))
+        let cleared = try RichBodyEdit.applying([clear], to: text, rich: styled)
+        XCTAssertEqual(cleared, plain)
+
+        let workspace = WorkspaceData(tasks: [TaskItem(title: "Snippet", body: text, richBody: styled)])
+        let bytes = try JSONEncoder().encode(workspace)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        var envelope = try XCTUnwrap(object["tasks"] as? [String: Any])
+        XCTAssertEqual(envelope["format"] as? String, "richCodeBlocksV1")
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceData.self, from: bytes), workspace)
+        envelope["format"] = "listSectionsV1"
+        object["tasks"] = envelope
+        XCTAssertThrowsError(try JSONDecoder().decode(WorkspaceData.self, from: JSONSerialization.data(withJSONObject: object)))
+    }
+
     func testPlainClipboardOnlyConvertsCompleteDestinationParagraphs() throws {
         let range = NSRange(location: 7, length: 0)
         let destination = "Before after"
@@ -1159,6 +1385,37 @@ final class MobileContractTests: XCTestCase {
                                                      to: source, rich: invalid)) {
             XCTAssertEqual($0 as? RichBodyEditError, .invalidSource)
         }
+    }
+
+    func testSummaryPresetsRoundTripEveryOptionAndPreserveIdentity() throws {
+        let start = date("2026-10-12T03:00:00Z")
+        let options = SummaryReportOptions(period: .custom, customStart: start, customEnd: now,
+                                           listIDs: [UUID(), TaskFilter.inboxListID], status: .wontDo,
+                                           grouping: .date, fields: [.progress, .completionDate], nextPeriod: true,
+                                           tagIDs: [UUID(), UUID()], priorities: [.none, .high], sort: .title)
+        var presets = try XCTUnwrap(SummaryReportPresets(stored: Data()))
+        XCTAssertFalse(presets.save(" \n", options: options))
+        XCTAssertTrue(presets.save("  November review ", options: options))
+        XCTAssertFalse(presets.save("november review", options: options))
+        XCTAssertTrue(presets.save("Daily", options: SummaryReportOptions(period: .today, customStart: start, customEnd: start)))
+        let saved = try XCTUnwrap(presets.entries.first)
+        XCTAssertEqual(saved.name, "November review")
+        XCTAssertFalse(presets.rename(saved.id, to: "DAILY"))
+        XCTAssertFalse(presets.rename(UUID(), to: "Unknown"))
+        XCTAssertTrue(presets.rename(saved.id, to: "October–November review"))
+
+        let bytes = try presets.encoded()
+        var reloaded = try XCTUnwrap(SummaryReportPresets(stored: bytes))
+        XCTAssertEqual(reloaded, presets)
+        XCTAssertEqual(reloaded.entries.first?.id, saved.id)
+        XCTAssertEqual(reloaded.entries.first?.options, options)
+        XCTAssertEqual(reloaded.entries.first?.name, "October–November review")
+        let relative = try XCTUnwrap(reloaded.entries.last?.options)
+        XCTAssertNotEqual(relative.interval(now: start, calendar: calendar), relative.interval(now: now, calendar: calendar))
+        XCTAssertEqual(options.interval(now: start, calendar: calendar), options.interval(now: now, calendar: calendar))
+        reloaded.remove(saved.id)
+        XCTAssertEqual(reloaded.entries.map(\.name), ["Daily"])
+        XCTAssertNil(SummaryReportPresets(stored: Data("{\"entries\":[{}]}".utf8)))
     }
 
     func testSummaryUsesPeriodHistoryAndExplicitArchiveSelection() {
@@ -1363,5 +1620,114 @@ extension MobileContractTests {
         }
         let malformed = RichBody(text: body, blocks: [.init(location: 0, length: 2, heading: 7)])
         XCTAssertNil(RichDescriptionPreview(body: body, rich: malformed))
+    }
+}
+
+extension MobileContractTests {
+    func testTaskProgressFollowsChecklistAndNewRecurrenceResetsManualValue() throws {
+        let original = TaskItem(title: "Project", dueDate: now, recurrence: .daily)
+        let manual = try XCTUnwrap(TaskMetadataChange.progress(73).applying(to: original, availableTags: []))
+        XCTAssertEqual(manual.progressPercent, 73)
+        XCTAssertNil(manual.completedAt)
+        XCTAssertNil(try TaskMetadataChange.progress(73).applying(to: manual, availableTags: []))
+        XCTAssertThrowsError(try TaskMetadataChange.progress(101).applying(to: manual, availableTags: [])) {
+            XCTAssertEqual($0 as? TaskMetadataValidation, .invalidProgress)
+        }
+
+        let steps = [ChecklistItem(title: "Plan", isCompleted: true), .init(title: "Prepare"), .init(title: "Review")]
+        let checklist = try XCTUnwrap(TaskMetadataChange.checklist(steps).applying(to: manual, availableTags: []))
+        XCTAssertEqual(checklist.progressPercent, 33)
+        XCTAssertFalse(checklist.canEditManualProgress)
+        XCTAssertThrowsError(try TaskMetadataChange.progress(40).applying(to: checklist, availableTags: [])) {
+            XCTAssertEqual($0 as? TaskMetadataValidation, .unavailableProgress)
+        }
+        let restored = try XCTUnwrap(TaskMetadataChange.checklist([]).applying(to: checklist, availableTags: []))
+        XCTAssertEqual(restored, manual)
+
+        let child = try XCTUnwrap(TaskMetadataChange.progress(30).applying(
+            to: TaskItem(title: "Child", parentID: manual.id), availableTags: []))
+        var lifecycle = TaskLifecycle(data: WorkspaceData(tasks: [manual, child]))
+        XCTAssertTrue(lifecycle.toggleComplete(id: manual.id, now: now, calendar: calendar))
+        XCTAssertEqual(lifecycle.data.tasks.first(where: { $0.id == manual.id })?.progressPercent, 73)
+        XCTAssertEqual(lifecycle.data.tasks.first(where: { $0.recurrenceSourceID == manual.id })?.progressPercent, 0)
+        XCTAssertEqual(lifecycle.data.tasks.first(where: { $0.recurrenceSourceID == child.id })?.progressPercent, 0)
+        XCTAssertTrue(lifecycle.reopenTask(id: manual.id, now: now + 1))
+        XCTAssertEqual(lifecycle.data.tasks.first(where: { $0.id == manual.id })?.progressPercent, 73)
+    }
+
+    func testTaskProgressProtectsNewDataAndClearingRestoresLegacyEncoding() throws {
+        let task = TaskItem(title: "A task")
+        let legacy = WorkspaceData(tasks: [task])
+        let encoder = JSONEncoder(), decoder = JSONDecoder()
+        let oldBytes = try encoder.encode(legacy)
+        XCTAssertEqual(try decoder.decode(WorkspaceData.self, from: oldBytes).tasks.first?.progressPercent, 0)
+
+        let progress = try XCTUnwrap(TaskMetadataChange.progress(100).applying(to: task, availableTags: []))
+        XCTAssertNil(progress.completedAt)
+        let workspace = WorkspaceData(tasks: [progress])
+        let bytes = try encoder.encode(workspace)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        var envelope = try XCTUnwrap(object["tasks"] as? [String: Any])
+        XCTAssertEqual(envelope["format"] as? String, "taskProgressV1")
+        XCTAssertEqual(try decoder.decode(WorkspaceData.self, from: bytes), workspace)
+        var records = try XCTUnwrap(envelope["records"] as? [[String: Any]])
+        object["tasks"] = records
+        XCTAssertThrowsError(try decoder.decode(WorkspaceData.self, from: JSONSerialization.data(withJSONObject: object)))
+        records[0]["manualProgress"] = -1
+        envelope["records"] = records
+        object["tasks"] = envelope
+        XCTAssertThrowsError(try decoder.decode(WorkspaceData.self, from: JSONSerialization.data(withJSONObject: object)))
+
+        let cleared = try XCTUnwrap(TaskMetadataChange.progress(0).applying(to: progress, availableTags: []))
+        XCTAssertEqual(cleared, task)
+        let reopenedLegacy = try encoder.encode(WorkspaceData(tasks: [cleared]))
+        XCTAssertNotNil((try JSONSerialization.jsonObject(with: reopenedLegacy) as? [String: Any])?["tasks"] as? [[String: Any]])
+    }
+}
+
+extension MobileContractTests {
+    func testSummaryCombinesParentTagPriorityAndListAndShowsIndependentFields() throws {
+        let work = TaskList(name: "Work", color: "#445566")
+        let parent = TaskTag(name: "Planning", color: "#445566")
+        let child = TaskTag(name: "Nested", color: "#445566", parentID: parent.id)
+        var manual = TaskItem(title: "Zeta", listID: work.id, tagIDs: [child.id], dueDate: now, priority: .high)
+        manual = try XCTUnwrap(TaskMetadataChange.progress(40).applying(to: manual, availableTags: [parent, child]))
+        manual.completedAt = now
+        let checklist = TaskItem(title: "Alpha", listID: work.id, tagIDs: [parent.id], dueDate: now, priority: .high,
+                                 checklist: [.init(title: "A", isCompleted: true), .init(title: "B"),
+                                             .init(title: "C"), .init(title: "D")])
+        let mismatched = [
+            TaskItem(title: "Other list", tagIDs: [child.id], dueDate: now, priority: .high),
+            TaskItem(title: "Other tag", listID: work.id, dueDate: now, priority: .high),
+            TaskItem(title: "Other priority", listID: work.id, tagIDs: [parent.id], dueDate: now, priority: .medium),
+        ]
+        let data = WorkspaceData(tasks: [manual, checklist] + mismatched, lists: [work], tags: [parent, child])
+        let opts = SummaryReportOptions(period: .today, customStart: now, customEnd: now, listIDs: [work.id],
+                                        grouping: .list, fields: [.completionDate, .status, .progress],
+                                        tagIDs: [parent.id], priorities: [.high], sort: .title)
+        let report = SummaryReport.generate(from: data, options: opts, now: now, calendar: calendar)
+        let day = now.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar, timeZone: calendar.timeZone))
+        XCTAssertEqual(report.text, "Summary · " + report.range +
+                       "\n\nWork\n- Alpha (Undone · 25% progress)\n- Zeta (Finished " + day + " · Completed · 40% progress)")
+        XCTAssertEqual(data.tasks.first, manual)
+    }
+
+    func testSummarySortingKeepsTiesAndAppliesToUpcomingTasks() {
+        let tomorrow = calendar.startOfDay(for: now) + 86_400
+        let data = WorkspaceData(tasks: [
+            .init(title: "First Low", dueDate: now, priority: .low),
+            .init(title: "First High", dueDate: now - 60, priority: .high),
+            .init(title: "Second High", dueDate: now + 60, priority: .high),
+            .init(title: "Upcoming Low", dueDate: tomorrow + 60, priority: .low),
+            .init(title: "Upcoming High", dueDate: tomorrow + 900, priority: .high),
+        ])
+        var opts = SummaryReportOptions(period: .today, customStart: now, customEnd: now,
+                                        fields: [], nextPeriod: true, sort: .priority)
+        func output() -> String { SummaryReport.generate(from: data, options: opts, now: now, calendar: calendar).text }
+        XCTAssertTrue(output().contains("\n- First High\n- Second High\n- First Low\n\nNext Period Tasks\n- Upcoming High\n- Upcoming Low"))
+        opts.sort = .date
+        XCTAssertTrue(output().contains("\n- First High\n- First Low\n- Second High\n\nNext Period Tasks\n- Upcoming Low\n- Upcoming High"))
+        opts.sort = .workspace
+        XCTAssertTrue(output().contains("\n- First Low\n- First High\n- Second High\n"))
     }
 }

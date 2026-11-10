@@ -2,6 +2,10 @@ import SwiftUI
 import AppKit
 import TaskovskyCore
 
+extension EnvironmentValues {
+    @Entry var showsFullTaskTimes = false
+}
+
 struct TaskRow: View {
     @ObservedObject var store: TaskStore
     let id: UUID
@@ -42,6 +46,7 @@ struct TaskRow: View {
     @State private var swallowSelect = false
     @FocusState private var titleFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.showsFullTaskTimes) private var showsFullTaskTimes
     private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
     private var tag: TaskTag? { store.data.tags.first { task.tagIDs.contains($0.id) } }
     private var listName: String? { store.data.lists.first { $0.id == task.listID }?.name }
@@ -116,19 +121,24 @@ struct TaskRow: View {
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { if allowRename { rename() } else { onTitleDoubleClick() } }
                             .simultaneousGesture(TapGesture().onEnded { onSelect() })
-                        ViewThatFits(in: .horizontal) {
-                            metadata(showTag: true, showExtras: true, showList: true).fixedSize()
-                            metadata(showTag: false, showExtras: true, showList: true).fixedSize()
-                            metadata(showTag: false, showExtras: false, showList: false).fixedSize()
-                            if task.dueDate != nil {
-                                Image(systemName: "calendar").foregroundStyle(accent).fixedSize()
+                        if showsFullTaskTimes, let due = task.dueDate, let label = task.expandedScheduleLabel {
+                            Text(label).font(.system(size: 10)).foregroundStyle(dueColor(due))
+                                .lineLimit(2).multilineTextAlignment(.trailing).help(label)
+                        } else {
+                            ViewThatFits(in: .horizontal) {
+                                metadata(showTag: true, showExtras: true, showList: true).fixedSize()
+                                metadata(showTag: false, showExtras: true, showList: true).fixedSize()
+                                metadata(showTag: false, showExtras: false, showList: false).fixedSize()
+                                if task.dueDate != nil {
+                                    Image(systemName: "calendar").foregroundStyle(accent).fixedSize()
+                                }
+                                // Terminal fallback: zero size when even the bare
+                                // date icon cannot fit, so metadata never covers
+                                // the title or controls.
+                                Color.clear.frame(width: 0, height: 0)
                             }
-                            // Terminal fallback: zero size when even the bare
-                            // date icon cannot fit, so metadata never covers
-                            // the title or controls.
-                            Color.clear.frame(width: 0, height: 0)
+                            .help(metadataDescription)
                         }
-                        .help(metadataDescription)
                     }
                 }
             }.frame(height: hasExtras ? 24 : 40)

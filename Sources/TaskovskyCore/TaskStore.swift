@@ -122,10 +122,39 @@ public final class TaskStore: ObservableObject {
         return backup
     }
 
+    public func setChecklistItemCompleted(taskID: UUID, itemID: UUID, completed: Bool) {
+        _ = saveTaskMetadata(.setChecklistCompleted(id: itemID, completed: completed), taskID: taskID)
+    }
+
+    public func setTaskProgress(taskID: UUID, percent: Int, expected: Int?) -> Bool {
+        guard let original = data.tasks.first(where: { $0.id == taskID }), original.manualProgress == expected else { return false }
+        return saveTaskMetadata(.progress(percent), taskID: taskID)
+    }
+
+    private func saveTaskMetadata(_ command: TaskMetadataChange, taskID: UUID) -> Bool {
+        guard let index = data.tasks.firstIndex(where: { $0.id == taskID }) else { return false }
+        let original = data.tasks[index]
+        guard original.kind == .task, original.deletedAt == nil, !isInArchivedList(original) else { return false }
+        do {
+            guard var updated = try command.applying(to: original, availableTags: data.tags) else { return true }
+            updated.updatedAt = Date()
+            var draft = data
+            draft.tasks[index] = updated
+            guard writeWorkspace(draft) else { return false }
+            data = draft
+            return true
+        } catch {
+            return false
+        }
+    }
+
     public func updateTask(_ task: TaskItem, applyDefaultReminders: Bool = true) {
         guard let index = data.tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var task = task
         let old = data.tasks[index]
+        // Progress has its own save command. A schedule or text draft can
+        // carry a snapshot from before that command ran.
+        task.manualProgress = old.manualProgress
         // Archived lists are read-only at the store layer: content, status,
         // schedule, tags, and links freeze. Moving the record out to a live
         // list (or Inbox) stays allowed and lifts the freeze for this save.
@@ -653,12 +682,12 @@ public final class TaskStore: ObservableObject {
         let before = CalendarScheduleSnapshot(original), after = CalendarScheduleSnapshot(changed)
         guard before != after, commitCalendarSchedule(changed, at: index) else { return nil }
         return CalendarScheduleUndo(taskID: id, before: before, after: after,
-                                    completedAt: changed.completedAt, wontDoAt: changed.wontDoAt)
+                                    completedAt: changed.completedAt, wontDoAt: changed.wontDoAt, operation: operation)
     }
 
     @discardableResult public func undoCalendarSchedule(_ token: CalendarScheduleUndo) -> Bool {
         guard let index = data.tasks.firstIndex(where: { $0.id == token.taskID }) else { return false }
-        guard let restored = token.restoring(on: data.tasks[index], lists: data.lists) else { return false }
+        guard let restored = token.restoring(on: data.tasks[index], lists: data.lists, tasks: data.tasks) else { return false }
         return commitCalendarSchedule(restored, at: index)
     }
 

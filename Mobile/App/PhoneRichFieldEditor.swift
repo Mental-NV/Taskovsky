@@ -97,11 +97,20 @@ struct PhoneRichFieldEditor: View {
             Button("Check Item") { paragraph(.checklistChecked(true)) }
             Button("Uncheck Item") { paragraph(.checklistChecked(false)) }
             Button("Horizontal Rule") { paragraph(.horizontalRule(true)) }
+            Button("Code Block") {
+                if let body = state?.content, let edit = RichBodyEdit.togglingCodeBlock(in: body, selection: selection) { apply(edit) }
+            }
             Button("Clear Paragraph Style") { paragraph(.clear) }
         }.disabled(!hasText).accessibilityIdentifier("richParagraphMenu")
         Menu("Inline", systemImage: "textformat") {
             ForEach(RichInlineFormat.allCases, id: \.self) { format in
                 Button(format.rawValue.capitalized) { apply(.toggle(format, selection)) }
+            }
+            Menu("Highlight Colors", systemImage: "highlighter") {
+                ForEach(RichHighlightColor.allCases, id: \.self) { color in
+                    Button(color.title) { apply(.setHighlight(color, selection)) }
+                }
+                Button("Remove Highlight") { apply(.setHighlight(nil, selection)) }
             }
             Button("Link", systemImage: "link") {
                 linkRange = selection
@@ -179,6 +188,9 @@ struct PhoneRichTextInput: UIViewRepresentable {
         view.copyContent = { [weak coordinator = context.coordinator] view in
             coordinator?.copy(from: view)
         }
+        let checklistTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.toggleChecklist(_:)))
+        checklistTap.delegate = context.coordinator
+        view.addGestureRecognizer(checklistTap)
         view.backgroundColor = .clear
         view.isScrollEnabled = false
         view.textContainerInset = .zero
@@ -213,7 +225,7 @@ struct PhoneRichTextInput: UIViewRepresentable {
         return CGSize(width: width, height: ceil(size.height))
     }
 
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var parent: PhoneRichTextInput
         private var rendering = false
         private var proposedRange: NSRange?
@@ -221,6 +233,27 @@ struct PhoneRichTextInput: UIViewRepresentable {
         private var markdownArm: RichMarkdownTyping.ArmedParagraph?
 
         init(_ parent: PhoneRichTextInput) { self.parent = parent }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let view = gestureRecognizer.view as? RichEditorTextView else { return false }
+            return checklist(at: touch.location(in: view), in: view) != nil
+        }
+
+        @objc func toggleChecklist(_ tap: UITapGestureRecognizer) {
+            guard let view = tap.view as? RichEditorTextView,
+                  let (paragraph, checked) = checklist(at: tap.location(in: view), in: view) else { return }
+            let selection = view.selectedRange
+            guard parent.apply(.paragraph(.checklistChecked(!checked), paragraph)), let updated = parent.read() else { return }
+            render(updated, in: view, selection: selection)
+            updateSelection(view)
+        }
+
+        private func checklist(at point: CGPoint, in view: RichEditorTextView) -> (NSRange, Bool)? {
+            guard parent.editable, view.isEditable, !parent.composing, view.markedTextRange == nil,
+                  let layout = view.layoutManager as? RichPreviewLayout else { return nil }
+            let inset = view.textContainerInset
+            return layout.checklist(at: CGPoint(x: point.x - inset.left, y: point.y - inset.top), in: view.textContainer)
+        }
 
         func updateEditability(of view: RichEditorTextView) {
             // UIKit may resign first responder when disabling a text view.
@@ -288,7 +321,7 @@ struct PhoneRichTextInput: UIViewRepresentable {
             if let fragment {
                 edit = .paste(range, fragment: fragment)
                 insertedLength = fragment.text.utf16.count
-            } else if recognizesPlainText,
+            } else if recognizesPlainText, !prior.isInCodeParagraph(at: range.location),
                       let formatted = RichBodyClipboard.formattedPlainText(text, replacing: range, in: prior.text),
                       (try? RichBodyEdit.applying([.paste(range, fragment: formatted)], to: prior.text, rich: prior)) != nil {
                 edit = .paste(range, fragment: formatted)
@@ -314,12 +347,25 @@ struct PhoneRichTextInput: UIViewRepresentable {
             }
             let indent = max(size * 1.5, size * 0.72 * CGFloat(widest + 2))
             let layout = view.layoutManager as? RichPreviewLayout
-            layout?.decorations = preview.paragraphs.filter { $0.marker != nil || $0.quote || $0.rule }
+            let decorations = preview.paragraphs.filter { $0.marker != nil || $0.quote || $0.rule }
+            let decorationsChanged = layout?.decorations != decorations
+            layout?.decorations = decorations
             layout?.pointSize = size
             layout?.markerIndent = indent
-            view.attributedText = attributedDescription(preview, pointSize: size, markerIndent: indent)
+            let attributed = attributedDescription(preview, pointSize: size, markerIndent: indent)
+            if content.hasCodeBlocks || view.rendered?.paragraphs.contains(where: { $0.codeBlockID != nil }) == true {
+                // Keep the text input session while a Return changes a code
+                // paragraph and moves the caret before the next keystroke.
+                view.textStorage.setAttributedString(attributed)
+            } else {
+                view.attributedText = attributed
+            }
+            if decorationsChanged {
+                layout?.invalidateDisplay(forCharacterRange: NSRange(location: 0, length: attributed.length))
+            }
             let location = min(selection.location, view.attributedText.length)
             view.selectedRange = NSRange(location: location, length: min(selection.length, view.attributedText.length - location))
+            view.setCodeTyping(content.isInCodeParagraph(at: location))
             view.rendered = preview
             view.renderedPointSize = size
         }
@@ -346,6 +392,9 @@ struct PhoneRichTextInput: UIViewRepresentable {
         }
 
         private func updateSelection(_ view: UITextView) {
+            if let body = parent.read(), RichBody.sameCodeUnits(view.text, body.text) {
+                (view as? RichEditorTextView)?.setCodeTyping(body.isInCodeParagraph(at: view.selectedRange.location))
+            }
             if parent.selection != view.selectedRange { parent.selection = view.selectedRange }
         }
     }
@@ -358,6 +407,18 @@ final class RichEditorTextView: UITextView {
     var copyContent: ((RichEditorTextView) -> RichBody?)?
     var qaPasteboardName: String?
     private var didFocus = false
+    private var codeTyping = false
+    private lazy var proseTypingTraits = (autocapitalizationType, autocorrectionType, smartDashesType, smartQuotesType)
+
+    func setCodeTyping(_ enabled: Bool) {
+        guard enabled != codeTyping else { return }
+        let (capitalization, correction, dashes, quotes) = proseTypingTraits
+        autocapitalizationType = enabled ? .none : capitalization
+        autocorrectionType = enabled ? .no : correction
+        smartDashesType = enabled ? .no : dashes
+        smartQuotesType = enabled ? .no : quotes
+        codeTyping = enabled
+    }
 
     override var undoManager: UndoManager? { nil }
 

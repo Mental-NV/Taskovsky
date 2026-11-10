@@ -68,6 +68,14 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     public var priority: TaskPriority
     public var recurrence: RepeatRule
     public var checklist: [ChecklistItem]
+    public package(set) var manualProgress: Int? = nil
+    public var progressPercent: Int {
+        guard !checklist.isEmpty else { return manualProgress ?? 0 }
+        return checklist.lazy.filter(\.isCompleted).count * 100 / checklist.count
+    }
+    public var canEditManualProgress: Bool {
+        kind == .task && checklist.isEmpty && completedAt == nil && wontDoAt == nil && deletedAt == nil
+    }
     public var completedAt: Date?
     public var deletedAt: Date?
     public var createdAt: Date
@@ -213,7 +221,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
              additionalReminderDates, reminderFollowsSchedule, priority, recurrence, checklist,
              completedAt, deletedAt, createdAt, updatedAt, recurrenceAnchorDay, recurrenceAnchorMonth,
              recurrenceSourceID, recurrenceEndDate, wontDoAt, timeZoneID, customRecurrence, occurrenceIndex, parentID, scheduledDuration,
-             richBody, isPinned, recurrenceNominalDate, originalOccurrenceSchedule, sectionID
+             richBody, isPinned, recurrenceNominalDate, originalOccurrenceSchedule, sectionID, manualProgress
     }
 
     public init(from decoder: Decoder) throws {
@@ -233,6 +241,11 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         priority = try c.decode(TaskPriority.self, forKey: .priority)
         recurrence = try c.decode(RepeatRule.self, forKey: .recurrence)
         checklist = try c.decode([ChecklistItem].self, forKey: .checklist)
+        manualProgress = try c.decodeIfPresent(Int.self, forKey: .manualProgress)
+        if let manualProgress, !(1...100).contains(manualProgress) {
+            throw DecodingError.dataCorruptedError(forKey: .manualProgress, in: c,
+                                                   debugDescription: "Invalid stored task progress.")
+        }
         completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         createdAt = try c.decode(Date.self, forKey: .createdAt)
@@ -435,11 +448,20 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey { case tasks, lists, tags, filters, templates, folders, completionCascades, trashCascades }
     // Older writers require an array or a recognized envelope before saving.
     private struct ProtectedTaskRecords: Codable {
-        enum Format: String, Codable { case occurrenceSchedulesV1, listSectionsV1 }
+        enum Format: String, Codable { case occurrenceSchedulesV1, listSectionsV1, richCodeBlocksV1, richHighlightColorsV1, taskProgressV1 }
         let format: Format
         let records: [TaskItem]
     }
     private var protectedTaskFormat: ProtectedTaskRecords.Format? {
+        if tasks.contains(where: { $0.manualProgress != nil }) { return .taskProgressV1 }
+        if tasks.contains(where: { $0.richBody?.hasCustomHighlightColors == true }) ||
+            templates.contains(where: { $0.richBody?.hasCustomHighlightColors == true }) {
+            return .richHighlightColorsV1
+        }
+        if tasks.contains(where: { $0.richBody?.hasCodeBlocks == true }) ||
+            templates.contains(where: { $0.richBody?.hasCodeBlocks == true }) {
+            return .richCodeBlocksV1
+        }
         if lists.contains(where: { !$0.sections.isEmpty }) || tasks.contains(where: { $0.sectionID != nil }) {
             return .listSectionsV1
         }

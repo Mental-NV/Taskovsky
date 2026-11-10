@@ -57,12 +57,29 @@ struct PhoneRichDescription: UIViewRepresentable {
 struct PhoneFoldableRichDescription: View {
     let preview: RichDescriptionPreview
     let revision: Date
+    var clipboardSession: String? = nil
     @State private var collapsed: Set<Int> = []
     @State private var positions: [Int: CGFloat] = [:]
+    @State private var copiedCode: Int?
 
     var body: some View {
         let reading = preview.readingView(collapsed: collapsed)
-        ZStack(alignment: .topLeading) {
+        let code = reading.preview.codeBlocks
+        VStack(alignment: .leading, spacing: 8) {
+            if !code.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack {
+                        ForEach(Array(code.enumerated()), id: \.element.id) { index, block in
+                            Button(copiedCode == block.id ? "Copied" : code.count == 1 ? "Copy Code Block" : "Copy Code Block \(index + 1)", systemImage: "doc.on.doc") {
+                                guard let board = RichEditorTextView.pasteboard(for: clipboardSession) else { return }
+                                board.string = block.text
+                                copiedCode = block.id
+                            }.frame(minHeight: 44).accessibilityIdentifier("copyRichCodeBlock-\(index)")
+                        }
+                    }
+                }
+            }
+            ZStack(alignment: .topLeading) {
             PhoneRichDescription(preview: reading.preview, headings: reading.headings) { positions = $0 }
                 .padding(.leading, reading.headings.isEmpty ? 0 : 34)
             ForEach(reading.headings) { heading in
@@ -80,7 +97,9 @@ struct PhoneFoldableRichDescription: View {
                         .offset(y: y)
                 }
             }
-        }.onChange(of: revision) { _, _ in collapsed.removeAll() }
+            }
+        }.onChange(of: revision) { _, _ in collapsed.removeAll(); copiedCode = nil }
+            .onChange(of: collapsed) { _, _ in copiedCode = nil }
     }
 }
 
@@ -114,8 +133,20 @@ private extension NSAttributedString.Key {
     static let previewBold = Self("TaskovskyPreviewBold")
     static let previewItalic = Self("TaskovskyPreviewItalic")
     static let previewCode = Self("TaskovskyPreviewCode")
+    static let previewCodeBlock = Self("TaskovskyPreviewCodeBlock")
     static let previewHighlight = Self("TaskovskyPreviewHighlight")
     static let previewHeading = Self("TaskovskyPreviewHeading")
+}
+
+private func highlightWash(for color: RichHighlightColor) -> UIColor {
+    let base: UIColor = switch color {
+    case .yellow: .systemYellow
+    case .green: .systemGreen
+    case .blue: .systemBlue
+    case .pink: .systemPink
+    case .purple: .systemPurple
+    }
+    return base.withAlphaComponent(0.28)
 }
 
 func attributedDescription(_ preview: RichDescriptionPreview, pointSize: CGFloat,
@@ -126,7 +157,7 @@ func attributedDescription(_ preview: RichDescriptionPreview, pointSize: CGFloat
         if run.bold { result.addAttribute(.previewBold, value: true, range: range) }
         if run.italic { result.addAttribute(.previewItalic, value: true, range: range) }
         if run.code { result.addAttribute(.previewCode, value: true, range: range) }
-        if run.highlight { result.addAttribute(.previewHighlight, value: true, range: range) }
+        if let color = run.effectiveHighlight { result.addAttribute(.previewHighlight, value: color.rawValue, range: range) }
         if run.underline || run.link != nil { result.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
         if run.strikethrough { result.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range) }
         if let link = run.link, let url = URL(string: link),
@@ -135,12 +166,16 @@ func attributedDescription(_ preview: RichDescriptionPreview, pointSize: CGFloat
         }
     }
     for paragraph in preview.paragraphs {
+        if paragraph.codeBlockID != nil {
+            result.addAttribute(.previewCodeBlock, value: true, range: paragraph.range)
+        }
         if let heading = paragraph.heading {
             result.addAttribute(.previewHeading, value: heading, range: paragraph.range)
         }
-        if paragraph.marker != nil || paragraph.quote || paragraph.rule {
+        if paragraph.marker != nil || paragraph.quote || paragraph.rule || paragraph.codeBlockID != nil {
             let style = NSMutableParagraphStyle()
             let indent = (paragraph.marker == nil ? 0 : markerIndent) + (paragraph.quote ? pointSize * 0.85 : 0)
+                + (paragraph.codeBlockID != nil ? 10 : 0)
             style.headIndent = indent
             style.firstLineHeadIndent = indent
             if paragraph.rule {
@@ -155,15 +190,15 @@ func attributedDescription(_ preview: RichDescriptionPreview, pointSize: CGFloat
         let level = attributes[.previewHeading] as? Int
         let size = level.map { pointSize * scale[$0 - 1] } ?? pointSize
         let weight: UIFont.Weight = (level != nil || attributes[.previewBold] != nil) ? .bold : .regular
-        let code = attributes[.previewCode] != nil
+        let code = attributes[.previewCode] != nil || attributes[.previewCodeBlock] != nil
         var font = code ? UIFont.monospacedSystemFont(ofSize: size, weight: weight) : UIFont.systemFont(ofSize: size, weight: weight)
         if attributes[.previewItalic] != nil,
            let descriptor = font.fontDescriptor.withSymbolicTraits(font.fontDescriptor.symbolicTraits.union(.traitItalic)) {
             font = UIFont(descriptor: descriptor, size: size)
         }
         result.addAttribute(.font, value: font, range: range)
-        if attributes[.previewHighlight] != nil {
-            result.addAttribute(.backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.28), range: range)
+        if let name = attributes[.previewHighlight] as? String, let color = RichHighlightColor(rawValue: name) {
+            result.addAttribute(.backgroundColor, value: highlightWash(for: color), range: range)
         } else if code {
             result.addAttribute(.backgroundColor, value: UIColor.secondarySystemFill, range: range)
         }
@@ -176,11 +211,38 @@ final class RichPreviewLayout: NSLayoutManager {
     var pointSize: CGFloat = 17
     var markerIndent: CGFloat = 26
 
+    private var markerAttributes: [NSAttributedString.Key: Any] {
+        [.font: UIFont.systemFont(ofSize: pointSize), .foregroundColor: UIColor.secondaryLabel]
+    }
+
+    private func markerRect(_ label: NSString, firstLine: CGRect, quote: Bool, attributes: [NSAttributedString.Key: Any]) -> CGRect {
+        let size = label.size(withAttributes: attributes)
+        let quoteInset = quote ? pointSize * 0.85 : 0
+        let x = quoteInset + max(0, markerIndent - size.width - pointSize * 0.3)
+        return CGRect(x: x, y: firstLine.midY - size.height / 2, width: size.width, height: size.height)
+    }
+
+    func checklist(at point: CGPoint, in container: NSTextContainer) -> (paragraph: NSRange, checked: Bool)? {
+        guard point.x >= 0, point.x < markerIndent + pointSize * 0.85, let textStorage else { return nil }
+        ensureLayout(for: container)
+        let attributes = markerAttributes
+        for paragraph in decorations {
+            guard case .checklist(let checked) = paragraph.marker, paragraph.range.location < textStorage.length else { continue }
+            let glyph = glyphIndexForCharacter(at: paragraph.range.location)
+            let firstLine = lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+            let label = (checked ? "☑" : "☐") as NSString
+            let gutter = CGRect(x: 0, y: firstLine.minY, width: markerIndent + (paragraph.quote ? pointSize * 0.85 : 0),
+                                height: firstLine.height)
+            let hit = markerRect(label, firstLine: firstLine, quote: paragraph.quote, attributes: attributes).insetBy(dx: -4, dy: -4)
+            if hit.intersection(gutter).contains(point) { return (paragraph.range, checked) }
+        }
+        return nil
+    }
+
     override func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: CGPoint) {
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
         guard let container = textContainers.first else { return }
-        let markerFont = UIFont.systemFont(ofSize: pointSize)
-        let markerAttributes: [NSAttributedString.Key: Any] = [.font: markerFont, .foregroundColor: UIColor.secondaryLabel]
+        let attributes = markerAttributes
         let textLength = textStorage?.length ?? 0
         for paragraph in decorations {
             guard paragraph.range.location < textLength, paragraph.range.length <= textLength - paragraph.range.location else { continue }
@@ -205,10 +267,8 @@ final class RichPreviewLayout: NSLayoutManager {
                 case .checklist(let checked): checked ? "☑" : "☐"
                 }
                 let text = markerText as NSString
-                let size = text.size(withAttributes: markerAttributes)
-                let quoteInset = paragraph.quote ? pointSize * 0.85 : 0
-                let x = origin.x + quoteInset + max(0, markerIndent - size.width - pointSize * 0.3)
-                text.draw(at: CGPoint(x: x, y: origin.y + first.midY - size.height / 2), withAttributes: markerAttributes)
+                let rect = markerRect(text, firstLine: first, quote: paragraph.quote, attributes: attributes)
+                text.draw(at: CGPoint(x: origin.x + rect.minX, y: origin.y + rect.minY), withAttributes: attributes)
             }
         }
     }

@@ -43,7 +43,8 @@ struct PhoneTaskSheet: View {
     @ViewBuilder private func description(_ task: TaskItem) -> some View {
         let preview = task.richBody.flatMap { RichDescriptionPreview(body: task.body, rich: $0) }
         if let preview, task.richBody?.isEmpty == false {
-            PhoneFoldableRichDescription(preview: preview, revision: task.updatedAt).id(task.id)
+            PhoneFoldableRichDescription(preview: preview, revision: task.updatedAt,
+                                         clipboardSession: model.isQA ? model.directory?.lastPathComponent : nil).id(task.id)
         } else {
             if task.richBody != nil, preview == nil {
                 Text("This formatting cannot be displayed. The saved description is shown below.")
@@ -92,6 +93,7 @@ struct PhoneTaskSheet: View {
                             .disabled(!writable)
                             .accessibilityIdentifier("editSchedule")
                             .accessibilityHint("Edit task schedule")
+                            progressRow(task)
                         }
                         description(task)
                         Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
@@ -167,6 +169,27 @@ struct PhoneTaskSheet: View {
         metadataRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: kind)
     }
 
+    @ViewBuilder private func progressRow(_ task: TaskItem) -> some View {
+        let indicator = HStack(spacing: 8) {
+            ProgressView(value: Double(task.progressPercent), total: 100)
+                .progressViewStyle(.linear).accessibilityHidden(true)
+            Text("\(task.progressPercent)%").monospacedDigit().foregroundStyle(.secondary)
+        }
+        if task.canEditManualProgress {
+            Button { openMetadata(.progress, task: task) } label: {
+                indicator.frame(minHeight: 44).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).disabled(!writable)
+            .accessibilityLabel("Set task progress").accessibilityValue("\(task.progressPercent)%")
+            .accessibilityIdentifier("editTaskProgress")
+        } else {
+            indicator.accessibilityElement(children: .ignore)
+                .accessibilityLabel(task.checklist.isEmpty ? "Task progress" : "Task progress from checklist")
+                .accessibilityValue("\(task.progressPercent)%")
+                .accessibilityIdentifier("taskProgressSummary")
+        }
+    }
+
     private func metadata(_ task: TaskItem, data: WorkspaceData) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             metadataButton("Priority", detail: task.priority.phoneLabel, symbol: task.priority == .none ? "flag" : "flag.fill",
@@ -239,6 +262,7 @@ struct PhoneCompletionButton: View {
     let task: TaskItem
     let lists: [TaskList]
     var isSubtaskRow = false
+    @State private var progressRequest: PhoneTaskMetadataRequest?
 
     var body: some View {
         let revision = model.document?.revision
@@ -260,6 +284,16 @@ struct PhoneCompletionButton: View {
                 .disabled(!model.canBeginEditing)
                 .accessibilityLabel((isHistory ? "Reopen " : "Complete ") + task.title)
                 .accessibilityIdentifier((isSubtaskRow ? "subtaskToggle-" : "lifecycleToggle-") + task.id.uuidString)
+                .contextMenu {
+                    if task.canEditManualProgress, let revision {
+                        Button("Set Progress", systemImage: "chart.bar") {
+                            progressRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .progress)
+                        }
+                    }
+                }
+                .sheet(item: $progressRequest) { request in
+                    PhoneTaskMetadataSheet(model: model, request: request)
+                }
         } else {
             icon.accessibilityHidden(true)
         }

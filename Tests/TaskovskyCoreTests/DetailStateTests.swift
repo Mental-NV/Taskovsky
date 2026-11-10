@@ -37,6 +37,35 @@ import Testing
         #expect(DueLabels.detailLabel(for: .past(daysOverdue: 10), dayText: "23 Oct", timedSuffix: "") == "23 Oct, 10d overdue")
     }
 
+    @Test func expandedRowsShowBothScheduleEndpointsInTheTaskCalendar() {
+        let cal = calendar()
+        let first = cal.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 23))!
+        let sameDay = first.addingTimeInterval(1_800)
+        let nextDay = first.addingTimeInterval(7_200)
+        func day(_ date: Date) -> String { "Nov \(cal.component(.day, from: date))" }
+        func time(_ date: Date) -> String {
+            String(format: "%02d:%02d", cal.component(.hour, from: date), cal.component(.minute, from: date))
+        }
+        var task = TaskItem(title: "Review", dueDate: first, hasDueTime: true)
+        func label() -> String? {
+            DueLabels.expandedRowLabel(for: task, calendar: cal, dayText: day, timeText: time)
+        }
+        #expect(label() == "Nov 9 23:00")
+        task.scheduledDuration = .init(start: first, end: sameDay)
+        #expect(label() == "Nov 9 23:00 – 23:30")
+        task.scheduledDuration = .init(start: first, end: nextDay)
+        #expect(label() == "Nov 9 23:00 – Nov 10 01:00")
+        task.scheduledDuration = .init(start: first, end: nextDay, isAllDay: true)
+        #expect(label() == "Nov 9 – Nov 10")
+        task.scheduledDuration = .init(start: first, end: first, isAllDay: true)
+        #expect(label() == "Nov 9")
+        task.scheduledDuration = .init(start: nextDay, end: first)
+        #expect(label() == "Nov 9 23:00")
+        task.scheduledDuration = nil
+        task.dueDate = nil
+        #expect(label() == nil)
+    }
+
     @Test func overdueCountsWholeDaysAcrossDaylightSaving() {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/New_York")!

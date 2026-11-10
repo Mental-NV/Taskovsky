@@ -128,6 +128,7 @@ struct PhoneCalendarEditSheet: View {
     @State private var remove = false
     @State private var scope: CalendarScheduleScope = .series
     @State private var restoreOccurrence = false
+    @State private var skipOccurrence = false
     @State private var error: String?
 
     private var original: CalendarScheduleDraft {
@@ -146,7 +147,12 @@ struct PhoneCalendarEditSheet: View {
         NavigationStack {
             Form {
                 Section { Text(request.task.title).font(.headline) }
-                if restoreOccurrence {
+                if skipOccurrence {
+                    Section {
+                        Text("Done moves this open task to its next scheduled occurrence.")
+                        Button("Keep editing") { skipOccurrence = false }
+                    }
+                } else if restoreOccurrence {
                     Section {
                         Text("Done restores the original schedule for this occurrence.")
                         Button("Keep editing") { restoreOccurrence = false }
@@ -160,6 +166,11 @@ struct PhoneCalendarEditSheet: View {
                                 Text("This occurrence").tag(CalendarScheduleScope.currentOccurrence)
                                 Text("Series").tag(CalendarScheduleScope.series)
                             }.pickerStyle(.segmented).accessibilityIdentifier("calendarOccurrenceScope")
+                            if request.mode == .schedule,
+                               CalendarScheduling.canSkipCurrentOccurrence(request.task, in: data.tasks, calendar: request.calendar) {
+                                Button("Skip this occurrence") { skipOccurrence = true }
+                                    .accessibilityIdentifier("calendarSkipOccurrence")
+                            }
                             if request.task.originalOccurrenceSchedule != nil {
                                 Button("Restore original schedule") { restoreOccurrence = true }
                                     .accessibilityIdentifier("calendarOccurrenceRestore")
@@ -237,7 +248,7 @@ struct PhoneCalendarEditSheet: View {
     }
 
     private var valid: Bool {
-        if restoreOccurrence { return true }
+        if restoreOccurrence || skipOccurrence { return true }
         return switch request.mode {
         case .schedule: remove || draft.isValid
         case .move: draft.start.timeIntervalSinceReferenceDate.isFinite
@@ -247,6 +258,7 @@ struct PhoneCalendarEditSheet: View {
     }
 
     private var operation: CalendarScheduleOperation? {
+        if skipOccurrence { return .skipOccurrence }
         if restoreOccurrence { return .restoreOccurrence }
         return switch request.mode {
         case .schedule: remove ? .unschedule : draft.operation
@@ -260,7 +272,7 @@ struct PhoneCalendarEditSheet: View {
         guard let operation else { dismiss(); return }
         Task {
             error = await model.saveCalendarSchedule(operation, taskID: request.task.id, expected: request.expected,
-                                                     scope: remove || restoreOccurrence ? .series : scope)
+                                                     scope: remove || restoreOccurrence || skipOccurrence ? .series : scope)
             if error == nil { dismiss() }
         }
     }

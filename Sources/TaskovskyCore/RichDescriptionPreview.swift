@@ -12,6 +12,7 @@ public struct RichDescriptionPreview: Sendable {
         public let quote: Bool
         public let marker: Marker?
         public let rule: Bool
+        public let codeBlockID: UUID?
     }
 
     public let text: String
@@ -46,8 +47,13 @@ public struct RichDescriptionPreview: Sendable {
         for block in rich.blocks.sorted(by: { $0.location < $1.location }) where !block.isEmpty {
             let end = block.location + block.length
             var paragraph = string.paragraphRange(for: NSRange(location: block.location, length: 1))
+            if block.codeBlockID != nil {
+                guard paragraph.location == block.location, paragraph.length == block.length,
+                      block.heading == nil, !block.quote, block.list == nil, block.checked == nil, !block.rule else { return nil }
+            }
             while paragraph.location < end {
                 var combined = blocks[paragraph.location] ?? RichBlockRun(location: paragraph.location, length: paragraph.length)
+                guard combined.codeBlockID == nil, block.codeBlockID == nil || combined.isEmpty else { return nil }
                 if let heading = block.heading { combined.heading = heading }
                 combined.quote = combined.quote || block.quote
                 if let list = block.list {
@@ -55,6 +61,7 @@ public struct RichDescriptionPreview: Sendable {
                     combined.checked = block.checked
                 }
                 combined.rule = combined.rule || block.rule
+                combined.codeBlockID = block.codeBlockID
                 blocks[paragraph.location] = combined
                 let next = NSMaxRange(paragraph)
                 if next >= end { break }
@@ -84,7 +91,8 @@ public struct RichDescriptionPreview: Sendable {
             }
             result.append(Paragraph(range: NSRange(location: offset, length: end - offset),
                                     heading: block?.heading, quote: block?.quote ?? false,
-                                    marker: marker, rule: block?.rule == true && offset == contentEnd))
+                                    marker: marker, rule: block?.rule == true && offset == contentEnd,
+                                    codeBlockID: block?.codeBlockID))
             offset = end
         }
         paragraphs = result
@@ -106,6 +114,26 @@ public struct RichDescriptionPreview: Sendable {
     public struct ReadingView: Sendable {
         public let preview: RichDescriptionPreview
         public let headings: [Heading]
+    }
+
+    public struct CodeBlock: Identifiable, Sendable {
+        public let range: NSRange
+        public let text: String
+        public var id: Int { range.location }
+    }
+
+    public var codeBlocks: [CodeBlock] {
+        let source = text as NSString
+        var groups: [(key: UUID, range: NSRange)] = []
+        for paragraph in paragraphs {
+            guard let key = paragraph.codeBlockID else { continue }
+            if let last = groups.last, last.key == key, NSMaxRange(last.range) == paragraph.range.location {
+                groups[groups.count - 1].range.length += paragraph.range.length
+            } else {
+                groups.append((key, paragraph.range))
+            }
+        }
+        return groups.map { CodeBlock(range: $0.range, text: source.substring(with: $0.range)) }
     }
 
     /// The source offsets are stable while reading. Only headings with
@@ -165,7 +193,7 @@ public struct RichDescriptionPreview: Sendable {
             for paragraph in paragraphs where NSLocationInRange(paragraph.range.location, range) {
                 let adjusted = NSRange(location: paragraph.range.location + shift, length: paragraph.range.length)
                 visibleParagraphs.append(.init(range: adjusted, heading: paragraph.heading, quote: paragraph.quote,
-                                               marker: paragraph.marker, rule: paragraph.rule))
+                                               marker: paragraph.marker, rule: paragraph.rule, codeBlockID: paragraph.codeBlockID))
             }
             for heading in headings where NSLocationInRange(heading.range.location, range) {
                 let adjusted = NSRange(location: heading.range.location + shift, length: heading.range.length)
@@ -181,7 +209,8 @@ public struct RichDescriptionPreview: Sendable {
     public var displayRichBody: RichBody {
         let blocks = paragraphs.compactMap { paragraph -> RichBlockRun? in
             var block = RichBlockRun(location: paragraph.range.location, length: paragraph.range.length,
-                                    heading: paragraph.heading, quote: paragraph.quote, rule: paragraph.rule)
+                                    heading: paragraph.heading, quote: paragraph.quote, rule: paragraph.rule,
+                                    codeBlockID: paragraph.codeBlockID)
             switch paragraph.marker {
             case .bullet: block.list = .bullet
             case .number: block.list = .numbered

@@ -6,6 +6,51 @@ import XCTest
 /// add/remove, highlight/code wash interplay, real list markers with
 /// continuation, and overflow-safe range math (emoji, hostile offsets).
 final class RichRenderTests: XCTestCase {
+    func testRecoloringKeepsInlineCodeAndOtherHighlightRanges() throws {
+        let text = "abc"
+        let rich = RichBody(text: text, runs: [
+            .init(location: 0, length: 2, bold: true, highlightColor: .pink),
+            .init(location: 1, length: 1, code: true),
+            .init(location: 2, length: 1, highlight: true),
+        ])
+        let storage = NSTextStorage(attributedString: RichRender.attributedString(text: text, rich: rich))
+        XCTAssertEqual(storage.attribute(.backgroundColor, at: 1, effectiveRange: nil) as? NSColor, RichRender.highlightWash(for: .pink))
+        let target = NSRange(location: 1, length: 1)
+        RichMutate.setHighlight(.green, in: storage, range: target)
+        let recolored = try XCTUnwrap(RichRender.extract(text: text, storage: storage).rich)
+        XCTAssertEqual(recolored.runs.map(\.effectiveHighlight), [.pink, .green, .yellow])
+        XCTAssertTrue(recolored.runs[1].bold && recolored.runs[1].code)
+        RichMutate.setHighlight(nil, in: storage, range: target)
+        XCTAssertEqual(storage.attribute(.backgroundColor, at: 1, effectiveRange: nil) as? NSColor, RichRender.codeWash)
+        XCTAssertEqual(try XCTUnwrap(RichRender.extract(text: text, storage: storage).rich).runs.map(\.effectiveHighlight), [.pink, nil, .yellow])
+    }
+
+    func testCodeBlockTypingDoesNotLeakIntoAnUnstyledTrailingCaret() throws {
+        let id = UUID()
+        let text = "code\r\n"
+        let rich = RichBody(text: text, blocks: [.init(location: 0, length: text.utf16.count, codeBlockID: id)])
+        let view = NSTextView()
+        let storage = try XCTUnwrap(view.textStorage)
+        storage.setAttributedString(RichRender.attributedString(text: text, rich: rich))
+        view.typingAttributes = storage.attributes(at: 0, effectiveRange: nil)
+        XCTAssertEqual(view.typingAttributes[RichRender.codeBlockKey] as? String, id.uuidString)
+        XCTAssertNil(RichRender.attributes(at: text.utf16.count, in: view)[RichRender.codeBlockKey])
+        XCTAssertEqual(RichRender.attributes(at: 0, in: view)[RichRender.codeBlockKey] as? String, id.uuidString)
+    }
+
+    func testCodeBlockRenderAndExtractKeepsParagraphsAndCanChangeStyle() throws {
+        let text = "print(🧩)\n"
+        let code = RichBody(text: text, blocks: [.init(location: 0, length: text.utf16.count, codeBlockID: UUID())])
+        let storage = NSTextStorage(attributedString: RichRender.attributedString(text: text, rich: code))
+        XCTAssertEqual(RichRender.extract(text: text, storage: storage).rich, code)
+        XCTAssertNotNil(storage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+        RichMutate.setHeading(2, in: storage, range: NSRange(location: 0, length: text.utf16.count))
+        let changed = try XCTUnwrap(RichRender.extract(text: text, storage: storage).rich)
+        XCTAssertNil(changed.blocks.first?.codeBlockID)
+        XCTAssertEqual(changed.blocks.first?.heading, 2)
+        XCTAssertNil(storage.attribute(.backgroundColor, at: 0, effectiveRange: nil))
+    }
+
     // MARK: - Range safety
 
     func testSanitizedSurvivesHostileRanges() {

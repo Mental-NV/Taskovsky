@@ -281,6 +281,7 @@ public struct TaskLifecycle {
             clone.recurrenceSourceID = member.id
             if member.isCustomRepeating { clone.occurrenceIndex = member.occurrenceIndex + 1 }
             clone.checklist = member.checklist.map { ChecklistItem(title: $0.title) }
+            clone.manualProgress = nil
             let memberCalendar = calendarFor(member)
             if let memberDue = member.dueDate {
                 let newDue = shift(memberDue, timed: member.hasDueTime, in: memberCalendar)
@@ -319,12 +320,25 @@ public struct TaskLifecycle {
     /// date. A valid custom rule supersedes the legacy enum; both honor the
     /// legacy end date.
     private static func spawnSuccessor(of record: TaskItem, now: Date, calendar: Calendar, in tasks: [TaskItem]) -> TaskItem? {
+        guard !tasks.contains(where: { $0.recurrenceSourceID == record.id }),
+              var copy = advancingRecurrenceSchedule(of: record, now: now, calendar: calendar) else { return nil }
+        copy.id = UUID()
+        copy.completedAt = nil; copy.deletedAt = nil; copy.wontDoAt = nil
+        copy.createdAt = now; copy.updatedAt = now
+        copy.recurrenceSourceID = record.id
+        copy.checklist = record.checklist.map { ChecklistItem(title: $0.title) }
+        copy.manualProgress = nil
+        return copy
+    }
+
+    /// Advances only the stored schedule of the recurrence. A completion
+    /// creates a successor from this result; Calendar skip keeps the same ID.
+    static func advancingRecurrenceSchedule(of record: TaskItem, now: Date, calendar: Calendar) -> TaskItem? {
         let original = record.recurrenceSchedule
         guard let (next, customIndex) = Self.nextRecurrenceDate(for: original, now: now, calendar: calendar),
-              !tasks.contains(where: { $0.recurrenceSourceID == original.id }),
               let due = original.dueDate else { return nil }
         var copy = original
-        copy.id = UUID(); copy.dueDate = next; copy.completedAt = nil; copy.deletedAt = nil; copy.wontDoAt = nil
+        copy.dueDate = next
         copy.occurrenceIndex = customIndex ?? original.occurrenceIndex
         // Weekend-rolling custom series record the unadjusted nominal
         // alongside the displayed (possibly rolled) due date, so the next
@@ -342,8 +356,6 @@ public struct TaskLifecycle {
             let parts = calendar.dateComponents([.hour, .minute, .second], from: reminder)
             return calendar.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: parts.second ?? 0, of: reminderDay) ?? reminderDay
         }
-        copy.createdAt = now; copy.updatedAt = now
-        copy.recurrenceSourceID = original.id
         // End-anchored (never `moved(to:)`, which anchors the start), then
         // re-cohered: the successor's window must end exactly at its due
         // date and the shape decides `hasDueTime`, even when the anchor
@@ -359,7 +371,6 @@ public struct TaskLifecycle {
         }
         copy.recurrenceAnchorDay = original.recurrenceAnchorDay ?? calendar.component(.day, from: due)
         copy.recurrenceAnchorMonth = original.recurrenceAnchorMonth ?? calendar.component(.month, from: due)
-        copy.checklist = original.checklist.map { ChecklistItem(title: $0.title) }
         return copy
     }
 
@@ -593,7 +604,8 @@ public struct TaskLifecycle {
     /// successor path and `nextRecurrenceDate` share it; a nil result ends
     /// the series and never falls back to another step.
     private static func nextCustomStep(for task: TaskItem, now: Date, calendar: Calendar) -> (adjusted: Date, nominal: Date?, index: Int)? {
-        guard let rule = task.customRecurrence, rule.isValid, let due = task.dueDate else { return nil }
+        guard let rule = task.customRecurrence, rule.isValid, let due = task.dueDate,
+              task.occurrenceIndex < Int.max else { return nil }
         if rule.anchor == .completionDate {
             guard let next = rule.nextOccurrence(after: due, completedAt: now, calendar: calendar, occurrenceIndex: task.occurrenceIndex),
                   task.recurrenceEndDate.map({ calendar.startOfDay(for: next) <= calendar.startOfDay(for: $0) }) ?? true else { return nil }

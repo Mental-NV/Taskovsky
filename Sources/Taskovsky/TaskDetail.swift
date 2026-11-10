@@ -73,6 +73,10 @@ struct TaskDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             detailHeader
+            if task.kind == .task {
+                TaskProgressControl(store: store, task: task, locked: locked)
+                    .padding(.horizontal, compact ? 16 : 24).padding(.bottom, 8)
+            }
             Divider()
             detailStatusBanner
             ScrollView {
@@ -157,9 +161,10 @@ struct TaskDetail: View {
         // reports its content height so docked, drawer, and pop-up
         // layouts all size it without an inner scroller.
         let preview = task.richBody.flatMap { rich in
-            rich.blocks.contains { $0.validHeading != nil } ? RichDescriptionPreview(body: task.body, rich: rich) : nil
+            rich.hasCodeBlocks || rich.blocks.contains { $0.validHeading != nil }
+                ? RichDescriptionPreview(body: task.body, rich: rich) : nil
         }
-        if let preview, !preview.foldableHeadings.isEmpty {
+        if let preview, !preview.foldableHeadings.isEmpty || !preview.codeBlocks.isEmpty {
             Button("Read Description", systemImage: "doc.text.magnifyingglass") { showDescriptionReader = true }
                 .sheet(isPresented: $showDescriptionReader) {
                     RichBodyReader(documentID: task.id, preview: preview)

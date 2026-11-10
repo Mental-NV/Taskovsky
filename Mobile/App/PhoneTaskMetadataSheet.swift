@@ -16,6 +16,7 @@ extension TaskPriority {
 
 enum PhoneTaskMetadataKind: String {
     case priority = "Priority"
+    case progress = "Task Progress"
     case tags = "Tags"
     case checklist = "Checklist"
 }
@@ -33,6 +34,7 @@ struct PhoneTaskMetadataSheet: View {
     let request: PhoneTaskMetadataRequest
     @State private var tagIDs: [UUID]
     @State private var items: [ChecklistItem]
+    @State private var progress: Double
     @State private var query = ""
     @State private var newTitle = ""
     @State private var newID = UUID()
@@ -51,10 +53,11 @@ struct PhoneTaskMetadataSheet: View {
         self.request = request
         _tagIDs = State(initialValue: request.task.tagIDs)
         _items = State(initialValue: request.task.checklist)
+        _progress = State(initialValue: Double(request.task.progressPercent))
     }
 
     private var hasChanges: Bool {
-        tagIDs != request.task.tagIDs ||
+        Int(progress) != request.task.progressPercent || tagIDs != request.task.tagIDs ||
             !TaskMetadataChange.sameChecklist(items, request.task.checklist) ||
             !newTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || composingID != nil
     }
@@ -87,6 +90,7 @@ struct PhoneTaskMetadataSheet: View {
                     }
                 }
         }
+        .presentationDetents(request.kind == .progress ? [.medium, .large] : [.large])
         .interactiveDismissDisabled(model.isBusy || hasChanges)
         .alert("Discard changes?", isPresented: $confirmDiscard) {
             Button("Discard Changes", role: .destructive) { dismiss() }
@@ -109,6 +113,18 @@ struct PhoneTaskMetadataSheet: View {
                     .accessibilityIdentifier("taskPriority-" + priority.rawValue)
                     .accessibilityAddTraits(priority == request.task.priority ? .isSelected : [])
             }
+        case .progress:
+            VStack(spacing: 20) {
+                Stepper(value: $progress, in: 0...100) {
+                    Text("\(Int(progress))%").font(.title2.monospacedDigit())
+                        .accessibilityIdentifier("taskProgressDraftValue")
+                }
+                .accessibilityIdentifier("taskProgressStepper")
+                Slider(value: Binding(get: { progress }, set: { progress = $0.rounded() }), in: 0...100) {
+                    Text("Progress percentage")
+                }.accessibilityIdentifier("taskProgressSlider")
+                Spacer()
+            }.padding(24)
         case .tags: tagPicker
         case .checklist: checklistEditor
         }
@@ -245,6 +261,7 @@ struct PhoneTaskMetadataSheet: View {
     private func saveDraft() {
         switch request.kind {
         case .priority: break
+        case .progress: submit(.progress(Int(progress)))
         case .tags: submit(.tags(tagIDs))
         case .checklist:
             guard composingID == nil else { return }

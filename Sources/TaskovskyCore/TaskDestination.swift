@@ -5,6 +5,13 @@ import Foundation
 public enum TaskDestination: Hashable, Sendable {
     case all, today, tomorrow, week, inbox, notes, reminders, completed, wontDo, summary, search, trash, list(UUID), folder(UUID), tag(UUID), filter(UUID)
 
+    public var supportsCreatedDateGrouping: Bool {
+        switch self {
+        case .all, .today, .tomorrow, .week, .inbox, .notes, .list, .folder, .tag, .filter: true
+        case .reminders, .completed, .wontDo, .summary, .search, .trash: false
+        }
+    }
+
     public var smartKey: SmartListKey? {
         switch self {
         case .all: .all

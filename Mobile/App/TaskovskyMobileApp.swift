@@ -44,6 +44,7 @@ struct MobileRootView: View {
     @State private var sessionCalendarMode: TaskCalendarMode?
     @State private var calendarPreferenceRoute: PhoneCalendarPreferenceRoute?
     @State private var preferenceNotice: String?
+    @State private var calendarChecklistError: String?
     @State private var viewPicker = false
     @State private var jumpDatePresented = false
     @State private var showTaskSort = false
@@ -194,6 +195,10 @@ struct MobileRootView: View {
                         Text(preferenceNotice).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("calendarPreferenceNotice").padding(.horizontal, 16)
                     }
+                    if let calendarChecklistError {
+                        Text(calendarChecklistError).font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("calendarChecklistError").padding(.horizontal, 16)
+                    }
                     PhoneCalendarFeedback(model: model).padding(.horizontal, 16)
                     calendarBody(data: snapshot.workspace)
                 case .search:
@@ -299,6 +304,10 @@ struct MobileRootView: View {
                 VStack(spacing: 0) {
                     taskSortChoice(nil)
                     ForEach(TaskTimestampSort.allCases, id: \.self) { taskSortChoice($0) }
+                    if destination.supportsCreatedDateGrouping {
+                        Divider()
+                        createdGroupingChoice
+                    }
                 }.padding(8).frame(width: 245).presentationCompactAdaptation(.popover)
             }
     }
@@ -317,6 +326,19 @@ struct MobileRootView: View {
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    private var createdGroupingChoice: some View {
+        Button {
+            showTaskSort = false
+            model.setTaskCreatedGrouping(!model.groupsByCreationDate)
+        } label: {
+            HStack {
+                Text("Group by Created Date")
+                Spacer()
+                if model.groupsByCreationDate { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityAddTraits(model.groupsByCreationDate ? .isSelected : [])
+    }
+
     private func taskDestinationRows(_ data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
         let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
@@ -331,7 +353,7 @@ struct MobileRootView: View {
             PhoneListModeControl(model: model, list: list).id("list-mode-" + id.uuidString)
             if let scope, list.viewMode == .timeline {
                 taskTimeline(scope, data: data)
-            } else if !list.sections.isEmpty {
+            } else if !list.sections.isEmpty && (list.viewMode == .board || !model.groupsByCreationDate) {
                 if list.viewMode == .board {
                     PhoneSectionBoard(model: model, list: list, data: data,
                                       openTask: { selectedTask = PhoneTaskRoute(id: $0) },
@@ -475,7 +497,13 @@ struct MobileRootView: View {
         return ScrollView {
             if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
             taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
-            taskRows(ordinary, lists: data.lists, searchQuery: searchQuery)
+            if searchQuery == nil && destination.supportsCreatedDateGrouping && model.groupsByCreationDate {
+                ForEach(TaskCreationDayGroup.group(ordinary, calendar: calendar, sort: model.taskTimestampSort)) { group in
+                    taskGroup(group.title(calendar: calendar), tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else {
+                taskRows(ordinary, lists: data.lists, searchQuery: searchQuery)
+            }
             taskGroup("Completed", tasks: completed, lists: data.lists, searchQuery: searchQuery)
             taskGroup("Won't Do", tasks: abandoned, lists: data.lists, searchQuery: searchQuery)
             Color.clear.frame(height: 90)
@@ -483,7 +511,7 @@ struct MobileRootView: View {
     }
     @ViewBuilder private func taskGroup(_ title: String, tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
         if !tasks.isEmpty {
-            Text(title).font(.headline)
+            Text(title).font(.headline).accessibilityAddTraits(.isHeader)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
             taskRows(tasks, lists: lists, searchQuery: searchQuery)
         }
@@ -719,6 +747,9 @@ struct MobileRootView: View {
                 calendarEdit = PhoneCalendarEditRequest(task: task, expected: document.revision, focus: focus,
                                                         hourly: options.mode.isHourly, calendar: calendar, mode: mode)
             },
+            complete: model.canBeginEditing ? { entry in
+                changeCalendarCompletion(entry, expected: revision)
+            } : nil,
             drop: acceptCalendarDrop,
             resize: { payload, operation in
                 _ = stageCalendarGesture(operation, payload: payload)
@@ -735,6 +766,20 @@ struct MobileRootView: View {
                                      options: options, controls: controls,
                                      select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }
 
+    }
+
+    private func changeCalendarCompletion(_ entry: CalendarEntry, expected: WorkspaceRevision?) {
+        guard entry.canChangeCompletion, let expected else { return }
+        calendarChecklistError = nil
+        Task {
+            if let itemID = entry.checklistID {
+                let change = TaskMetadataChange.setChecklistCompleted(id: itemID, completed: !entry.isCompleted)
+                calendarChecklistError = await model.saveTaskMetadata(change, taskID: entry.taskID, expected: expected)
+            } else {
+                await model.performLifecycle(entry.isCompleted ? .reopen : .complete,
+                                             taskID: entry.taskID, expected: expected)
+            }
+        }
     }
 
     private func acceptCalendarDrop(_ payload: PhoneCalendarDrag, _ target: PhoneCalendarDropTarget) -> Bool {

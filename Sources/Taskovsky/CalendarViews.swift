@@ -16,7 +16,7 @@ struct CalendarHourlyView: View {
     var calendar: Calendar
     var options: TaskCalendarOptions
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var create: (Date, Date, Bool) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
@@ -319,7 +319,7 @@ private struct CalendarAllDayCell: View {
     var width: CGFloat
     var height: CGFloat
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var create: (Date, Date, Bool) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
@@ -355,7 +355,7 @@ private struct CalendarSpanningEntry: View {
     let options: TaskCalendarOptions
     let calendar: Calendar
     let open: (UUID) -> Void
-    let complete: (UUID) -> Void
+    let complete: (CalendarEntry) -> Void
     let edit: (CalendarEntry) -> Void
     let resize: CalendarAllDayResizeContext?
 
@@ -466,7 +466,7 @@ private struct CalendarHourColumn: View {
     var window: CalendarHourlyWindow
     var hourHeight: CGFloat
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var create: (Date, Date, Bool) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
@@ -535,7 +535,7 @@ private struct CalendarTimedBlock: View {
     var scale: CGFloat
     var width: CGFloat
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
     var moveTarget: (CGPoint) -> Date?
@@ -636,7 +636,7 @@ struct CalendarMonthView: View {
     var calendar: Calendar
     var options: TaskCalendarOptions
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
     var create: (Date) -> Void
     var move: (UUID, Date, Bool) -> Void
@@ -728,7 +728,7 @@ private struct CalendarMonthCell: View {
     var options: TaskCalendarOptions
     var height: CGFloat
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
     var create: (Date) -> Void
     var selected: Bool
@@ -903,7 +903,7 @@ struct CalendarAgendaView: View {
     var calendar: Calendar
     var options: TaskCalendarOptions
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
     var create: (Date) -> Void
     var canExtend: Bool
