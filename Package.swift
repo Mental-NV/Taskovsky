@@ -31,6 +31,7 @@ let domainSources = [
     "LegacyRecurrence.swift",
     "TaskDestination.swift",
     "TaskCreation.swift",
+    "TaskTextBatch.swift",
     "TaskTemplateChange.swift",
     "TaskLifecycle.swift",
     "TaskBatchEdit.swift",

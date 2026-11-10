@@ -48,6 +48,8 @@ Date recognition is a limited English parser: today, tomorrow, day after tomorro
 
 **Evidence.** [TaskStore.createTask/recognizeDate](../../Sources/TaskovskyCore/TaskStore.swift); [QuickEntry](../../Sources/Taskovsky/QuickEntry.swift); [App quick-entry dispatch](../../Sources/Taskovsky/App.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [EntryAndListTests](../../Tests/TaskovskyCoreTests/EntryAndListTests.swift).
 
+Add Multiple Tasks treats each nonblank line as a separate title. Both platforms resolve each line through the shared capture defaults, and display the reviewed list, titles, dates and existing tags. A batch saves once in pasted order at the configured insertion end. Each reviewed item retains its identity through retries. [Batch text capture](../changes/task-batch-text-capture-2026-11-10.md).
+
 <a id="bus-004"></a>
 
 ### BUS-004 — URL titles are optional network enrichment

@@ -11,6 +11,39 @@ final class MobileContractTests: XCTestCase {
     private var now: Date { date("2026-11-09T12:00:00Z") }
     private func ids(_ tasks: [TaskItem]) -> [UUID] { tasks.map(\.id) }
 
+    func testTextBatchUsesCaptureDefaultsAndRetainsDuplicateAndUnicodeLines() throws {
+        let work = TaskList(name: "Work", color: "#123456")
+        let note = TaskList(name: "Notes", color: "#123456", kind: .note)
+        let tag = TaskTag(name: "Existing", color: "#123456")
+        let data = WorkspaceData(lists: [work, note], tags: [tag])
+        var settings = AppSettings()
+        settings.defaultListID = work.id
+        settings.defaultPriority = .high
+        settings.removeTagText = true
+        settings.removeDateText = true
+        let text = "  Check tomorrow #Existing \r\n\t\r\n  e\u{301} 🧩 #Literal\u{2028}e\u{301} 🧩 #Literal  "
+        let batch = try TaskTextBatch(text: text, destination: .inbox, workspace: data, settings: settings,
+                                      now: now, calendar: calendar, recognizesDetails: true)
+        XCTAssertEqual(batch.listName, "Inbox")
+        XCTAssertTrue(batch.tasks.allSatisfy { $0.listID == nil && $0.priority == .high })
+        XCTAssertEqual(batch.tasks.map(\.title), ["Check", "e\u{301} 🧩 #Literal", "e\u{301} 🧩 #Literal"])
+        XCTAssertEqual(Array(batch.tasks[1].title.utf16), Array("e\u{301} 🧩 #Literal".utf16))
+        XCTAssertEqual(Set(ids(batch.tasks)).count, 3)
+        XCTAssertEqual(batch.tasks[0].dueDate, calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)))
+        XCTAssertEqual(batch.tasks[0].tagIDs, [tag.id])
+        XCTAssertEqual(batch.tasks[1].tagIDs, [])
+        XCTAssertThrowsError(try TaskTextBatch(text: "Valid\n#Existing", destination: .today, workspace: data, settings: settings,
+                                              now: now, calendar: calendar, recognizesDetails: true)) {
+            XCTAssertEqual($0 as? TaskTextBatchValidation, .invalidLine(2, .emptyTitle))
+        }
+        let literal = try TaskTextBatch(text: "#Existing", destination: .today, workspace: data, settings: settings,
+                                        now: now, calendar: calendar, recognizesDetails: false)
+        XCTAssertEqual(literal.tasks.first?.title, "#Existing")
+        XCTAssertEqual(literal.tasks.first?.listID, work.id)
+        XCTAssertEqual(literal.tasks.first?.dueDate, calendar.startOfDay(for: now))
+        XCTAssertFalse(TaskTextBatch.isAvailable(in: .list(note.id), workspace: data))
+    }
+
     func testEndReminderTracksTimedDurationAndKeepsExistingReminderPolicy() throws {
         let start = now, due = start + 3_600
         let task = TaskItem(title: "Workshop", dueDate: due, hasDueTime: true, reminderDate: due,

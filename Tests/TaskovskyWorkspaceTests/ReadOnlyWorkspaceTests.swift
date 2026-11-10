@@ -1153,6 +1153,46 @@ final class CaptureCommandTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("workspace.json")), bytes)
         XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("settings.json")), settings)
     }
+
+    func testTextBatchIsAtomicAndConfirmsTheWholeBatchAfterAWriteThrow() async throws {
+        var settings = AppSettings()
+        settings.defaultAddTo = .bottom
+        let (root, repository) = try fixture(settings: settings)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let before = try await repository.load()
+        let snapshot = before.snapshot
+        let batch = try TaskTextBatch(text: "First\nSecond\nSecond", destination: .inbox, workspace: snapshot.workspace,
+                                      settings: snapshot.settings, now: now, calendar: calendar, recognizesDetails: false)
+        let unrelated = try TaskTextBatch(text: "Later", destination: .inbox, workspace: snapshot.workspace,
+                                          settings: snapshot.settings, now: now, calendar: calendar, recognizesDetails: false)
+        let failedWriter = repo(root, write: { _, _ in throw FixtureWriteError.denied })
+        guard case .notSaved(let unchanged) = await failedWriter.create(batch, expected: before.revision) else {
+            return XCTFail("Expected the failed batch to leave the file untouched")
+        }
+        XCTAssertEqual(unchanged.snapshot.workspaceBytes, snapshot.workspaceBytes)
+        let afterWrite = repo(root, write: { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        })
+        guard case .alreadyCreated(let saved, _) = await afterWrite.create(batch, expected: before.revision) else {
+            return XCTFail("Expected readback to confirm all of the submitted tasks")
+        }
+        XCTAssertEqual(saved.snapshot.workspace.tasks, snapshot.workspace.tasks + batch.tasks)
+        XCTAssertEqual(saved.snapshot.settingsBytes, snapshot.settingsBytes)
+        guard case .alreadyCreated = await repository.create(batch, expected: before.revision),
+              case .refused(.stale) = await repository.create(unrelated, expected: before.revision) else {
+            return XCTFail("Expected the same batch to replay and the unrelated batch to refuse its stale review")
+        }
+        var partial = snapshot.workspace
+        partial.tasks.append(batch.tasks[0])
+        let partialBytes = try JSONEncoder().encode(partial)
+        let file = root.appendingPathComponent("workspace.json")
+        try partialBytes.write(to: file, options: .atomic)
+        guard case .refused(.commandConflict) = await repository.create(batch, expected: before.revision) else {
+            return XCTFail("Expected a partial identity match to refuse the entire batch")
+        }
+        XCTAssertEqual(try Data(contentsOf: file), partialBytes)
+    }
     func testAfterWriteThrowConfirmsSuccessAndDoesNotDuplicate() async throws {
         let (root, normal) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let draft = try prepared(try await normal.load())

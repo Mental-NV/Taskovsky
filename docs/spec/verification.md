@@ -1595,3 +1595,19 @@ Physical iPhone, dark appearance, VoiceOver and other Calendar modes were outsid
 | Saved fixture audit | The layout-only session's workspace and settings files were byte-identical to their seeds. Reset removed the active layout. A separate QA session stored Duplicate in More under its own preference key. The copy's rich body matched the original and its child had an independent ID. The disposable simulator was removed. |
 
 The drag check exercised Pinned. The native More-section reorder control, VoiceOver and physical-device touch are outside this verification pass.
+
+<a id="task-batch-text-capture"></a>
+
+## Batch text capture on current main — November 10, 2026
+
+[Change contract](../changes/task-batch-text-capture-2026-11-10.md). The isolated `codex/batch-text-capture-current` branch starts from `aba0b9b78a2b6af3dede10542234ba3eed0bc805`. It brings forward the batch-only changes from the earlier local prototype. The final 172-input source manifest has SHA-256 `521e2c0a99288d5713779dd652f67ce17567dead7096d10d4a7b69862ddd27df`.
+
+| Evidence | Result |
+| --- | --- |
+| Reference | The [TickTick Add Tasks guide](https://help.ticktick.com/articles/7055782422935240704) documents creating multiple tasks from copied lines after confirmation. Taskovsky uses an explicit paste or typing step, followed by a review. |
+| macOS 27.0.1, Xcode 27.0 | **683 tests passed.** Batch tests covered order, Unicode, duplicate titles, date and tag defaults, failed replacement, confirmed after-write failure, retry, partial identity conflicts and stale review refusal. The Mac guard rejected a batch when an unknown protected field appeared on disk after review. The release build and strict signature verification passed. |
+| Guarded native Mac | A pasted two-line review cancelled with Escape and left both files byte-identical. A tag-only line was refused when recognition removed its entire title, then reviewed literally with recognition off. A three-line batch in Calendar Work showed the expected date and tag, preserved both identical titles, saved once and showed all three tasks after relaunch. |
+| iPhone 13 Pro simulator, iOS 26.5, Xcode 27.0 | **Three workflows passed across two runs of the same iPhone source.** Typed multiline input reviewed and cancelled, then a second batch saved in Work and appeared once per line after relaunch. Single-task capture into an empty workspace and Select Tasks batch edits passed. |
+| Saved files and restoration | Both settings files stayed byte-identical. On Mac, existing workspace records matched after accounting for encoded defaults absent from the seed. The recognized task saved November 11 at 09:00 Europe/Moscow with the default 30-minute duration and due-time reminder. On iPhone, the two new tasks were first and every original record matched. The original Mac QA app and preferences were restored, and the disposable simulator was removed. |
+
+The iPhone run exercised typed input. System clipboard paste was verified on Mac. Physical iPhone, VoiceOver and other destination layouts were outside these native checks.

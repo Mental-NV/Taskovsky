@@ -43,6 +43,10 @@ final class NominalCadenceTests: XCTestCase {
         store.updateTask(task)
         XCTAssertNotNil(store.scheduleOnCalendar(id: id, operation: .setPoint(date: date(2026, 11, 10), allDay: false),
                                                  calendar: calendar, scope: .currentOccurrence))
+        let expected = store.data
+        let settings = store.settings
+        let batch = try TaskTextBatch(text: "First\nSecond", destination: .inbox, workspace: expected,
+                                      settings: settings, now: due, calendar: calendar, recognizesDetails: false)
         let file = store.fileURL
         XCTAssertFalse(TaskStore(fileURL: file, seed: false).needsRecovery)
         var object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
@@ -55,6 +59,11 @@ final class NominalCadenceTests: XCTestCase {
         object["tasks"] = collection
         let newer = try JSONSerialization.data(withJSONObject: object)
         try newer.write(to: file, options: .atomic)
+        guard case .uncertain = store.createTextBatch(batch, expected: expected, expectedSettings: settings) else {
+            return XCTFail("Batch creation must refuse the newer protected data.")
+        }
+        XCTAssertEqual(store.data, expected)
+        XCTAssertEqual(try Data(contentsOf: file), newer)
         let guarded = TaskStore(fileURL: file, seed: false)
         XCTAssertTrue(guarded.needsRecovery)
         guarded.save()

@@ -76,6 +76,7 @@ struct MobileRootView: View {
     @State private var jumpDatePresented = false
     @State private var showTaskSort = false
     @State private var showTaskActions = false
+    @State private var showTextBatch = false
     @State private var batchRequest: PhoneBatchRequest?
     @State private var batchNotice: String?
     @State private var showArrange = false
@@ -212,9 +213,12 @@ struct MobileRootView: View {
                             }
                     } else {
                         Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary)
-                        if section == .tasks && showsTaskSort(in: snapshot.workspace) {
-                            taskSortMenu
-                            if destination != .trash { taskActions(snapshot.workspace) }
+                        if section == .tasks {
+                            let showsSort = showsTaskSort(in: snapshot.workspace)
+                            if showsSort { taskSortMenu }
+                            if destination != .trash && (showsSort || TaskTextBatch.isAvailable(in: destination, workspace: snapshot.workspace)) {
+                                taskActions(snapshot.workspace, showsSelection: showsSort)
+                            }
                         }
                     }
                 }.padding(.horizontal, 16)
@@ -319,6 +323,7 @@ struct MobileRootView: View {
             case .move(let request): PhoneTaskMoveSheet(model: model, request: request)
             }
         }
+        .sheet(isPresented: $showTextBatch) { textBatchSheet.presentationDetents([.large]) }
         .sheet(item: $batchRequest) { request in taskBatchSheet(request).presentationDetents([.large]) }
         .onChange(of: destination) { _, _ in
             batchNotice = nil
@@ -404,25 +409,51 @@ struct MobileRootView: View {
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
-    private func taskActions(_ data: WorkspaceData) -> some View {
+    private func taskActions(_ data: WorkspaceData, showsSelection: Bool) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
         return circle("Tasks actions", symbol: "ellipsis") { showTaskActions = true }
             .accessibilityIdentifier("taskListActions")
             .popover(isPresented: $showTaskActions, arrowEdge: .top) {
-                Button {
-                    guard let document = model.document else { return }
-                    showTaskActions = false
-                    batchNotice = nil
-                    let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
-                    batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
-                } label: {
-                    Label("Select Tasks", systemImage: "checklist")
-                        .frame(minHeight: 44, alignment: .leading)
-                }.buttonStyle(.plain).disabled(!model.canBeginEditing || tasks.isEmpty)
-                    .accessibilityIdentifier("batchOpen")
-                    .padding(.horizontal, 16).padding(.vertical, 6)
+                VStack(alignment: .leading, spacing: 0) {
+                    if showsSelection {
+                        Button {
+                            guard let document = model.document else { return }
+                            showTaskActions = false
+                            batchNotice = nil
+                            let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+                            batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
+                        } label: {
+                            Label("Select Tasks", systemImage: "checklist")
+                                .frame(minHeight: 44, alignment: .leading)
+                        }.disabled(!model.canBeginEditing || tasks.isEmpty)
+                            .accessibilityIdentifier("batchOpen")
+                    }
+                    if TaskTextBatch.isAvailable(in: destination, workspace: data) {
+                        Button {
+                            showTaskActions = false
+                            showTextBatch = true
+                        } label: {
+                            Label("Add Multiple Tasks", systemImage: "plus.rectangle.on.rectangle")
+                                .frame(minHeight: 44, alignment: .leading)
+                        }.disabled(!model.canBeginEditing)
+                            .accessibilityIdentifier("batchCaptureOpen")
+                    }
+                }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 6)
                     .presentationCompactAdaptation(.popover)
             }
+    }
+
+    private var textBatchSheet: some View {
+        TaskTextBatchSheet { text, recognizesDetails in
+            guard let document = model.document else { throw TaskTextBatchValidation.unavailableDestination }
+            let snapshot = document.snapshot
+            let batch = try TaskTextBatch(text: text, destination: destination, workspace: snapshot.workspace,
+                                          settings: snapshot.settings, now: model.now, calendar: calendar,
+                                          recognizesDetails: recognizesDetails)
+            return TaskTextBatchReview(batch: batch, calendar: calendar, tags: snapshot.workspace.tags) {
+                await model.saveTextBatch(batch, expected: document.revision)
+            }
+        }
     }
 
     private func taskBatchSheet(_ request: PhoneBatchRequest) -> some View {

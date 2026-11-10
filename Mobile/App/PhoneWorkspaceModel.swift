@@ -738,6 +738,29 @@ final class PhoneWorkspaceModel: ObservableObject {
         }
     }
 
+    func saveTextBatch(_ batch: TaskTextBatch, expected: WorkspaceRevision) async -> TaskTextBatchSubmission {
+        guard canBeginEditing, let repository else { return .failed("Editing is currently unavailable.") }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.create(batch, expected: expected) {
+        case .created(let saved, _), .alreadyCreated(let saved, _):
+            document = saved
+            creationNotice = batch.tasks.count == 1 ? "Task added" : "Added \(batch.tasks.count) tasks"
+            return .saved
+        case .notSaved(let latest):
+            document = latest
+            return .failed("Could not save the batch. You can retry.")
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return .needsReview("The workspace changed. Go back to review the batch again.")
+        case .refused(.compatibility): return .failed("This workspace contains data this build cannot safely rewrite.")
+        case .refused(.invalidCapture), .refused(.validation): return .needsReview("Could not validate these tasks. Go back to review them again.")
+        case .uncertain, .refused(.commandConflict):
+            return .uncertain("Could not confirm the batch. Retry checks the same tasks before saving.")
+        }
+    }
+
     func saveOrganization(_ command: ListOrganizationCommand, expected: WorkspaceRevision) async -> String? {
         guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
         readTicket = UUID()

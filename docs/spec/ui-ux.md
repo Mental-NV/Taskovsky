@@ -200,6 +200,8 @@ Interactions:
 - Trash disables completion and rename. Archived list rows also disable checklist edits and drag while retaining selection. Archived context menus retain an explicit Move to Inbox/active-list escape hatch.
 - Active task menu offers completion/reopen, Won't Do, pin (only active), priority, move, duplicate, save template, add subtask, make subtask of a valid same-list parent, move to top level, and trash. Notes omit completion/subtask actions. Trash menus offer Restore/Delete Forever.
 
+Tasks → More → Add Multiple Tasks opens a multiline text sheet. Review shows the target and one row per task. Back returns to the input, and Cancel or Escape discards the review. Confirming adds the entire batch. [Batch text capture](../changes/task-batch-text-capture-2026-11-10.md).
+
 <a id="ux-007"></a>
 
 ## UX-007 — Drag feedback and board mode
