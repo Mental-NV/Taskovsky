@@ -4,6 +4,7 @@ import TaskovskyCore
 
 extension EnvironmentValues {
     @Entry var showsFullTaskTimes = false
+    @Entry var showsTaskCountdown = false
 }
 
 struct TaskRow: View {
@@ -47,6 +48,7 @@ struct TaskRow: View {
     @FocusState private var titleFocused: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.showsFullTaskTimes) private var showsFullTaskTimes
+    @Environment(\.showsTaskCountdown) private var showsTaskCountdown
     private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
     private var tag: TaskTag? { store.data.tags.first { task.tagIDs.contains($0.id) } }
     private var listName: String? { store.data.lists.first { $0.id == task.listID }?.name }
@@ -215,7 +217,9 @@ struct TaskRow: View {
                     Image(systemName: "bell").foregroundStyle(finished ? metaColor : reminder <= now ? .orange : .secondary)
                 }
             }
-            if let due = task.dueDate { Text(dueText(due)).foregroundStyle(dueColor(due)) }
+            if let due = task.dueDate {
+                Text(countdown ?? dueText(due)).foregroundStyle(dueColor(due))
+            }
         }.font(.system(size: 10)).lineLimit(1)
     }
     private var metaColor: Color { finished ? Color(nsColor: .tertiaryLabelColor) : Color(nsColor: .secondaryLabelColor) }
@@ -224,7 +228,11 @@ struct TaskRow: View {
         return DueLabels.isOverdue(due: due, now: now, calendar: task.scheduleCalendar) ? .red : accent
     }
     private var metadataDescription: String {
-        ([tag.map { "#" + $0.name }, task.dueDate.map(dueText), listContext ?? listName].compactMap { $0 }).joined(separator: " · ")
+        ([tag.map { "#" + $0.name }, task.dueDate.map(dueText), countdown, listContext ?? listName].compactMap { $0 }).joined(separator: " · ")
+    }
+    private var countdown: String? {
+        guard showsTaskCountdown else { return nil }
+        return TaskDueCountdown.label(for: task, now: now, calendar: task.scheduleCalendar)
     }
     private func rename() { guard allowRename, !readOnly, task.deletedAt == nil else { return }; draft = task.title; editing = true; titleFocused = true }
     private func commit() {

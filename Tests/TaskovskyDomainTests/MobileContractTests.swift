@@ -69,6 +69,26 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(next.effectiveReminderDates, [due + 86_400])
     }
 
+    func testTaskCountdownUsesCivilDaysAndUpdatesTimedDeadlines() {
+        let timed = TaskItem(title: "Timed", dueDate: now + 90 * 60, hasDueTime: true)
+        XCTAssertEqual(TaskDueCountdown.label(for: timed, now: now, calendar: calendar), "1h 30m left")
+        XCTAssertEqual(TaskDueCountdown.label(for: timed, now: now + 60, calendar: calendar), "1h 29m left")
+        XCTAssertEqual(TaskDueCountdown.label(for: timed, now: now + 90 * 60, calendar: calendar), "Due now")
+        XCTAssertEqual(TaskDueCountdown.label(for: timed, now: now + 91 * 60, calendar: calendar), "1m overdue")
+        let beforeDST = date("2026-03-07T05:00:00Z")
+        let afterDST = date("2026-03-09T04:00:00Z")
+        let allDay = TaskItem(title: "Civil date", dueDate: afterDST, timeZoneID: "America/New_York")
+        XCTAssertEqual(TaskDueCountdown.label(for: allDay, now: beforeDST, calendar: calendar), "2 days left")
+        XCTAssertEqual(TaskDueCountdown.label(for: allDay, now: afterDST + 90, calendar: calendar), "Due today")
+        XCTAssertEqual(TaskDueCountdown.label(for: allDay, now: afterDST + 86_400, calendar: calendar), "1 day overdue")
+        let nearMidnight = date("2026-11-10T23:45:00Z")
+        let later = TaskItem(title: "Tomorrow in minutes", dueDate: nearMidnight + 1_800, hasDueTime: true)
+        XCTAssertEqual(TaskDueCountdown.label(for: later, now: nearMidnight, calendar: calendar), "30m left")
+        var finished = timed
+        finished.completedAt = now
+        XCTAssertNil(TaskDueCountdown.label(for: finished, now: now, calendar: calendar))
+        XCTAssertNil(TaskDueCountdown.label(for: TaskItem(title: "Undated"), now: now, calendar: calendar))
+    }
 
     func testScopedBoardWeekDateMovePreservesInclusiveSpanAndTimedDueClock() throws {
         let days = CalendarDates.days(from: now, count: 7, calendar: calendar)

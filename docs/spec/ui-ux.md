@@ -189,6 +189,8 @@ Metadata order: contextual list, body `doc.plaintext`, checklist done/total, sub
 
 Due labels use the task's zone: Yesterday/Today/Tomorrow or localized day/month. Timed tasks due today show time only in the row. Only dates before the start of the current day become red; same-day lateness is not red. Other active due text is accent; finished metadata is tertiary. A due reminder bell is orange. Details append a nonlocal time-zone abbreviation where applicable. In Mac List and Board, hold Option to reveal the full date or range with both timed endpoints. Compact List rows can wrap it within the metadata budget. Release or loss of the key window restores the regular presentation. [Verification](verification.md#task-option-times).
 
+In active Tasks list views, More → Show Countdown replaces ordinary due labels on eligible rows. Hide Countdown restores the ordinary labels. The device remembers this choice. Option still takes precedence for the full schedule. [Countdown contract](../changes/task-countdown-labels-2026-11-10.md).
+
 Interactions:
 
 - Single click selects. Checkbox/checklist clicks avoid selecting the row by consuming only that click.

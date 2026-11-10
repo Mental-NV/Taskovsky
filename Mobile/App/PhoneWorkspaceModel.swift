@@ -13,6 +13,7 @@ final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var failure: String?
     @Published private(set) var recentSearches: [String] = []
     @Published private(set) var taskTimestampSort: TaskTimestampSort?
+    @Published private(set) var taskCountdownEnabled = false
     @Published private(set) var groupsByCreationDate = false
     @Published private(set) var activeDraft: TaskFieldDraft?
     @Published private(set) var recoveredDraft: TaskFieldDraft?
@@ -104,6 +105,17 @@ final class PhoneWorkspaceModel: ObservableObject {
         return isQA ? "TaskovskyMobile.qaTaskSort." + directory.lastPathComponent : "TaskovskyMobile.taskSort"
     }
 
+    private var taskCountdownKey: String? {
+        guard let directory else { return nil }
+        return isQA ? "TaskovskyMobile.qaTaskCountdown." + directory.lastPathComponent : "TaskovskyMobile.taskCountdown"
+    }
+
+    func setTaskCountdownEnabled(_ enabled: Bool) {
+        guard let key = taskCountdownKey, enabled != taskCountdownEnabled else { return }
+        taskCountdownEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: key)
+    }
+
     func setTaskTimestampSort(_ value: TaskTimestampSort?) {
         guard let key = taskTimestampSortKey, value != taskTimestampSort else { return }
         taskTimestampSort = value
@@ -142,6 +154,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         if let key = taskTimestampSortKey, let raw = UserDefaults.standard.string(forKey: key) {
             taskTimestampSort = TaskTimestampSort(rawValue: raw)
         }
+        if let key = taskCountdownKey { taskCountdownEnabled = UserDefaults.standard.bool(forKey: key) }
         if let key = taskCreatedGroupingKey { groupsByCreationDate = UserDefaults.standard.bool(forKey: key) }
         readTicket = UUID(); isBusy = true
         do {

@@ -1441,3 +1441,17 @@ The iPhone simulator verified cancelling the staged toggle, enabling it, relaunc
 The guarded Mac app, preferences and fixture files were restored. The disposable iPhone simulator was removed. Physical-device and notification-delivery verification remain outside this local feature. [TickTick reminder guide](https://help.ticktick.com/articles/7055782395743567872).
 
 The feature-only Git branch was independently verified from the same main revision. Its 167-input source manifest SHA-256 is `ad92d90c0df8e90cf8d202e7d31c36404b99edffa0e5bd4c68bbc0d1b49b3db7`. It passed all 674 Mac tests, the signed release verification and five iPhone simulator checks without runtime warnings. Its saved-file audit confirmed the protected reminder preference and byte-identical settings.
+
+<a id="task-countdown-labels"></a>
+
+## Task countdown labels — November 10, 2026
+
+[Change contract](../changes/task-countdown-labels-2026-11-10.md). Feature-only branch `codex/task-countdown-labels` starts from merged `main` at `36a9e17ad1fac20e7d0c32eb5507f7d22b69b4b8`. The 168-file source manifest has SHA-256 `5c8170b2e54b7181e992c81a2b69b7f8cf1c63496d32acb06504575ace63f9f4`.
+
+| Evidence | Result |
+| --- | --- |
+| macOS 27.0.1, Xcode 27.0 | **672 passed** across all Swift package test suites. `scripts/build-app.sh` and strict `codesign` verification passed. |
+| Native Mac QA | **Passed.** More → Show Countdown displayed `20m left` and `1 day overdue` in Today. The note and completed row kept their ordinary dates. Hide Countdown restored the two fixture dates. The choice survived quitting and relaunching. The live label changed to `19m left` without input. Both fixture files stayed byte-identical, and the prior guarded app and preferences were restored. |
+| iPhone 13 Pro simulator, iOS 26.3.1 | **4 passed.** Covered enabling and cancelling the setting, toggling a date separately from detail navigation, relaunch behavior, ordinary Settings saves and row swipe actions, and shared deadline math. The countdown-only test left both fixture files byte-identical. The disposable simulator was removed after inspection. |
+
+The shared unit test covers recalculation with a shifted clock, civil-day counting across daylight saving, a timed deadline across midnight and overdue display. The native pass used the Tasks list accessibility tree. Option-key precedence was checked in source. Other native destinations, VoiceOver and dynamic type were outside this pass.
