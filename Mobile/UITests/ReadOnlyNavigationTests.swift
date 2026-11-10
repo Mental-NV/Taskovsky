@@ -4312,6 +4312,71 @@ extension ReadOnlyNavigationTests {
         attach(app, "Batch items recoverable in Trash")
     }
 
+    @MainActor func testTaskBatchPostponeRequiresTimedSelectionAndExplicitApply() {
+        let app = launch(qaCase: "batch-postpone")
+        goTo("Work", in: app)
+        app.buttons["taskListActions"].tap()
+        app.buttons["batchOpen"].tap()
+        let next = app.buttons["batchChooseAction"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5))
+        let timed = batchRow("002", in: app)
+        let repeating = batchRow("006", in: app)
+        let allDay = batchRow("008", in: app)
+        timed.tap()
+        allDay.tap()
+        next.tap()
+        XCTAssertFalse(app.buttons["batchPostpone"].exists)
+        let back = app.buttons["batchBack"]
+        back.tap()
+        allDay.tap()
+        repeating.tap()
+        next.tap()
+        app.buttons["batchPostpone"].tap()
+        XCTAssertTrue(app.buttons["batchApply"].waitForExistence(timeout: 5))
+        back.tap()
+        back.tap()
+        back.tap()
+        waitGone(back)
+        XCTAssertFalse(app.staticTexts["batchNotice"].exists)
+        openWorkBatch(app, action: "batchPostpone")
+        attach(app, "Review before postponing Tasks")
+        applyWorkBatch(app)
+        XCTAssertEqual(app.staticTexts["batchNotice"].label, "Selected tasks postponed by 1 hour.")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertTrue(app.buttons["Write meeting notes"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testCalendarBatchPostponeUsesSavedCalendarSourcesAcrossDays() {
+        let app = launch(qaCase: "batch-postpone")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar actions"].tap()
+        let action = app.buttons["Postpone Tasks"]
+        XCTAssertTrue(action.waitForExistence(timeout: 5))
+        action.tap()
+        let review = app.buttons["batchChooseAction"]
+        XCTAssertTrue(review.waitForExistence(timeout: 5))
+        XCTAssertFalse(review.isEnabled)
+        XCTAssertFalse(batchRow("005", in: app).exists)
+        XCTAssertFalse(batchRow("008", in: app).exists)
+        for tail in ["002", "006"] {
+            let row = batchRow(tail, in: app)
+            reveal(row, in: app)
+            row.tap()
+        }
+        attach(app, "Calendar sources for postponing")
+        review.tap()
+        XCTAssertTrue(app.buttons["batchApply"].waitForExistence(timeout: 5))
+        applyWorkBatch(app)
+        XCTAssertEqual(app.staticTexts["batchNotice"].label, "Selected tasks postponed by 1 hour.")
+    }
+
+    @MainActor private func batchRow(_ tail: String, in app: XCUIApplication) -> XCUIElement {
+        app.buttons["batchTask-00000000-0000-0000-0000-000000000" + tail]
+    }
+
     @MainActor private func openWorkBatch(_ app: XCUIApplication, action: String) {
         app.buttons["taskListActions"].tap()
         let open = app.buttons["batchOpen"]
@@ -4321,7 +4386,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(next.waitForExistence(timeout: 5))
         XCTAssertFalse(next.isEnabled)
         for tail in ["002", "006"] {
-            let row = app.buttons["batchTask-00000000-0000-0000-0000-000000000" + tail]
+            let row = batchRow(tail, in: app)
             reveal(row, in: app)
             row.tap()
         }

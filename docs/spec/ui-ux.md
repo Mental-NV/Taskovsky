@@ -322,7 +322,7 @@ Filter editor: width 520/padding 24/spacing 16, title 18 bold, name field, Norma
 
 Advanced scroll height is 340. AND, OR and NOT groups use compact badges, a plain-language label, shaded surfaces and two-point indent guides. Condition type and value share a row. An ellipsis contains conversion and removal actions, and Add opens the group's creation menu. Remove NOT unwraps its child. Empty groups explicitly match all eligible tasks. Existing deeper trees remain editable. Save requires a nonempty name and advanced root. Normal custom dates require at least one bound. Escape or Cancel discards the draft. Save as Filter carries the full current query and criteria into its draft. [Native verification](verification.md#nested-filter-layout).
 
-In List view, More Actions → Select Tasks opens a scoped selector. Choose Action opens the available batch commands. Apply saves the staged edit and Trash asks for confirmation. [Batch editing](../changes/task-batch-editing-2026-11-10.md).
+In List view, More Actions → Select Tasks opens a scoped selector. Choose Action opens the available batch commands. Apply saves the staged edit and Trash asks for confirmation. [Batch editing](../changes/task-batch-editing-2026-11-10.md). Calendar actions → Postpone Tasks opens the selector for eligible items in the saved Calendar sources across dates. [Postpone](../changes/task-batch-postpone-2026-11-10.md).
 
 <a id="ux-012"></a>
 

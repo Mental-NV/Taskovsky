@@ -33,6 +33,13 @@ private struct CalendarOccurrenceChange {
 }
 
 struct TaskCalendarWorkspace: View {
+    private struct PostponeRequest: Identifiable {
+        let id = UUID()
+        let tasks: [TaskItem]
+        let data: WorkspaceData
+        let settings: AppSettings
+    }
+
     private static let shortcutModes: [TaskCalendarMode] = [.day, .week, .month, .year, .agenda]
     @ObservedObject var store: TaskStore
     var onOpenTask: (UUID) -> Void
@@ -44,6 +51,7 @@ struct TaskCalendarWorkspace: View {
     @State private var viewOptions = false
     @State private var jumpDate = false
     @State private var editor: CalendarEditorDraft?
+    @State private var postponeRequest: PostponeRequest?
     @State private var occurrenceChange: CalendarOccurrenceChange?
     @State private var undo: CalendarScheduleUndo?
     @State private var notice = ""
@@ -56,7 +64,7 @@ struct TaskCalendarWorkspace: View {
     }
     private var mode: TaskCalendarMode { store.settings.calendarOptions.mode }
     private var dateJumpAction: (() -> Void)? {
-        guard editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions else { return nil }
+        guard editor == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions else { return nil }
         return { jumpDate = true }
     }
 
@@ -119,7 +127,7 @@ struct TaskCalendarWorkspace: View {
         .focusedSceneValue(\.calendarDateJump, dateJumpAction)
         .background {
             WindowKeyboardInput(optionChanged: { optionHeld = $0 }, handleKeyDown: { event in
-                guard !embeddedInTasks, editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions,
+                guard !embeddedInTasks, editor == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions,
                       event.modifierFlags.intersection([.command, .control, .option, .shift, .function]).isEmpty,
                       let characters = event.characters, let digit = Int(characters),
                       (1...Self.shortcutModes.count).contains(digit) else { return false }
@@ -132,6 +140,17 @@ struct TaskCalendarWorkspace: View {
         .tint(CalendarAppearance.accent)
         .onChange(of: focus) { _, _ in agendaWindow = CalendarAgendaWindow() }
         .onChange(of: mode) { _, _ in agendaWindow = CalendarAgendaWindow() }
+        .sheet(item: $postponeRequest) { request in
+            TaskBatchSheet(scope: "Calendar sources", tasks: request.tasks, data: request.data,
+                           calendar: request.settings.calendar, today: focus, onlyAction: .postpone) { edit in
+                let error = saveDesktopTaskBatch(edit, to: store, expected: request.data, settings: request.settings)
+                if error == nil {
+                    notice = edit.action.kind.completionMessage
+                    undo = nil
+                }
+                return error
+            }
+        }
         .sheet(item: $editor) { draft in
             CalendarTaskEditor(draft: draft, lists: store.data.lists.filter { !$0.isArchived }, calendar: calendar, removeDate: {
                 if let id = draft.taskID { commitSchedule(id, .unschedule, scope: .series) }; editor = nil
@@ -229,6 +248,10 @@ struct TaskCalendarWorkspace: View {
             Menu {
                 Button("View Options…") { viewOptions = true }
                 Button(showArrange ? "Hide Arrange tasks" : "Arrange tasks") { showArrange.toggle(); sidebarOverlay = false }
+                let candidates = TaskBatchEdit.calendarPostponeCandidates(in: store.data, options: options.wrappedValue)
+                Button("Postpone Tasks…") {
+                    postponeRequest = PostponeRequest(tasks: candidates, data: store.data, settings: store.settings)
+                }.disabled(candidates.isEmpty)
             } label: { Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28) }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
                 .accessibilityLabel("Calendar actions")

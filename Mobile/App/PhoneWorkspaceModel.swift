@@ -3,7 +3,7 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneScheduleSurface: Hashable { case tasks, calendar }
 
@@ -413,6 +413,24 @@ final class PhoneWorkspaceModel: ObservableObject {
                     settings.calendarOptions.showCompleted = true
                     settings.calendarOptions.showRepeatCycles = true
                 }
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys]
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: encoder.encode(data), settingsBytes: encoder.encode(settings))
+            }
+            if isQA && qaCase == .batchPostpone {
+                var data = initial.workspace
+                var settings = initial.settings
+                guard data.tasks.count == 8, let work = data.lists.first(where: { $0.name == "Work" }) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                let now = MobilePreviewFixture.now
+                data.tasks[1].reminderDates = [now + 6_600]
+                data.tasks[1].reminderFollowsSchedule = false
+                data.tasks[4].hasDueTime = true
+                data.tasks[5].dueDate = now + 86_400 + 1_800
+                data.tasks[5].hasDueTime = true
+                data.tasks[5].recurrence = .weekly
+                settings.calendarOptions.selectOnlyList(work.id)
                 let encoder = JSONEncoder()
                 encoder.outputFormatting = [.sortedKeys]
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: encoder.encode(data), settingsBytes: encoder.encode(settings))
