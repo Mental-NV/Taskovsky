@@ -32,7 +32,6 @@ struct TaskCalendarWorkspace: View {
     @State private var undo: CalendarScheduleUndo?
     @State private var notice = ""
     @State private var compactLayout = false
-    @State private var detailedMode: TaskCalendarMode = .week
     private var calendar: Calendar { store.settings.calendar }
     private var options: Binding<TaskCalendarOptions> {
         Binding(get: { store.settings.calendarOptions }, set: { store.settings.calendarOptions = $0 })
@@ -45,27 +44,28 @@ struct TaskCalendarWorkspace: View {
             let range = CalendarDates.interval(for: days, calendar: calendar) ?? DateInterval(start: focus, duration: 86_400)
             let projection = TaskCalendarProjection.project(data: store.data, range: range, options: options.wrappedValue, calendar: calendar)
             let compact = geometry.size.width < 760
-            VStack(spacing: 0) {
-                header(compact: compact)
-                Divider()
-                HStack(spacing: 0) {
-                    if !compact && options.wrappedValue.showSidebar {
-                        CalendarNavigationSidebar(store: store, focus: $focus, range: range)
-                            .frame(width: 234)
-                        Divider()
-                    }
-                    content(days: days, entries: projection.entries)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    if showArrange && !compact {
-                        Divider()
-                        CalendarArrangePanel(store: store, focus: focus, calendar: calendar,
-                            close: { showArrange = false }, open: onOpenTask, schedule: edit)
-                            .frame(width: compact ? 210 : 234)
-                    }
+            HStack(spacing: 0) {
+                if !compact && options.wrappedValue.showSidebar {
+                    CalendarNavigationSidebar(store: store, focus: $focus, range: range)
+                        .frame(width: 222)
+                    Divider()
                 }
-                if !projection.truncatedTaskIDs.isEmpty {
-                    Text("Some repeat previews reach the 5,000-occurrence preview limit.")
-                        .font(.caption).foregroundStyle(.secondary).padding(6)
+                VStack(spacing: 0) {
+                    header(compact: compact).overlay(alignment: .bottom) { Divider() }
+                    HStack(spacing: 0) {
+                        content(days: days, entries: projection.entries)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        if showArrange && !compact {
+                            Divider()
+                            CalendarArrangePanel(store: store, focus: focus, calendar: calendar,
+                                close: { showArrange = false }, open: onOpenTask, schedule: edit)
+                                .frame(width: 234)
+                        }
+                    }
+                    if !projection.truncatedTaskIDs.isEmpty {
+                        Text("Some repeat previews reach the 5,000-occurrence preview limit.")
+                            .font(.caption).foregroundStyle(.secondary).padding(6)
+                    }
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -73,7 +73,7 @@ struct TaskCalendarWorkspace: View {
                     ZStack(alignment: .topLeading) {
                         Color.black.opacity(0.08).onTapGesture { sidebarOverlay = false }
                         CalendarNavigationSidebar(store: store, focus: $focus, range: range)
-                            .frame(width: 234).background(Color(nsColor: .windowBackgroundColor))
+                            .frame(width: 222).background(Color(nsColor: .textBackgroundColor))
                             .clipShape(RoundedRectangle(cornerRadius: 10)).shadow(radius: 12)
                             .padding(.top, 83).padding(.leading, 10)
                     }
@@ -92,6 +92,7 @@ struct TaskCalendarWorkspace: View {
             .onChange(of: geometry.size.width) { _, width in compactLayout = width < 760; if width >= 760 { sidebarOverlay = false } }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .tint(CalendarAppearance.accent)
         .sheet(item: $editor) { draft in
             CalendarTaskEditor(draft: draft, lists: store.data.lists.filter { !$0.isArchived }, calendar: calendar, removeDate: {
                 if let id = draft.taskID { schedule(id, .unschedule) }; editor = nil
@@ -116,8 +117,6 @@ struct TaskCalendarWorkspace: View {
                     .shadow(radius: 6).padding(.bottom, 58).padding(.horizontal)
             }
         }
-        .onChange(of: mode) { _, new in if new != .year { detailedMode = new } }
-        .onAppear { if mode != .year { detailedMode = mode } }
         .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in create(on: focus) }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
             if compactLayout { sidebarOverlay.toggle() } else { options.wrappedValue.showSidebar.toggle() }
@@ -126,13 +125,13 @@ struct TaskCalendarWorkspace: View {
 
     private func header(compact: Bool) -> some View {
         VStack(spacing: 7) {
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button {
                     if compact { sidebarOverlay.toggle() } else { options.wrappedValue.showSidebar.toggle() }
-                } label: { Image(systemName: "sidebar.left") }
+                } label: { Image(systemName: "sidebar.left").font(.system(size: 16)).frame(width: 18) }
                     .accessibilityLabel("Toggle Calendar sidebar")
                 Button(CalendarText.date(focus, mode == .year ? "yyyy" : "MMMM y", calendar: calendar)) { jumpDate.toggle() }
-                    .font(.system(size: compact ? 16 : 19, weight: .semibold)).lineLimit(1)
+                    .font(.system(size: compact ? 16 : 20, weight: .semibold)).lineLimit(1)
                     .popover(isPresented: $jumpDate) {
                         CalendarGrid(date: $focus, calendar: calendar, showWeekNumbers: store.settings.showWeekNumbers, onSelect: { jumpDate = false })
                     }
@@ -140,11 +139,13 @@ struct TaskCalendarWorkspace: View {
                 if !compact { headerControls }
             }
             if compact { HStack { Spacer(minLength: 0); headerControls } }
-        }.buttonStyle(.borderless).padding(.horizontal, compact ? 10 : 18).frame(height: compact ? 78 : 58)
+        }.buttonStyle(.plain).foregroundStyle(.primary).padding(.top, compact ? 0 : 10)
+            .padding(.horizontal, compact ? 10 : 20).frame(maxWidth: .infinity).frame(height: compact ? 78 : 54)
     }
     private var headerControls: some View {
         HStack(spacing: 12) {
-            Button { create(on: focus) } label: { Image(systemName: "plus") }
+            Button { create(on: focus) } label: { Image(systemName: "plus").font(.system(size: 17, weight: .light)).frame(width: 28, height: 28) }
+                .background { RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.18), lineWidth: 0.7) }
                 .help("Add a task to Calendar").accessibilityLabel("Add Calendar task")
             Menu {
                 ForEach(TaskCalendarMode.allCases, id: \.self) { value in
@@ -152,17 +153,24 @@ struct TaskCalendarWorkspace: View {
                         Label(value.title, systemImage: mode == value ? "checkmark" : "calendar")
                     }
                 }
-            } label: { Text(modeLabel).frame(minWidth: 48) }
+            } label: {
+                HStack(spacing: 5) { Text(modeLabel); Image(systemName: "chevron.down").font(.system(size: 8)) }
+                    .padding(.horizontal, 10).frame(minWidth: 48, minHeight: 28)
+                    .background { RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.18), lineWidth: 0.7) }
+            }.menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden).fixedSize()
                 .accessibilityLabel("Calendar view")
             HStack(spacing: 0) {
-                Button { navigate(-1) } label: { Image(systemName: "chevron.left") }.accessibilityLabel("Previous Calendar period")
-                Button("Today") { focus = Date() }.accessibilityLabel("Calendar Today")
-                Button { navigate(1) } label: { Image(systemName: "chevron.right") }.accessibilityLabel("Next Calendar period")
-            }.controlSize(.small)
+                Button { navigate(-1) } label: { Image(systemName: "chevron.left").font(.system(size: 11)).frame(width: 32, height: 28) }.accessibilityLabel("Previous Calendar period")
+                Divider().frame(height: 28)
+                Button("Today") { focus = Date() }.frame(width: 58, height: 28).accessibilityLabel("Calendar Today")
+                Divider().frame(height: 28)
+                Button { navigate(1) } label: { Image(systemName: "chevron.right").font(.system(size: 11)).frame(width: 32, height: 28) }.accessibilityLabel("Next Calendar period")
+            }.fixedSize().background { RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.18), lineWidth: 0.7) }
             Menu {
                 Button("View Options…") { viewOptions = true }
                 Button(showArrange ? "Hide Arrange tasks" : "Arrange tasks") { showArrange.toggle(); sidebarOverlay = false }
-            } label: { Image(systemName: "ellipsis") }
+            } label: { Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28) }
+                .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
                 .accessibilityLabel("Calendar actions")
                 .sheet(isPresented: $viewOptions) {
                     VStack(alignment: .leading, spacing: 18) {
@@ -170,7 +178,7 @@ struct TaskCalendarWorkspace: View {
                         HStack { Spacer(); Button("Done") { viewOptions = false }.keyboardShortcut(.cancelAction) }
                     }.padding(18).frame(width: 360, height: 560)
                 }
-        }
+        }.font(.system(size: 13)).foregroundStyle(.primary)
     }
     private var modeLabel: String {
         switch mode {
@@ -182,10 +190,12 @@ struct TaskCalendarWorkspace: View {
     @ViewBuilder private func content(days: [Date], entries: [CalendarEntry]) -> some View {
         if mode.isHourly {
             CalendarHourlyView(days: days, entries: entries, calendar: calendar, options: options.wrappedValue,
-                open: onOpenTask, complete: complete, create: createRange, schedule: schedule, edit: editEntry)
+                open: onOpenTask, complete: complete, create: createRange, schedule: schedule, edit: editEntry,
+                selectDay: { day in focus = day; options.wrappedValue.mode = .day })
         } else if mode == .year {
-            CalendarYearView(focus: focus, entries: entries, calendar: calendar, style: options.wrappedValue.yearStyle) { day in
-                focus = day; options.wrappedValue.mode = detailedMode
+            CalendarYearView(focus: focus, entries: entries, calendar: calendar, style: options.wrappedValue.yearStyle,
+                selectMonth: { month in focus = month; options.wrappedValue.mode = .month }) { day in
+                focus = day; options.wrappedValue.mode = .week
             }
         } else if mode == .agenda {
             CalendarAgendaView(days: days, entries: entries, calendar: calendar, options: options.wrappedValue,

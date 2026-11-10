@@ -44,11 +44,25 @@ final class CalendarDisplayOptionsTests: XCTestCase {
     }
 
     func testInvalidAndDuplicateZonesAreRemovedWithoutDisplacingValidRows() throws {
-        let options = try decode(#"{"additionalTimeZones":[{"identifier":"bad"},{"identifier":"Asia/Tokyo","label":"  Tokyo  "},{"identifier":"Asia/Tokyo","label":"duplicate"},{"identifier":"America/New_York"},{"identifier":"Europe/London"},{"identifier":"Europe/Paris"}]}"#)
-        XCTAssertEqual(options.additionalTimeZones.map(\.identifier), ["Asia/Tokyo", "America/New_York", "Europe/London"])
-        XCTAssertEqual(options.additionalTimeZones.map(\.label), ["Tokyo", "", ""])
+        let options = try decode(#"{"additionalTimeZones":[{"identifier":"bad"},{"identifier":"Asia/Tokyo","label":"  Tokyo  "},{"identifier":"Asia/Tokyo","label":"duplicate"},{"identifier":"America/New_York"},{"identifier":"Europe/London"},{"identifier":"Europe/Paris"},{"identifier":"Pacific/Auckland"}]}"#)
+        XCTAssertEqual(options.additionalTimeZones.map(\.identifier), ["Asia/Tokyo", "America/New_York", "Europe/London", "Europe/Paris"])
+        XCTAssertEqual(options.additionalTimeZones.map(\.label), ["Tokyo", "", "", ""])
         XCTAssertTrue(options.showAdditionalTimeZones)
         XCTAssertEqual(CalendarTimeZone.normalized([.init(identifier: "UTC", label: String(repeating: "x", count: 100))])[0].label.count, 32)
+    }
+
+    func testFourAdditionalRulersPersistAndHidePrimaryDuplicate() throws {
+        var settings = AppSettings()
+        settings.calendarOptions.showAdditionalTimeZones = true
+        settings.calendarOptions.additionalTimeZones = [
+            .init(identifier: "America/New_York", label: "NYC"), .init(identifier: "Asia/Tokyo", label: "Tokyo"),
+            .init(identifier: "Europe/London", label: "London"), .init(identifier: "Europe/Paris", label: "Paris")
+        ]
+        let restored = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(settings))
+        XCTAssertEqual(restored.calendarOptions.additionalTimeZones, settings.calendarOptions.additionalTimeZones)
+        XCTAssertEqual(restored.calendarOptions.visibleTimeZones(primary: TimeZone(identifier: "Europe/Moscow")!).count, 4)
+        XCTAssertEqual(restored.calendarOptions.visibleTimeZones(primary: TimeZone(identifier: "Asia/Tokyo")!).count, 3)
+        XCTAssertEqual(restored.calendarOptions.additionalTimeZones.count, 4)
     }
 
     func testPrimaryZoneIsHiddenWithoutDiscardingConfiguration() {

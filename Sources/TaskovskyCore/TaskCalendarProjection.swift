@@ -114,9 +114,17 @@ public enum TaskCalendarProjection {
             color: color(for: task, data: data, by: options.colorBy), listID: task.listID)
     }
     public static func arrangementTasks(data: WorkspaceData, options: TaskCalendarOptions, overdue: Bool = false,
-                                        now: Date = Date(), calendar: Calendar) -> [TaskItem] {
-        data.tasks.filter { task in
-            guard options.includes(task, data: data), task.completedAt == nil, task.wontDoAt == nil else { return false }
+                                        now: Date = Date(), calendar: Calendar,
+                                        selection: CalendarArrangeSelection = .calendar) -> [TaskItem] {
+        var scope = options
+        switch selection {
+        case .calendar: break
+        case .inbox: scope.listIDs = []; scope.includeInbox = true; scope.tagIDs = []
+        case .list(let id): scope.listIDs = [id]; scope.includeInbox = false; scope.tagIDs = []
+        }
+        return data.tasks.filter { task in
+            guard scope.includes(task, data: data), task.completedAt == nil, task.wontDoAt == nil else { return false }
+            if selection != .calendar && !options.tagIDs.isEmpty && !options.matchesSelectedTags(task, data: data) { return false }
             if let due = task.dueDate {
                 let local = taskCalendar(task, fallback: calendar)
                 let allDay = task.scheduledDuration?.validated(in: local)?.isAllDay ?? !task.hasDueTime

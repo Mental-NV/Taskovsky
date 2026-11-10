@@ -12,6 +12,10 @@ The Calendar display follow-up in [PR #3](https://github.com/Mental-NV/Taskovsky
 
 For future work, an explicitly approved change specification defines the intended delta. If that proposal, code, and baseline disagree, record the mismatch and resolve the product decision before changing behavior. TickTick observations and archived progress reports never override Taskovsky requirements.
 
+The later local [Calendar visual follow-up](changes/calendar-visual-parity-2026-11-08.md) is uncommitted on `codex/calendar-visual-parity`, based on merged PR #3 at `f85e2f6`. Its [comparison](calendar-visual-parity-audit-2026-11-08.md) and [verification](spec/verification.md#calendar-visual-follow-up) record fresh native checks, 471 passing tests and a signed release build, with remaining differences and unverified cases explicit. Historical baseline/CI statements above describe their original checkouts.
+
+The subsequent [Tasks/Calendar comparison](tasks-calendar-comparison-2026-11-09.md) reconciles official guides with installed Mac behavior. Local source selection, Year navigation and four additional rulers are corrected on that same preserved working tree. [Latest verification](spec/verification.md#calendar-source-follow-up): 485 passing tests, signed release and bounded native checks; no commit/push or mobile implementation in this Desktop checkout.
+
 ## Read by purpose
 
 | Purpose | Canonical document | Status |
