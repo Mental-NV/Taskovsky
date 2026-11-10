@@ -6,7 +6,10 @@ import Combine
 public final class TaskStore: ObservableObject {
     @Published public private(set) var data: WorkspaceData
     @Published public private(set) var storageError: String?
-    @Published public var settings: AppSettings { didSet { saveSettings() } }
+    @Published public var settings: AppSettings {
+        didSet { if !publishingSavedSettings { saveSettings() } }
+    }
+    private var publishingSavedSettings = false
     public let fileURL: URL
     private var settingsLoadFailed = false
     private var settingsSaveError: String?
@@ -96,14 +99,35 @@ public final class TaskStore: ObservableObject {
         }
     }
 
-    private func saveSettings() {
-        guard !settingsLoadFailed else { return }
+    private func saveSettings() { _ = writeSettings(settings) }
+
+    private func writeSettings(_ replacement: AppSettings) -> Bool {
+        guard !settingsLoadFailed else { return false }
         do {
             try FileManager.default.createDirectory(at: settingsURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             let encoder = JSONEncoder(); encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(settings).write(to: settingsURL, options: .atomic)
+            try encoder.encode(replacement).write(to: settingsURL, options: .atomic)
+            if settingsSaveError != nil, storageError == settingsSaveError { storageError = nil }
             settingsSaveError = nil
-        } catch { settingsSaveError = "Could not save settings: \(error.localizedDescription)"; storageError = settingsSaveError }
+            return true
+        } catch {
+            settingsSaveError = "Could not save settings: \(error.localizedDescription)"
+            storageError = settingsSaveError
+            return false
+        }
+    }
+
+    public func saveCalendarSourceColors(_ colors: CalendarColorSource.Overrides,
+                                         expected: CalendarColorSource.Overrides) -> Bool {
+        guard settings.calendarOptions.sourceColors == expected else { return false }
+        guard colors != expected else { return true }
+        var replacement = settings
+        replacement.calendarOptions.sourceColors = colors
+        guard writeSettings(replacement) else { return false }
+        publishingSavedSettings = true
+        defer { publishingSavedSettings = false }
+        settings = replacement
+        return true
     }
 
     /// Backs up an unreadable workspace before saving the current in-memory data.

@@ -6,7 +6,8 @@ public enum TaskCalendarProjection {
         if let id = task.timeZoneID, let zone = TimeZone(identifier: id) { result.timeZone = zone }
         return result
     }
-    public static func color(for task: TaskItem, data: WorkspaceData, by mode: CalendarColorMode) -> String {
+    public static func color(for task: TaskItem, data: WorkspaceData, by mode: CalendarColorMode,
+                             overrides: CalendarColorSource.Overrides = .init()) -> String {
         switch mode {
         case .priority:
             switch task.priority {
@@ -14,9 +15,15 @@ public enum TaskCalendarProjection {
             case .low: return "#5B8DEF"; case .none: return "#7C6CF2"
             }
         case .tag:
-            if let tag = task.tagIDs.compactMap({ id in data.tags.first { $0.id == id } }).first { return tag.color }
+            if let tag = task.tagIDs.compactMap({ id in data.tags.first { $0.id == id } }).first {
+                return overrides[.tag(tag.id)] ?? tag.color
+            }
             fallthrough
-        case .list: return task.listID.flatMap { id in data.lists.first { $0.id == id }?.color } ?? "#7C6CF2"
+        case .list:
+            if let list = task.listID.flatMap({ id in data.lists.first { $0.id == id } }) {
+                return overrides[.list(list.id)] ?? list.color
+            }
+            return overrides[.inbox] ?? "#7C6CF2"
         }
     }
     /// Projection never creates records or completes a task. Repeat previews
@@ -126,7 +133,7 @@ public enum TaskCalendarProjection {
             title: task.title, start: start, end: end, due: due, isAllDay: allDay, isProjected: projected,
             isCompleted: task.completedAt != nil || task.wontDoAt != nil, isNote: task.kind == .note,
             hasDuration: window != nil,
-            color: color(for: task, data: data, by: options.colorBy), listID: task.listID)
+            color: color(for: task, data: data, by: options.colorBy, overrides: options.sourceColors), listID: task.listID)
     }
     public static func arrangementTasks(data: WorkspaceData, options: TaskCalendarOptions, overdue: Bool = false,
                                         now: Date = Date(), calendar: Calendar,

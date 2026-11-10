@@ -11,6 +11,61 @@ public enum TaskCalendarMode: String, Codable, CaseIterable, Sendable {
     public var isHourly: Bool { self == .day || self == .week || self == .multiDay }
 }
 public enum CalendarColorMode: String, Codable, CaseIterable, Sendable { case list, tag, priority }
+public enum CalendarColorSource: Hashable, Sendable {
+    case inbox, list(UUID), tag(UUID)
+
+    private var storageKey: String {
+        switch self {
+        case .inbox: "inbox"
+        case .list(let id): "list-" + id.uuidString
+        case .tag(let id): "tag-" + id.uuidString
+        }
+    }
+
+    public struct Swatch: Identifiable, Sendable {
+        public let id: CalendarColorSource
+        public let name: String
+        public let defaultColor: String
+    }
+
+    public static func swatches(in data: WorkspaceData, by mode: CalendarColorMode) -> [Swatch] {
+        switch mode {
+        case .list:
+            return [Swatch(id: .inbox, name: "Inbox", defaultColor: "#7C6CF2")] + data.lists.compactMap { list in
+                list.isArchived ? nil : Swatch(id: .list(list.id), name: list.name, defaultColor: list.color)
+            }
+        case .tag:
+            return data.tags.map { Swatch(id: .tag($0.id), name: $0.name, defaultColor: $0.color) }
+        case .priority:
+            return []
+        }
+    }
+
+    public struct Overrides: Codable, Equatable, Sendable {
+        private var colors: [String: String] = [:]
+
+        public init() {}
+
+        public subscript(source: CalendarColorSource) -> String? {
+            get { colors[source.storageKey].flatMap(Self.normalizedHex) }
+            set {
+                if let newValue {
+                    guard let normalized = Self.normalizedHex(newValue) else { return }
+                    colors[source.storageKey] = normalized
+                } else {
+                    colors.removeValue(forKey: source.storageKey)
+                }
+            }
+        }
+
+        public static func normalizedHex(_ value: String) -> String? {
+            let bytes = value.utf8
+            guard bytes.count == 7, bytes.first == 35,
+                  bytes.dropFirst().allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }) else { return nil }
+            return value.uppercased()
+        }
+    }
+}
 public enum CalendarItemStyle: String, Codable, CaseIterable, Sendable { case filled, outline }
 public enum CalendarYearStyle: String, Codable, CaseIterable, Sendable { case standard, heatmap }
 
@@ -30,6 +85,11 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         set { if newValue != showDetails { detailsOverride = newValue ? true : nil } }
     }
     public var colorBy: CalendarColorMode = .list
+    private var sourceColorOverrides: CalendarColorSource.Overrides?
+    public var sourceColors: CalendarColorSource.Overrides {
+        get { sourceColorOverrides ?? .init() }
+        set { sourceColorOverrides = newValue == .init() ? nil : newValue }
+    }
     public var itemStyle: CalendarItemStyle = .filled
     public var yearStyle: CalendarYearStyle = .heatmap
     public var showItemIcons = true
@@ -84,7 +144,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         case mode, multiDayCount, multiWeekCount, showSidebar, showCompleted, showRepeatCycles,
              showChecklistItems, colorBy, itemStyle, additionalTimeZoneID, listIDs, includeInbox, tagIDs,
              yearStyle, showItemIcons, showTaskIcons, showNoteIcons, showAdditionalTimeZones, additionalTimeZones,
-             foldedHours, allDayRows, showDetails
+             foldedHours, allDayRows, showDetails, sourceColors
     }
     public init(from decoder: Decoder) throws {
         self.init()
@@ -98,6 +158,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         showChecklistItems = try c.decodeIfPresent(Bool.self, forKey: .showChecklistItems) ?? showChecklistItems
         detailsOverride = try c.decodeIfPresent(Bool.self, forKey: .showDetails)
         colorBy = (try? c.decode(CalendarColorMode.self, forKey: .colorBy)) ?? colorBy
+        sourceColorOverrides = try c.decodeIfPresent(CalendarColorSource.Overrides.self, forKey: .sourceColors)
         itemStyle = (try? c.decode(CalendarItemStyle.self, forKey: .itemStyle)) ?? itemStyle
         yearStyle = (try? c.decode(CalendarYearStyle.self, forKey: .yearStyle)) ?? yearStyle
         showItemIcons = try c.decodeIfPresent(Bool.self, forKey: .showItemIcons) ?? showItemIcons
@@ -126,6 +187,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         try c.encode(showChecklistItems, forKey: .showChecklistItems)
         try c.encodeIfPresent(detailsOverride, forKey: .showDetails)
         try c.encode(colorBy, forKey: .colorBy)
+        try c.encodeIfPresent(sourceColorOverrides, forKey: .sourceColors)
         try c.encode(itemStyle, forKey: .itemStyle)
         try c.encode(yearStyle, forKey: .yearStyle)
         try c.encode(showItemIcons, forKey: .showItemIcons)

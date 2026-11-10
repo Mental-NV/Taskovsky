@@ -1828,6 +1828,7 @@ extension ReadOnlyWorkspaceTests {
         options.mode = .multiWeek
         options.multiWeekCount = 6
         options.showCompleted = false
+        options.sourceColors[.inbox] = "#2468AC"
         guard case .saved(let saved) = await repo.saveCalendarOptions(options, expected: before.revision) else {
             return XCTFail("Expected scoped Calendar preference write")
         }

@@ -265,7 +265,7 @@ struct TaskCalendarWorkspace: View {
                 .accessibilityLabel("Calendar actions")
                 .sheet(isPresented: $viewOptions) {
                     VStack(alignment: .leading, spacing: 18) {
-                        ScrollView { CalendarViewOptions(options: options, calendar: calendar) }
+                        ScrollView { CalendarViewOptions(options: options, calendar: calendar, store: store) }
                         HStack { Spacer(); Button("Done") { viewOptions = false }.keyboardShortcut(.cancelAction) }
                     }.padding(18).frame(width: 360, height: 560)
                 }
@@ -562,15 +562,123 @@ struct CalendarTaskEditor: View {
     }
 }
 
+private struct CalendarSourceColorSettings: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var store: TaskStore
+    let mode: CalendarColorMode
+    let original: CalendarColorSource.Overrides
+    @State private var draft: CalendarColorSource.Overrides
+    @State private var error: String?
+
+    init(mode: CalendarColorMode, store: TaskStore) {
+        self.mode = mode
+        self.store = store
+        let original = store.settings.calendarOptions.sourceColors
+        self.original = original
+        _draft = State(initialValue: original)
+    }
+
+    var body: some View {
+        let rows = CalendarColorSource.swatches(in: store.data, by: mode)
+        VStack(alignment: .leading, spacing: 14) {
+            Text(mode == .list ? "Calendar List Colors" : "Calendar Tag Colors").font(.headline)
+            Text("These colors apply only in Calendar.").font(.caption).foregroundStyle(.secondary)
+            ScrollView {
+                VStack(spacing: 8) {
+                    if rows.isEmpty { Text("No tags to customize.").foregroundStyle(.secondary) }
+                    ForEach(rows) { row in
+                        CalendarSourceColorRow(row: row, override: Binding(get: { draft[row.id] }, set: { draft[row.id] = $0 }))
+                    }
+                }.padding(.vertical, 2)
+            }.frame(maxHeight: 280)
+            if let error { Text(error).font(.caption).foregroundStyle(.red) }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                Button("Done") {
+                    if store.saveCalendarSourceColors(draft, expected: original) { dismiss() }
+                    else { error = store.storageError ?? "Calendar colors changed. Open the editor again to review them." }
+                }.keyboardShortcut(.defaultAction)
+            }
+        }.padding(18).frame(width: 340)
+    }
+}
+
+private struct CalendarSourceColorRow: View {
+    let row: CalendarColorSource.Swatch
+    @Binding var override: String?
+    @State private var editing = false
+    @State private var hex = ""
+
+    private var color: String { override ?? row.defaultColor }
+    private var normalizedHex: String? {
+        let value = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+        return CalendarColorSource.Overrides.normalizedHex(value.hasPrefix("#") ? value : "#" + value)
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(row.name).frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                hex = color
+                editing = true
+            } label: {
+                RoundedRectangle(cornerRadius: 4).fill(Color(hex: color))
+                    .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(.primary.opacity(0.18)) }
+                    .frame(width: 34, height: 19)
+            }.buttonStyle(.plain)
+                .accessibilityLabel("Color for " + row.name).accessibilityValue(override ?? "Default")
+                .popover(isPresented: $editing, arrowEdge: .trailing) { picker }
+            Button("Default") { override = nil }
+                .disabled(override == nil).accessibilityLabel("Use default color for " + row.name)
+        }
+    }
+
+    private var picker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(row.name).font(.headline)
+            HStack(spacing: 6) {
+                ForEach(palette, id: \.self) { preset in
+                    Button { select(preset) } label: {
+                        Circle().fill(Color(hex: preset)).frame(width: 22, height: 22)
+                    }.buttonStyle(.plain).accessibilityLabel("Preset " + preset)
+                }
+            }
+            HStack {
+                TextField("Hex color", text: $hex).textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Hex color").onSubmit(applyHex)
+                Button("Apply", action: applyHex).disabled(normalizedHex == nil)
+            }
+        }.padding(12).frame(width: 240)
+    }
+
+    private func applyHex() {
+        if let normalizedHex { select(normalizedHex) }
+    }
+
+    private func select(_ value: String) {
+        override = value
+        editing = false
+    }
+}
+
 struct CalendarViewOptions: View {
     @Binding var options: TaskCalendarOptions
     var calendar: Calendar
+    @ObservedObject var store: TaskStore
     @State private var timeZoneSettings = false
+    @State private var colorSettings = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Calendar View Options").font(.headline)
             Picker("Color by", selection: $options.colorBy) {
                 ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            }
+            if options.colorBy != .priority {
+                Button(options.colorBy == .list ? "Customize List Colors…" : "Customize Tag Colors…") { colorSettings = true }
+                    .sheet(isPresented: $colorSettings) {
+                        CalendarSourceColorSettings(mode: options.colorBy, store: store)
+                    }
             }
             Picker("Style", selection: $options.itemStyle) { Text("Filled").tag(CalendarItemStyle.filled); Text("Outline").tag(CalendarItemStyle.outline) }
             if options.mode == .year {
