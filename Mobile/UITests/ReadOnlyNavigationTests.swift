@@ -3187,6 +3187,39 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.descendants(matching: .any)["calendarHourlyGrid"].firstMatch.waitForExistence(timeout: 5))
     }
 
+    @MainActor func testCalendarYearDayPreviewStaysInYearAndCanOpenWeek() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Year"].tap()
+        let year = app.descendants(matching: .any)["calendarYearHeatmap"].firstMatch
+        XCTAssertTrue(year.waitForExistence(timeout: 5))
+        let done = app.buttons["calendarYearPreviewDone"]
+        let empty = app.buttons["calendarYearDay-2026-1-1"]
+        reveal(empty, in: app)
+        empty.tap()
+        XCTAssertTrue(app.staticTexts["No scheduled items for this date"].waitForExistence(timeout: 5))
+        done.tap()
+        waitGone(done)
+        XCTAssertTrue(empty.isHittable)
+
+        let filled = app.buttons["calendarYearDay-2026-11-9"]
+        reveal(filled, in: app)
+        filled.tap()
+        XCTAssertTrue(app.staticTexts["Prepare the weekly plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Review the project outline"].exists)
+        attach(app, "Year Calendar preview with local items")
+        done.tap()
+        waitGone(done)
+        XCTAssertTrue(year.exists)
+        XCTAssertTrue(filled.isHittable)
+        filled.tap()
+        app.buttons["calendarYearPreviewOpenWeek"].tap()
+        let week = app.descendants(matching: .any)["calendarHourlyGrid"].firstMatch
+        XCTAssertTrue(week.waitForExistence(timeout: 8))
+        XCTAssertTrue(app.buttons["Prepare the weekly plan"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testCalendarViewOptionsRenderAndPersistAcrossRelaunch() {
         let app = launch(qaCase: "calendar-options")
         app.buttons["Calendar"].tap()

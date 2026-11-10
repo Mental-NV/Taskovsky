@@ -1,0 +1,5 @@
+# CAL-YEAR-001 — Preview scheduled items from Year view
+
+The [TickTick release notes](https://help.ticktick.com/articles/7082552170989486080) describe viewing a date’s tasks without leaving Year. The installed Mac version observed in the [Calendar comparison](../tasks-calendar-comparison-2026-11-09.md) opened Week on a date click. Taskovsky preserves that Mac click and adds Preview Scheduled Items to the date’s context menu and accessibility actions. On iPhone, tap a date to preview it. The preview on both platforms offers Open Week. The month heading continues to open Month.
+
+The preview reads the selected civil day using the displayed Calendar time zone and saved source filters. It shows scheduled titles, time or All day, list and forecast status. It includes visible checklist and recurring entries according to Calendar preferences. Empty dates have an explicit empty state. Done, Escape on Mac and normal iPhone sheet dismissal return to the same Year position. Open Week is the only preview action that changes the saved view. The preview leaves task data and source filters untouched.

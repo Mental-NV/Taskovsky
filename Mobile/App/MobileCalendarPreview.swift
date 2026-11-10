@@ -79,6 +79,7 @@ struct MobileCalendarPreview: View {
     @State private var focusFromMonthScroll: Date?
     @State private var heldMonthWeek: Date?
     @State private var monthViewportRevision = 0
+    @State private var yearDayPreview: CalendarDayPreview?
     private var browsesFullMonth: Bool { options.mode == .month && monthZoom == .full }
     private var firstWeekOfMonth: Date {
         CalendarDates.weekStart(CalendarDates.monthStart(focus, calendar: calendar), calendar: calendar)
@@ -106,7 +107,7 @@ struct MobileCalendarPreview: View {
                                      focus: $focus, options: options, monthZoom: $monthZoom,
                                      monthWindow: window, monthPosition: window.map(monthPosition),
                                      monthViewportRevision: monthViewportRevision,
-                                     controls: controls, select: select, open: open,
+                                     controls: controls, select: select, previewYearDay: { yearDayPreview = CalendarDayPreview($0, calendar: calendar) }, open: open,
                                      canExtendAgenda: agendaWindow.canExtend, showMoreAgenda: { agendaWindow.extend() },
                                      showToday: showToday, holdMonthForCapture: holdMonthPosition)
             .onChange(of: focus) { _, date in
@@ -154,6 +155,12 @@ struct MobileCalendarPreview: View {
             }
             .onChange(of: controls.createRange != nil) { _, canCapture in
                 if canCapture && !monthInteractionActive { restoreMonthPosition() }
+            }
+            .sheet(item: $yearDayPreview) { preview in
+                let names = Dictionary(data.lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
+                PhoneCalendarYearDayPreview(day: preview.day,
+                    projection: preview.project(data: data, options: options, calendar: calendar),
+                    listNames: names, calendar: calendar) { select(.week, preview.day) }
             }
     }
 
@@ -204,6 +211,53 @@ struct MobileCalendarPreview: View {
     }
 }
 
+private struct PhoneCalendarYearDayPreview: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.locale) private var locale
+    let day: Date
+    let projection: CalendarProjectionResult
+    let listNames: [UUID: String]
+    let calendar: Calendar
+    let openWeek: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    if projection.entries.isEmpty { Text("No scheduled items for this date").foregroundStyle(.secondary) }
+                    ForEach(projection.entries) { entry in
+                        HStack(spacing: 10) {
+                            Circle().fill(PhoneEntityColor.read(entry.color)).frame(width: 8, height: 8).accessibilityHidden(true)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(entry.title).strikethrough(entry.isCompleted)
+                                let details = CalendarEntryDetails(entry: entry, listNames: listNames, calendar: calendar, locale: locale)
+                                Text(details.text + (entry.isProjected ? " · Forecast" : ""))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    let format = Date.FormatStyle(date: .complete, time: .omitted, locale: locale,
+                                                  calendar: calendar, timeZone: calendar.timeZone)
+                    Text(day.formatted(format)).accessibilityIdentifier("calendarYearPreviewDate")
+                }
+                if !projection.truncatedTaskIDs.isEmpty {
+                    Text("Some repeat previews reach the preview limit.").font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Scheduled items").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }.accessibilityIdentifier("calendarYearPreviewDone")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Open Week") { dismiss(); openWeek() }.accessibilityIdentifier("calendarYearPreviewOpenWeek")
+                }
+            }
+        }
+    }
+}
+
 /// Projection is computed once per body update, rather than cached from a
 /// Binding in init (which can remain stale when only that binding changes).
 private struct MobileCalendarContent: View {
@@ -223,6 +277,7 @@ private struct MobileCalendarContent: View {
     let monthViewportRevision: Int
     let controls: PhoneCalendarControls
     let select: (TaskCalendarMode, Date) -> Void
+    let previewYearDay: (Date) -> Void
     let open: (UUID) -> Void
     let canExtendAgenda: Bool
     let showMoreAgenda: () -> Void
@@ -902,7 +957,9 @@ private struct MobileCalendarContent: View {
     }
 
     private var year: some View {
-        ScrollView {
+        let dateFormat = Date.FormatStyle(date: .complete, time: .omitted, locale: locale,
+                                          calendar: calendar, timeZone: calendar.timeZone)
+        return ScrollView {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 3), spacing: 20) {
                 ForEach(1...12, id: \.self) { number in
                     let first = calendar.date(from: DateComponents(year: calendar.component(.year, from: focus), month: number, day: 1))!
@@ -910,9 +967,12 @@ private struct MobileCalendarContent: View {
                         Button { select(.month, first) } label: { Text(first.formatted(.dateTime.month(.abbreviated))).font(.subheadline.bold()).frame(minHeight: 44) }
                         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 3) {
                             ForEach(CalendarDates.days(from: CalendarDates.weekStart(first, calendar: calendar), count: 42, calendar: calendar), id: \.self) { day in
-                                Button { select(.week, day) } label: {
+                                let parts = calendar.dateComponents([.year, .month, .day], from: day)
+                                Button { previewYearDay(day) } label: {
                                     yearDay(day, month: number)
-                                }.accessibilityLabel(day.formatted(date: .complete, time: .omitted) + ", open Week")
+                                }.accessibilityLabel(day.formatted(dateFormat))
+                                    .accessibilityHint("Preview scheduled items")
+                                    .accessibilityIdentifier(parts.month == number ? "calendarYearDay-\(parts.year ?? 0)-\(number)-\(parts.day ?? 0)" : "")
                             }
                         }
                     }
