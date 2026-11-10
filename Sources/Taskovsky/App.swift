@@ -246,6 +246,7 @@ struct WorkspaceView: View {
     // sidebar and the compact popover, which share the same sidebar view.
     @StateObject private var sidebarDrag = SidebarDragCoordinator()
     @State private var destination: Destination = .today
+    @State private var showTextBatch = false
     @State private var batchRequest: BatchRequest?
     @State private var quickTitle = ""
     @State private var quickKind: TaskKind = .task
@@ -612,6 +613,7 @@ struct WorkspaceView: View {
         }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(store: store) }
         .sheet(isPresented: $viewOptions) { ViewOptionsView(layout: $detailLayout) }
+        .sheet(isPresented: $showTextBatch) { textBatchSheet }
         .sheet(item: $batchRequest) { request in batchSheet(request) }
         .sheet(isPresented: $boardDisplaySettings) {
             BoardDisplaySettings(size: $boardColumnSize, showsTaskInput: $showBoardTaskInput)
@@ -1094,6 +1096,25 @@ struct WorkspaceView: View {
         }
     }
 
+    private var textBatchSheet: some View {
+        TaskTextBatchSheet { text, recognizesDetails in
+            let workspace = store.data
+            let settings = store.settings
+            let batch = try TaskTextBatch(text: text, destination: destination, workspace: workspace, settings: settings,
+                                          now: Date(), calendar: settings.calendar, recognizesDetails: recognizesDetails)
+            return TaskTextBatchReview(batch: batch, calendar: settings.calendar, tags: workspace.tags) {
+                switch store.createTextBatch(batch, expected: workspace, expectedSettings: settings) {
+                case .saved:
+                    actions.notice(batch.tasks.count == 1 ? "Task added" : "Added \(batch.tasks.count) tasks")
+                    return .saved
+                case .stale: return .needsReview("The workspace changed. Go back to review the batch again.")
+                case .failed: return .failed(store.storageError ?? "Could not save the batch. You can retry.")
+                case .uncertain: return .uncertain("Could not confirm the batch. Retry checks the same tasks before saving.")
+                }
+            }
+        }
+    }
+
     private func batchSheet(_ request: BatchRequest) -> some View {
         TaskBatchSheet(scope: request.scope, tasks: request.tasks, data: request.data,
                        calendar: request.settings.calendar, today: request.now) { edit in
@@ -1426,6 +1447,10 @@ struct WorkspaceView: View {
                     }
                 }
                 Menu {
+                    if TaskTextBatch.isAvailable(in: destination, workspace: store.data) {
+                        Button("Add Multiple Tasks…") { showTextBatch = true }
+                            .disabled(store.needsRecovery)
+                    }
                     if mode == .list && destination != .trash && destination != .summary {
                         Button("Select Tasks…") {
                             batchRequest = BatchRequest(scope: destination.title(store.data), tasks: tasks,

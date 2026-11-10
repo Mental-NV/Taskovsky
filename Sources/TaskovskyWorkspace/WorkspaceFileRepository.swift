@@ -312,21 +312,41 @@ public actor WorkspaceFileRepository {
             guard exactEncoding(prepared, expected) else { return .refused(.invalidCapture) }
         } catch let reason as TaskCaptureValidation { return .refused(.validation(reason)) }
         catch { return .refused(.invalidCapture) }
+        return commitCapturedTasks([prepared], current: current)
+    }
+
+    public func create(_ batch: TaskTextBatch, expected: WorkspaceRevision) -> WorkspaceCreateOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .uncertain }
+        guard current.allowsKnownFieldWrites else { return .refused(.compatibility) }
+        guard let first = batch.tasks.first else { return .refused(.invalidCapture) }
+        switch TaskCreation.presence(of: batch.tasks, in: current.snapshot.workspace) {
+        case .matching: return .alreadyCreated(current, first.id)
+        case .conflicting: return .refused(.commandConflict)
+        case .absent: break
+        }
+        guard current.revision == expected else { return .refused(.stale) }
+        return commitCapturedTasks(batch.tasks, current: current)
+    }
+
+    private func commitCapturedTasks(_ tasks: [TaskItem], current: WorkspaceDocument) -> WorkspaceCreateOutcome {
+        guard let first = tasks.first else { return .refused(.invalidCapture) }
         var data = current.snapshot.workspace
-        if current.snapshot.settings.defaultAddTo == .top { data.tasks.insert(prepared, at: 0) }
-        else { data.tasks.append(prepared) }
+        TaskCreation.insert(tasks, into: &data, position: current.snapshot.settings.defaultAddTo)
         do {
             let bytes = try JSONEncoder().encode(data)
             let staged = try document(workspace: bytes, settings: current.snapshot.settingsBytes)
             guard staged.allowsKnownFieldWrites else { return .refused(.invalidCapture) }
             try write(bytes, workspaceURL)
-            return .created(staged, prepared.id)
+            return .created(staged, first.id)
         } catch {
             // Failure is not proof that replacement did not happen. Confirm
             // the identity before acknowledging success or unlocking editing.
             if let latest = try? load(), latest.allowsKnownFieldWrites {
-                if let existing = latest.snapshot.workspace.tasks.first(where: { $0.id == draft.id }) {
-                    return exactEncoding(existing, prepared) ? .alreadyCreated(latest, existing.id) : .refused(.commandConflict)
+                switch TaskCreation.presence(of: tasks, in: latest.snapshot.workspace) {
+                case .matching: return .alreadyCreated(latest, first.id)
+                case .conflicting: return .refused(.commandConflict)
+                case .absent: break
                 }
                 if latest.revision == current.revision { return .notSaved(latest) }
             }

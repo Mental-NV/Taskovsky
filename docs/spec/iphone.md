@@ -228,6 +228,8 @@ The reference establishes a floating Add affordance but supplies no new-task cap
 
 Contextual defaults come from shared policy. Explicit Inbox must stay Inbox rather than resolving through a configured default list. Show the resolved destination and date before submission. A target archived or removed while the draft is open must produce a clear validation result or an explicit, visible fallback consistent with the approved create contract. Do not silently put the record somewhere unexpected.
 
+Tasks Actions → Add Multiple Tasks opens multiline entry and an explicit review. Each nonblank line uses the shared creation rules. One save adds the full batch to the reviewed list. The text stays in the sheet while retrying a save. [Batch text capture](../changes/task-batch-text-capture-2026-11-10.md).
+
 Date/tag recognition displays removable candidates. Native pickers resolve IDs, including multiword tag names, without requiring knowledge of the desktop quoted-token syntax. Applying a template updates the capture draft and preserves its complete rich body, checklist and schedule representation. A styled template may be instantiated while its body stays read-only on phone.
 
 Submission produces a stable command ID and at most one creation transaction. Disable repeated submission while it is pending. Retry after uncertain completion must query that command outcome or use an idempotent path, not create a second task. A durable success dismisses capture and gives feedback. A failed write keeps the draft and offers Retry or Keep Editing without claiming the task is saved.

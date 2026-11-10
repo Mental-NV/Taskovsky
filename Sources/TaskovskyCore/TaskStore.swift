@@ -38,16 +38,7 @@ public final class TaskStore: ObservableObject {
         if FileManager.default.fileExists(atPath: self.fileURL.path) {
             do {
                 let bytes = try Data(contentsOf: self.fileURL)
-                let workspace = try JSONDecoder().decode(WorkspaceData.self, from: bytes)
-                if workspace.requiresProtectedTaskCollection {
-                    let loaded = try JSONSerialization.jsonObject(with: bytes)
-                    let understood = try JSONSerialization.jsonObject(with: JSONEncoder().encode(workspace))
-                    guard try JSONSerialization.data(withJSONObject: loaded, options: .sortedKeys) ==
-                              JSONSerialization.data(withJSONObject: understood, options: .sortedKeys) else {
-                        throw CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: "The protected task data includes unsupported fields or values."])
-                    }
-                }
-                self.data = workspace
+                self.data = try Self.decodeWorkspace(bytes)
                 self.storageError = nil
             } catch {
                 // Never overwrite a file that failed to load, even after in-memory edits.
@@ -68,6 +59,19 @@ public final class TaskStore: ObservableObject {
             // Do not record migration until the workspace has been written successfully.
             if storageError == nil { settings.hasInstalledBuiltInTemplates = true; saveSettings() }
         }
+    }
+
+    private static func decodeWorkspace(_ bytes: Data) throws -> WorkspaceData {
+        let workspace = try JSONDecoder().decode(WorkspaceData.self, from: bytes)
+        if workspace.requiresProtectedTaskCollection {
+            let loaded = try JSONSerialization.jsonObject(with: bytes)
+            let understood = try JSONSerialization.jsonObject(with: JSONEncoder().encode(workspace))
+            guard try JSONSerialization.data(withJSONObject: loaded, options: .sortedKeys) ==
+                      JSONSerialization.data(withJSONObject: understood, options: .sortedKeys) else {
+                throw CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: "The protected task data includes unsupported fields or values."])
+            }
+        }
+        return workspace
     }
 
     public static var defaultFileURL: URL {
@@ -307,7 +311,38 @@ public final class TaskStore: ObservableObject {
 
     private func insertCreatedTask(_ task: TaskItem, tags: [TaskTag], into draft: inout WorkspaceData) {
         draft.tags.append(contentsOf: tags)
-        if settings.defaultAddTo == .top { draft.tasks.insert(task, at: 0) } else { draft.tasks.append(task) }
+        TaskCreation.insert([task], into: &draft, position: settings.defaultAddTo)
+    }
+
+    public enum TextBatchResult { case saved, stale, failed, uncertain }
+
+    public func createTextBatch(_ batch: TaskTextBatch, expected: WorkspaceData, expectedSettings: AppSettings) -> TextBatchResult {
+        guard !blockedByLoadFailure else { return .failed }
+        if let result = checkSavedTextBatch(batch, expected: data) { return result }
+        guard data == expected, settings == expectedSettings else { return .stale }
+        var draft = data
+        TaskCreation.insert(batch.tasks, into: &draft, position: settings.defaultAddTo)
+        if writeWorkspace(draft) {
+            data = draft
+            return .saved
+        }
+        return checkSavedTextBatch(batch, expected: expected) ?? .failed
+    }
+
+    private func checkSavedTextBatch(_ batch: TaskTextBatch, expected: WorkspaceData) -> TextBatchResult? {
+        do {
+            let saved = try Self.decodeWorkspace(Data(contentsOf: fileURL))
+            switch TaskCreation.presence(of: batch.tasks, in: saved) {
+            case .matching:
+                data = saved
+                if !settingsLoadFailed { storageError = settingsSaveError }
+                return .saved
+            case .absent where saved == expected: return nil
+            case .absent, .conflicting: return .uncertain
+            }
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+            return expected == WorkspaceData() ? nil : .uncertain
+        } catch { return .uncertain }
     }
 
     public static func recognizeDate(in text: String, calendar: Calendar, now: Date = Date()) -> (date: Date, hasTime: Bool, range: Range<String.Index>)? {

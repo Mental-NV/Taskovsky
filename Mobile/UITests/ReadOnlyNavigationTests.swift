@@ -1288,6 +1288,53 @@ final class ReadOnlyNavigationTests: XCTestCase {
         waitGone(destination)
     }
 
+    @MainActor func testTextBatchCaptureReviewsCancelsAndSavesInWork() {
+        let app = launch()
+        goTo("Work", in: app)
+        func openBatch() -> XCUIElement {
+            app.buttons["taskListActions"].tap()
+            let open = app.buttons["batchCaptureOpen"]
+            XCTAssertTrue(open.waitForExistence(timeout: 5))
+            open.tap()
+            let input = app.textViews["batchCaptureInput"]
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            return input
+        }
+        func review(_ text: String) {
+            let input = openBatch()
+            input.tap()
+            input.typeText(text)
+            app.buttons["batchCaptureReview"].tap()
+            XCTAssertTrue(app.staticTexts["batchCaptureDestination"].waitForExistence(timeout: 5))
+            XCTAssertEqual(app.staticTexts["batchCaptureDestination"].label, "Add to Work")
+        }
+
+        review("Discard this title\nDiscard this too")
+        XCTAssertTrue(app.staticTexts["Discard this title"].exists)
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(app.buttons["Discard this title"].exists)
+
+        review("Batch first\n\nBatch second")
+        let first = app.staticTexts["Batch first"], second = app.staticTexts["Batch second"]
+        XCTAssertTrue(first.exists && second.exists)
+        XCTAssertLessThan(first.frame.minY, second.frame.minY)
+        let add = app.buttons["batchCaptureCommit"]
+        XCTAssertEqual(add.label, "Add 2 Tasks")
+        attach(app, "Batch text capture review")
+        add.tap()
+        let firstTask = app.buttons["Batch first"], secondTask = app.buttons["Batch second"]
+        XCTAssertTrue(firstTask.waitForExistence(timeout: 5))
+        XCTAssertTrue(secondTask.exists)
+        XCTAssertLessThan(firstTask.frame.minY, secondTask.frame.minY)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertEqual(app.buttons.matching(identifier: "Batch first").count, 1)
+        XCTAssertEqual(app.buttons.matching(identifier: "Batch second").count, 1)
+        XCTAssertFalse(app.buttons["Discard this title"].exists)
+    }
+
     @MainActor func testManualTaskDragSavesOrderAndRespectsPinAndSortBoundaries() {
         let app = launch(qaCase: "task-sort")
         goTo("Work", in: app)
