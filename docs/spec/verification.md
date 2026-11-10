@@ -1500,3 +1500,18 @@ On the iOS 26.3.1 simulator, persistence checks passed while the first screensho
 | Saved fixture audit | Mac task and settings files were byte-identical before and after the previews. Explicit Week navigation changed only the Calendar mode value. The iPhone workspace stayed byte-identical, and the final settings matched the original values after navigating Year → Week. The previous Mac QA app and preferences were restored, and the disposable simulator was removed. |
 
 The native checks cover the default Year layout and the recorded fixtures. Compact split panes, large iPhone text sizes and physical iPhone gestures were outside this pass.
+
+<a id="calendar-letter-shortcuts"></a>
+
+## Mac Calendar letter shortcuts — November 10, 2026
+
+[Change contract](../changes/calendar-letter-shortcuts-2026-11-10.md). The isolated branch `codex/calendar-letter-shortcuts` starts from merged `main` at `3c1204a14eccef61c2ff80c523a8fc53e1f4e558`. The source manifest for the build has SHA-256 `86a238c3e726bfbf53f8b24a0793b75d16a00524787892ba5796fcf57c14fb2d`. The Mac view source has SHA-256 `6f947950ff8a412f89c3d515189905406ee4727df08db7359c23b8efa0f8c190`.
+
+| Evidence | Result |
+| --- | --- |
+| TickTick 8.2.20 build 922 on Mac | The selector advertised the five key pairs. From Month, W → Week, Y → Year, D → Day, A → Agenda and M → Month each changed the toolbar and view. Returned to Tasks with Month as the Calendar selection. |
+| macOS 27.0.1, Xcode 27.0 | **678 passed.** Release build and strict signature verification passed. |
+| Guarded native Mac | All five letter keys and all five number keys selected their advertised modes. Shift-M left Day selected. The Calendar task title received all ten characters, and Escape cancelled the draft with Day still selected. In the compact Tasks split, Y left Day selected and the selector omitted key hints. Tasks quick entry received all ten characters. |
+| Saved fixture and restoration | W saved Week after returning to full Calendar. The workspace file was byte-identical. Calendar mode was the only changed value relative to the previously normalized settings for this fixture. The previous guarded app and its preferences were restored. |
+
+The change touches only the Mac Calendar view. This pass covers the recorded keyboard interactions and saved settings file. It does not cover other keyboard layouts, a process relaunch after the shortcut, or iPhone execution.
