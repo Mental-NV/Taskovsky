@@ -3,8 +3,18 @@ name: macOS CI
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    # Keep both filters identical. Do not make this workflow a required check
+    # without an always-running gate; see docs/spec/ci-cd.md#ci-002.
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - 'AGENTS.md'
   workflow_dispatch:
 
 permissions:
