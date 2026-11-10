@@ -3,7 +3,7 @@
 ## Identity and decision
 
 - Change ID: CHG-CI-PAUSE.
-- Status: Implemented, verification pending publication.
+- Status: Verified for static rename, preservation and diff-scope checks; integration pending.
 - Requested and approved by the user on November 10, 2026: temporarily disable remote CI, for example by renaming GitHub Action files, so ongoing work does not wait for it.
 - Base: remote main `6ee96eeb8f88e74a105c518de2202233ea528efa`; isolated branch `ci/pause-remote-actions-2026-11-10`.
 - Related contract: [CI-006](../spec/ci-cd.md#temporary-pause-ci-006). Product, UI, parity and deviation IDs are unaffected.
@@ -30,4 +30,4 @@ See the [verification record](../spec/verification.md#remote-ci-pause-2026-11-10
 
 ## Completion record
 
-The draft PR carries the exact implementation commit and publication checks. Integration is pending user review; historical CI results remain unchanged.
+[Draft PR #6](https://github.com/Mental-NV/Taskovsky/pull/6) contains implementation commit `40447fe47fbbdd8b5eb94b64cb3b528aea564780` and records the final published head. The implementation head was confirmed remotely, with zero check runs, workflow runs and commit statuses observed after publication. These are point-in-time observations, not runtime passes. Integration is pending user review; historical CI results remain unchanged.
