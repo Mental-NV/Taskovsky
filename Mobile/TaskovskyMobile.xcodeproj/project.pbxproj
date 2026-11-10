@@ -5,6 +5,25 @@
   "objectVersion" = "56";
   "archiveVersion" = "1";
   "objects" = {
+    "C407BA710000000000000001" = {
+      "path" = "../Sources/Taskovsky/TaskBatchSheet.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "C407BA710000000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "C407BA710000000000000001";
+    };
+    "CE73F4000000000000000001" = {
+      "isa" = "XCSwiftPackageProductDependency";
+      "package" = "000000000000000000000001";
+      "productName" = "TaskovskyClipboard";
+    };
+    "CE73F4000000000000000002" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "CE73F4000000000000000001";
+    };
     "000000000000000000000002" = {
       "isa" = "XCSwiftPackageProductDependency";
       "package" = "000000000000000000000001";
@@ -41,6 +60,7 @@
         "A5F903CA0110000000000015",
         "D6E7BA091100000000000001",
         "D6E7BA091100000000000003",
+        "C407BA710000000000000001",
         "A5F903CA0110000000000013",
         "958468F042788401D618E34F",
         "B8FD48B691B49BCDE6CC3EAB",
@@ -148,6 +168,7 @@
         "A5F903CA0110000000000016",
         "D6E7BA091100000000000002",
         "D6E7BA091100000000000004",
+        "C407BA710000000000000002",
         "A5F903CA0110000000000014",
         "A00000000000000000000002",
       );
@@ -334,6 +355,7 @@
       "files" = (
         "000000000000000000000014",
         "000000000000000000000015",
+        "CE73F4000000000000000002",
       );
       "runOnlyForDeploymentPostprocessing" = "0";
     };
@@ -453,6 +475,7 @@
       "packageProductDependencies" = (
         "000000000000000000000002",
         "000000000000000000000003",
+        "CE73F4000000000000000001",
       );
       "productName" = "TaskovskyMobile";
       "isa" = "PBXNativeTarget";

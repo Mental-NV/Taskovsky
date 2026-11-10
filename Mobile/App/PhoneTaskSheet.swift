@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import TaskovskyDomain
 import TaskovskyWorkspace
 
@@ -72,6 +73,7 @@ struct PhoneTaskSheet: View {
                             }
                         }
                         PhoneLifecycleFeedback(model: model)
+                        PhoneScheduleFeedback(model: model, surface: .tasks)
                         Button { Task { await model.begin(taskID: task.id, field: .title) } } label: {
                             Text(task.title).font(.title2.bold()).foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
                         }.buttonStyle(.plain).disabled(!writable).accessibilityIdentifier("editTitle")
@@ -317,6 +319,276 @@ struct PhoneLifecycleFeedback: View {
     }
 }
 
+enum PhoneTaskSwipeEdge { case leading, trailing }
+
+struct PhoneTaskSwipeSelection: Equatable {
+    let taskID: UUID
+    let edge: PhoneTaskSwipeEdge
+}
+
+struct PhoneTaskSwipeAction: Identifiable {
+    enum Kind: String {
+        case complete, reopen, restore, schedule, priority, move, trash
+
+        var title: String {
+            switch self {
+            case .complete: "Complete"
+            case .reopen: "Reopen"
+            case .restore: "Restore"
+            case .schedule: "Schedule"
+            case .priority: "Priority"
+            case .move: "Move to List"
+            case .trash: "Move to Trash"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .complete: "checkmark"
+            case .reopen, .restore: "arrow.uturn.backward"
+            case .schedule: "calendar"
+            case .priority: "flag"
+            case .move: "folder"
+            case .trash: "trash"
+            }
+        }
+
+        var color: Color {
+            switch self {
+            case .complete, .reopen, .restore: .green
+            case .schedule: .blue
+            case .priority: .orange
+            case .move: .indigo
+            case .trash: .red
+            }
+        }
+    }
+
+    let id: Kind
+    let run: () -> Void
+    var title: String { id.title }
+}
+
+struct PhoneTaskSwipeRow<Content: View>: View {
+    let taskID: UUID
+    let leading: [PhoneTaskSwipeAction]
+    let trailing: [PhoneTaskSwipeAction]
+    @Binding var selection: PhoneTaskSwipeSelection?
+    @ViewBuilder let content: (PhoneRowHorizontalPan) -> Content
+    @Environment(\.layoutDirection) private var direction
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var translation: CGFloat = 0
+    private let actionWidth: CGFloat = 64
+
+    private var sign: CGFloat { direction == .leftToRight ? 1 : -1 }
+    private var leadingWidth: CGFloat { CGFloat(leading.count) * actionWidth }
+    private var trailingWidth: CGFloat { CGFloat(trailing.count) * actionWidth }
+    private var selected: Bool { selection?.taskID == taskID }
+    private var rest: CGFloat {
+        guard selected else { return 0 }
+        return selection?.edge == .leading ? leadingWidth : -trailingWidth
+    }
+    private var offset: CGFloat { min(leadingWidth, max(-trailingWidth, rest + translation)) }
+
+    var body: some View {
+        content(PhoneRowHorizontalPan(track: track))
+            .background(offset == 0 ? .clear : PhoneStyle.card)
+            .offset(x: offset * sign)
+            .overlay(alignment: offset >= 0 ? .leading : .trailing) {
+                if offset != 0 {
+                    HStack(spacing: 0) {
+                        ForEach(offset > 0 ? leading : trailing) { action in
+                            Button {
+                                selection = nil
+                                action.run()
+                            } label: {
+                                VStack(spacing: 3) {
+                                    Image(systemName: action.id.icon).font(.subheadline)
+                                    Text(action.id == .move ? "Move" : action.id == .trash ? "Trash" : action.title)
+                                        .font(.caption2).lineLimit(1).minimumScaleFactor(0.7)
+                                }
+                                .frame(width: actionWidth).frame(maxHeight: .infinity)
+                                .foregroundStyle(.white)
+                                .background(action.id.color)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(action.title)
+                            .accessibilityIdentifier("taskSwipe-" + action.id.rawValue)
+                        }
+                    }
+                    .frame(width: abs(offset), alignment: offset > 0 ? .leading : .trailing)
+                    .clipped()
+                    .allowsHitTesting(selected && translation == 0)
+                    .accessibilityHidden(!selected)
+                }
+            }
+            .clipped()
+            .onDisappear { if selected { selection = nil } }
+    }
+
+    private func track(_ distance: CGFloat, _ state: UIGestureRecognizer.State) {
+        let movement = distance * sign
+        switch state {
+        case .began, .changed:
+            translation = movement
+        case .ended:
+            let ending = rest + movement
+            let edge: PhoneTaskSwipeEdge = ending >= 0 ? .leading : .trailing
+            let width = edge == .leading ? leadingWidth : trailingWidth
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) {
+                translation = 0
+                selection = width > 0 && abs(ending) >= min(44, width / 2)
+                    ? PhoneTaskSwipeSelection(taskID: taskID, edge: edge) : nil
+            }
+        default:
+            translation = 0
+        }
+    }
+}
+
+/// Limit the horizontal recognizer to the title so the checkbox and grip keep their own gestures.
+struct PhoneRowHorizontalPan: UIViewRepresentable {
+    let track: (CGFloat, UIGestureRecognizer.State) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIView(context: Context) -> Anchor {
+        let anchor = Anchor()
+        anchor.isUserInteractionEnabled = false
+        anchor.moved = { [weak coordinator = context.coordinator] anchor in
+            coordinator?.attach(to: anchor)
+        }
+        return anchor
+    }
+
+    func updateUIView(_ anchor: Anchor, context: Context) {
+        context.coordinator.track = track
+        context.coordinator.attach(to: anchor)
+    }
+
+    static func dismantleUIView(_ anchor: Anchor, coordinator: Coordinator) {
+        anchor.moved = nil
+        coordinator.detach()
+    }
+
+    final class Anchor: UIView {
+        var moved: ((Anchor) -> Void)?
+
+        override func didMoveToWindow() {
+            super.didMoveToWindow()
+            moved?(self)
+        }
+    }
+
+    @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        var track: ((CGFloat, UIGestureRecognizer.State) -> Void)?
+        private weak var anchor: Anchor?
+        private weak var scroll: UIScrollView?
+        private lazy var pan: UIPanGestureRecognizer = {
+            let gesture = UIPanGestureRecognizer(target: self, action: #selector(didPan))
+            gesture.delegate = self
+            gesture.maximumNumberOfTouches = 1
+            return gesture
+        }()
+
+        func attach(to anchor: Anchor) {
+            self.anchor = anchor
+            var ancestor = anchor.window == nil ? nil : anchor.superview
+            while let current = ancestor, !(current is UIScrollView) { ancestor = current.superview }
+            let list = ancestor as? UIScrollView
+            guard list !== scroll else { return }
+            detach()
+            scroll = list
+            list?.addGestureRecognizer(pan)
+        }
+
+        func detach() {
+            scroll?.removeGestureRecognizer(pan)
+            scroll = nil
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard let anchor else { return false }
+            return anchor.bounds.contains(touch.location(in: anchor))
+        }
+
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            let movement = pan.translation(in: scroll)
+            return abs(movement.x) > 1.5 * abs(movement.y)
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
+            other === scroll?.panGestureRecognizer
+        }
+
+        @objc private func didPan() {
+            track?(pan.translation(in: scroll).x, pan.state)
+        }
+    }
+}
+
+struct PhoneTaskMoveRequest: Identifiable {
+    let task: TaskItem
+    let revision: WorkspaceRevision
+    var id: UUID { task.id }
+}
+
+enum PhoneTaskRowEditor: Identifiable {
+    case schedule(PhoneScheduleRequest)
+    case priority(PhoneTaskMetadataRequest)
+    case move(PhoneTaskMoveRequest)
+
+    var id: UUID {
+        switch self {
+        case .schedule(let request): request.id
+        case .priority(let request): request.id
+        case .move(let request): request.id
+        }
+    }
+}
+
+struct PhoneTaskMoveSheet: View {
+    @ObservedObject var model: PhoneWorkspaceModel
+    let request: PhoneTaskMoveRequest
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            PhoneTaskMoveChoices(model: model, request: request) { dismiss() }
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }.disabled(model.isBusy)
+                    }
+                }
+        }.interactiveDismissDisabled(model.isBusy)
+    }
+}
+
+private struct PhoneTaskMoveChoices: View {
+    @ObservedObject var model: PhoneWorkspaceModel
+    let request: PhoneTaskMoveRequest
+    let moved: () -> Void
+
+    var body: some View {
+        List {
+            moveTarget("Inbox", id: nil)
+            ForEach((model.document?.snapshot.workspace.lists ?? []).filter { !$0.isArchived }) { list in
+                moveTarget(list.name, id: list.id)
+            }
+            PhoneLifecycleFeedback(model: model)
+        }.navigationTitle("Move to List")
+    }
+
+    private func moveTarget(_ title: String, id: UUID?) -> some View {
+        Button(title) {
+            Task {
+                if await model.performLifecycle(.move(id), taskID: request.task.id, expected: request.revision) { moved() }
+            }
+        }.disabled(!model.canBeginEditing || request.task.listID == id)
+    }
+}
+
 private struct PhoneTaskActions: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let taskID: UUID
@@ -343,12 +615,9 @@ private struct PhoneTaskActions: View {
                         action(task.isPinned ? "Unpin" : "Pin", .setPinned(!task.isPinned), task: task, document: document)
                         if TaskLifecycle.refusal(for: .move(nil), task: task, lists: lists) == nil {
                             NavigationLink("Move to List") {
-                                List {
-                                    moveTarget("Inbox", id: nil, task: task, revision: document.revision)
-                                    ForEach(lists.filter { !$0.isArchived }) { list in
-                                        moveTarget(list.name, id: list.id, task: task, revision: document.revision)
-                                    }
-                                }.navigationTitle("Move to List")
+                                PhoneTaskMoveChoices(model: model, request: PhoneTaskMoveRequest(task: task, revision: document.revision)) {
+                                    dismiss()
+                                }
                             }
                         }
                         action("Duplicate", .duplicate(copyID: UUID()), task: task, document: document)
@@ -402,11 +671,6 @@ private struct PhoneTaskActions: View {
         if TaskLifecycle.refusal(for: command, task: task, lists: document.snapshot.workspace.lists) == nil {
             Button(title, role: role) { run(command, revision: document.revision) }
         }
-    }
-
-    private func moveTarget(_ title: String, id: UUID?, task: TaskItem, revision: WorkspaceRevision) -> some View {
-        Button(title) { run(.move(id), revision: revision) }
-            .disabled(!model.canBeginEditing || task.listID == id)
     }
 
     private func run(_ command: TaskLifecycleCommand, revision: WorkspaceRevision) {

@@ -82,6 +82,13 @@ struct PhoneCalendarPreferences: View {
             Toggle("Show Completed", isOn: $draft.showCompleted).accessibilityIdentifier("calendarCompleted")
             Toggle("Show Checklist Items", isOn: $draft.showChecklistItems).accessibilityIdentifier("calendarChecklist")
             Toggle("Show All Repeat Cycles", isOn: $draft.showRepeatCycles).accessibilityIdentifier("calendarRepeats")
+            Toggle(isOn: $draft.showDetails) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Show Details")
+                    Text("Show task time and list in Agenda and Month.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }.accessibilityIdentifier("calendarDetails")
         } header: { Text("Visible Items") } footer: { Text("Future repeats are previews. Open the repeating task to edit its schedule.") }
         Section("Range") {
             Stepper("Multi-Day: \(draft.multiDayCount) days", value: $draft.multiDayCount, in: 2...14)

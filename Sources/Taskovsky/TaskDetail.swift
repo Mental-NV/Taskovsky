@@ -22,6 +22,7 @@ final class DetailDrafts: ObservableObject {
 struct TaskDetail: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
+    let actions: TaskActionCenter
     @Environment(\.colorScheme) private var colorScheme
     let id: UUID
     let onTrash: () -> Void
@@ -50,6 +51,7 @@ struct TaskDetail: View {
     private var showTags: Binding<Bool> { drafts.flag(id, \.shownTags) }
     private var showTemplates: Binding<Bool> { drafts.flag(id, \.shownTemplates) }
     @StateObject private var richController = RichBodyController()
+    @State private var occurrenceSkip: TaskOccurrenceSkipRequest?
     @State private var bodyFocused = false
     @State private var bodyHeight: CGFloat = 0
     @FocusState private var stepFocused: Bool
@@ -97,6 +99,7 @@ struct TaskDetail: View {
             Divider()
             detailFooter
         }
+        .taskOccurrenceSkipPrompt($occurrenceSkip, store: store, actions: actions)
     }
 
     // Keep the original view sections separate so Swift can type-check each
@@ -291,6 +294,9 @@ struct TaskDetail: View {
                     if task.wontDoAt != nil { Button("Mark incomplete") { store.reopenTask(id: id) } }
                     if task.completedAt == nil && task.wontDoAt == nil {
                         Button(task.isPinned ? "Unpin" : "Pin") { _ = store.setPinned(id: id, pinned: !task.isPinned) }
+                    }
+                    if CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) {
+                        Button("Skip this occurrence…") { occurrenceSkip = TaskOccurrenceSkipRequest(task) }
                     }
                     Button("Save as Template") { _ = store.saveTemplate(from: id) }
                     Menu("Apply Template") {

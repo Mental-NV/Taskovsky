@@ -167,7 +167,7 @@ public enum RichBodyEdit: Codable, Sendable {
         guard boundary(range.location), boundary(NSMaxRange(range)) else { throw RichBodyEditError.invalidRange }
     }
 
-    fileprivate static func supportsLink(_ link: String) -> Bool {
+    public static func supportsLink(_ link: String) -> Bool {
         guard let components = URLComponents(string: link),
               let scheme = components.scheme?.lowercased(), ["http", "https"].contains(scheme),
               let host = components.host, !host.isEmpty else { return false }

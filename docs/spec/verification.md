@@ -1262,3 +1262,141 @@ All 34 saved-file audit groups passed, including Calendar completion and skip, a
 The guarded Mac build saved, applied, renamed and deleted a named preset. A relaunch preserved the preset while restoring the ordinary initial report options. Renaming and deleting preserved the report text. Cancelling deletion kept the preset. Workspace and settings files were byte-identical, and the original guarded bundle and preferences were restored. The native check covered the wide Summary options rail.
 
 All 11 focused iPhone simulator tests passed with zero failures, skips and runtime warnings. The first run also passed 11 tests and reported a SwiftUI reparenting warning when opening the preset menu. The final build uses a dedicated preset screen. Applying and managing presets stayed staged until Done, and Cancel preserved the edited report and discarded the staged preset. The final audit found one renamed preset in the QA preference key and verified byte-identical workspace and settings. The two existing note tests preserved exact report text and unrelated records, and the failed-save workflow left its workspace and settings byte-identical. Both simulators were removed. Physical-device and VoiceOver checks remain open.
+
+
+<a id="foreign-rich-description-paste"></a>
+
+### RICH-CLIPBOARD-003 — Supported HTML and RTF description paste
+
+[Change contract](../changes/rich-description-foreign-paste-2026-11-10.md). Final source manifest SHA-256 is `5ad5a236ace65e20cbb197e41a358f7c27c00f75cef59aa375d166e7890ce8ec`. All 657 Mac tests passed, and the release passed strict signature verification. Four focused contracts check Unicode ranges, matching whitespace, allowed links and inline CSS, refused embedded RTF data, malformed and oversized payloads, and conflicting HTML and RTF representations.
+
+The guarded Mac app pasted synthetic HTML with bold, italic and one web link. Undo and Redo treated the paste as one edit. Paste as Plain Text saved the same characters without styles. Relaunch reopened both descriptions without a write. The saved-file audit found the expected exact text and inline ranges, preserved unrelated records and settings, and verified restoration of the QA files, bundle and preferences.
+
+The first eight iPhone simulator checks passed. Review found that unstyled HTML could be replaced by different RTF text when no plain representation was available. The final importer retains the HTML text in that case. The final four iPhone checks passed with zero failures, skips or runtime warnings. They covered HTML with a plain alternative, RTF without one, internal rich copy and paste, and plain Markdown paste. Both runs audited exact saved text, supported ranges, literal paste, untouched records and settings. Clipboard QA used synthetic content on private pasteboards. Both disposable simulators were removed. The HTML screenshot retains the simulator’s previously observed puzzle-emoji fallback glyph. The file audit confirms the exact UTF-16 text. Physical-device behavior and general-pasteboard prompts remain unverified.
+
+
+<a id="task-batch-editing"></a>
+
+### TASK-BATCH-001 — Local batch editing from task lists
+
+[Change contract](../changes/task-batch-editing-2026-11-10.md). Source manifest SHA-256 is `af18edd59f12267a6bf795e9625a04cea1b2c2f606fae48cdc2023f2a4f89b6d`. All 662 Mac tests passed, and the release passed strict signature verification. The new shared tests verify unchanged fields, unavailable selections, tag addition and removal, archived list movement, duration and reminders on a date move, unscheduling, descendant cascades, recurrence successors and an idempotent completion. The repository tests cover stale revisions, no-op, failed writes and confirmation after a write throws. The Mac store test confirms a disk refusal leaves the visible data intact.
+
+The guarded Mac app opened Select Tasks from the current list, cancelled a staged edit with byte-identical files and applied Low priority to two items. Both priorities were visible after relaunch. An archived selection offered only Move to List. The file audit found only the selected priorities and timestamps changed. The original guarded app, fixture files and QA preferences were restored.
+
+Six focused iPhone simulator tests passed with zero skips, failures or runtime warnings. The native workflows covered cancel, priority, tag addition, clearing dates, moving selected tasks to another list, completion, cancelling the Trash confirmation and confirming the move to Trash. The file audits verified the intended edits, exact unowned fields and unchanged settings. The disposable simulator was removed. Physical-device and exact reference UI comparisons remain open.
+
+
+<a id="mobile-calendar-show-details"></a>
+
+### CAL-MOBILE-DETAILS-001 — Show Details in iPhone Calendar
+
+[Change contract](../changes/mobile-calendar-details-2026-11-10.md). Source manifest SHA-256 is `6b1977c648158849454cbf93e8618df3802f5e560f79f1f71e502832ae2bfc63`. All 664 Mac tests passed, and the release passed strict signature verification. Shared cases check localized labels in the display zone, a range across midnight, timed points, all-day labels, missing lists and an unchanged projection. Repository coverage verifies sparse options, explicit legacy false, save and reset, and byte preservation outside the option slice.
+
+Seven focused iPhone simulator tests passed with zero skips, failures or runtime warnings. The new native flow checked default-off, cancelling an enable, enabling with Done, Agenda details, Day retaining its standard presentation, Month details at high zoom, reopening after relaunch and cancelling a disable. The workflow returned to Week before auditing the saved file. Only `showDetails` changed, with the exact workspace and adjacent settings bytes preserved. The adjacent checks covered Agenda completion and undo, Month range continuation, timed end resize and saved view options. Both disposable simulators were removed.
+
+The supplied TickTick R22 screenshot establishes the List and Month scope and shows the switch off. The official guide identifies time and list. Taskovsky uses its Agenda name and a compact Month subtitle with full accessibility metadata. On the 390-point iPhone, existing narrow Month cards still truncate titles and some list names. Physical-device verification and a live side-by-side reference comparison remain open.
+
+
+<a id="mobile-calendar-month-scroll"></a>
+
+### CAL-MOBILE-MONTH-SCROLL-001 — Continuous Full Month browsing on iPhone
+
+[Change contract](../changes/mobile-calendar-month-scroll-2026-11-10.md). iPhone source manifest SHA-256 is `a5ad22d66a043c7ef31b7d7e30664f79a9204700cdbd08a7d4dc914de04dc5b1`. All 665 Mac tests passed, and the release passed strict signature verification. The Mac verification source manifest is `7afde9888ac3ca40ff822ce091eef8abf696a089bcc4ea216df2b563023da14f`. Only two iPhone source files differ. The shared tests cover the bounded civil-week range, both rebasing thresholds, a distant jump, the spring clock change and a week spanning two calendar years.
+
+Thirteen focused iPhone simulator tests passed with zero skips, failures or runtime warnings. The native browse workflow moved from November back into October, forward through December into January, and then directly to March using Jump to Date. Today and the month arrows kept their existing meanings. Relaunch returned to November in saved Month mode. The saved fixture and settings matched their initial bytes. Adjacent tests covered zoom, Show Details, range continuations, both resize edges, a local task drop, recurring scope and restore, and range capture/recovery. The file audits confirmed the capture's November 6–11 inclusive dates, the new start and end dates on both resize fixtures, and exact preservation of other workspace records. The disposable simulators were removed.
+
+The preliminary runs exposed ambiguous day numbers, unstable window shifts and competing scroll and edit gestures. The final build gives each date its full accessibility label, retains a visible week when shifting the buffer and holds the grid during range selection and endpoint resizing. The reference changelog establishes free vertical Month browsing. The buffer and zoom scope are Taskovsky choices. Narrow Month cards can still truncate titles. Physical-device and VoiceOver navigation checks remain open.
+
+
+<a id="foreign-rich-paste-full-iphone-regression"></a>
+
+### MOB-QA-011 — Full iPhone regression through foreign rich paste
+
+Source manifest SHA-256 is `5ad5a236ace65e20cbb197e41a358f7c27c00f75cef59aa375d166e7890ce8ec`. The sealed source recorded 292 passes, 0 failures, 0 skips and 0 runtime warnings. The inventory retains all 281 prior tests and adds 11 covering Task Progress, Summary options and presets, and external HTML/RTF paste with synthetic clipboard fixtures. Later batch and Calendar display work used separate focused runs.
+
+The file audit passed 80 baseline cases with 79 Mac reopens that made no writes. All 38 recorded audit groups passed. The disposable simulator was removed.
+
+
+<a id="mobile-calendar-month-card-titles"></a>
+
+### CAL-MOBILE-MONTH-TITLE-001 — Readable titles in compact iPhone Calendar cards
+
+[Change contract](../changes/mobile-calendar-month-card-titles-2026-11-10.md). The source manifest SHA-256 is `97a20a59f2485c794d4a1d3d2586b4f372d636d9ca891ba84a15e7c01ca816ce`. All 665 Mac tests passed, and the release passed strict signature verification. The application change is in the iPhone presentation.
+
+Ten focused simulator tests passed in light appearance with zero failures, skips or runtime warnings. The new workflow checked distinct card and grip targets, the full accessibility label and the correct task detail on tap in Month and Multi-Week. It passed again in dark appearance. The saved workspace bytes matched the initial fixtures in both appearances. Only switching from Month to Multi-Week saved a different mode. Adjacent tests exercised scrolling, zoom, details, drops, range capture and both resize endpoints. File audits confirmed the intended dates and unchanged unrelated records.
+
+The R17 reference capture shows leading title text in narrow cards. The final screenshots show readable prefixes while retaining separate move and resize targets. Full titles remain available on the card's accessibility label and in task detail. Device and live VoiceOver checks remain open.
+
+
+<a id="mobile-calendar-week-swipe"></a>
+
+### CAL-MOBILE-WEEK-SWIPE-001 — Swipe between weeks on iPhone
+
+[Change contract](../changes/mobile-calendar-week-swipe-2026-11-10.md). The iPhone source manifest SHA-256 is `c19249d98599bd4c35e7b121903c3006808ba329c93ecb467ad46c4f08b09cad`. Only the iPhone view and UI tests differ from the snapshot with 665 passing Mac tests and strict release signature verification. Mac verification manifest SHA-256 is `97a20a59f2485c794d4a1d3d2586b4f372d636d9ca891ba84a15e7c01ca816ce`.
+
+Twelve focused iPhone simulator tests passed with zero failures, skips or runtime warnings. With one ruler, all seven days were visible. Swipes moved to the next and previous week, kept the vertical hour offset, and left vertical scrolling within the current week. With two extra rulers, the first swipe panned to Sunday, and a subsequent outward swipe paged to the next week. The swipe back returned to the previous week's trailing edge. Day and Multi-Day checks, a local task drop and Undo, both all-day resize edges, and drag-edge dwell passed.
+
+The saved-file audits confirmed byte-identical tasks and settings for ordinary Week swipes and drag-edge dwell. The ruler workflow changed its explicitly saved visibility preference and the existing legacy alias for the first ruler. The source ruler list and adjacent settings bytes stayed intact. The exact resized dates and the restored schedule matched the fixture. The disposable simulator was removed. The reference changelog establishes the browse gesture and R20 establishes the one-ruler layout. The minimum column width and overflow behavior are Taskovsky choices. Physical-device, trackpad and right-to-left gesture checks remain open.
+
+
+<a id="mobile-task-row-swipes"></a>
+
+### TASK-MOBILE-SWIPE-001 — Quick actions from iPhone task rows
+
+[Change contract](../changes/mobile-task-row-swipes-2026-11-10.md). The iPhone source manifest SHA-256 is `2d85b76b22249eb736dc97f592cd2a30286c70483f5d89455b50dbc1963f9e04`. The 665 Mac tests and strict release signature check used manifest SHA-256 `97a20a59f2485c794d4a1d3d2586b4f372d636d9ca891ba84a15e7c01ca816ce`. Mac inputs are source-identical.
+
+Four focused simulator tests and ten neighboring workflow checks passed on the same binary, with zero failures, skips or runtime warnings. The focused tests covered both swipe directions, explicit taps, staged Schedule cancellation, Priority and Move, Complete, Reopen, Trash, Restore and task-detail Undo. The saved-file audit confirmed that Priority and Move changed only the selected task's priority, list and update timestamp. Completing, reopening, trashing and restoring the task left only the update timestamp changed. Settings were byte-identical in both workflows. The simulator was removed. The reference documents the action categories. The edge assignment and tap requirement are Taskovsky choices. Physical-device, VoiceOver and right-to-left checks remain open.
+
+The same snapshot also passed the recurring Month reschedule, skip, Undo and relaunch test. [Full Month](../changes/mobile-calendar-month-scroll-2026-11-10.md) now holds its visible week while task detail, capture and schedule edits are active and while a schedule write or Undo is in progress. The saved-file audit matched the exact next occurrence, shifted reminder and unchanged settings. The task-list and task-detail action menus have separate accessibility identifiers. Conversion, duplication, archived-task Move, pinning, recoverable Trash and named purge passed. Batch edits changed only the selected records, and Month browsing left the workspace and settings byte-identical. The earlier full regression exposed one Month viewport failure and six menu-selection failures. All seven passed on this snapshot.
+
+
+<a id="mobile-calendar-card-swipe"></a>
+
+### CAL-MOBILE-CARD-SWIPE-001 — Swipe to open a recurring Calendar schedule
+
+[Change contract](../changes/mobile-calendar-card-swipe-2026-11-10.md). The exact iPhone source manifest SHA-256 is `c98be5615327c8df593b5ac890077055915e13195eae7711ed8efcd62668efba`. Mac inputs match the snapshot with 665 passing Mac tests and strict release signature verification, manifest SHA-256 `97a20a59f2485c794d4a1d3d2586b4f372d636d9ca891ba84a15e7c01ca816ce`.
+
+Eleven focused iPhone simulator tests passed with zero failures, skips or runtime warnings. A title swipe opened Schedule in Month and Agenda. The wrong direction, projected cards, nonrecurring tasks and terminal series did not open the editor. Month Cancel preserved the visible week and the exact fixture bytes. The title still opened task detail on tap and the context menu remained available. Agenda saved the next occurrence, restored the prior schedule through Undo and kept the saved next occurrence after relaunch. The selected checklist, grip and Tasks list workflows passed. Both Month resize handles still worked across week rows, and their saved ranges matched the expected civil dates. Saving and applying a styled task template passed on this snapshot after the older regression encountered the task-menu identifier collision. The Mac fixture reader verified the saved template workflow without writes.
+
+The Agenda fixture kept the task ID and all unrelated fields and moved the manual reminder by the same seven days. Its sole settings change was the explicitly selected Agenda mode. The disposable simulator was removed. TickTick documents the right swipe and date popup. Taskovsky uses its own staged editor and direction mirrors in right-to-left layouts. Physical-device, right-to-left and VoiceOver gesture checks remain open.
+
+
+<a id="mobile-task-schedule-skip"></a>
+
+### TASK-MOBILE-SKIP-001 — Skip a recurrence from the iPhone Tasks schedule editor
+
+[Change contract](../changes/mobile-task-schedule-skip-2026-11-10.md). The exact iPhone source manifest SHA-256 is `dedc11b03677cfff357e8e1a2428e91288f756eeb0b329ae3a6495a20156053e`. Mac inputs match the snapshot with 665 passing tests and strict release signature verification, manifest SHA-256 `97a20a59f2485c794d4a1d3d2586b4f372d636d9ca891ba84a15e7c01ca816ce`.
+
+Eleven distinct focused iPhone simulator checks passed across two runs of the same application binary. The first run exposed two test issues. The relaunch test targeted the hidden All list, and the row test tapped a button partially covered by the home indicator. The second run used the fixture's Inbox and scrolled the entire button into view. All six rerun tests passed with zero failures, skips or runtime warnings. Only UI test source changed between runs, and both application executable hashes matched. The swipe and detail routes opened the same Schedule editor. Keep editing restored the draft time toggle. Cancel discarded the staged skip and the unsaved time change. A confirmed skip advanced the task and offered Undo. The detail path showed the new date after relaunch, and the terminal occurrence lacked the skip action. An injected write failure kept the stage retryable and left both files byte-identical. The Calendar, Board and Timeline schedule and Undo regressions and ordinary custom-repeat editing also passed.
+
+The detail save moved the same task and manual reminder by seven days and preserved every unrelated field and setting. The swipe and Undo round trip left only the update timestamp changed. The disposable simulator was removed. The reference documents the swipe and date-popup action. Taskovsky uses its shared staged editor with separate Tasks and Calendar feedback. Physical-device and VoiceOver checks remain open.
+
+<a id="mobile-calendar-month-titles-full-regression"></a>
+
+### Earlier 304-test iPhone regression
+
+The older Month-card title snapshot had 296 passes and eight failures. One failure followed a Month viewport shift after a recurrence move. The other seven hit the shared task menu identifier. All eight later passed in the focused [task-row swipe](#mobile-task-row-swipes) and [Calendar-card swipe](#mobile-calendar-card-swipe) snapshots. The older run remains recorded as failed.
+
+Thirty-nine audit groups passed for the older run, including 75 round-trip file fixtures and 74 Mac reloads without writes. The separate failed-case audit confirmed byte-identical settings in all eight. Seven left their workspace files byte-identical. The Month case saved its intended one-occurrence move and protection format before the viewport failure. The disposable simulator was removed. The archived result SHA-256 is `c633e1639ee253baf344bfac314ad948c039f69e7b709422481dd65332b787f1`.
+
+
+<a id="mac-task-skip-occurrence"></a>
+
+### TASK-MAC-SKIP-001 — Skip a recurrence from Mac Tasks
+
+[Change contract](../changes/mac-task-skip-occurrence-2026-11-10.md). The source manifest SHA-256 is `be5cad280cf16ed99b9453393bf1aa1c9afca83624178ee0eb38a56ebe830c30`. All 665 Mac tests passed, and the release passed strict signature verification on macOS 27.0.1 arm64. The guarded QA copy refused launch without the exact disposable paths. Copies of its executable and the release executable were byte-identical after removal of their local signatures.
+
+The native row context menu and detail More actions opened a confirmation naming the task. Escape left the workspace and settings bytes unchanged. The detail command advanced the occurrence and offered Undo in the existing task toast. Undo restored the schedule and left only the selected task's update timestamp changed. A second skip from the row menu moved the same task's one-hour window and manual reminder by seven days. On relaunch the detail showed 17 November at 14:00 and its 13:30 reminder. Ordinary, archived and terminal tasks lacked the command. The terminal task was checked in both menus after relaunch. The stored task identity, unrelated decoded records and settings were preserved. Relaunch made no writes. The QA app was closed.
+
+The reference documents the right-click command. Taskovsky adds the named confirmation, the task-detail shortcut and the existing five-second Undo behavior. The iPhone source and tests are identical to the previously verified snapshot, manifest SHA-256 `dedc11b03677cfff357e8e1a2428e91288f756eeb0b329ae3a6495a20156053e`. Mac dark appearance and VoiceOver were outside this native check.
+
+
+<a id="foreign-html-paragraph-paste"></a>
+
+### RICH-CLIPBOARD-004 — Preserve supported HTML paragraphs in pasted descriptions
+
+[Change contract](../changes/rich-description-foreign-html-blocks-2026-11-10.md). The exact source manifest SHA-256 is `81e88718df8ee9af2d13b1f75815b067414f8e53b117f465f37fe317663af075`. All 669 Mac tests passed, including four new importer cases, and the Mac release passed strict signature verification. Five focused iPhone simulator tests passed with zero failures, skips or runtime warnings.
+
+Mac native ordinary paste rendered a heading, quote, bullet and numbered list, and a three-paragraph code block with indentation and a blank line. Undo restored the old body, Redo restored the imported formatting and the formatted description reopened after relaunch without writing the files. Paste as Plain Text kept the same characters without styles. The iPhone workflow verified the two paste paths, Undo, Redo, Done and relaunch. Saved-file audits on both platforms confirmed exact text and paragraph ranges, the shared code block identity, the italic run, unrelated fields and byte-identical settings. Mac QA files, the prior guarded bundle and QA preferences were restored. Both disposable iPhone simulators were removed.
+
+The iPhone simulator screenshot showed a replacement glyph for the heading emoji. The saved UTF-16 text was exact, and the Mac native capture rendered the emoji. Physical iPhone and VoiceOver were outside this check. The reference guide describes supported rich paste and editor formats. The semantic HTML mapping is a Taskovsky choice.

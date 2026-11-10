@@ -1983,3 +1983,71 @@ extension ReadOnlyWorkspaceTests {
         XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
     }
 }
+
+extension ReadOnlyWorkspaceTests {
+    func testTaskBatchIsOneAtomicWriteWithStaleAndFailedWriteProtection() async throws {
+        let first = TaskItem(title: "First")
+        let second = TaskItem(title: "Second")
+        let other = TaskItem(title: "Other", body: "Keep this")
+        let files = try fixture(WorkspaceData(tasks: [first, second, other]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let denied = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { _, _ in
+            throw FixtureWriteError.denied
+        }
+        let start = try await denied.load()
+        let batch = TaskBatchEdit(ids: [second.id, first.id], action: .priority(.high))
+        guard case .persistenceFailed = await denied.apply(batch, expected: start.revision) else {
+            return XCTFail("Expected a disk refusal")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        assertRefused(await repo.apply(TaskBatchEdit(ids: [first.id, UUID()], action: .priority(.high)),
+                                       expected: start.revision), .batch(.invalidSelection))
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+        guard case .saved(let saved) = await repo.apply(batch, expected: start.revision) else {
+            return XCTFail("Expected both changes to be confirmed after replacement")
+        }
+        XCTAssertEqual(saved.snapshot.workspace.tasks.map(\.priority), [.high, .high, .none])
+        XCTAssertEqual(saved.snapshot.workspace.tasks.last, other)
+        assertRefused(await repo.apply(batch, expected: start.revision), .stale)
+        guard case .unchanged = await denied.apply(batch, expected: saved.revision) else {
+            return XCTFail("An identical batch should need no write")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+}
+
+extension ReadOnlyWorkspaceTests {
+    func testCalendarDetailsSaveResetAndKeepOtherSettingsBytes() async throws {
+        let files = try fixture(WorkspaceData(tasks: [TaskItem(title: "Do not rewrite this")]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let prefix = "{\n \"futureSetting\" : [1, 2], \"calendarOptions\" : "
+        let suffix = ", \"defaultDurationMinutes\" : 45\n}\n"
+        let original = Data((prefix + #"{"showDetails":false}"# + suffix).utf8)
+        try original.write(to: files.settings)
+        let repo = repository(files), start = try await repo.load()
+        var draft = start.snapshot.settings.calendarOptions
+        XCTAssertFalse(draft.showDetails)
+        draft.showDetails = true
+        guard case .saved(let saved) = await repo.saveCalendarOptions(draft, expected: start.revision) else {
+            return XCTFail("Expected Show Details to save")
+        }
+        let reloaded = try await repo.load()
+        XCTAssertTrue(reloaded.snapshot.settings.calendarOptions.showDetails)
+        XCTAssertTrue(reloaded.snapshot.settingsBytes.starts(with: prefix.utf8))
+        XCTAssertTrue(String(decoding: reloaded.snapshot.settingsBytes, as: UTF8.self).hasSuffix(suffix))
+        draft.showDetails = false
+        guard case .saved(let reset) = await repo.saveCalendarOptions(draft, expected: saved.revision) else {
+            return XCTFail("Expected Show Details to clear")
+        }
+        XCTAssertFalse(reset.snapshot.settings.calendarOptions.showDetails)
+        XCTAssertFalse(String(decoding: reset.snapshot.settingsBytes, as: UTF8.self).contains("showDetails"))
+        XCTAssertTrue(reset.snapshot.settingsBytes.starts(with: prefix.utf8))
+        XCTAssertTrue(String(decoding: reset.snapshot.settingsBytes, as: UTF8.self).hasSuffix(suffix))
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+    }
+}

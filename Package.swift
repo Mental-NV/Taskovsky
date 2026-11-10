@@ -32,6 +32,7 @@ let domainSources = [
     "TaskCreation.swift",
     "TaskTemplateChange.swift",
     "TaskLifecycle.swift",
+    "TaskBatchEdit.swift",
     "TaskMetadataChange.swift"
 ]
 let desktopSources = [
@@ -54,14 +55,16 @@ let package = Package(
     products: [
         .executable(name: "Taskovsky", targets: ["Taskovsky"]),
         .library(name: "TaskovskyDomain", targets: ["TaskovskyDomain"]),
+        .library(name: "TaskovskyClipboard", targets: ["TaskovskyClipboard"]),
         .library(name: "TaskovskyWorkspace", targets: ["TaskovskyWorkspace"])
     ],
     targets: [
         .target(name: "TaskovskyDomain", path: "Sources/TaskovskyCore", exclude: desktopSources, sources: domainSources),
         .target(name: "TaskovskyWorkspace", dependencies: ["TaskovskyDomain"]),
+        .target(name: "TaskovskyClipboard", dependencies: ["TaskovskyDomain"]),
         .target(name: "TaskovskyCore", dependencies: ["TaskovskyDomain"], exclude: domainSources),
-        .executableTarget(name: "Taskovsky", dependencies: ["TaskovskyCore"]),
-        .testTarget(name: "TaskovskyCoreTests", dependencies: ["TaskovskyCore"]),
+        .executableTarget(name: "Taskovsky", dependencies: ["TaskovskyCore", "TaskovskyClipboard"]),
+        .testTarget(name: "TaskovskyCoreTests", dependencies: ["TaskovskyCore", "TaskovskyClipboard"]),
         .testTarget(name: "TaskovskyDomainTests", dependencies: ["TaskovskyDomain"]),
         .testTarget(name: "TaskovskyWorkspaceTests", dependencies: ["TaskovskyDomain", "TaskovskyWorkspace"])
     ],

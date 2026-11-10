@@ -19,23 +19,6 @@ struct PhoneCalendarEditRequest: Identifiable {
     let mode: PhoneCalendarEditMode
 }
 
-struct PhoneCalendarFeedback: View {
-    @ObservedObject var model: PhoneWorkspaceModel
-
-    var body: some View {
-        if let notice = model.calendarNotice {
-            HStack {
-                Text(notice).font(.footnote).accessibilityIdentifier("calendarScheduleNotice")
-                if model.canUndoCalendar {
-                    Button("Undo") { Task { await model.undoCalendarSchedule() } }
-                        .frame(minWidth: 44, minHeight: 44)
-                        .accessibilityIdentifier("undoCalendarSchedule")
-                }
-            }
-        }
-    }
-}
-
 struct PhoneCalendarArrangeSheet: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: PhoneWorkspaceModel
@@ -78,7 +61,7 @@ struct PhoneCalendarArrangeSheet: View {
             } footer: {
                 Text("Schedule tasks for \(focus.formatted(date)).")
             }
-            if model.calendarNotice != nil { Section { PhoneCalendarFeedback(model: model) } }
+            if model.scheduleNotice(in: .calendar) != nil { Section { PhoneScheduleFeedback(model: model, surface: .calendar) } }
             if groups.isEmpty {
                 Text("No tasks to arrange").foregroundStyle(.secondary).accessibilityIdentifier("arrangeEmpty")
             }
@@ -148,10 +131,7 @@ struct PhoneCalendarEditSheet: View {
             Form {
                 Section { Text(request.task.title).font(.headline) }
                 if skipOccurrence {
-                    Section {
-                        Text("Done moves this open task to its next scheduled occurrence.")
-                        Button("Keep editing") { skipOccurrence = false }
-                    }
+                    PhoneOccurrenceSkipStage { skipOccurrence = false }
                 } else if restoreOccurrence {
                     Section {
                         Text("Done restores the original schedule for this occurrence.")

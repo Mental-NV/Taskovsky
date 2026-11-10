@@ -1,8 +1,9 @@
 import SwiftUI
 import AppKit
 import TaskovskyCore
+import TaskovskyClipboard
 
-/// Native AppKit rich-text body editor (no WebViews, no HTML).
+/// Native AppKit rich-text body editor.
 ///
 /// An `NSTextView` renders the plain body with `RichBody` styles; every edit
 /// (typing or toolbar) reports `(body, rich)` through `onChange`, where
@@ -34,7 +35,13 @@ final class RichBodyTextView: NSTextView {
               arguments.contains("--workspace") else { return nil }
         let pasteboard = NSPasteboard.withUniqueName()
         if let fixture = arguments.firstIndex(of: "--qa-plain-clipboard"), arguments.indices.contains(fixture + 1) {
-            pasteboard.setString(arguments[fixture + 1], forType: .string)
+            let item = NSPasteboardItem()
+            item.setString(arguments[fixture + 1], forType: .string)
+            if let html = arguments.firstIndex(of: "--qa-html-clipboard"), arguments.indices.contains(html + 1) {
+                item.setData(Data(arguments[html + 1].utf8), forType: .html)
+            }
+            pasteboard.clearContents()
+            pasteboard.writeObjects([item])
         }
         return pasteboard
     }()
@@ -127,10 +134,16 @@ final class RichBodyTextView: NSTextView {
     }
 
     override func pasteAsPlainText(_ sender: Any?) {
-        guard let board = Self.qaClipboard else { super.pasteAsPlainText(sender); return }
-        if let text = board.string(forType: .string) {
-            (delegate as? RichBodyEditor.Coordinator)?
-                .pasteClipboard(.replace(selectedRange(), with: text, style: .plain), into: self, length: text.utf16.count)
+        guard isEditable, !hasMarkedText() else { return }
+        let board = Self.descriptionClipboard
+        if selectedRanges.count == 1, let item = Self.foreignItem(from: board) {
+            if let text = item.string(forType: .string) ?? Self.foreignFragment(from: item, plain: nil)?.text {
+                pasteLiteral(text)
+            }
+        } else if Self.qaClipboard == nil {
+            super.pasteAsPlainText(sender)
+        } else if let text = board.string(forType: .string) {
+            pasteLiteral(text)
         }
     }
 
@@ -140,15 +153,25 @@ final class RichBodyTextView: NSTextView {
             if Self.qaClipboard == nil { super.paste(sender) }
             return
         }
-        let board = Self.qaClipboard ?? .general
+        let board = Self.descriptionClipboard
         let coordinator = delegate as? RichBodyEditor.Coordinator
         let data = board.data(forType: Self.fragmentType)
-        if let text = board.string(forType: .string) {
-            if let data, let fragment = RichBodyClipboard.decode(data, matching: text) {
-                coordinator?.pasteClipboard(.paste(selectedRange(), fragment: fragment), into: self,
-                                            length: fragment.text.utf16.count)
-                return
-            }
+        let text = board.string(forType: .string)
+        if let data, let text, let fragment = RichBodyClipboard.decode(data, matching: text) {
+            coordinator?.pasteClipboard(.paste(selectedRange(), fragment: fragment), into: self,
+                                        length: fragment.text.utf16.count)
+            return
+        }
+        if let item = Self.foreignItem(from: board) {
+            let plain = item.string(forType: .string)
+            let fragment = data == nil ? Self.foreignFragment(from: item, plain: plain) : nil
+            if let fragment,
+               coordinator?.pasteClipboard(.paste(selectedRange(), fragment: fragment), into: self,
+                                            length: fragment.text.utf16.count) == true { return }
+            if let literal = plain ?? fragment?.text { pasteLiteral(literal) }
+            return
+        }
+        if let text {
             if data == nil, board.availableType(from: [.rtfd, .rtf, .html, .string]) == .string,
                !selectionStartsInCodeParagraph,
                let fragment = RichBodyClipboard.formattedPlainText(text, replacing: selectedRange(), in: string),
@@ -156,12 +179,24 @@ final class RichBodyTextView: NSTextView {
                                             length: fragment.text.utf16.count) == true {
                 return
             }
-            if Self.qaClipboard != nil {
-                coordinator?.pasteClipboard(.replace(selectedRange(), with: text, style: .plain), into: self,
-                                            length: text.utf16.count)
-            }
+            if Self.qaClipboard != nil { pasteLiteral(text) }
         }
         if Self.qaClipboard == nil { super.paste(sender) }
+    }
+
+    private func pasteLiteral(_ text: String) {
+        (delegate as? RichBodyEditor.Coordinator)?
+            .pasteClipboard(.replace(selectedRange(), with: text, style: .plain), into: self, length: text.utf16.count)
+    }
+
+    private static func foreignItem(from board: NSPasteboard) -> NSPasteboardItem? {
+        guard let items = board.pasteboardItems, items.count == 1, let item = items.first,
+              item.types.contains(.html) || item.types.contains(.rtf) else { return nil }
+        return item
+    }
+
+    private static func foreignFragment(from item: NSPasteboardItem, plain: String?) -> RichBody? {
+        ForeignRichPaste.fragment(plain: plain, html: item.data(forType: .html), rtf: item.data(forType: .rtf))
     }
 
     private func handleQAClipboardKey(_ event: NSEvent) -> Bool {

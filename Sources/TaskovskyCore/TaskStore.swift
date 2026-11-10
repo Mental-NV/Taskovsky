@@ -528,6 +528,16 @@ public final class TaskStore: ObservableObject {
         commitLifecycle { $0.moveTasksToList(ids: ids, listID: listID, now: Date()) }
     }
 
+    public func applyBatch(_ edit: TaskBatchEdit) throws -> Bool {
+        let current = TaskLifecycle(data: data, completionSnapshots: completionSnapshots)
+        guard let staged = try edit.applying(to: current, settings: settings, now: Date(),
+                                            calendar: settings.calendar) else { return true }
+        guard writeWorkspace(staged.data) else { return false }
+        data = staged.data
+        completionSnapshots = staged.completionSnapshots
+        return true
+    }
+
     /// Atomically reorders tasks: moves `moving` (in the given relative order)
     /// to just before `target`, or just after it when `afterTarget` is true.
     /// Validates the whole batch first: unknown or deleted records, duplicate

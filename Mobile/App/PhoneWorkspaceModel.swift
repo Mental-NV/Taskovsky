@@ -1,8 +1,11 @@
 import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
+import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, taskSort = "task-sort", createdGrouping = "created-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+
+enum PhoneScheduleSurface: Hashable { case tasks, calendar }
 
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
@@ -25,8 +28,12 @@ final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var createdTaskID: UUID?
     @Published private(set) var creationNotice: String?
     @Published private(set) var lifecycleNotice: String?
-    @Published private(set) var calendarNotice: String?
-    @Published private var calendarUndo: WorkspaceCalendarUndo?
+    private struct ScheduleFeedback {
+        let message: String
+        let undo: WorkspaceCalendarUndo?
+    }
+
+    @Published private var scheduleFeedback: [PhoneScheduleSurface: ScheduleFeedback] = [:]
     @Published private var lifecycleUndo: WorkspaceLifecycleUndo?
     @Published var captureIsComposing = false
     @Published var confirmCaptureDiscard = false
@@ -192,12 +199,12 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
-            if isQA && (qaCase == .occurrence || qaCase == .skipOccurrence) {
+            if isQA && (qaCase == .occurrence || qaCase == .skipOccurrence || qaCase == .skipOccurrenceSaveFailure) {
                 var data = initial.workspace
                 guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
                 data.tasks[0].recurrence = .weekly
                 var settingsBytes = initial.settingsBytes
-                if qaCase == .skipOccurrence {
+                if qaCase == .skipOccurrence || qaCase == .skipOccurrenceSaveFailure {
                     guard let due = data.tasks[0].dueDate else { throw CocoaError(.fileReadCorruptFile) }
                     data.tasks[0].recurrenceEndDate = due.addingTimeInterval(7 * 86_400)
                     data.tasks[0].reminderDates = [due - 3_600]
@@ -227,6 +234,23 @@ final class PhoneWorkspaceModel: ObservableObject {
                              scheduledDuration: TaskDurationRange(start: start, end: days[2], isAllDay: true))
                 }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .monthBrowse {
+                var data = initial.workspace
+                var settings = initial.settings
+                let calendar = self.calendar
+                let month = CalendarDates.monthStart(MobilePreviewFixture.now, calendar: calendar)
+                let samples = [(-1, 12, "October review"), (0, 8, "November plan"), (1, 13, "December plan"),
+                               (2, 10, "January review"), (4, 8, "March planning")]
+                data.tasks = try samples.map { months, days, title in
+                    guard let date = calendar.date(byAdding: DateComponents(month: months, day: days), to: month) else {
+                        throw CocoaError(.fileReadCorruptFile)
+                    }
+                    return TaskItem(title: title, dueDate: date)
+                }
+                settings.calendarOptions.mode = .month
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data),
+                                                        settingsBytes: JSONEncoder().encode(settings))
             }
             if isQA && qaCase == .monthSpans {
                 var data = initial.workspace
@@ -444,6 +468,38 @@ final class PhoneWorkspaceModel: ObservableObject {
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
                 pasteboard.string = String(word)
             }
+            if isQA && (qaCase == .richForeignPaste || qaCase == .richForeignHTMLBlocks || qaCase == .richForeignRTFPaste) {
+                var data = initial.workspace
+                guard data.tasks.count > 1,
+                      let pasteboard = RichEditorTextView.pasteboard(for: directory.lastPathComponent) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                for index in 0...1 {
+                    data.tasks[index].body = "Prior"
+                    data.tasks[index].richBody = nil
+                }
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+                let item: [String: Any]
+                if qaCase == .richForeignPaste {
+                    let plain = "Bold 🧩 italic e\u{301}\nReview safe **literal**"
+                    let html = """
+                    <p><strong>Bold 🧩 <em>italic e&#769;</em></strong></p>
+                    <p><a href="https://example.test/review">Review</a>
+                      <a href="file:///taskovsky-fixture.txt">safe</a> **literal**</p>
+                    """
+                    item = [UTType.utf8PlainText.identifier: plain, UTType.html.identifier: Data(html.utf8)]
+                } else if qaCase == .richForeignHTMLBlocks {
+                    let plain = "Review 🧩\nA quoted e\u{301}\nOne bullet\nFirst number\n  let value = 1\n\n  print(value)\nPlain end"
+                    let html = "<h2>Review 🧩</h2><blockquote>A <em>quoted</em> e&#769;</blockquote>" +
+                        "<ul><li>One bullet</li></ul><ol><li>First number</li></ol>" +
+                        "<pre><code>  let value = 1\n\n  print(value)</code></pre><p>Plain end</p>"
+                    item = [UTType.utf8PlainText.identifier: plain, UTType.html.identifier: Data(html.utf8)]
+                } else {
+                    let rtf = #"{\rtf1\ansi\deff0{\fonttbl{\f0 Helvetica;}}\f0\fs24\b Bold\b0  \i italic\i0}"#
+                    item = [UTType.rtf.identifier: Data(rtf.utf8)]
+                }
+                pasteboard.setItems([item], options: [.localOnly: true])
+            }
             if isQA && (qaCase == .richMarkdownPaste || qaCase == .richCodePaste) {
                 var data = initial.workspace
                 guard data.tasks.count > 1,
@@ -488,7 +544,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             let bootstrap = initial
             try await Task.detached { try WorkspaceBootstrap.prepare(directory: directory, initial: bootstrap) }.value
             let repo: WorkspaceFileRepository
-            if isQA && (qaCase == .saveFailure || qaCase == .summarySaveFailure) {
+            if isQA && (qaCase == .saveFailure || qaCase == .summarySaveFailure || qaCase == .skipOccurrenceSaveFailure) {
                 repo = WorkspaceFileRepository(workspaceURL: directory.appendingPathComponent("workspace.json"), settingsURL: directory.appendingPathComponent("settings.json"), write: { _, _ in throw CocoaError(.fileWriteNoPermission) })
             } else if isQA && qaCase == .afterWrite {
                 repo = WorkspaceFileRepository(workspaceURL: directory.appendingPathComponent("workspace.json"), settingsURL: directory.appendingPathComponent("settings.json"), write: { bytes, url in
@@ -618,10 +674,30 @@ final class PhoneWorkspaceModel: ObservableObject {
             return "This checklist contains ambiguous item identities."
         case .refused(.metadata(.missingChecklistItem)), .refused(.missing), .refused(.readOnlyRecord):
             return "This task or checklist item is no longer editable."
-        case .refused(.emptyTitle), .refused(.styledBody), .refused(.richBody):
+        case .refused(.emptyTitle), .refused(.styledBody), .refused(.richBody), .refused(.batch):
             return "The task edit could not be applied."
         case .persistenceFailed:
             return "Could not save the task change. You can retry."
+        }
+    }
+
+    func saveBatch(_ edit: TaskBatchEdit, expected: WorkspaceRevision) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.apply(edit, expected: expected, now: now, calendar: calendar) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Close this sheet and select tasks again."
+        case .refused(.compatibility):
+            return "This workspace contains data this build cannot safely rewrite."
+        case .refused(.batch(let reason)): return reason.batchMessage
+        case .refused: return "The selected tasks could not be changed."
+        case .persistenceFailed: return "Could not save the batch change. You can retry."
         }
     }
 
@@ -726,36 +802,50 @@ final class PhoneWorkspaceModel: ObservableObject {
         await commitSchedule { await $0.apply(edit, expected: expected, now: now) }
     }
 
+    func skipTaskOccurrence(taskID: UUID, expected: WorkspaceRevision) async -> String? {
+        await commitSchedule(feedback: (.tasks, "Occurrence skipped")) {
+            await $0.apply(.skipOccurrence, to: taskID, expected: expected, calendar: calendar, scope: .series, now: now)
+        }
+    }
+
     func saveCalendarSchedule(_ operation: CalendarScheduleOperation, taskID: UUID,
                               expected: WorkspaceRevision, scope: CalendarScheduleScope = .series) async -> String? {
         let message: String
         if case .skipOccurrence = operation { message = "Occurrence skipped" }
         else { message = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated" }
-        return await commitSchedule(calendarMessage: message) {
+        return await commitSchedule(feedback: (.calendar, message)) {
             await $0.apply(operation, to: taskID, expected: expected, calendar: calendar, scope: scope, now: now)
         }
     }
 
-    var canUndoCalendar: Bool {
-        guard canBeginEditing, let calendarUndo, let document else { return false }
-        return calendarUndo.canRestore(in: document.snapshot.workspace)
+    func scheduleNotice(in surface: PhoneScheduleSurface) -> String? {
+        scheduleFeedback[surface]?.message
     }
 
-    func undoCalendarSchedule() async {
-        guard canUndoCalendar, let calendarUndo else { return }
-        if let error = await commitSchedule(calendarMessage: "Schedule restored", action: {
-            await $0.undo(calendarUndo, now: now)
-        }) { calendarNotice = error }
+    func canUndoSchedule(in surface: PhoneScheduleSurface) -> Bool {
+        guard canBeginEditing, let undo = scheduleFeedback[surface]?.undo, let document else { return false }
+        return undo.canRestore(in: document.snapshot.workspace)
+    }
+
+    func undoSchedule(in surface: PhoneScheduleSurface) async {
+        guard canUndoSchedule(in: surface), let undo = scheduleFeedback[surface]?.undo else { return }
+        if let error = await commitSchedule(feedback: (surface, "Schedule restored"), action: {
+            await $0.undo(undo, now: now)
+        }) { showScheduleError(error, in: surface) }
     }
 
     func dropCalendarTask(_ operation: CalendarScheduleOperation, taskID: UUID,
                           expected: WorkspaceRevision, scope: CalendarScheduleScope = .series) async {
         if let error = await saveCalendarSchedule(operation, taskID: taskID, expected: expected, scope: scope) {
-            calendarNotice = error
+            showScheduleError(error, in: .calendar)
         }
     }
 
-    private func commitSchedule(calendarMessage: String? = nil,
+    private func showScheduleError(_ message: String, in surface: PhoneScheduleSurface) {
+        scheduleFeedback[surface] = ScheduleFeedback(message: message, undo: scheduleFeedback[surface]?.undo)
+    }
+
+    private func commitSchedule(feedback: (surface: PhoneScheduleSurface, message: String)? = nil,
                                 action: (WorkspaceFileRepository) async -> WorkspaceScheduleOutcome) async -> String? {
         guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
         readTicket = UUID()
@@ -764,9 +854,8 @@ final class PhoneWorkspaceModel: ObservableObject {
         switch await action(repository) {
         case .saved(let saved, let undo):
             document = saved
-            if let calendarMessage {
-                calendarUndo = undo
-                calendarNotice = calendarMessage
+            if let feedback {
+                scheduleFeedback[feedback.surface] = ScheduleFeedback(message: feedback.message, undo: undo)
             }
             return nil
         case .unchanged(let current):
@@ -790,7 +879,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             if let latest = try? await repository.load() { document = latest }
             return "The schedule or task status changed since this edit."
         case .persistenceFailed:
-            return calendarMessage == nil
+            return feedback == nil
                 ? "Could not confirm the save. Your edits are still here."
                 : "Could not confirm the save. Review the schedule before retrying."
         }
@@ -979,7 +1068,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         case .refused(.styledBody): editorError = "Formatting is protected. The description cannot be replaced with plain text."
         case .refused(.readOnlyRecord), .refused(.missing): editorError = "This task is no longer editable. Your text is kept."
         case .refused(.emptyTitle): editorError = "Enter a title before saving."
-        case .refused(.metadata), .refused(.richBody): editorError = "This task edit could not be applied."
+        case .refused(.metadata), .refused(.richBody), .refused(.batch): editorError = "This task edit could not be applied."
         case .persistenceFailed: editorError = "Could not save. Your edit is still here. Retry when storage is available."
         }
         isBusy = false

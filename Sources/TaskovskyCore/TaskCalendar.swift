@@ -24,6 +24,11 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
     public var showCompleted = true
     public var showRepeatCycles = true
     public var showChecklistItems = false
+    private var detailsOverride: Bool?
+    public var showDetails: Bool {
+        get { detailsOverride ?? false }
+        set { if newValue != showDetails { detailsOverride = newValue ? true : nil } }
+    }
     public var colorBy: CalendarColorMode = .list
     public var itemStyle: CalendarItemStyle = .filled
     public var yearStyle: CalendarYearStyle = .heatmap
@@ -79,7 +84,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         case mode, multiDayCount, multiWeekCount, showSidebar, showCompleted, showRepeatCycles,
              showChecklistItems, colorBy, itemStyle, additionalTimeZoneID, listIDs, includeInbox, tagIDs,
              yearStyle, showItemIcons, showTaskIcons, showNoteIcons, showAdditionalTimeZones, additionalTimeZones,
-             foldedHours, allDayRows
+             foldedHours, allDayRows, showDetails
     }
     public init(from decoder: Decoder) throws {
         self.init()
@@ -91,6 +96,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         showCompleted = try c.decodeIfPresent(Bool.self, forKey: .showCompleted) ?? showCompleted
         showRepeatCycles = try c.decodeIfPresent(Bool.self, forKey: .showRepeatCycles) ?? showRepeatCycles
         showChecklistItems = try c.decodeIfPresent(Bool.self, forKey: .showChecklistItems) ?? showChecklistItems
+        detailsOverride = try c.decodeIfPresent(Bool.self, forKey: .showDetails)
         colorBy = (try? c.decode(CalendarColorMode.self, forKey: .colorBy)) ?? colorBy
         itemStyle = (try? c.decode(CalendarItemStyle.self, forKey: .itemStyle)) ?? itemStyle
         yearStyle = (try? c.decode(CalendarYearStyle.self, forKey: .yearStyle)) ?? yearStyle
@@ -118,6 +124,7 @@ public struct TaskCalendarOptions: Codable, Equatable, Sendable {
         try c.encode(showCompleted, forKey: .showCompleted)
         try c.encode(showRepeatCycles, forKey: .showRepeatCycles)
         try c.encode(showChecklistItems, forKey: .showChecklistItems)
+        try c.encodeIfPresent(detailsOverride, forKey: .showDetails)
         try c.encode(colorBy, forKey: .colorBy)
         try c.encode(itemStyle, forKey: .itemStyle)
         try c.encode(yearStyle, forKey: .yearStyle)
@@ -325,6 +332,41 @@ public enum CalendarMonthZoom: Int, CaseIterable, Sendable {
     }
 }
 
+/// A rolling projection range for a vertically scrolling Month grid.
+public struct CalendarMonthBrowseWindow: Hashable, Sendable {
+    private static let weeksBeforeAndAfter = 8
+    private static let leadingReserve = 2
+    // The top week reaches the forward threshold while later weeks are still visible.
+    private static let trailingReserve = 5
+    private let firstWeek: Date
+
+    public init(around date: Date, calendar: Calendar) {
+        let week = CalendarDates.weekStart(date, calendar: calendar)
+        firstWeek = calendar.date(byAdding: .day, value: -Self.weeksBeforeAndAfter * 7, to: week) ?? week
+    }
+
+    public func days(calendar: Calendar) -> [Date] {
+        CalendarDates.days(from: firstWeek, count: (Self.weeksBeforeAndAfter * 2 + 1) * 7, calendar: calendar)
+    }
+
+    public func keeping(_ week: Date, in calendar: Calendar) -> Self {
+        let offset = calendar.dateComponents([.day], from: firstWeek, to: week).day ?? 0
+        let interior = Self.leadingReserve...(Self.weeksBeforeAndAfter * 2 - Self.trailingReserve)
+        return interior.contains(offset / 7) ? self : Self(around: week, calendar: calendar)
+    }
+
+    public func contains(_ week: Date, calendar: Calendar) -> Bool {
+        guard let offset = calendar.dateComponents([.day], from: firstWeek, to: week).day else { return false }
+        return (0...Self.weeksBeforeAndAfter * 2 * 7).contains(offset) && offset.isMultiple(of: 7)
+    }
+
+    /// A week that contains a month boundary takes the new month as its label.
+    public static func focus(forWeek week: Date, calendar: Calendar) -> Date {
+        let end = calendar.date(byAdding: .day, value: 6, to: week) ?? week
+        return max(week, CalendarDates.monthStart(end, calendar: calendar))
+    }
+}
+
 public enum CalendarDates {
     public static func monthStart(_ date: Date, calendar: Calendar) -> Date {
         calendar.dateInterval(of: .month, for: date)?.start ?? calendar.startOfDay(for: date)
@@ -447,4 +489,35 @@ public struct CalendarEntry: Identifiable, Equatable, Sendable {
 public struct CalendarProjectionResult: Sendable {
     public var entries: [CalendarEntry]
     public var truncatedTaskIDs: Set<UUID>
+}
+
+/// Presentation metadata derived from a projected entry, with no stored
+/// task changes. Time labels use the same zone as the displayed Calendar.
+public struct CalendarEntryDetails: Equatable, Sendable {
+    public let listName: String
+    public let schedule: String
+    public let compact: String
+    public var text: String { schedule + " · " + listName }
+
+    public init(entry: CalendarEntry, listNames: [UUID: String], calendar: Calendar, locale: Locale = .current) {
+        listName = entry.listID.map { listNames[$0] ?? "List unavailable" } ?? "Inbox"
+        if entry.isAllDay {
+            schedule = "All day"
+            compact = listName
+            return
+        }
+        let clock = Date.FormatStyle(date: .omitted, time: .shortened, locale: locale,
+                                     calendar: calendar, timeZone: calendar.timeZone)
+        let hasRange = entry.hasDuration && entry.start < entry.due
+        let parts = calendar.dateComponents([.hour, .minute], from: hasRange ? entry.start : entry.due)
+        compact = String(format: "%02d:%02d", parts.hour ?? 0, parts.minute ?? 0)
+        if hasRange {
+            let style = calendar.isDate(entry.start, inSameDayAs: entry.due) ? clock
+                : Date.FormatStyle(date: .abbreviated, time: .shortened, locale: locale,
+                                   calendar: calendar, timeZone: calendar.timeZone)
+            schedule = entry.start.formatted(style) + " – " + entry.due.formatted(style)
+        } else {
+            schedule = entry.due.formatted(clock)
+        }
+    }
 }

@@ -3,6 +3,7 @@ import UIKit
 import UniformTypeIdentifiers
 import TaskovskyDomain
 import TaskovskyWorkspace
+import TaskovskyClipboard
 
 struct PhoneRichFieldEditor: View {
     @ObservedObject var model: PhoneWorkspaceModel
@@ -132,7 +133,8 @@ struct PhoneRichFieldEditor: View {
     private func paragraph(_ edit: RichParagraphEdit) { apply(.paragraph(edit, selection)) }
 
     private func pasteAsPlainText() {
-        guard let text = RichEditorTextView.pasteboard(for: clipboardSession)?.string,
+        guard let board = RichEditorTextView.pasteboard(for: clipboardSession),
+              let text = RichEditorTextView.literalText(from: board),
               selection.length > 0 || !text.isEmpty else { return }
         if apply(.replace(selection, with: text, style: .plain)) { clampSelection() }
     }
@@ -318,7 +320,8 @@ struct PhoneRichTextInput: UIViewRepresentable {
             markdownArm = nil
             let edit: RichBodyEdit
             let insertedLength: Int
-            if let fragment {
+            if let fragment,
+               (try? RichBodyEdit.applying([.paste(range, fragment: fragment)], to: prior.text, rich: prior)) != nil {
                 edit = .paste(range, fragment: fragment)
                 insertedLength = fragment.text.utf16.count
             } else if recognizesPlainText, !prior.isInCodeParagraph(at: range.location),
@@ -436,8 +439,22 @@ final class RichEditorTextView: UITextView {
         return UIPasteboard(name: name, create: true)
     }
 
+    private static let foreignTypes = [UTType.html.identifier, UTType.rtf.identifier]
     private var clipboard: UIPasteboard? { Self.pasteboard(for: qaPasteboardName) }
-    private var canPasteDescription: Bool { isEditable && markedTextRange == nil && clipboard?.hasStrings == true }
+    private var canPasteDescription: Bool {
+        guard isEditable, markedTextRange == nil, let clipboard else { return false }
+        return clipboard.hasStrings || (clipboard.numberOfItems == 1 && clipboard.contains(pasteboardTypes: Self.foreignTypes))
+    }
+
+    static func literalText(from board: UIPasteboard) -> String? {
+        board.string ?? foreignFragment(from: board, plain: nil)?.text
+    }
+
+    private static func foreignFragment(from board: UIPasteboard, plain: String?) -> RichBody? {
+        guard board.numberOfItems == 1, board.contains(pasteboardTypes: foreignTypes) else { return nil }
+        return ForeignRichPaste.fragment(plain: plain, html: board.data(forPasteboardType: UTType.html.identifier),
+                                         rtf: board.data(forPasteboardType: UTType.rtf.identifier))
+    }
 
     override var keyCommands: [UIKeyCommand]? {
         guard qaPasteboardName != nil else { return super.keyCommands }
@@ -472,12 +489,16 @@ final class RichEditorTextView: UITextView {
     }
 
     override func paste(_ sender: Any?) {
-        guard canPasteDescription, let board = clipboard, let text = board.string else { return }
+        guard canPasteDescription, let board = clipboard else { return }
+        let plain = board.string
         let data = board.data(forPasteboardType: RichBodyClipboard.typeIdentifier)
-        let fragment = data.flatMap { RichBodyClipboard.decode($0, matching: text) }
-        let recognizesPlainText = data == nil && !board.contains(pasteboardTypes: [
-            UTType.rtf.identifier, UTType.rtfd.identifier, UTType.html.identifier,
-        ])
+        let fragment = if let data {
+            plain.flatMap { RichBodyClipboard.decode(data, matching: $0) }
+        } else {
+            Self.foreignFragment(from: board, plain: plain)
+        }
+        guard let text = plain ?? fragment?.text else { return }
+        let recognizesPlainText = data == nil && !board.contains(pasteboardTypes: Self.foreignTypes + [UTType.rtfd.identifier])
         pasteContent?(self, text, fragment, recognizesPlainText)
     }
 }

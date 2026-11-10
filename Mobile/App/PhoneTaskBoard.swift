@@ -231,7 +231,7 @@ struct PhoneScopedTaskBoard: View {
             Picker("Group board by", selection: $grouping) {
                 ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
             }.pickerStyle(.segmented).accessibilityIdentifier("scopedBoardGrouping").padding(.horizontal, 16)
-            PhoneCalendarFeedback(model: model).padding(.horizontal, 16)
+            PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
                     HStack(spacing: 4) {

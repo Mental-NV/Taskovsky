@@ -35,6 +35,7 @@ public enum WorkspaceFieldPatch: Sendable {
 public enum WorkspaceWriteRefusal: Equatable, Sendable {
     case stale, compatibility, missing, readOnlyRecord, emptyTitle, styledBody
     case metadata(TaskMetadataValidation), richBody(RichBodyEditError)
+    case batch(TaskBatchRefusal)
 }
 public enum WorkspaceWriteOutcome: Sendable {
     case saved(WorkspaceDocument), unchanged(WorkspaceDocument)
@@ -264,6 +265,29 @@ public actor WorkspaceFileRepository {
             return .refused(.task(reason))
         } catch {
             return .persistenceFailed
+        }
+    }
+
+    public func apply(_ edit: TaskBatchEdit, expected: WorkspaceRevision, now: Date = Date(),
+                      calendar: Calendar? = nil) -> WorkspaceWriteOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .persistenceFailed }
+        guard current.revision == expected else { return .refused(.stale) }
+        guard current.allowsKnownFieldWrites else { return .refused(.compatibility) }
+        let settings = current.snapshot.settings
+        let lifecycle = TaskLifecycle(data: current.snapshot.workspace, completionSnapshots: completionSnapshots)
+        do {
+            guard let staged = try edit.applying(to: lifecycle, settings: settings, now: now,
+                                                 calendar: calendar ?? settings.calendar) else {
+                return .unchanged(current)
+            }
+            let outcome = saveKnownWorkspace(staged.data, current: current)
+            if case .saved = outcome { completionSnapshots = staged.completionSnapshots }
+            return outcome
+        } catch let reason as TaskBatchRefusal {
+            return .refused(.batch(reason))
+        } catch {
+            return .refused(.batch(.readOnlyRecord))
         }
     }
 

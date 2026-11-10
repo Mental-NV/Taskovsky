@@ -14,6 +14,12 @@ private struct PhoneOccurrenceChange {
     let drag: PhoneCalendarDrag
     let operation: CalendarScheduleOperation
 }
+private struct PhoneBatchRequest: Identifiable {
+    let id = UUID()
+    let scope: String
+    let tasks: [TaskItem]
+    let document: WorkspaceDocument
+}
 enum PhoneStyle {
     static let accent = Color(red: 70/255, green: 112/255, blue: 250/255)
     static let page = Color(uiColor: .systemGroupedBackground)
@@ -39,6 +45,8 @@ struct MobileRootView: View {
     @State private var tagDrawerError: String?
     @State private var collapsedFolders: Set<UUID> = []
     @State private var selectedTask: PhoneTaskRoute?
+    @State private var revealedTaskSwipe: PhoneTaskSwipeSelection?
+    @State private var taskRowEditor: PhoneTaskRowEditor?
     @State private var search = TaskFilter(name: "", status: .all)
     @State private var focus = MobilePreviewFixture.day
     @State private var sessionCalendarMode: TaskCalendarMode?
@@ -48,6 +56,9 @@ struct MobileRootView: View {
     @State private var viewPicker = false
     @State private var jumpDatePresented = false
     @State private var showTaskSort = false
+    @State private var showTaskActions = false
+    @State private var batchRequest: PhoneBatchRequest?
+    @State private var batchNotice: String?
     @State private var showArrange = false
     @State private var showCalendarActions = false
     @State private var calendarEdit: PhoneCalendarEditRequest?
@@ -171,7 +182,10 @@ struct MobileRootView: View {
                             }
                     } else {
                         Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary)
-                        if section == .tasks && showsTaskSort(in: snapshot.workspace) { taskSortMenu }
+                        if section == .tasks && showsTaskSort(in: snapshot.workspace) {
+                            taskSortMenu
+                            if destination != .trash { taskActions(snapshot.workspace) }
+                        }
                     }
                 }.padding(.horizontal, 16)
                 Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
@@ -179,7 +193,10 @@ struct MobileRootView: View {
                     Button(model.activeDraft != nil ? "Continue your edit" : "Resume saved edit", action: resumeEdit).frame(minHeight: 44)
                 }
                 if let notice = model.creationNotice { Text(notice).font(.caption).accessibilityIdentifier("captureSuccess") }
-                if selectedTask == nil { PhoneLifecycleFeedback(model: model).padding(.horizontal, 16) }
+                if selectedTask == nil {
+                    PhoneLifecycleFeedback(model: model).padding(.horizontal, 16)
+                    if section == .tasks { PhoneScheduleFeedback(model: model, surface: .tasks).padding(.horizontal, 16) }
+                }
                 if model.recoveredCapture != nil || model.captureDraft != nil {
                     Button("Resume new task", action: resumeCapture).frame(minHeight: 44).disabled(model.activeDraft != nil)
                 }
@@ -189,6 +206,10 @@ struct MobileRootView: View {
                 switch section {
                 case .tasks:
                     Text(title(destination, in: snapshot.workspace)).font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
+                    if let batchNotice {
+                        Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("batchNotice")
+                    }
                     taskDestination(snapshot.workspace)
                 case .calendar:
                     if let preferenceNotice {
@@ -199,7 +220,7 @@ struct MobileRootView: View {
                         Text(calendarChecklistError).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("calendarChecklistError").padding(.horizontal, 16)
                     }
-                    PhoneCalendarFeedback(model: model).padding(.horizontal, 16)
+                    PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
                     calendarBody(data: snapshot.workspace)
                 case .search:
                     PhoneSearchView(model: model, criteria: $search, data: snapshot.workspace,
@@ -251,6 +272,16 @@ struct MobileRootView: View {
             if case .tag(let id) = destination, !ids.contains(id) { destination = visibility.fallback }
         }
         .sheet(item: $selectedTask) { route in PhoneTaskSheet(model: model, route: route, close: { selectedTask = nil }) }
+        .sheet(item: $taskRowEditor) { editor in
+            switch editor {
+            case .schedule(let request): PhoneScheduleSheet(model: model, request: request)
+            case .priority(let request): PhoneTaskMetadataSheet(model: model, request: request)
+            case .move(let request): PhoneTaskMoveSheet(model: model, request: request)
+            }
+        }
+        .sheet(item: $batchRequest) { request in taskBatchSheet(request).presentationDetents([.large]) }
+        .onChange(of: destination) { _, _ in batchNotice = nil; revealedTaskSwipe = nil }
+        .onChange(of: section) { _, _ in batchNotice = nil; revealedTaskSwipe = nil }
         .sheet(item: $calendarPreferenceRoute) { route in
             PhoneCalendarPreferences(model: model, route: route)
         }
@@ -326,6 +357,37 @@ struct MobileRootView: View {
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    private func taskActions(_ data: WorkspaceData) -> some View {
+        let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        return circle("Tasks actions", symbol: "ellipsis") { showTaskActions = true }
+            .accessibilityIdentifier("taskListActions")
+            .popover(isPresented: $showTaskActions, arrowEdge: .top) {
+                Button {
+                    guard let document = model.document else { return }
+                    showTaskActions = false
+                    batchNotice = nil
+                    let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+                    batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
+                } label: {
+                    Label("Select Tasks", systemImage: "checklist")
+                        .frame(minHeight: 44, alignment: .leading)
+                }.buttonStyle(.plain).disabled(!model.canBeginEditing || tasks.isEmpty)
+                    .accessibilityIdentifier("batchOpen")
+                    .padding(.horizontal, 16).padding(.vertical, 6)
+                    .presentationCompactAdaptation(.popover)
+            }
+    }
+
+    private func taskBatchSheet(_ request: PhoneBatchRequest) -> some View {
+        let data = request.document.snapshot.workspace
+        return TaskBatchSheet(scope: request.scope, tasks: request.tasks, lists: data.lists,
+                              tags: data.tags, calendar: calendar, today: model.now) { edit in
+            let error = await model.saveBatch(edit, expected: request.document.revision)
+            if error == nil { batchNotice = "Batch change applied." }
+            return error
+        }
+    }
+
     private var createdGroupingChoice: some View {
         Button {
             showTaskSort = false
@@ -398,7 +460,7 @@ struct MobileRootView: View {
             }
         } : nil
         return VStack(spacing: 0) {
-            PhoneCalendarFeedback(model: model).padding(.horizontal, 16)
+            PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
             TaskTimelineView(scope: scope, data: data, now: model.now, calendar: calendar, color: PhoneEntityColor.read,
                              open: { selectedTask = PhoneTaskRoute(id: $0) },
                              arrange: model.canBeginEditing ? editTimelineSchedule : nil,
@@ -520,45 +582,89 @@ struct MobileRootView: View {
         let ordered = TaskHierarchy.displayOrder(tasks)
         return LazyVStack(spacing: 0) {
             ForEach(ordered, id: \.task.id) { task, depth in
-                HStack(spacing: 0) {
-                    PhoneCompletionButton(model: model, task: task, lists: lists)
-                    let titleButton = Button {
-                        if let searchQuery { model.rememberSearch(searchQuery) }
-                        selectedTask = PhoneTaskRoute(id: task.id)
-                    } label: {
-                        HStack(spacing: 12) {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(task.title).font(.body).lineLimit(2)
-                                    .foregroundStyle(task.completedAt != nil || task.wontDoAt != nil ? .secondary : .primary)
-                                if let searchQuery {
-                                    PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
+                let actions = searchQuery == nil ? taskSwipeActions(for: task, lists: lists) : ([], [])
+                PhoneTaskSwipeRow(taskID: task.id, leading: actions.0, trailing: actions.1, selection: $revealedTaskSwipe) { gesture in
+                    HStack(spacing: 0) {
+                        PhoneCompletionButton(model: model, task: task, lists: lists)
+                        let titleButton = Button {
+                            if let searchQuery { model.rememberSearch(searchQuery) }
+                            revealedTaskSwipe = nil
+                            selectedTask = PhoneTaskRoute(id: task.id)
+                        } label: {
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(task.title).font(.body).lineLimit(2)
+                                        .foregroundStyle(task.completedAt != nil || task.wontDoAt != nil ? .secondary : .primary)
+                                    if let searchQuery {
+                                        PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
+                                    }
+                                    if let due = task.dueDate {
+                                        Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption)
+                                            .foregroundStyle(due < calendar.startOfDay(for: model.now) ? .red : .secondary)
+                                    }
                                 }
-                                if let due = task.dueDate {
-                                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption)
-                                        .foregroundStyle(due < calendar.startOfDay(for: model.now) ? .red : .secondary)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                            if task.richBody != nil {
-                                Image(systemName: "textformat").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(minHeight: 48).padding(.trailing, 18).padding(.vertical, 3)
-                        .contentShape(Rectangle())
-                    }.buttonStyle(.plain).accessibilityLabel(task.title)
-                    if let list = sectionList, !list.isArchived, model.canBeginEditing, task.parentID == nil {
-                        titleButton
-                            .contextMenu {
-                                TaskSectionMoveMenu(sections: list.sections, current: task.sectionID) {
-                                    movePhoneSectionTask(task.id, to: $0, listID: list.id)
+                                Spacer(minLength: 0)
+                                if task.richBody != nil {
+                                    Image(systemName: "textformat").font(.caption).foregroundStyle(.secondary)
                                 }
                             }
-                        PhoneSectionTaskGrip(task: task, session: sectionListDragSession, listID: list.id)
-                    } else { titleButton }
-                }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
+                            .frame(minHeight: 48).padding(.trailing, 18).padding(.vertical, 3)
+                            .contentShape(Rectangle())
+                        }.buttonStyle(.plain).accessibilityLabel(task.title)
+                            .background {
+                                if !actions.0.isEmpty || !actions.1.isEmpty { gesture }
+                            }
+                            .accessibilityActions {
+                                ForEach(actions.0 + actions.1) { action in
+                                    Button(action.title) {
+                                        revealedTaskSwipe = nil
+                                        action.run()
+                                    }
+                                }
+                            }
+                        if let list = sectionList, !list.isArchived, model.canBeginEditing, task.parentID == nil {
+                            titleButton
+                                .contextMenu {
+                                    TaskSectionMoveMenu(sections: list.sections, current: task.sectionID) {
+                                        movePhoneSectionTask(task.id, to: $0, listID: list.id)
+                                    }
+                                }
+                            PhoneSectionTaskGrip(task: task, session: sectionListDragSession, listID: list.id)
+                        } else { titleButton }
+                    }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
+                }
                 if task.id != ordered.last?.task.id { Divider().padding(.leading, 46) }
             }
         }.background(PhoneStyle.card, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 16)
+    }
+
+    private func taskSwipeActions(for task: TaskItem, lists: [TaskList]) -> ([PhoneTaskSwipeAction], [PhoneTaskSwipeAction]) {
+        guard model.canBeginEditing, let document = model.document else { return ([], []) }
+        func lifecycle(_ kind: PhoneTaskSwipeAction.Kind, _ command: TaskLifecycleCommand) -> PhoneTaskSwipeAction? {
+            guard TaskLifecycle.refusal(for: command, task: task, lists: lists) == nil else { return nil }
+            return PhoneTaskSwipeAction(id: kind) {
+                Task { await model.performLifecycle(command, taskID: task.id, expected: document.revision) }
+            }
+        }
+        let leading = [lifecycle(.complete, .complete), lifecycle(.reopen, .reopen), lifecycle(.restore, .restore)].compactMap { $0 }
+        var trailing: [PhoneTaskSwipeAction] = []
+        if task.deletedAt == nil && !SmartListEligibility.isArchived(task, lists: lists) {
+            if task.kind == .task {
+                trailing.append(PhoneTaskSwipeAction(id: .schedule) {
+                    taskRowEditor = .schedule(PhoneScheduleRequest(task: task, document: document, calendar: calendar, now: model.now))
+                })
+            }
+            trailing.append(PhoneTaskSwipeAction(id: .priority) {
+                taskRowEditor = .priority(PhoneTaskMetadataRequest(task: task, revision: document.revision, kind: .priority))
+            })
+        }
+        if TaskLifecycle.refusal(for: .move(nil), task: task, lists: lists) == nil {
+            trailing.append(PhoneTaskSwipeAction(id: .move) {
+                taskRowEditor = .move(PhoneTaskMoveRequest(task: task, revision: document.revision))
+            })
+        }
+        if let trash = lifecycle(.trash, .trash) { trailing.append(trash) }
+        return (leading, trailing)
     }
     private func navigation(_ snapshot: ReadOnlyWorkspaceSnapshot) -> some View {
         let data = snapshot.workspace
@@ -762,8 +868,10 @@ struct MobileRootView: View {
                 }
             } : nil
         )
+        let holdsMonthPosition = model.isBusy || calendarEdit != nil || occurrenceChange != nil
+            || capturePresented || model.captureDraft != nil || selectedTask != nil
         return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
-                                     options: options, controls: controls,
+                                     options: options, monthInteractionActive: holdsMonthPosition, controls: controls,
                                      select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }
 
     }
