@@ -526,6 +526,66 @@ final class ReadOnlyNavigationTests: XCTestCase {
         attach(app, "Saved Markdown paste")
     }
 
+    @MainActor func testRichDescriptionCodeBlockPasteCopyAndRelaunch() {
+        let app = launch(qaCase: "rich-code-paste")
+        let format = app.buttons["editRichDescription"]
+        let input = app.textViews["richFieldEditor"]
+        let undo = app.buttons["richUndo"]
+        let source = "```\n  let value = **e\u{301} 🧩**\nprint(value)\n```"
+        let code = "  let value = **e\u{301} 🧩**\nprint(value)\n"
+        let target = "Prepare the weekly plan"
+        let other = "Review the project outline"
+        func openPrior(_ title: String) {
+            let row = app.buttons[title]
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            row.tap()
+            reveal(format, in: app)
+            format.tap()
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            XCTAssertEqual(input.value as? String, "Prior")
+            input.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+                .withOffset(CGVector(dx: 18, dy: 11)).doubleTap()
+            XCTAssertTrue(app.buttons["richInlineMenu"].isEnabled)
+        }
+        openPrior(target)
+        app.buttons["richPastePlain"].tap()
+        XCTAssertEqual(input.value as? String, source)
+        undo.tap()
+        XCTAssertEqual(input.value as? String, "Prior")
+        input.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0))
+            .withOffset(CGVector(dx: 18, dy: 11)).doubleTap()
+        let paste = app.menuItems["Paste"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5))
+        paste.tap()
+        XCTAssertEqual(input.value as? String, code)
+        undo.tap()
+        XCTAssertEqual(input.value as? String, "Prior")
+        app.buttons["richRedo"].tap()
+        XCTAssertEqual(input.value as? String, code)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        let copy = app.buttons["copyRichCodeBlock-0"]
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        attach(app, "Saved code block without fences")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons[target].tap()
+        XCTAssertTrue(copy.waitForExistence(timeout: 5))
+        reveal(copy, in: app)
+        copy.tap()
+        XCTAssertTrue(copy.label.contains("Copied"))
+        app.buttons["taskDetailDone"].tap()
+        openPrior(other)
+        app.buttons["richPastePlain"].tap()
+        XCTAssertEqual(input.value as? String, code)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        XCTAssertFalse(copy.exists)
+        attach(app, "Exact plain text copied from the code block")
+    }
+
     @MainActor func testRichDescriptionFormatsTypedMarkdownWithUndoAndChecklist() {
         let app = launch()
         app.buttons["Prepare the weekly plan"].tap()
@@ -566,6 +626,190 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(description.waitForExistence(timeout: 5))
         XCTAssertEqual(description.value as? String, expected)
         attach(app, "Saved typed Markdown heading and checklist")
+    }
+
+    @MainActor func testRichDescriptionTypesCodeFenceAndResumesProse() {
+        let app = launch(), title = "Prepare the weekly plan"
+        app.buttons[title].tap()
+        let format = app.buttons["editRichDescription"]
+        reveal(format, in: app)
+        format.tap()
+        let input = app.textViews["richFieldEditor"]
+        XCTAssertTrue(input.waitForExistence(timeout: 5))
+        let original = "A neutral sample description."
+        XCTAssertEqual(input.value as? String, original)
+        input.typeText("\n```")
+        XCTAssertEqual(input.value as? String, original + "\n```")
+        input.typeText("\n")
+        XCTAssertEqual(input.value as? String, original + "\n\n")
+        app.buttons["richUndo"].tap()
+        XCTAssertEqual(input.value as? String, original + "\n```")
+        app.buttons["richRedo"].tap()
+        XCTAssertEqual(input.value as? String, original + "\n\n")
+
+        let code = "  let x = 1\n# literal\n"
+        input.typeText("  let x = 1\n# literal\n```\n")
+        XCTAssertEqual(input.value as? String, original + "\n" + code)
+        input.typeText("# Plain after")
+        let expected = original + "\n" + code + "Plain after"
+        XCTAssertEqual(input.value as? String, expected)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        let description = app.textViews["richTaskDescription"]
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertEqual(description.value as? String, expected)
+        XCTAssertTrue(app.buttons["copyRichCodeBlock-0"].exists)
+        attach(app, "Typed code block followed by a heading")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons[title].tap()
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertEqual(description.value as? String, expected)
+        XCTAssertTrue(app.buttons["copyRichCodeBlock-0"].exists)
+    }
+
+    @MainActor func testRichChecklistTapsSaveAndCancelOnlyTheirParagraphs() {
+        let app = launch(qaCase: "rich-checklist-toggle")
+        let task = app.buttons["Review the project outline"]
+        let format = app.buttons["editRichDescription"]
+        let input = app.textViews["richFieldEditor"]
+        let undo = app.buttons["richUndo"]
+        let redo = app.buttons["richRedo"]
+        let expected = "First 🧩\nSecond e\u{301}\nOrdinary text\nBullet"
+        func openEditor() {
+            XCTAssertTrue(task.waitForExistence(timeout: 5))
+            task.tap()
+            reveal(format, in: app)
+            format.tap()
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+            XCTAssertEqual(input.value as? String, expected)
+            let keyboardIntro = app.buttons["Continue"]
+            if keyboardIntro.exists && keyboardIntro.isHittable { keyboardIntro.tap() }
+        }
+        func tap(_ x: CGFloat, _ y: CGFloat) {
+            input.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y)).tap()
+        }
+
+        openEditor()
+        tap(75, 10)
+        tap(13, 52)
+        tap(13, 73)
+        XCTAssertFalse(undo.isEnabled)
+        // The two nearby text taps can open the system selection menu over the first marker.
+        // Tap in the trailing empty space to collapse the selection and keep the keyboard open.
+        tap(input.frame.width - 16, 73)
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5))
+        let selectionMenu = app.buttons["Select All"].firstMatch
+        if selectionMenu.exists {
+            tap(input.frame.width - 16, 31)
+            waitGone(selectionMenu)
+        }
+        tap(13, 10)
+        XCTAssertTrue(undo.isEnabled)
+        tap(13, 31)
+        undo.tap()
+        XCTAssertTrue(redo.isEnabled)
+        redo.tap()
+        XCTAssertEqual(input.value as? String, expected)
+        attach(app, "First checked and second unchecked")
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openEditor()
+        tap(13, 10)
+        XCTAssertTrue(undo.isEnabled)
+        app.buttons["fieldEditorCancel"].tap()
+        app.buttons["Discard"].tap()
+        waitGone(input)
+        XCTAssertEqual(app.textViews["richTaskDescription"].value as? String, expected)
+    }
+
+    @MainActor func testRichHighlightColorsRecolorRemoveCopyAndRelaunch() {
+        let app = launch(qaCase: "rich-highlight-colors")
+        let source = "Review the project outline", target = "Prepare the weekly plan"
+        let format = app.buttons["editRichDescription"]
+        let input = app.textViews["richFieldEditor"]
+        let inline = app.buttons["richInlineMenu"]
+        func edit(_ title: String) {
+            let task = app.buttons[title]
+            XCTAssertTrue(task.waitForExistence(timeout: 5))
+            task.tap()
+            reveal(format, in: app)
+            format.tap()
+            XCTAssertTrue(input.waitForExistence(timeout: 5))
+        }
+        func chooseColor(_ title: String) {
+            XCTAssertTrue(inline.isEnabled)
+            inline.tap()
+            let palette = app.descendants(matching: .any)["Highlight Colors"].firstMatch
+            XCTAssertTrue(palette.waitForExistence(timeout: 5))
+            palette.tap()
+            let action = app.buttons[title]
+            XCTAssertTrue(action.waitForExistence(timeout: 5))
+            action.tap()
+            waitGone(action)
+        }
+
+        edit(source)
+        XCTAssertEqual(input.value as? String, "Alpha Beta")
+        input.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 22, dy: 11)).doubleTap()
+        chooseColor("Blue")
+        chooseColor("Pink")
+        chooseColor("Remove Highlight")
+        app.buttons["richUndo"].tap()
+        XCTAssertTrue(app.buttons["richRedo"].isEnabled)
+        app.buttons["richRedo"].tap()
+        app.buttons["richUndo"].tap()
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        let description = app.textViews["richTaskDescription"]
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertEqual(description.value as? String, "Alpha Beta")
+        attach(app, "Pink and legacy yellow highlights")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        edit(source)
+        let sourceWord = input.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 22, dy: 11))
+        sourceWord.doubleTap()
+        let trailing = input.otherElements["com.apple.text.grabber.trailing"]
+        guard trailing.waitForExistence(timeout: 5) else {
+            return XCTFail("Expected a selection handle after double tapping the source")
+        }
+        let originalTrailingX = trailing.frame.minX
+        let handle = trailing.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 1, dy: 27))
+        let afterText = input.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 108, dy: 27))
+        handle.press(forDuration: 0.15, thenDragTo: afterText)
+        XCTAssertGreaterThan(trailing.frame.minX, originalTrailingX + 25)
+        XCTAssertTrue(inline.isEnabled)
+        let copy = app.menuItems["Copy"]
+        if !copy.exists {
+            sourceWord.tap()
+        }
+        guard copy.waitForExistence(timeout: 5) else {
+            attach(app, "Source copy menu")
+            return XCTFail("Expected the native Copy action after selecting the description")
+        }
+        copy.tap()
+        app.buttons["fieldEditorCancel"].tap()
+        waitGone(input)
+        app.buttons["taskDetailDone"].tap()
+        edit(target)
+        input.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 22, dy: 11)).doubleTap()
+        let paste = app.menuItems["Paste"]
+        XCTAssertTrue(paste.waitForExistence(timeout: 5), "Copy must populate the private clipboard")
+        paste.tap()
+        XCTAssertEqual(input.value as? String, "Alpha Beta")
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        XCTAssertTrue(description.waitForExistence(timeout: 5))
+        XCTAssertEqual(description.value as? String, "Alpha Beta")
     }
 
     @MainActor func testPlainDescriptionRecoveryDoesNotAutosubmit() {
@@ -905,6 +1149,56 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         goTo("Work", in: app)
         expect([newest, middle, old])
+    }
+
+    @MainActor func testTaskCreatedDateGroupingRestoresSectionsAndSurvivesRelaunch() {
+        let app = launch(qaCase: "created-grouping")
+        goTo("Work", in: app)
+        let section = app.staticTexts["Review section"]
+        let menu = app.buttons["taskSortMenu"]
+        let groupChoice = "Group by Created Date"
+        let pinned = app.buttons["Write meeting notes"]
+        let earlier = app.buttons["Review the project outline"]
+        let newest = app.buttons["Prepare the weekly plan"]
+        let middle = app.buttons["Review the draft"]
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Europe/Moscow")!
+        let format = Date.FormatStyle(date: .abbreviated, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)
+        let earlierDay = app.staticTexts[calendar.date(from: DateComponents(year: 2026, month: 11, day: 7))!.formatted(format)]
+        let laterDay = app.staticTexts[calendar.date(from: DateComponents(year: 2026, month: 11, day: 8))!.formatted(format)]
+
+        func choose(_ label: String) {
+            menu.tap()
+            let choice = app.buttons[label]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5))
+            choice.tap()
+            waitGone(choice)
+        }
+        func expectOrder(_ elements: [XCUIElement]) {
+            for element in elements { XCTAssertTrue(element.exists, element.debugDescription) }
+            let positions = elements.map { $0.frame.minY }
+            XCTAssertEqual(positions, positions.sorted())
+            XCTAssertEqual(Set(positions).count, positions.count)
+        }
+
+        XCTAssertTrue(section.exists)
+        choose(groupChoice)
+        XCTAssertFalse(section.exists)
+        expectOrder([pinned, laterDay, newest, middle, earlierDay, earlier])
+        choose("Created · Oldest First")
+        expectOrder([pinned, earlierDay, earlier, laterDay, middle, newest])
+        attach(app, "Work grouped by creation day in oldest-first order")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        expectOrder([pinned, earlierDay, earlier, laterDay, middle, newest])
+        choose(groupChoice)
+        XCTAssertTrue(section.exists)
+        XCTAssertFalse(earlierDay.exists)
+        XCTAssertEqual(menu.value as? String, "Created · Oldest First")
+        choose(groupChoice)
+        expectOrder([pinned, earlierDay, earlier, laterDay, middle, newest])
     }
 
     @MainActor private func chooseLifecycleAction(_ name: String, in app: XCUIApplication) {
@@ -1604,6 +1898,70 @@ extension ReadOnlyNavigationTests {
                    withVelocity: .slow, thenHoldForDuration: 0.25)
     }
 
+    @MainActor func testCalendarSkipOccurrenceStagesAdvancesUndoesAndSurvivesRelaunch() {
+        let app = launch(qaCase: "skip-occurrence"), title = "Review the project outline"
+        app.buttons["Calendar"].tap()
+        let forecast = app.buttons.matching(identifier: title + ", recurring preview")
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        let skip = app.buttons["calendarSkipOccurrence"]
+        let done = app.buttons["calendarEditDone"]
+        let restore = app.buttons["calendarOccurrenceRestore"]
+        XCTAssertEqual(forecast.count, 1)
+
+        dragOccurrence(in: app, title: title)
+        let occurrence = app.buttons["This occurrence"]
+        XCTAssertTrue(occurrence.waitForExistence(timeout: 5))
+        occurrence.tap()
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "This occurrence updated")
+
+        func stage() {
+            editCalendarCard(app, title: title)
+            reveal(skip, in: app)
+            XCTAssertTrue(skip.isHittable)
+            skip.tap()
+            XCTAssertTrue(app.staticTexts["Done moves this open task to its next scheduled occurrence."].exists)
+        }
+        stage()
+        attach(app, "Skip occurrence staged")
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(done)
+        XCTAssertEqual(forecast.count, 1)
+        XCTAssertEqual(notice.label, "This occurrence updated")
+
+        stage()
+        done.tap()
+        waitGone(done)
+        XCTAssertEqual(notice.label, "Occurrence skipped")
+        XCTAssertEqual(forecast.count, 0)
+        let undo = app.buttons["undoCalendarSchedule"]
+        XCTAssertTrue(undo.isEnabled)
+        undo.tap()
+        XCTAssertEqual(notice.label, "Schedule restored")
+        XCTAssertEqual(forecast.count, 1)
+        editCalendarCard(app, title: title)
+        XCTAssertTrue(restore.exists)
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(done)
+
+        stage()
+        done.tap()
+        waitGone(done)
+        XCTAssertEqual(notice.label, "Occurrence skipped")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertEqual(forecast.count, 0)
+        XCTAssertFalse(undo.exists)
+        editCalendarCard(app, title: title)
+        XCTAssertFalse(skip.exists)
+        XCTAssertFalse(restore.exists)
+        attach(app, "Final occurrence reopened")
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(done)
+    }
+
     @MainActor func testCalendarRecurringDragStagesScopeAndRetainsExceptionOnRelaunch() {
         let app = openRecurringCalendar(), title = "Review the project outline"
         let forecast = app.buttons.matching(identifier: title + ", recurring preview")
@@ -1675,7 +2033,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["calendarPreferencesDone"].waitForExistence(timeout: 5))
     }
 
-    @MainActor private func setCalendarSwitch(_ id: String, to state: Bool, app: XCUIApplication) {
+    @MainActor private func setSwitch(_ id: String, to state: Bool, app: XCUIApplication) {
         let toggle = app.switches[id]
         reveal(toggle, in: app)
         let desired = state ? "1" : "0"
@@ -2016,7 +2374,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(note.exists)
         attach(app, "Task and note icons shown")
         openCalendarViewOptions(app)
-        setCalendarSwitch("calendarTaskIcons", to: false, app: app)
+        setSwitch("calendarTaskIcons", to: false, app: app)
         XCTAssertEqual(app.switches["calendarNoteIcons"].value as? String, "1")
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
@@ -2030,7 +2388,7 @@ extension ReadOnlyNavigationTests {
         openCalendarViewOptions(app)
         XCTAssertEqual(app.switches["calendarTaskIcons"].value as? String, "0")
         XCTAssertEqual(app.switches["calendarNoteIcons"].value as? String, "1")
-        setCalendarSwitch("calendarIcons", to: false, app: app)
+        setSwitch("calendarIcons", to: false, app: app)
         XCTAssertFalse(app.switches["calendarTaskIcons"].isEnabled)
         XCTAssertFalse(app.switches["calendarNoteIcons"].isEnabled)
         app.buttons["calendarPreferencesCancel"].tap()
@@ -2038,12 +2396,103 @@ extension ReadOnlyNavigationTests {
 
         openCalendarViewOptions(app)
         XCTAssertEqual(app.switches["calendarIcons"].value as? String, "1")
-        setCalendarSwitch("calendarTaskIcons", to: true, app: app)
-        setCalendarSwitch("calendarNoteIcons", to: false, app: app)
+        setSwitch("calendarTaskIcons", to: true, app: app)
+        setSwitch("calendarNoteIcons", to: false, app: app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(task.exists && note.exists)
         attach(app, "Only task icons shown")
+    }
+
+    @MainActor func testCalendarAgendaCompletesChecklistAndUsesTaskLifecycleUndo() {
+        let app = launch(qaCase: "calendar-completion")
+        app.buttons["Calendar"].tap()
+        let check = app.buttons["Complete Review the first step"]
+        let reopen = app.buttons["Reopen Review the first step"]
+        let parent = app.buttons["Review the project outline"]
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(check.frame.height, 44)
+        XCTAssertGreaterThanOrEqual(check.frame.width, 44)
+        check.tap()
+        XCTAssertTrue(reopen.waitForExistence(timeout: 5))
+        XCTAssertTrue(parent.exists)
+        XCTAssertTrue(app.buttons["Complete Keep the second step"].exists)
+        attach(app, "Completed checklist item in Agenda")
+        reopen.tap()
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+
+        let title = "Prepare the weekly plan"
+        let completeTask = app.buttons["Complete " + title]
+        let reopenTask = app.buttons["Reopen " + title]
+        reveal(completeTask, in: app)
+        completeTask.tap()
+        XCTAssertTrue(reopenTask.waitForExistence(timeout: 5))
+        let feedback = app.staticTexts["lifecycleFeedback"]
+        XCTAssertEqual(feedback.label, "Task completed")
+        app.buttons["undoLifecycle"].tap()
+        XCTAssertTrue(completeTask.waitForExistence(timeout: 5))
+        XCTAssertEqual(feedback.label, "Change undone")
+        reveal(completeTask, in: app)
+        completeTask.tap()
+        XCTAssertTrue(reopenTask.waitForExistence(timeout: 5))
+        reveal(reopenTask, in: app)
+        reopenTask.tap()
+        XCTAssertTrue(completeTask.waitForExistence(timeout: 5))
+        XCTAssertEqual(feedback.label, "Task reopened")
+
+        reveal(check, in: app, towardTop: true)
+        check.tap()
+        XCTAssertTrue(reopen.waitForExistence(timeout: 5))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(reopen.waitForExistence(timeout: 5))
+        XCTAssertTrue(completeTask.exists)
+        XCTAssertFalse(app.buttons["undoLifecycle"].exists)
+        attach(app, "Agenda completion after relaunch")
+    }
+
+    @MainActor func testCalendarChecklistMenuWorksWithHiddenIconsAndCompletedRows() {
+        let app = launch(qaCase: "calendar-completion")
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        setSwitch("calendarTaskIcons", to: false, app: app)
+        setSwitch("calendarCompleted", to: false, app: app)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+
+        let title = "Review the first step"
+        let card = app.buttons[title]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Complete " + title].exists)
+        card.press(forDuration: 0.75)
+        let complete = app.buttons["Complete checklist item"]
+        XCTAssertTrue(complete.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Edit Calendar Schedule"].exists)
+        attach(app, "Checklist menu with hidden icons")
+        complete.tap()
+        waitGone(card)
+        XCTAssertTrue(app.buttons["Review the project outline"].exists)
+
+        openCalendarViewOptions(app)
+        setSwitch("calendarCompleted", to: true, app: app)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.press(forDuration: 0.75)
+        let reopen = app.buttons["Reopen checklist item"]
+        XCTAssertTrue(reopen.waitForExistence(timeout: 5))
+        reopen.tap()
+        waitGone(reopen)
+
+        let forecast = app.buttons.matching(identifier: title + ", recurring preview").firstMatch
+        reveal(forecast, in: app)
+        forecast.press(forDuration: 0.75)
+        XCTAssertFalse(complete.exists)
+        XCTAssertFalse(reopen.exists)
+        XCTAssertFalse(app.buttons["Edit Calendar Schedule"].exists)
+        attach(app, "Read-only checklist forecast")
     }
 
     @MainActor func testCalendarViewOptionsRenderAndPersistAcrossRelaunch() {
@@ -2058,10 +2507,10 @@ extension ReadOnlyNavigationTests {
         app.buttons["Outline"].tap()
         app.buttons["calendarYearStyle"].tap()
         app.buttons["Standard"].tap()
-        setCalendarSwitch("calendarIcons", to: false, app: app)
-        setCalendarSwitch("calendarCompleted", to: false, app: app)
-        setCalendarSwitch("calendarChecklist", to: true, app: app)
-        setCalendarSwitch("calendarRepeats", to: false, app: app)
+        setSwitch("calendarIcons", to: false, app: app)
+        setSwitch("calendarCompleted", to: false, app: app)
+        setSwitch("calendarChecklist", to: true, app: app)
+        setSwitch("calendarRepeats", to: false, app: app)
         attach(app, "Calendar options staged")
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
@@ -2116,7 +2565,7 @@ extension ReadOnlyNavigationTests {
         london.typeText("UK")
         app.buttons["calendarZonesDone"].tap()
         waitGone(london)
-        setCalendarSwitch("calendarAdditionalZones", to: true, app: app)
+        setSwitch("calendarAdditionalZones", to: true, app: app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         let ruler = app.staticTexts["calendarRuler-Europe/London"]
@@ -2136,7 +2585,7 @@ extension ReadOnlyNavigationTests {
         let app = launch(qaCase: "save-failure")
         app.buttons["Calendar"].tap()
         openCalendarViewOptions(app)
-        setCalendarSwitch("calendarCompleted", to: false, app: app)
+        setSwitch("calendarCompleted", to: false, app: app)
         app.buttons["calendarPreferencesDone"].tap()
         XCTAssertTrue(app.staticTexts["calendarPreferenceError"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.switches["calendarCompleted"].value as? String, "0")
@@ -2271,6 +2720,73 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.textViews["richTaskDescription"].exists)
     }
 
+    @MainActor func testTaskProgressSavesFromCheckboxAndTracksChecklistAfterRelaunch() {
+        let app = launch(qaCase: "calendar-options")
+        let manualTask = app.buttons["Prepare the weekly plan"]
+        let checklistTask = app.buttons["Review the project outline"]
+        let edit = app.buttons["editTaskProgress"]
+        let done = app.buttons["taskMetadataDone"]
+        let slider = app.sliders["taskProgressSlider"]
+        let draftValue = app.staticTexts["taskProgressDraftValue"]
+        let detailDone = app.buttons["taskDetailDone"]
+
+        manualTask.tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        XCTAssertEqual(edit.value as? String, "0%")
+        edit.tap()
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        slider.adjust(toNormalizedSliderPosition: 0.5)
+        XCTAssertNotEqual(draftValue.label, "0%")
+        app.buttons["taskMetadataCancel"].tap()
+        app.buttons["Discard Changes"].tap()
+        waitGone(slider)
+        XCTAssertEqual(edit.value as? String, "0%")
+        detailDone.tap()
+
+        let completion = app.buttons["lifecycleToggle-00000000-0000-0000-0000-000000000002"]
+        reveal(completion, in: app)
+        completion.press(forDuration: 0.75)
+        let progressMenu = app.buttons["Set Progress"]
+        XCTAssertTrue(progressMenu.waitForExistence(timeout: 5))
+        progressMenu.tap()
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        slider.adjust(toNormalizedSliderPosition: 0.98)
+        let nearEnd = Int(draftValue.label.dropLast()) ?? -1
+        XCTAssertTrue((96..<100).contains(nearEnd))
+        let increment = app.steppers["taskProgressStepper"].buttons["taskProgressStepper-Increment"]
+        XCTAssertTrue(increment.exists)
+        if (96..<100).contains(nearEnd) {
+            for _ in nearEnd..<100 { increment.tap() }
+        }
+        XCTAssertEqual(draftValue.label, "100%")
+        attach(app, "Task progress draft at 100 percent")
+        done.tap()
+        waitGone(slider)
+        XCTAssertEqual(completion.label, "Complete Prepare the weekly plan")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(manualTask.waitForExistence(timeout: 10))
+        manualTask.tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        XCTAssertEqual(edit.value as? String, "100%")
+        attach(app, "Manual task progress after relaunch")
+        detailDone.tap()
+
+        checklistTask.tap()
+        let summary = app.descendants(matching: .any)["taskProgressSummary"].firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 5))
+        XCTAssertEqual(summary.value as? String, "0%")
+        XCTAssertFalse(edit.exists)
+        let item = app.buttons["checklistToggle-00000000-0000-0000-0000-000000000501"]
+        reveal(item, in: app)
+        item.tap()
+        XCTAssertEqual(item.value as? String, "Checked")
+        reveal(summary, in: app, towardTop: true)
+        XCTAssertEqual(summary.value as? String, "100%")
+        attach(app, "Progress computed from checklist")
+    }
+
     @MainActor func testEmbeddedChecklistEditsAndCalendarReflectSavedItems() {
         let app = launch(qaCase: "task-metadata"), task = "Review the project outline"
         let first = "00000000-0000-0000-0000-000000000501"
@@ -2303,7 +2819,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["taskDetailDone"].tap()
         app.buttons["Calendar"].tap()
         openCalendarViewOptions(app)
-        setCalendarSwitch("calendarChecklist", to: true, app: app)
+        setSwitch("calendarChecklist", to: true, app: app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(app.buttons["First step reviewed"].waitForExistence(timeout: 5))
@@ -2507,7 +3023,7 @@ extension ReadOnlyNavigationTests {
         openOrganization(app)
         let work = "00000000-0000-0000-0000-000000000100"
         openOrganizationList(work, in: app)
-        setCalendarSwitch("organizationArchive", to: true, app: app)
+        setSwitch("organizationArchive", to: true, app: app)
         finishOrganizationEdit(app)
         app.buttons["organizationManagerDone"].tap()
         let archived = app.staticTexts["Archived Lists"]
@@ -2521,8 +3037,8 @@ extension ReadOnlyNavigationTests {
         app.buttons["taskDetailDone"].tap()
         openOrganization(app)
         openOrganizationList(work, in: app)
-        setCalendarSwitch("organizationArchive", to: false, app: app)
-        setCalendarSwitch("organizationSmartInclusion", to: false, app: app)
+        setSwitch("organizationArchive", to: false, app: app)
+        setSwitch("organizationSmartInclusion", to: false, app: app)
         finishOrganizationEdit(app)
         app.buttons["organizationManagerDone"].tap()
         app.buttons["Today"].tap()
@@ -2707,7 +3223,7 @@ extension ReadOnlyNavigationTests {
         reveal(keyword, in: app)
         keyword.tap()
         keyword.typeText("weekly")
-        setCalendarSwitch("savedFilterPin", to: true, app: app)
+        setSwitch("savedFilterPin", to: true, app: app)
         app.buttons["savedFilterDone"].tap()
         waitGone(app.buttons["savedFilterDone"])
         let managerRow = managedFilter("Weekly only", in: app)
@@ -2869,7 +3385,7 @@ extension ReadOnlyNavigationTests {
         reveal(parent, in: app)
         parent.tap()
         tagChoice("Planning", id: "tagParentChoice-00000000-0000-0000-0000-000000000200", in: app).tap()
-        setCalendarSwitch("tagPin", to: true, app: app)
+        setSwitch("tagPin", to: true, app: app)
         app.buttons["tagDone"].tap()
         waitGone(app.buttons["tagDone"])
         app.buttons["tagManagerDone"].tap()
@@ -3123,7 +3639,9 @@ extension ReadOnlyNavigationTests {
         app.buttons["summaryFilter"].tap()
         app.buttons["summaryPeriod"].tap()
         app.buttons["Today"].tap()
-        app.buttons["summaryGrouping"].tap()
+        let grouping = app.buttons["summaryGrouping"]
+        reveal(grouping, in: app)
+        grouping.tap()
         app.buttons["By List"].tap()
         app.buttons["summaryFilterDone"].tap()
         let generated = report.value as? String
@@ -3135,7 +3653,8 @@ extension ReadOnlyNavigationTests {
         let changed = report.value as? String
         XCTAssertTrue(changed?.contains("Temporary edit") == true)
         app.buttons["summaryFilter"].tap()
-        app.buttons["summaryGrouping"].tap()
+        reveal(grouping, in: app)
+        grouping.tap()
         app.buttons["By Date"].tap()
         app.buttons["summaryFilterCancel"].tap()
         XCTAssertEqual(report.value as? String, changed)
@@ -3166,6 +3685,174 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(note.waitForExistence(timeout: 5))
         note.tap()
         XCTAssertEqual(app.staticTexts["taskDescription"].label, edited)
+    }
+
+    @MainActor func testSummaryTagPrioritySortAndFieldsSaveExactReport() {
+        let app = launch(qaCase: "summary-fields")
+        goTo("Summary", in: app)
+        let report = app.textViews["summaryText"]
+        let filter = app.buttons["summaryFilter"]
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        let original = report.value as? String
+        XCTAssertTrue(original?.contains("Read a chapter") == true)
+        XCTAssertTrue(original?.contains("Arrange the studio") == true)
+
+        filter.tap()
+        app.buttons["summaryTagFilter"].tap()
+        let planning = "summaryTag-00000000-0000-0000-0000-000000000200"
+        setSwitch(planning, to: true, app: app)
+        app.navigationBars["Tags"].buttons.firstMatch.tap()
+        app.buttons["summaryPriorityFilter"].tap()
+        setSwitch("summaryPriority-high", to: true, app: app)
+        app.navigationBars["Priority"].buttons.firstMatch.tap()
+        let grouping = app.buttons["summaryGrouping"]
+        reveal(grouping, in: app)
+        grouping.tap()
+        app.buttons["By Date"].tap()
+        let sort = app.buttons["summarySort"]
+        reveal(sort, in: app)
+        sort.tap()
+        app.buttons["Title"].tap()
+        app.swipeUp()
+        for field in ["Progress", "Status", "Completion Date"] {
+            setSwitch("summaryField-" + field, to: true, app: app)
+        }
+        attach(app, "Summary display options")
+        app.buttons["summaryFilterDone"].tap()
+        waitGone(app.buttons["summaryFilterDone"])
+        let generated = report.value as? String ?? ""
+        XCTAssertTrue(generated.contains("Prepare the weekly plan") && generated.contains("Undone · 25% progress"))
+        XCTAssertTrue(generated.contains("Review the project outline") && generated.contains("Completed · 40% progress"))
+        XCTAssertTrue(generated.contains("Finished"))
+        XCTAssertFalse(generated.contains("Read a chapter") || generated.contains("Arrange the studio"))
+        if let first = generated.range(of: "Prepare the weekly plan"),
+           let second = generated.range(of: "Review the project outline") {
+            XCTAssertLessThan(first.lowerBound, second.lowerBound)
+        }
+        attach(app, "Filtered Summary report")
+
+        filter.tap()
+        let selectedTags = app.buttons["summaryTagFilter"]
+        reveal(selectedTags, in: app, towardTop: true)
+        selectedTags.tap()
+        setSwitch(planning, to: false, app: app)
+        app.navigationBars["Tags"].buttons.firstMatch.tap()
+        app.buttons["summaryFilterCancel"].tap()
+        waitGone(app.buttons["summaryFilterDone"])
+        XCTAssertEqual(report.value as? String, generated)
+
+        report.tap()
+        report.typeText("Local review")
+        guard let edited = report.value as? String, edited.contains("Local review") else {
+            return XCTFail("Expected an edited report")
+        }
+        let exact = XCTAttachment(data: Data(edited.utf8), uniformTypeIdentifier: "public.utf8-plain-text")
+        exact.name = "Summary edited fields output"
+        exact.lifetime = .keepAlways
+        add(exact)
+        let save = app.buttons["summarySave"]
+        reveal(save, in: app)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Saved as note"].waitForExistence(timeout: 8))
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app)
+        let note = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Summary ")).firstMatch
+        XCTAssertTrue(note.waitForExistence(timeout: 5))
+        note.tap()
+        XCTAssertEqual(app.staticTexts["taskDescription"].label, edited)
+    }
+
+    @MainActor func testSummaryPresetsStageApplyRenameDeleteAndSurviveRelaunch() {
+        let app = launch(qaCase: "summary")
+        goTo("Summary", in: app)
+        let report = app.textViews["summaryText"]
+        let filter = app.buttons["summaryFilter"]
+        let presets = app.buttons["summaryPresets"]
+        let done = app.buttons["summaryFilterDone"]
+        let cancel = app.buttons["summaryFilterCancel"]
+
+        func openPresets() {
+            reveal(presets, in: app, towardTop: true)
+            presets.tap()
+            XCTAssertTrue(app.navigationBars["Summary Presets"].waitForExistence(timeout: 5))
+        }
+        func backToFilter() {
+            app.navigationBars["Summary Presets"].buttons.firstMatch.tap()
+            XCTAssertTrue(app.navigationBars["Summary Filter"].waitForExistence(timeout: 5))
+        }
+        func namePreset(_ name: String) {
+            app.buttons["Save Current Options…"].tap()
+            let alert = app.alerts["Save Summary Preset"]
+            XCTAssertTrue(alert.waitForExistence(timeout: 5))
+            let save = alert.buttons["Save"]
+            XCTAssertFalse(save.isEnabled)
+            alert.textFields.firstMatch.tap()
+            alert.textFields.firstMatch.typeText(name)
+            save.tap()
+            waitGone(alert)
+        }
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        let defaultReport = report.value as? String
+        filter.tap()
+        app.buttons["summaryPeriod"].tap()
+        app.buttons["Today"].tap()
+        app.buttons["summaryStatus"].tap()
+        app.buttons["Completed"].tap()
+        openPresets()
+        namePreset("Weekly review")
+        backToFilter()
+        done.tap()
+        waitGone(done)
+        let selectedReport = report.value as? String
+        XCTAssertNotEqual(selectedReport, defaultReport)
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Summary", in: app)
+        XCTAssertEqual(report.value as? String, defaultReport)
+        report.tap()
+        report.typeText("Preserve this edit")
+        let edited = report.value as? String
+        XCTAssertTrue(edited?.contains("Preserve this edit") == true)
+        filter.tap()
+        openPresets()
+        namePreset("Discarded preset")
+        app.buttons["Weekly review"].tap()
+        cancel.tap()
+        waitGone(done)
+        XCTAssertEqual(report.value as? String, edited)
+
+        filter.tap()
+        openPresets()
+        XCTAssertFalse(app.buttons["Discarded preset"].exists)
+        attach(app, "Persisted Summary presets")
+        app.buttons["Weekly review"].tap()
+        done.tap()
+        waitGone(done)
+        XCTAssertEqual(report.value as? String, selectedReport)
+
+        filter.tap()
+        openPresets()
+        app.buttons["summaryPresetManage"].tap()
+        app.buttons["Rename Weekly review"].tap()
+        let rename = app.alerts["Rename Summary Preset"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        let name = rename.textFields.firstMatch
+        name.tap()
+        name.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "Weekly review".count) + "Completed today")
+        rename.buttons["Save"].tap()
+        namePreset("Temporary preset")
+        app.buttons["Delete Temporary preset"].tap()
+        XCTAssertFalse(app.buttons["Delete Temporary preset"].exists)
+        app.buttons["summaryPresetManage"].tap()
+        XCTAssertFalse(app.buttons["Temporary preset"].exists)
+        app.buttons["Completed today"].tap()
+        done.tap()
+        waitGone(done)
+        XCTAssertEqual(report.value as? String, selectedReport)
     }
 
     @MainActor func testSummaryFailedNoteSaveRecoversWithoutSubmitting() {

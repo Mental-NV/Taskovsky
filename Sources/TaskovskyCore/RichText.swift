@@ -10,6 +10,12 @@ public enum RichListStyle: String, Codable, Equatable, Sendable {
     case checklist
 }
 
+public enum RichHighlightColor: String, Codable, CaseIterable, Sendable {
+    case yellow, green, blue, pink, purple
+
+    public var title: String { rawValue.capitalized }
+}
+
 /// One inline character run. Offsets are UTF-16 code units so they map
 /// directly onto `NSString`/`NSTextStorage` ranges without any `Character`
 /// versus glyph ambiguity (emoji and other multi-unit text stays aligned).
@@ -21,25 +27,32 @@ public struct RichInlineRun: Codable, Equatable, Sendable {
     public var underline: Bool
     public var strikethrough: Bool
     public var highlight: Bool
+    /// Nil keeps the legacy yellow representation for highlighted text.
+    public var highlightColor: RichHighlightColor?
     public var code: Bool
     public var link: String?
 
     public init(location: Int, length: Int, bold: Bool = false, italic: Bool = false,
                 underline: Bool = false, strikethrough: Bool = false,
-                highlight: Bool = false, code: Bool = false, link: String? = nil) {
+                highlight: Bool = false, code: Bool = false, link: String? = nil,
+                highlightColor: RichHighlightColor? = nil) {
         self.location = location; self.length = length
         self.bold = bold; self.italic = italic
         self.underline = underline; self.strikethrough = strikethrough
-        self.highlight = highlight; self.code = code; self.link = link
+        self.highlight = highlight || highlightColor != nil
+        self.highlightColor = highlightColor == .yellow ? nil : highlightColor
+        self.code = code; self.link = link
     }
+
+    public var effectiveHighlight: RichHighlightColor? { highlightColor ?? (highlight ? .yellow : nil) }
 
     /// True when the run carries no styling (never persisted).
     public var isEmpty: Bool {
-        !bold && !italic && !underline && !strikethrough && !highlight && !code && link == nil
+        !bold && !italic && !underline && !strikethrough && effectiveHighlight == nil && !code && link == nil
     }
 
     private enum CodingKeys: String, CodingKey {
-        case location, length, bold, italic, underline, strikethrough, highlight, code, link
+        case location, length, bold, italic, underline, strikethrough, highlight, highlightColor, code, link
     }
 
     public init(from decoder: Decoder) throws {
@@ -50,7 +63,9 @@ public struct RichInlineRun: Codable, Equatable, Sendable {
         italic = try c.decodeIfPresent(Bool.self, forKey: .italic) ?? false
         underline = try c.decodeIfPresent(Bool.self, forKey: .underline) ?? false
         strikethrough = try c.decodeIfPresent(Bool.self, forKey: .strikethrough) ?? false
-        highlight = try c.decodeIfPresent(Bool.self, forKey: .highlight) ?? false
+        let color = try c.decodeIfPresent(RichHighlightColor.self, forKey: .highlightColor)
+        highlightColor = color == .yellow ? nil : color
+        highlight = (try c.decodeIfPresent(Bool.self, forKey: .highlight) ?? false) || color != nil
         code = try c.decodeIfPresent(Bool.self, forKey: .code) ?? false
         link = try c.decodeIfPresent(String.self, forKey: .link)
     }
@@ -70,20 +85,23 @@ public struct RichBlockRun: Codable, Equatable, Sendable {
     /// rule is an empty line carrying the marker, so the plain body keeps a
     /// blank line and the rich companion records it without touching text.
     public var rule: Bool
+    /// Adjacent code paragraphs with the same identity form one copyable block.
+    public var codeBlockID: UUID?
 
-    public init(location: Int, length: Int, heading: Int? = nil, quote: Bool = false, list: RichListStyle? = nil, checked: Bool? = nil, rule: Bool = false) {
+    public init(location: Int, length: Int, heading: Int? = nil, quote: Bool = false, list: RichListStyle? = nil, checked: Bool? = nil, rule: Bool = false, codeBlockID: UUID? = nil) {
         self.location = location; self.length = length
         self.heading = heading; self.quote = quote; self.list = list; self.checked = checked
         self.rule = rule
+        self.codeBlockID = codeBlockID
     }
 
     /// True when the run carries no styling (never persisted).
     public var isEmpty: Bool {
-        validHeading == nil && !quote && list == nil && !rule
+        validHeading == nil && !quote && list == nil && !rule && codeBlockID == nil
     }
 
     private enum CodingKeys: String, CodingKey {
-        case location, length, heading, quote, list, checked, rule
+        case location, length, heading, quote, list, checked, rule, codeBlockID
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +113,7 @@ public struct RichBlockRun: Codable, Equatable, Sendable {
         list = try c.decodeIfPresent(RichListStyle.self, forKey: .list)
         checked = try c.decodeIfPresent(Bool.self, forKey: .checked)
         rule = try c.decodeIfPresent(Bool.self, forKey: .rule) ?? false
+        codeBlockID = try c.decodeIfPresent(UUID.self, forKey: .codeBlockID)
     }
 
     /// Normalized heading in 1...6 (reference exposes Heading 1–6), or nil
@@ -132,6 +151,18 @@ public struct RichBody: Codable, Equatable, Sendable {
     /// True when there is nothing styled to persist.
     public var isEmpty: Bool {
         runs.allSatisfy(\.isEmpty) && blocks.allSatisfy(\.isEmpty)
+    }
+
+    public var hasCodeBlocks: Bool { blocks.contains { $0.codeBlockID != nil } }
+
+    public var hasCustomHighlightColors: Bool { runs.contains { $0.highlightColor != nil } }
+
+    public func isInCodeParagraph(at offset: Int) -> Bool {
+        guard hasCodeBlocks else { return false }
+        let string = text as NSString
+        guard (0...string.length).contains(offset) else { return false }
+        let paragraph = string.paragraphRange(for: NSRange(location: offset, length: 0))
+        return paragraph.length > 0 && blocks.contains { $0.codeBlockID != nil && $0.location == paragraph.location }
     }
 
     /// Exact UTF-16 identity (NOT `String ==`, which treats canonically

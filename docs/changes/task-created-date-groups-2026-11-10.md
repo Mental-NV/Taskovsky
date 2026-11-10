@@ -1,0 +1,11 @@
+# TASK-GROUP-001 — Group task lists by creation date
+
+The local Tasks and Calendar parity goal authorizes this Mac and iPhone change. It refines [BUS-019](../spec/business.md#bus-019), [UX-005](../spec/ui-ux.md#ux-005) and [IOS-004](../spec/iphone.md#ios-004) and [iPhone organization](../spec/iphone.md#8-organization-search-and-settings) and tracks [TT-021](../parity-implementation-status.md#tt-021). The isolated worktree is based on `6ee96eeb8f88e74a105c518de2202233ea528efa`. TickTick’s release notes document Created Time grouping alongside independent Created and Modified sorts. The exact reference buckets and destination-specific persistence remain open. [TickTick release notes](https://help.ticktick.com/articles/7082552170989486080).
+
+The existing Sort control gains a separate Group by Created Date switch. It defaults off and saves as a device-local preference, using the existing QA preference isolation. Ordinary list routes including regular lists, smart lists, folders, tags and filters group active unpinned rows by `createdAt` on the workspace’s local civil calendar. The header uses a localized date with a year. Groups are newest day first, with oldest day first for Created · Oldest First. The active sort controls row order inside each day. Pins and history retain their existing presentation. Children nest only when their parent is in the same group.
+
+In a regular list with named sections, the switch temporarily shows creation days in List view. Turning it off restores the section headers and their capture and move targets. Creation grouping is a computed presentation and disallows Mac row reordering. Task-grip drops into lists and Calendar retain their existing actions. The setting is scoped to task-list presentation. Boards, Timeline, Search, Summary, reminders and history destinations keep their own grouping. Changing the preference does not write workspace or Calendar settings files.
+
+Verify local midnight and year boundaries, stable same-day order, both creation-sort directions, named-section restoration, pins, and saved preference after relaunch. Compare file hashes before and after and verify that the existing sort remains available. Use the native Sort controls and group headings already specified in UX-005 and IOS-006.
+
+[Verification record](../spec/verification.md#task-created-date-groups).

@@ -1,0 +1,9 @@
+# RICH-BLOCK-002 — Type a code block fence
+
+The local Tasks and Calendar parity goal authorizes this Mac and iPhone change. It extends [saved code blocks](rich-code-blocks-2026-11-10.md), [BUS-005](../spec/business.md#bus-005) and [TT-002](../parity-implementation-status.md#tt-002). TickTick documents three backticks followed by a line break to start a code block. [TickTick formatting guide](https://help.ticktick.com/articles/7507338582718152704).
+
+On a standalone line, type exactly three backticks and press Return. The editor replaces the marker with a blank code paragraph and places the caret in it. Return within code continues the block. On a code line containing only three backticks, Return closes the block and places the caret in plain text. If there is existing text below the closing fence, the editor leaves a plain blank line for the caret. An existing line separator is preserved, including CRLF. The opening blank line uses the code block’s existing paragraph representation and supports Undo/Redo even before typing content. The code and plain body contain the actual source characters and line separators, with no fence markers.
+
+Whitespace and inline Markdown stay literal inside code. A stored code line that resembles a fence with a language label does not change Markdown detection in the following prose. Ordinary Markdown Return rules, selection replacement, marked-text composition, the clipboard contract, and the protected workspace format keep their existing behavior. Verify native opening, blank-block Undo/Redo, multiple lines, closing, subsequent prose, reopen, and the exact saved block ranges and source bytes. The guide establishes the opening trigger. The closing marker and blank-line placement are Taskovsky’s local editing rules.
+
+[Verification record](../spec/verification.md#rich-typed-code-fence).

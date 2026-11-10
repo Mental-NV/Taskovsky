@@ -57,7 +57,8 @@ struct DesktopTaskTimeline: View {
                 commit(.unschedule, taskID: request.taskID, before: request.before)
                 self.request = nil
             }) { draft in
-                if draft.restoreOccurrence { commit(.restoreOccurrence, taskID: request.taskID, before: request.before) }
+                if draft.skipOccurrence { commit(.skipOccurrence, taskID: request.taskID, before: request.before) }
+                else if draft.restoreOccurrence { commit(.restoreOccurrence, taskID: request.taskID, before: request.before) }
                 else if let operation = draft.schedule.operation {
                     commit(operation, taskID: request.taskID, before: request.before, scope: draft.scope)
                 }
@@ -98,7 +99,9 @@ struct DesktopTaskTimeline: View {
             schedule: CalendarScheduleDraft(task: task, focus: focus, hourly: false, calendar: store.settings.calendar),
             listID: task.listID,
             canRescheduleOccurrence: CalendarScheduling.canRescheduleCurrentOccurrence(task, in: store.data.tasks),
-            hasOccurrenceOverride: task.originalOccurrenceSchedule != nil)
+            hasOccurrenceOverride: task.originalOccurrenceSchedule != nil,
+            skipBaseline: CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar)
+                ? CalendarScheduleSnapshot(task) : nil)
         request = ScheduleRequest(taskID: id, before: CalendarScheduleSnapshot(task), draft: draft)
     }
 
@@ -155,7 +158,8 @@ struct DesktopTaskTimeline: View {
         }
         if let token = store.scheduleOnCalendar(id: taskID, operation: operation, scope: scope) {
             undo = token
-            notice = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated"
+            if case .skipOccurrence = operation { notice = "Occurrence skipped" }
+            else { notice = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated" }
             return true
         }
         notice = store.storageError ?? "Schedule unchanged"

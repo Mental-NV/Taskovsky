@@ -1,13 +1,14 @@
 import Foundation
 
 public enum TaskMetadataValidation: Error, Equatable, Sendable {
-    case unavailableTag, ambiguousChecklist, missingChecklistItem, emptyChecklistTitle
+    case unavailableTag, ambiguousChecklist, missingChecklistItem, emptyChecklistTitle, unavailableProgress, invalidProgress
 }
 
 /// Each command changes only the metadata it names. Embedded checklist
 /// identities are independent of task hierarchy and rich-body list markers.
 public enum TaskMetadataChange: Sendable {
     case priority(TaskPriority)
+    case progress(Int)
     case tags([UUID])
     case checklist([ChecklistItem])
     case setChecklistCompleted(id: UUID, completed: Bool)
@@ -18,6 +19,12 @@ public enum TaskMetadataChange: Sendable {
         case .priority(let value):
             guard value != original.priority else { return nil }
             task.priority = value
+        case .progress(let percent):
+            guard original.canEditManualProgress else { throw TaskMetadataValidation.unavailableProgress }
+            guard (0...100).contains(percent) else { throw TaskMetadataValidation.invalidProgress }
+            let value: Int? = percent == 0 ? nil : percent
+            guard value != original.manualProgress else { return nil }
+            task.manualProgress = value
         case .tags(let ids):
             guard ids != original.tagIDs else { return nil }
             let allowed = Set(availableTags.map(\.id)).union(original.tagIDs)

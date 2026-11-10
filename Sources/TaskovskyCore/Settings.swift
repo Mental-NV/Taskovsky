@@ -176,6 +176,24 @@ public enum TaskTimestampSort: String, CaseIterable, Sendable {
     }
 }
 
+/// Creation groups preserve the incoming sort order within each civil day.
+public struct TaskCreationDayGroup: Identifiable, Sendable {
+    public let day: Date
+    public let tasks: [TaskItem]
+    public var id: Date { day }
+
+    public func title(calendar: Calendar) -> String {
+        day.formatted(Date.FormatStyle(date: .abbreviated, time: .omitted,
+                                       calendar: calendar, timeZone: calendar.timeZone))
+    }
+
+    public static func group(_ tasks: [TaskItem], calendar: Calendar, sort: TaskTimestampSort?) -> [Self] {
+        let groups = Dictionary(grouping: tasks) { calendar.startOfDay(for: $0.createdAt) }
+        return groups.map { Self(day: $0.key, tasks: $0.value) }
+            .sorted { sort == .createdOldest ? $0.day < $1.day : $0.day > $1.day }
+    }
+}
+
 public enum FilterDateRule: String, Codable, CaseIterable, Sendable {
     case all, today, tomorrow, next7, overdue, noDate
     case thisWeek, nextWeek, lastWeek, thisMonth, nextMonth, lastMonth, repeating, custom

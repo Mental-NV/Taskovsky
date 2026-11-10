@@ -39,6 +39,8 @@ final class RichBodyTextView: NSTextView {
         return pasteboard
     }()
 
+    static var descriptionClipboard: NSPasteboard { qaClipboard ?? .general }
+
     override var undoManager: UndoManager? { ownedUndo }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -46,9 +48,24 @@ final class RichBodyTextView: NSTextView {
         return super.performKeyEquivalent(with: event)
     }
 
+    override func mouseDown(with event: NSEvent) {
+        if isEditable, !hasMarkedText(), event.clickCount == 1,
+           event.modifierFlags.intersection([.control, .option, .shift]).isEmpty,
+           let layout = layoutManager as? ListLayoutManager,
+           let marker = layout.checklistMarker(at: convert(event.locationInWindow, from: nil), origin: textContainerOrigin),
+           case .checkbox(let checked) = marker.kind,
+           let coordinator = delegate as? RichBodyEditor.Coordinator {
+            window?.makeFirstResponder(self)
+            coordinator.toggleChecklistMarker(marker.paragraph, checked: !checked)
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
     override func keyDown(with event: NSEvent) {
         if handleHistoryKey(event) || handleQAClipboardKey(event) { return }
-        if event.characters == "/", !event.isARepeat,
+        let inCode = selectionStartsInCodeParagraph
+        if !inCode, event.characters == "/", !event.isARepeat,
            event.modifierFlags.intersection([.command, .control]).isEmpty,
            (delegate as? RichBodyEditor.Coordinator)?.showSlashMenu(in: self) == true { return }
         handlingTextKey = event.modifierFlags.intersection([.command, .control]).isEmpty
@@ -56,12 +73,22 @@ final class RichBodyTextView: NSTextView {
         // divider. Prose and the system's Smart Dashes preference are untouched.
         let keepsDividerPrefix = isAutomaticDashSubstitutionEnabled && handlingTextKey &&
             event.characters == "-" && !hasMarkedText() && isSecondDividerHyphen
-        if keepsDividerPrefix { isAutomaticDashSubstitutionEnabled = false }
+        let restoreDashes = isAutomaticDashSubstitutionEnabled && (keepsDividerPrefix || inCode)
+        let restoreQuotes = isAutomaticQuoteSubstitutionEnabled && inCode
+        if restoreDashes { isAutomaticDashSubstitutionEnabled = false }
+        if restoreQuotes { isAutomaticQuoteSubstitutionEnabled = false }
         defer {
-            if keepsDividerPrefix { isAutomaticDashSubstitutionEnabled = true }
+            if restoreDashes { isAutomaticDashSubstitutionEnabled = true }
+            if restoreQuotes { isAutomaticQuoteSubstitutionEnabled = true }
             handlingTextKey = false
         }
         super.keyDown(with: event)
+    }
+
+    private var selectionStartsInCodeParagraph: Bool {
+        guard let storage = textStorage else { return false }
+        let paragraph = (string as NSString).paragraphRange(for: NSRange(location: selectedRange().location, length: 0))
+        return paragraph.length > 0 && storage.attribute(RichRender.codeBlockKey, at: paragraph.location, effectiveRange: nil) != nil
     }
 
     private var isSecondDividerHyphen: Bool {
@@ -123,6 +150,7 @@ final class RichBodyTextView: NSTextView {
                 return
             }
             if data == nil, board.availableType(from: [.rtfd, .rtf, .html, .string]) == .string,
+               !selectionStartsInCodeParagraph,
                let fragment = RichBodyClipboard.formattedPlainText(text, replacing: selectedRange(), in: string),
                coordinator?.pasteClipboard(.paste(selectedRange(), fragment: fragment), into: self,
                                             length: fragment.text.utf16.count) == true {
@@ -359,6 +387,10 @@ struct RichBodyEditor: NSViewRepresentable {
             updateToolbarState(view)
         }
 
+        func toggleChecklistMarker(_ paragraph: NSRange, checked: Bool) {
+            host.controller.toggleChecklistMarker(paragraph, checked: checked)
+        }
+
         @discardableResult
         func pasteClipboard(_ command: RichBodyEdit, into view: NSTextView, length: Int) -> Bool {
             guard !applying, view.isEditable, !view.hasMarkedText() else { return false }
@@ -429,7 +461,7 @@ struct RichBodyEditor: NSViewRepresentable {
         }
 
         private func applyMarkdown(_ text: String, at range: NSRange, in view: NSTextView) -> Bool {
-            guard markdownArm != nil || text == " " || text == "-" else { return false }
+            guard markdownArm != nil || text == " " || text == "-" || text == "\n" else { return false }
             let original = RichRender.extract(from: view)
             let prior = original.rich ?? RichBody(text: original.text)
             let change = markdownArm?.inserting(text, at: range, in: prior)
@@ -445,6 +477,9 @@ struct RichBodyEditor: NSViewRepresentable {
             // never reach shouldChangeTextInRanges — intercept the command
             // itself with the same shared policy.
             if commandSelector == #selector(NSResponder.insertNewline(_:)) {
+                if let view = textView as? RichBodyTextView, view.handlingTextKey, !view.hasMarkedText(),
+                   view.selectedRanges.count == 1, view.selectedRange().length == 0,
+                   applyMarkdown("\n", at: view.selectedRange(), in: view) { return true }
                 markdownArm = nil
                 return host.controller.handleReturn()
             }
@@ -554,12 +589,12 @@ struct RichBodyEditor: NSViewRepresentable {
 
 private enum RichSlashFormat {
     case heading(Int)
-    case quote, bullet, numbered, checklist, rule
+    case quote, bullet, numbered, checklist, rule, codeBlock
     case bold, italic, underline, strikethrough, highlight, code
 
     static let groups: [[Self]] = [
         (1...6).map(Self.heading),
-        [.quote, .bullet, .numbered, .checklist, .rule],
+        [.quote, .bullet, .numbered, .checklist, .rule, .codeBlock],
         [.bold, .italic, .underline, .strikethrough, .highlight, .code]
     ]
 
@@ -571,6 +606,7 @@ private enum RichSlashFormat {
         case .numbered: "Numbered List"
         case .checklist: "Checklist"
         case .rule: "Horizontal Rule"
+        case .codeBlock: "Code Block"
         case .bold: "Bold"
         case .italic: "Italic"
         case .underline: "Underline"
@@ -588,6 +624,7 @@ private enum RichSlashFormat {
         case .numbered: controller.toggleList(.numbered)
         case .checklist: controller.toggleList(.checklist)
         case .rule: controller.insertRule()
+        case .codeBlock: controller.toggleCodeBlock()
         case .bold: controller.toggleTrait(.boldFontMask)
         case .italic: controller.toggleTrait(.italicFontMask)
         case .underline: controller.toggleUnderline()
@@ -732,6 +769,23 @@ final class RichBodyController: ObservableObject {
         edit(label: label, undoSelection: undoSelection) { storage in
             storage.setAttributedString(RichRender.attributedString(text: body.text, rich: body))
             view.setSelectedRange(NSRange(location: caret, length: 0))
+            if body.hasCodeBlocks, caret == storage.length, !body.isInCodeParagraph(at: caret) {
+                view.typingAttributes = RichRender.baseAttributes
+            }
+        }
+    }
+
+    func toggleCodeBlock() {
+        guard let view = textView, view.isEditable, !view.hasMarkedText() else { return }
+        let selection = view.selectedRange()
+        let original = RichRender.extract(from: view)
+        let body = original.rich ?? RichBody(text: original.text)
+        guard let change = RichBodyEdit.togglingCodeBlock(in: body, selection: selection),
+              let updated = try? RichBodyEdit.applying([change], to: body.text, rich: body) else { return }
+        view.breakUndoCoalescing()
+        edit(label: "Code Block", undoSelection: true) { storage in
+            storage.setAttributedString(RichRender.attributedString(text: updated.text, rich: updated))
+            view.setSelectedRange(selection)
         }
     }
 
@@ -743,6 +797,11 @@ final class RichBodyController: ObservableObject {
         storage.setAttributedString(snapshot)
         if let selection { view.setSelectedRange(selection) }
         clampSelection(view)
+        let caret = view.selectedRange().location
+        if view.typingAttributes[RichRender.codeBlockKey] != nil ||
+            (caret < storage.length && storage.attribute(RichRender.codeBlockKey, at: caret, effectiveRange: nil) != nil) {
+            view.typingAttributes = RichRender.attributes(at: caret, in: view)
+        }
         // Undo/redo swaps storage wholesale without touching typing; re-arm
         // from the restored paragraph so continuation survives the swap.
         repairContinuation(beforeTyping: nil)
@@ -799,6 +858,13 @@ final class RichBodyController: ObservableObject {
             label: "Highlight",
             storageEdit: { storage, range in RichMutate.toggleHighlight(in: storage, range: range) },
             typingEdit: { attrs in RichTyping.toggleHighlight(in: &attrs) })
+    }
+
+    func setHighlight(_ color: RichHighlightColor?) {
+        editInlineOrTyping(
+            label: color.map { "Highlight \($0.title)" } ?? "Remove Highlight",
+            storageEdit: { storage, range in RichMutate.setHighlight(color, in: storage, range: range) },
+            typingEdit: { attrs in RichTyping.setHighlight(color, in: &attrs) })
     }
 
     func toggleCode() {
@@ -1105,6 +1171,13 @@ final class RichBodyController: ObservableObject {
         return true
     }
 
+    func toggleChecklistMarker(_ paragraph: NSRange, checked: Bool) {
+        textView?.breakUndoCoalescing()
+        edit(label: checked ? "Check Item" : "Uncheck Item") { storage in
+            RichMutate.setChecklistChecked(checked, in: storage, paragraph: paragraph)
+        }
+    }
+
     /// Inline checklist checked state. Explicit values always apply (marking
     /// already-checked items checked again is a no-op, never a removal).
     /// With no characters to restyle (empty document, trailing empty
@@ -1200,14 +1273,29 @@ struct RichBodyReader: View {
     @State private var collapsed: Set<Int> = []
     @State private var positions: [Int: CGFloat] = [:]
     @State private var height: CGFloat = 60
+    @State private var copiedCode: Int?
 
     var body: some View {
         let reading = preview.readingView(collapsed: collapsed)
+        let code = reading.preview.codeBlocks
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Read Description").font(.headline)
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            if !code.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack {
+                        ForEach(Array(code.enumerated()), id: \.element.id) { index, block in
+                            Button(copiedCode == block.id ? "Copied" : code.count == 1 ? "Copy Code Block" : "Copy Code Block \(index + 1)", systemImage: "doc.on.doc") {
+                                let board = RichBodyTextView.descriptionClipboard
+                                board.clearContents()
+                                if board.setString(block.text, forType: .string) { copiedCode = block.id }
+                            }.accessibilityIdentifier("copyRichCodeBlock-\(index)")
+                        }
+                    }
+                }
             }
             ScrollView {
                 ZStack(alignment: .topLeading) {
@@ -1235,6 +1323,7 @@ struct RichBodyReader: View {
                 }
             }
         }.padding(18).frame(width: 530, height: 430)
+            .onChange(of: collapsed) { _, _ in copiedCode = nil }
     }
 }
 
@@ -1305,9 +1394,11 @@ struct RichBodyToolbar: View {
             toolButton(symbol: "highlighter", label: "Highlight", active: controller.active.highlight) {
                 controller.toggleHighlight()
             }
+            highlightPalette
             toolButton(symbol: "chevron.left.forwardslash.chevron.right", label: "Inline Code", active: controller.active.code) {
                 controller.toggleCode()
             }
+            toolButton(symbol: "curlybraces", label: "Code Block", active: false) { controller.toggleCodeBlock() }
             Divider().frame(height: 16)
             toolButton(symbol: "text.quote", label: "Block Quote", active: controller.active.quote) {
                 controller.toggleQuote()
@@ -1363,5 +1454,22 @@ struct RichBodyToolbar: View {
         .help(label)
         .accessibilityLabel(label)
         .disabled(disabled)
+    }
+
+    private var highlightPalette: some View {
+        Menu {
+            ForEach(RichHighlightColor.allCases, id: \.self) { color in
+                Button { controller.setHighlight(color) } label: {
+                    Label(color.title, systemImage: "circle.fill")
+                        .foregroundStyle(Color(nsColor: RichRender.highlightWash(for: color).withAlphaComponent(1)))
+                }
+            }
+            Divider()
+            Button("Remove Highlight") { controller.setHighlight(nil) }
+        } label: {
+            Label("Highlight Colors", systemImage: "chevron.down").labelStyle(.iconOnly)
+                .font(.system(size: 9, weight: .semibold)).frame(width: 14, height: 24)
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Highlight Colors").accessibilityLabel("Highlight Colors").disabled(disabled)
     }
 }

@@ -79,7 +79,7 @@ public struct WorkspaceCalendarUndo: Sendable {
 
     public func canRestore(in data: WorkspaceData) -> Bool {
         guard let task = data.tasks.first(where: { $0.id == schedule.taskID }) else { return false }
-        return schedule.canRestore(task, lists: data.lists)
+        return schedule.canRestore(task, lists: data.lists, tasks: data.tasks)
     }
 }
 
@@ -339,14 +339,15 @@ public actor WorkspaceFileRepository {
             }
             let undo = CalendarScheduleUndo(taskID: task.id, before: CalendarScheduleSnapshot(task),
                                             after: CalendarScheduleSnapshot(changed),
-                                            completedAt: task.completedAt, wontDoAt: task.wontDoAt)
+                                            completedAt: task.completedAt, wontDoAt: task.wontDoAt, operation: operation)
             return (changed, WorkspaceCalendarUndo(schedule: undo))
         }
     }
 
     public func undo(_ undo: WorkspaceCalendarUndo, now: Date = Date()) -> WorkspaceScheduleOutcome {
         editSchedule(taskID: undo.schedule.taskID, expected: nil, now: now) { task, document in
-            guard let restored = undo.schedule.restoring(on: task, lists: document.snapshot.workspace.lists) else {
+            let data = document.snapshot.workspace
+            guard let restored = undo.schedule.restoring(on: task, lists: data.lists, tasks: data.tasks) else {
                 throw WorkspaceScheduleRefusal.changedSinceCalendarEdit
             }
             return (restored, nil)

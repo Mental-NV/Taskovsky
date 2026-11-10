@@ -38,6 +38,24 @@ public enum DueLabels {
         return dayText
     }
 
+    /// Full task-row schedule in the caller's task calendar.
+    public static func expandedRowLabel(for task: TaskItem, calendar: Calendar,
+                                        dayText: (Date) -> String, timeText: (Date) -> String) -> String? {
+        guard let due = task.dueDate else { return nil }
+        func endpoint(_ date: Date, timed: Bool) -> String {
+            timed ? dayText(date) + " " + timeText(date) : dayText(date)
+        }
+        guard let window = task.scheduledDuration?.validated(in: calendar) else {
+            return endpoint(due, timed: task.hasDueTime)
+        }
+        let first = endpoint(window.start, timed: !window.isAllDay)
+        if window.start == window.end { return first }
+        if calendar.isDate(window.start, inSameDayAs: window.end) {
+            return window.isAllDay ? first : first + " – " + timeText(window.end)
+        }
+        return first + " – " + endpoint(window.end, timed: !window.isAllDay)
+    }
+
     /// Detail header text with day-relative prefixes and overdue counts.
     public static func detailLabel(for day: DueDay, dayText: String, timedSuffix: String) -> String {
         switch day {

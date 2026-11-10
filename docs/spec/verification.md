@@ -1063,6 +1063,8 @@ The reference evidence is the installed TickTick 8.2.20 build 922 English resour
 
 <a id="calendar-month-span-width-regression"></a>
 
+<a id="mobile-month-span-width-regression"></a>
+
 ### iPhone Month span width regression check
 
 The broader iPhone run through typed Markdown recorded a failure in the older Month continuation test. Its leading segment's title button measured 122.67 points, below the 125-point test threshold. The start handle occupies its own space in the same all-day bar. The revised test measures each complete segment through the title and its visible drag and resize controls. Both original width thresholds, vertical separation, horizontal continuation, overflow and Multi-Week checks remain in place.
@@ -1088,3 +1090,175 @@ The vendor changelog documents both configurable shortcuts. Taskovsky's recorder
 With the saved master and both per-kind switches off, standalone Calendar initially hid the task and note icons. Option-click on the leading task target completed and reopened the task. Option-click on the note’s leading target stayed in Calendar, while a plain click at the same point opened the note detail. In split view, Option-click on the Calendar checkbox completed the same task. Undo restored it and the checkbox stayed hidden after release. The default date jump still worked from split Calendar. Ordinary Tasks kept its checkbox and did not open Calendar on the Option probe. The file audit found byte-identical Calendar settings and only the test task’s modification timestamp changed. The fixture, guarded app and scoped preferences were restored.
 
 The original Calendar view-options guide documents the temporary reveal on Mac. The app keeps the input within the key Calendar workspace window and uses existing entry controls. [TickTick Calendar View Options](https://help.ticktick.com/articles/7055782085826445312).
+
+<a id="markdown-typing-iphone-full-regression"></a>
+
+### MOB-QA-006 — Full iPhone regression through typed Markdown
+
+The full suite used the sealed all-day start, date jump and typed Markdown source, SHA-256 `2eacf197b0154f82d3d5123a14865a2742f111747017e1e4db86712752ff86bd`. It recorded 263 passes, one failure, zero skips and zero runtime warnings. `testCalendarMonthAllDayRangeContinuesOnNextWeekRow()` failed the older title-width assertion. The [corrected whole-bar test passed in the focused rerun](#mobile-month-span-width-regression). Rich description and Summary clipboard actions used only named pasteboards with synthetic data. The [focused typed Markdown checks](#rich-description-markdown-typing) have separate results.
+
+The file audit passed 80 baseline cases with 79 Mac reopens that made no writes. All 26 file-audit groups passed, including exact saved all-day endpoints, no-write date navigation and the rich ranges created by typed Markdown. The disposable simulator was removed.
+
+<a id="task-created-date-groups"></a>
+
+### TASK-GROUP-001 — Creation-date grouping on Mac and iPhone
+
+[Change contract](../changes/task-created-date-groups-2026-11-10.md). Source manifest SHA-256 is `1247e0e0750e7b9b835e74592edf8bafa0f16f196cd96f45fc8ab6dea5d3e642`. All 632 Mac tests passed and the release passed strict signature verification. Five focused iPhone simulator tests passed with zero failures, skips or runtime warnings. The tests included the existing timestamp sort and the corrected Month continuation check.
+
+Mac QA showed a named Review section and a pinned row. Group by Created Date moved the two unpinned tasks under their localized creation-day headers, with newest day first. Activating the task grip in manual sort showed the grouping-specific reorder message. Created · Oldest First reversed the date groups. Both settings survived relaunch. Turning grouping off restored the Review header and its add target. Completed kept its existing menu without the grouping choice. The file audit verified byte-identical workspace and settings and restored the fixture, guarded app and scoped preferences.
+
+The iPhone test kept the pinned row above the creation days, checked default and oldest-first order, restored a named section, and confirmed both settings survived relaunch. Its audit confirmed byte-identical workspace and settings, including the original section assignment, and preferences scoped to the QA session. The domain test verifies the boundary at Moscow midnight across New Year, independent of the due date. The focused simulator was removed. The full 266-test run started separately on the same source.
+
+The reference documents creation grouping separately from sort. Local-day labels and device-wide List preference are Taskovsky choices. [TickTick release notes](https://help.ticktick.com/articles/7082552170989486080).
+
+<a id="rich-code-blocks"></a>
+
+### RICH-BLOCK-001 — Saved description code blocks
+
+[Change contract](../changes/rich-code-blocks-2026-11-10.md). Source manifest SHA-256 is `4ce05d24fee643166131b15d4182ac378a83b525249e02eae905d223a9abefa2`. All 635 Mac tests passed and the release passed strict signature verification. Seven focused iPhone simulator tests passed across two runs with zero failures, skips or runtime warnings.
+
+Guarded Mac QA pasted a closed fence into a disposable task, checked Undo and Redo, opened Read Description and copied the block. Paste as Plain Text in another task produced the exact same characters, including the trailing newline, with no rich companion. Relaunch reopened the saved block. The Code Block tool removed only the paragraph style and Undo restored it. The audit found only the intended descriptions and modification times changed, with byte-identical settings. The guarded app, fixture and preferences were restored.
+
+The iPhone check compared ordinary and explicit plain paste, exercised Undo and Redo, saved, relaunched and pasted the reader’s copy into another task. The file audit verified the two UTF-16 ranges, their shared block ID, the exact plain copy and unchanged settings and other fields. The existing clipboard file audit needed its second case in a separate run on the same simulator. Both named-board audits passed and the focused simulator was removed.
+
+The shared tests cover CRLF, decomposed Unicode, emoji, literal formatting marks, adjacent separate blocks, removing the style without changing the text, joining lines within a block and protected workspace encoding. An older Mac reader left the new format byte-for-byte unchanged. The reference documents code blocks and one-click Copy. Taskovsky’s typed fence trigger and syntax highlighting remain open. [TickTick formatting guide](https://help.ticktick.com/articles/7507338582718152704) · [TickTick changelog](https://ticktick.com/public/changelog/en.html).
+
+<a id="rich-typed-code-fence"></a>
+
+### RICH-BLOCK-002 — Type a code block fence
+
+[Change contract](../changes/rich-typed-code-fence-2026-11-10.md). Mac source manifest SHA-256 is `c754b6ed34beb964273aac0f3b1d78066b6f8e0e8853efbdda57c75518183040`. The iPhone source SHA-256 is `a6c0960084ce6d1583f66cf86a8f3565d2b6018c892f6efdebe756fdc75ce97b`. The manifests differ only in the Mac editor, AppKit renderer and Mac-only test. All 638 Mac tests passed and the release passed strict signature verification. Five focused iPhone simulator tests passed with zero failures, skips or runtime warnings.
+
+Mac QA typed both fences with the Return key, verified Undo and Redo at opening and closing, continued through two code lines, and typed a Markdown heading afterward. The first Mac trial left the code style at the trailing caret after redoing the close. The verified AppKit build recomputes code typing attributes from the restored paragraph and clears them at an empty trailing caret. Relaunch showed the saved snippet and its Copy action. The audit found two code ranges and one ordinary heading, with byte-identical settings and unrelated records. The guarded app, fixture and scoped preferences were restored.
+
+The first iPhone trial lost characters during rapid multiline typing after the opening conversion. The verified build updates the existing text storage during code edits. It passed the same rapid sequence, opening Undo and Redo, a literal hash line, closing, a following heading and relaunch. The audit verified exact saved text, two code ranges and an ordinary heading. Existing code paste, whole-block copy and typed Markdown also passed. Both disposable iPhone simulators were removed.
+
+The shared tests cover CRLF, an opening before existing text, a final code line without a separator, an exact standalone closing fence, literal whitespace, and return to prose. The protected workspace format is unchanged. TickTick documents the opening shortcut. The standalone closing rule is Taskovsky’s local choice. [TickTick formatting guide](https://help.ticktick.com/articles/7507338582718152704).
+
+<a id="task-created-groups-iphone-full-regression"></a>
+
+### MOB-QA-007 — Full iPhone regression through creation-date grouping
+
+The full suite used source manifest SHA-256 `1247e0e0750e7b9b835e74592edf8bafa0f16f196cd96f45fc8ab6dea5d3e642`. It recorded 266 passes, 0 failures, 0 skips and 0 runtime warnings. The test inventory includes both creation grouping cases and the corrected whole-bar Month test. Rich clipboard actions used named boards with synthetic data.
+
+The file audit passed 80 baseline cases with 79 Mac reopens that made no writes. All 28 audit groups passed, including creation grouping’s section assignment and exact task bytes and the Month continuation’s no-write check. The disposable simulator was removed.
+
+<a id="rich-highlight-colors"></a>
+
+### RICH-HIGHLIGHT-001 — Multiple description highlight colors
+
+[Change contract](../changes/rich-highlight-colors-2026-11-10.md). The Mac source manifest SHA-256 is `8133d3e50abd4fc1bfe617243d32f9c53b7fe152fe4a9d8b694e057fa03cbbde` and the iPhone source SHA-256 is `97e0607ee9701c3afdcf740a0a47d874d50fc5f6bdc1972011f66c61318143a6`. Only the iPhone UI test differs between them. All 640 Mac tests passed and the release passed strict signature verification. Six focused iPhone simulator tests passed with zero failures, skips or runtime warnings.
+
+The Mac accessibility tree names the menu Highlight Colors. The guarded Mac QA build applied blue, changed it to pink, removed it, and stepped through Undo and Redo. Saved ranges confirmed that the original yellow and bold stayed intact. Copy into another task and a relaunch preserved both colors and exact text. The prior QA build, fixture files and preferences were restored.
+
+The initial iPhone trials saved the correct source ranges, but keyboard selection failed after relaunch and the first touch attempt did not expose Select All. The passing rerun extended the selection using its visible handle and used the native Copy and Paste menus. The saved file audit verified both colors and original bold in the destination, unchanged settings, and preservation by an older Mac reader. All four disposable simulators were removed.
+
+The shared tests cover exact Unicode, color edits over existing bold and inline code, legacy yellow, color clipboard protection and workspace round trips. The Mac renderer tests cover overlapping inline code and highlight and restoring its wash after removal. The reference documents multiple colors. Taskovsky’s palette and storage are local choices. [TickTick release notes](https://help.ticktick.com/articles/7082552170989486080).
+
+<a id="rich-checklist-toggle"></a>
+
+### RICH-CHECKLIST-001 — Direct description checkbox toggles
+
+[Change contract](../changes/rich-checklist-toggle-2026-11-10.md). Mac source manifest SHA-256 is `f13bffa09c37580609cad9363dc9d3e52200a982bd8e9e3fce736dbda6d3cc15` and iPhone source SHA-256 is `cc0952d738a9f884e8bce101f52d89c2172fd696d4761baa48514d6ed76a554d`. The only difference is the Mac editor source. All 641 Mac tests passed, including the native layout and mutation regression. The release passed strict signature verification. Five focused iPhone simulator tests passed with zero failures, skips or runtime warnings, including regressions for colored highlights, rich copy, typed Markdown and typed code fences.
+
+Once the editor had focus, a prose click and a bullet click left the workspace bytes unchanged. The first native Mac trial revealed that Computer Use supplied Command with its clicks. The final handler accepts that modifier in the checkbox gutter and leaves other text click behavior to AppKit. The open and checked description items then toggled independently, and Undo/Redo and relaunch retained the expected states. The saved-file audit found only the two checkbox states and the target task’s modification timestamp changed. The prior QA build, fixture files and preferences were restored.
+
+The first iPhone trial left the simulator keyboard tutorial open. The passing case dismissed it, then tapped adjacent prose and a bullet before toggling both checkboxes. Undo/Redo and Done retained the two independent states, and a further toggle after relaunch was discarded with Cancel. The saved file preserved exact Unicode, inline bold, other blocks, tasks and settings. Both disposable simulators were removed. The reference guide establishes description checklists. The exact hit targets and local editor transactions are Taskovsky choices. [TickTick editing guide](https://help.ticktick.com/articles/7507338582718152704).
+
+<a id="task-option-times"></a>
+
+### TASK-TIME-001 — Hold Option to reveal full task times on Mac
+
+[Change contract](../changes/task-option-times-2026-11-10.md). Mac source manifest SHA-256 is `16f6c4fe089690c329d0af42ce41637da07e61a49796c8e221c0d3ee7e77278a`. All 642 Mac tests passed, including date, time zone, point, same-day, overnight, all-day and invalid-window label cases. The release passed strict signature verification.
+
+The signed Mac build retained compact labels after release, hid the configured Calendar icons, and opened and cancelled Jump to Date. Computer Use cannot send a standalone modifier and its snapshots followed key release. A separate guarded build recorded native held and released events and the actual List label layout. It displayed Tokyo same-day and overnight ranges, a three-day all-day range and a timed Board point. The overnight List label occupied two lines. The split view activated both Tasks and Calendar together. Settings as the key window suppressed the reveal. Calendar number shortcuts changed Month and Week in standalone Calendar and stayed inactive in split view.
+
+The workspace and settings were byte-identical throughout the Option checks. The separate number shortcut probe returned the settings to their original values. Both QA builds, fixtures and scoped preferences were restored. The diagnostics stayed outside the integrated source.
+
+TickTick documents holding Option for task times. The local label format and responsive List/Board treatment are Taskovsky choices. [TickTick Mac changelog](https://ticktick.com/public/changelog/en.html).
+
+<a id="calendar-skip-occurrence"></a>
+
+### CAL-REPEAT-002 — Skip the current Calendar occurrence
+
+[Change contract](../changes/calendar-skip-occurrence-2026-11-10.md). Source manifest SHA-256 is `a0191aa88d9a6018358d49ce7940201c4f8bb50475df02c9a07c1ed6493a1ebe`. All 645 Mac tests passed and the release passed strict signature verification. Six focused iPhone simulator tests passed with zero failures, skips or runtime warnings. The shared tests verify nominal series advancement, a monthly anchor, completion-based cadence, preservation of the same record, terminal and stale refusals, and scoped Undo.
+
+The guarded Mac build staged and canceled the action, moved a two-day all-day range and its manual reminder one day, then restored the previous schedule with Undo. A second skip survived relaunch, and the editor omitted the action at the terminal occurrence. The audit confirmed only the target schedule and modification timestamp changed. The prior QA build, fixture files and preferences were restored.
+
+The iPhone Month case moved the current weekly occurrence before staging a skip. Cancel kept the moved occurrence. Done advanced from the saved series baseline, and Undo recovered the exception. A second skip survived relaunch as the terminal occurrence. The file audit confirmed the exact task ID, next date, shifted manual reminder, and unchanged other records and settings. The disposable simulator was removed. TickTick documents the current-occurrence action. The completion anchor and terminal handling are Taskovsky choices. [TickTick FAQ](https://help.ticktick.com/articles/7055792921664028672).
+
+<a id="calendar-card-completion"></a>
+
+### CAL-COMPLETION-001 — Calendar task and checklist completion
+
+[Change contract](../changes/calendar-card-completion-2026-11-10.md). Source manifest SHA-256 is `a9b45e99387c6dd5309d7a080cf189fa57ccfac60aa59005e1a32c95676bc3bc`. All 646 Mac tests passed and the release passed strict signature verification. The store regression covers a narrow checklist write, an identical no-op and a failed write without an in-memory change.
+
+The guarded Mac Agenda build completed and reopened an item using its checkbox and completed it with the icons hidden through the card menu. The checked state survived relaunch. A forecast had no completion action. The saved-workspace audit matched every field except the chosen item and its task's modification timestamp. The prior guarded build, fixture files and QA preferences were restored.
+
+Four focused iPhone simulator tests passed with zero failures or skips. They covered the 44-point Agenda checkbox, task completion and reopening with lifecycle Undo, hidden-icon checklist menus, Show Completed, read-only forecasts, relaunch and prior Calendar options and occurrence scheduling. The saved-workspace audits confirmed the exact checklist item and preserved the other items, parent status, schedule, and unrelated tasks. The disposable simulator was removed. VoiceOver and physical-device testing remain open.
+
+The iPhone-only alignment follow-up centered the Agenda title and drag grip with the checkbox. Source manifest SHA-256 is `2a0c9f07b479c3023300684e71550ab646f71550408d7a155e020eb1b15ef1f9`. Four focused tests passed on a fresh simulator, including Agenda Show more, completion, lifecycle Undo and hidden-icon menus. Both completion file audits passed. The aligned Agenda and hidden-icon menu screenshots are in the checkpoint evidence. The Mac source and tested release are identical to the previous checkpoint.
+
+<a id="rich-checklist-full-iphone-regression"></a>
+
+### MOB-QA-008 — Full iPhone regression through description checkbox toggles
+
+The full suite used source manifest SHA-256 `f13bffa09c37580609cad9363dc9d3e52200a982bd8e9e3fce736dbda6d3cc15`. It recorded 274 passes, 1 failures, 0 skips and 0 runtime warnings. Failed cases include `testRichChecklistTapsSaveAndCancelOnlyTheirParagraphs()`. The test inventory retains all 266 prior tests and adds nine cases covering saved code blocks, typed code fences, highlight colors and description checkbox toggles. Rich clipboard actions used named boards with synthetic data.
+
+The file audit passed 80 baseline cases with 79 Mac reopens that made no writes. 31 of 32 audit groups passed. The description-checkbox audit found both markers still in their initial states and the body unchanged. The disposable simulator was removed.
+
+<a id="rich-checklist-selection-menu-qa"></a>
+
+### MOB-QA-009 — Rich-description checkbox test and native selection menu
+
+A full regression on the older source missed two rich-description checkbox taps. The saved task kept both initial marker states and the exact body. On the same source, an isolated repeat passed twice and failed once. The failed replay showed the native iOS selection menu covering the first checkbox and intercepting the tap. Its saved file kept the first item unchecked.
+
+The corrected test moves the caret out of the selection menu's hit area and checks that the software keyboard remains visible before tapping the markers. All six runs and six exact saved-workspace comparisons passed. Source manifest SHA-256 is `86bfc1182f5e335ed43fbbee5171c24d4cb07116a22f4b19ed396480c11a73a5`. Only the test changed. The simulator was removed.
+
+<a id="board-display-settings"></a>
+
+### TASK-BOARD-DISPLAY-001 — Desktop Board display settings
+
+[Change contract](../changes/board-display-settings-2026-11-10.md). Source manifest SHA-256 is `b392c496b3a4d3e7b5090e3c7c6d89787ae01be42c48b33226fbaa2d8ee13eb6`. All 646 Mac tests passed, and the local release passed strict signature verification. The Board's three column sizes and idle task input are Mac presentation preferences. iPhone source and shared models match the prior verified checkpoint.
+
+The guarded Mac build exercised the three width choices across status, section and grouped Boards. The short status Board stayed aligned at the top of the pane. Cancel discarded a draft choice. Done saved the width and idle input setting. Hiding the input left section capture and New Task available. An in-progress title survived a width change, and List retained its input. The saved preferences survived relaunch. The file audit confirmed byte-identical workspace and shared settings files. The prior guarded build, QA preferences and fixture files were restored. Exact TickTick dimensions and preference scope remain unverified.
+
+<a id="task-progress"></a>
+
+### TASK-PROGRESS-001 — Local task progress
+
+[Change contract](../changes/task-progress-2026-11-10.md). Source manifest SHA-256 is `612de19363a880cfe75720161b4a928535b0f70adc7350dbae4ee0fe5389fa57`. All 650 Mac tests passed, and the release passed strict signature verification. The subsequent iPhone sheet and test changes left the tested Mac sources identical. Domain and store tests cover exact field changes, checklist derivation, protected-format transitions, stale drafts, disk refusal, recurring successors and progress surviving other desktop edits.
+
+The guarded Mac run discarded a changed draft with Escape, saved 100% on an open task, and changed a separate task from 25% to 50% by checking one item. Both values survived relaunch. Its saved-file audit confirmed only the selected values and modification timestamps changed. The prior guarded build, fixture files and QA preferences were restored.
+
+The final iPhone simulator run passed eight focused tests with zero failures, skips or runtime warnings. It covered Cancel, long-press entry, slider and one-point stepper, 100% without completion, relaunch and checklist derivation. The first simulator run saved 99% when the test drove the slider to its far end. The revised build uses the stepper for exact values. Its first test used an incorrect increment-button identifier and made no file writes. The corrected test passed against both the original sheet and the compact, expandable editor with a simplified slider. The final file audit checked the progress and checklist fields and byte-identical settings. An older Mac reader refused the protected file and the current reader opened it, with both leaving the files byte-identical. All four disposable simulators were removed.
+
+<a id="summary-report-options"></a>
+
+### TASK-SUMMARY-002 — Local Summary criteria and fields
+
+[Change contract](../changes/summary-report-options-2026-11-10.md). Source manifest SHA-256 is `d3fa80af2b3d865cf181ab2b247c05731322867cbf2202c257a0c04328afcca7`. All 652 Mac tests passed, and the release passed strict signature verification. The shared tests cover intersecting list, tag and priority criteria, parent-tag descendants, exact manual and checklist progress, optional completion fields, and sorting with stable ties in the current and upcoming sections.
+
+The guarded Mac build exercised Summary tag and priority selection, title sorting and the three new fields. It saved the rendered report as an Inbox note. The note body matched the captured report, the source tasks and settings were preserved, and the QA bundle, fixture and preferences were restored.
+
+Nine focused iPhone simulator tests passed with zero failures, skips or runtime warnings. The first iPhone test tapped switch rows outside their native controls and saved the unfiltered text. The second run applied scope and progress but missed the partially offscreen Completion Date switch. The final test scrolls to the fields and verifies each switch before applying the draft. The correction changed only the iPhone test source. The report with tag and priority scope matched both the parent and child tag cases. Cancel preserved the report. The edited report survived relaunch as an Inbox note. The saved-file audit matched the exact edited text and verified that only the new note was added. All three simulators were removed. TickTick's exact sorting choices and generated punctuation remain unverified.
+
+
+<a id="board-display-full-iphone-regression"></a>
+
+### MOB-QA-010 — Full iPhone regression through Calendar completion and skip
+
+The sealed pre–Task Progress and pre–Summary options source has manifest SHA-256 `b392c496b3a4d3e7b5090e3c7c6d89787ae01be42c48b33226fbaa2d8ee13eb6`. All 281 tests passed, with zero skips and zero runtime warnings. The suite retains all 275 prior tests and adds six for Calendar card completion, lifecycle Undo and skipping a recurring occurrence. The earlier description checkbox workflow also passed. Clipboard tests used named boards with synthetic data.
+
+All 34 saved-file audit groups passed, including Calendar completion and skip, and the 80 baseline file cases included 79 Mac reopens without writes. The disposable iPhone 13 Pro simulator was removed.
+
+
+<a id="summary-report-presets"></a>
+
+### TASK-SUMMARY-003 — Device-local Summary presets
+
+[Change contract](../changes/summary-report-presets-2026-11-10.md). Source manifest SHA-256 is `12d84a5733f8cb42837bc0a347df7cc4d0ff69d1d64312475b8408737fb552f2`. The Mac build uses the equivalent Mac source in manifest `5a76482ecbaf96785b67372826dc13669223e506a143cf041e9d604b9ff52dec`. All 653 Mac tests passed and the release passed strict signature verification. The shared contract test round-tripped every option and verified relative and custom periods, duplicate names, stable identity, rename, deletion and invalid data.
+
+The guarded Mac build saved, applied, renamed and deleted a named preset. A relaunch preserved the preset while restoring the ordinary initial report options. Renaming and deleting preserved the report text. Cancelling deletion kept the preset. Workspace and settings files were byte-identical, and the original guarded bundle and preferences were restored. The native check covered the wide Summary options rail.
+
+All 11 focused iPhone simulator tests passed with zero failures, skips and runtime warnings. The first run also passed 11 tests and reported a SwiftUI reparenting warning when opening the preset menu. The final build uses a dedicated preset screen. Applying and managing presets stayed staged until Done, and Cancel preserved the edited report and discarded the staged preset. The final audit found one renamed preset in the QA preference key and verified byte-identical workspace and settings. The two existing note tests preserved exact report text and unrelated records, and the failed-save workflow left its workspace and settings byte-identical. Both simulators were removed. Physical-device and VoiceOver checks remain open.

@@ -26,9 +26,12 @@ struct CalendarEntryView: View {
     var compact = false
     var trailingInset: CGFloat = 0
     var open: (UUID) -> Void
-    var complete: (UUID) -> Void
+    var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
     private var tint: Color { Color(hex: entry.color) }
+    private var completionAction: String {
+        (entry.isCompleted ? "Reopen " : "Complete ") + (entry.checklistID == nil ? "task" : "checklist item")
+    }
     private var time: String {
         if entry.isAllDay { return "All day" }
         if entry.hasDuration { return CalendarText.time(entry.start, calendar: calendar) + " – " + CalendarText.time(entry.due, calendar: calendar) }
@@ -42,10 +45,8 @@ struct CalendarEntryView: View {
                         .accessibilityLabel("Future repeat preview")
                 } else if entry.isNote {
                     Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(tint)
-                } else if entry.checklistID != nil {
-                    Image(systemName: entry.isCompleted ? "checkmark.square" : "square").font(.system(size: 10)).foregroundStyle(tint)
-                } else {
-                    Button { complete(entry.taskID) } label: {
+                } else if entry.canChangeCompletion {
+                    Button { complete(entry) } label: {
                         Image(systemName: entry.isCompleted ? "checkmark.square.fill" : "square").font(.system(size: 10))
                     }.buttonStyle(.plain).foregroundStyle(tint)
                         .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
@@ -58,6 +59,9 @@ struct CalendarEntryView: View {
                     if !compact { Text(time).font(.system(size: 10)).lineLimit(1).foregroundStyle(.secondary) }
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel((entry.isProjected ? "Preview: " : "") + entry.title + ", " + time)
+                .accessibilityActions {
+                    if entry.canChangeCompletion { Button(completionAction) { complete(entry) } }
+                }
         }
         .font(.system(size: compact ? 11 : 12))
         .padding(.horizontal, 4).padding(.vertical, compact ? 1 : 4)
@@ -71,9 +75,7 @@ struct CalendarEntryView: View {
         .help((entry.isProjected ? "Future repeat preview. Open the repeating task.\n" : "") + entry.title + "\n" + time)
         .contextMenu {
             Button(entry.isProjected ? "Open repeating task" : "Open task") { open(entry.taskID) }
-            if !entry.isProjected && !entry.isNote && entry.checklistID == nil {
-                Button(entry.isCompleted ? "Reopen task" : "Complete task") { complete(entry.taskID) }
-            }
+            if entry.canChangeCompletion { Button(completionAction) { complete(entry) } }
             if entry.canSchedule { Button("Schedule…") { edit(entry) } }
         }
     }

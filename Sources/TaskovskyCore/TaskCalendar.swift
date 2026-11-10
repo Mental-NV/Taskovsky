@@ -422,6 +422,7 @@ public struct CalendarEntry: Identifiable, Equatable, Sendable {
     public var color: String
     public var listID: UUID?
     public var canSchedule: Bool { !isProjected && checklistID == nil }
+    public var canChangeCompletion: Bool { !isProjected && !isNote }
     public var canResizeAllDayRange: Bool { isAllDay && hasDuration && canSchedule }
 
     /// The projected end is exclusive. Gesture targets and stored all-day

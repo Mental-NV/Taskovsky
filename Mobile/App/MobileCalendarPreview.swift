@@ -26,6 +26,7 @@ enum PhoneCalendarDropTarget {
 struct PhoneCalendarControls {
     let drag: (CalendarEntry) -> PhoneCalendarDrag?
     let edit: (CalendarEntry, PhoneCalendarEditMode) -> Void
+    let complete: ((CalendarEntry) -> Void)?
     let drop: (PhoneCalendarDrag, PhoneCalendarDropTarget) -> Bool
     let resize: (PhoneCalendarDrag, CalendarScheduleOperation) -> Void
     let saveFoldedHours: (CalendarFoldedHours) -> Void
@@ -149,11 +150,13 @@ private struct MobileCalendarContent: View {
     }
     private func card(_ entry: CalendarEntry, fillsHeight: Bool = false,
                       resizeStartDay: ((DragGesture.Value) -> Date?)? = nil,
-                      compactResize: Bool = false,
+                      compactResize: Bool = false, agendaRow: Bool = false,
                       resizeDay: ((DragGesture.Value) -> Date?)? = nil) -> some View {
         let payload = controls.drag(entry)
         let color = cardColor(entry.color)
         let usesCompactGrips = compactResize && entry.canResizeAllDayRange && (resizeStartDay != nil || resizeDay != nil)
+        let completion = entry.canChangeCompletion ? controls.complete : nil
+        let hasCompletionButton = agendaRow && completion != nil && options.showsIcon(for: entry)
         return HStack(alignment: .top, spacing: 0) {
             if let payload, let resizeStartDay, entry.canResizeAllDayRange {
                 PhoneAllDayResizeHandle(entry: entry, edge: .start, calendar: calendar, dateAt: resizeStartDay,
@@ -161,13 +164,24 @@ private struct MobileCalendarContent: View {
                                         save: { controls.resize(payload, .resizeStart($0)) },
                                         edit: { controls.edit(entry, .resizeStart) })
             }
-            cardButton(entry, color: color, canEdit: payload != nil, fillsHeight: fillsHeight, compact: usesCompactGrips)
+            if hasCompletionButton, let completion {
+                Button { completion(entry) } label: {
+                    Image(systemName: completionSymbol(entry))
+                        .font(.system(size: 15)).foregroundStyle(color)
+                        .frame(width: 44, height: 44)
+                        .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 2).allowsHitTesting(false) }
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
+            }
+            cardButton(entry, color: color, canEdit: payload != nil, completion: completion, fillsHeight: fillsHeight,
+                       compact: usesCompactGrips, agendaRow: agendaRow, hasCompletionButton: hasCompletionButton)
             if let payload {
                 Image(systemName: "line.3.horizontal")
                     .font(.system(size: fillsHeight ? 11 : 8, weight: .semibold))
                     .foregroundStyle(.secondary)
                     .frame(width: fillsHeight ? 28 : usesCompactGrips ? 12 : 16,
-                           height: fillsHeight ? 28 : 17)
+                           height: agendaRow ? 44 : fillsHeight ? 28 : 17)
                     .contentShape(Rectangle())
                     .accessibilityLabel("Drag " + entry.title)
                     .draggable(payload)
@@ -195,44 +209,63 @@ private struct MobileCalendarContent: View {
         return Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
     }
 
+    private func completionSymbol(_ entry: CalendarEntry) -> String {
+        entry.isCompleted ? "checkmark.square" : "square"
+    }
+
     @ViewBuilder private func cardButton(_ entry: CalendarEntry, color: Color, canEdit: Bool,
-                                         fillsHeight: Bool, compact: Bool) -> some View {
+                                         completion: ((CalendarEntry) -> Void)?, fillsHeight: Bool,
+                                         compact: Bool, agendaRow: Bool, hasCompletionButton: Bool) -> some View {
+        let completionAction = (entry.isCompleted ? "Reopen " : "Complete ") +
+            (entry.checklistID == nil ? "task" : "checklist item")
         let button = Button { open(entry.taskID) } label: {
             HStack(spacing: 3) {
-                Rectangle().fill(color).frame(width: 2)
-                if options.showsIcon(for: entry) {
-                    Image(systemName: entry.isNote ? "doc.text" : entry.isCompleted ? "checkmark.square" :
-                          entry.checklistID != nil ? "checklist" : "square")
-                        .font(.system(size: 8)).foregroundStyle(color).accessibilityHidden(true)
+                if !hasCompletionButton {
+                    Rectangle().fill(color).frame(width: 2)
+                    if options.showsIcon(for: entry) {
+                        Image(systemName: entry.isProjected ? "repeat" : entry.isNote ? "doc.text" : completionSymbol(entry))
+                            .font(.system(size: 8)).foregroundStyle(color).accessibilityHidden(true)
+                    }
                 }
                 Text(entry.title).font(.caption2).lineLimit(1).foregroundStyle(.primary)
                     .strikethrough(entry.isCompleted)
                 Spacer(minLength: 0)
             }
-            .frame(minWidth: compact ? 0 : nil, maxWidth: compact ? .infinity : nil, minHeight: 17,
-                   maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
+            .frame(minWidth: compact ? 0 : nil, maxWidth: compact ? .infinity : nil,
+                   minHeight: agendaRow ? 44 : 17, maxHeight: fillsHeight ? .infinity : nil,
+                   alignment: agendaRow ? .leading : .topLeading)
             .clipped()
             .contentShape(Rectangle())
         }
         .accessibilityLabel(entry.title + (entry.isProjected ? ", recurring preview" : ""))
-        if canEdit {
+        if canEdit || completion != nil {
             button
                 .contextMenu {
-                    Button("Edit Calendar Schedule", systemImage: "calendar") { controls.edit(entry, .schedule) }
-                    Button("Move Schedule", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { controls.edit(entry, .move) }
-                    if entry.hasDuration {
-                        Button("Resize Start", systemImage: entry.isAllDay ? "arrow.left.to.line" : "arrow.up.to.line") {
-                            controls.edit(entry, .resizeStart)
-                        }
+                    if let completion {
+                        Button(completionAction, systemImage: completionSymbol(entry)) { completion(entry) }
                     }
-                    Button("Resize Schedule", systemImage: "arrow.up.and.down") { controls.edit(entry, .resize) }
+                    if canEdit {
+                        Button("Edit Calendar Schedule", systemImage: "calendar") { controls.edit(entry, .schedule) }
+                        Button("Move Schedule", systemImage: "arrow.up.and.down.and.arrow.left.and.right") { controls.edit(entry, .move) }
+                        if entry.hasDuration {
+                            Button("Resize Start", systemImage: entry.isAllDay ? "arrow.left.to.line" : "arrow.up.to.line") {
+                                controls.edit(entry, .resizeStart)
+                            }
+                        }
+                        Button("Resize Schedule", systemImage: "arrow.up.and.down") { controls.edit(entry, .resize) }
+                    }
                 }
-                .accessibilityAction(named: Text("Edit Calendar Schedule")) { controls.edit(entry, .schedule) }
-                .accessibilityAction(named: Text("Move Schedule")) { controls.edit(entry, .move) }
-                .accessibilityAction(named: Text("Resize Schedule")) { controls.edit(entry, .resize) }
                 .accessibilityActions {
-                    if entry.hasDuration {
-                        Button("Resize Start") { controls.edit(entry, .resizeStart) }
+                    if let completion {
+                        Button(completionAction) { completion(entry) }
+                    }
+                    if canEdit {
+                        Button("Edit Calendar Schedule") { controls.edit(entry, .schedule) }
+                        Button("Move Schedule") { controls.edit(entry, .move) }
+                        Button("Resize Schedule") { controls.edit(entry, .resize) }
+                        if entry.hasDuration {
+                            Button("Resize Start") { controls.edit(entry, .resizeStart) }
+                        }
                     }
                 }
         } else { button }
@@ -683,7 +716,7 @@ private struct MobileCalendarContent: View {
                     if !items.isEmpty {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())).font(.headline)
-                            ForEach(items) { card($0).frame(minHeight: 44) }
+                            ForEach(items) { card($0, agendaRow: true) }
                         }.padding(12).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
                     }
                 }

@@ -12,6 +12,7 @@ public enum RichParagraphEdit: Codable, Sendable {
     case list(RichListStyle?)
     case checklistChecked(Bool)
     case horizontalRule(Bool)
+    case codeBlock(UUID?)
     case clear
 }
 
@@ -27,6 +28,7 @@ public enum RichBodyEdit: Codable, Sendable {
     case replace(NSRange, with: String, style: InsertionStyle)
     case paste(NSRange, fragment: RichBody)
     case toggle(RichInlineFormat, NSRange)
+    case setHighlight(RichHighlightColor?, NSRange)
     case setLink(String?, NSRange)
     case clearInline(NSRange)
     case paragraph(RichParagraphEdit, NSRange)
@@ -48,6 +50,19 @@ public enum RichBodyEdit: Codable, Sendable {
             current = try edit.applying(to: current)
         }
         return current
+    }
+
+    public static func togglingCodeBlock(in body: RichBody, selection: NSRange) -> Self? {
+        guard (try? validate(selection, in: body.text)) != nil,
+              let preview = RichDescriptionPreview(body: body.text, rich: body) else { return nil }
+        let text = body.text as NSString
+        let start = text.paragraphRange(for: NSRange(location: selection.location, length: 0))
+        let end = text.paragraphRange(for: NSRange(location: max(selection.location, NSMaxRange(selection) - 1), length: 0))
+        let target = NSUnionRange(start, end)
+        guard target.length > 0 else { return nil }
+        let paragraphs = preview.paragraphs.filter { NSLocationInRange($0.range.location, target) }
+        let id = paragraphs.allSatisfy { $0.codeBlockID != nil } ? nil : UUID()
+        return .paragraph(.codeBlock(id), selection)
     }
 
     /// Reconciles a native text change, preserving the reported edit location
@@ -108,7 +123,16 @@ public enum RichBodyEdit: Codable, Sendable {
                 if value == nil { allStyled = false; stop.pointee = true }
             }
             if allStyled { inline.removeAttribute(format.attribute, range: range) }
-            else { inline.addAttribute(format.attribute, value: true, range: range) }
+            else {
+                let value: Any = format == .highlight ? RichHighlightColor.yellow.rawValue : true
+                inline.addAttribute(format.attribute, value: value, range: range)
+            }
+            return RichBody(text: body.text, runs: Self.extractInline(inline), blocks: body.blocks)
+        case .setHighlight(let color, let range):
+            try Self.validate(range, in: body.text, empty: false)
+            let inline = Self.inlineContent(body)
+            if let color { inline.addAttribute(RichInlineFormat.highlight.attribute, value: color.rawValue, range: range) }
+            else { inline.removeAttribute(RichInlineFormat.highlight.attribute, range: range) }
             return RichBody(text: body.text, runs: Self.extractInline(inline), blocks: body.blocks)
         case .setLink(let link, let range):
             try Self.validate(range, in: body.text, empty: false)
@@ -160,10 +184,13 @@ public enum RichBodyEdit: Codable, Sendable {
             let range = NSRange(location: run.location, length: run.length)
             let active: [(RichInlineFormat, Bool)] = [
                 (.bold, run.bold), (.italic, run.italic), (.underline, run.underline),
-                (.strikethrough, run.strikethrough), (.highlight, run.highlight), (.code, run.code)
+                (.strikethrough, run.strikethrough), (.code, run.code)
             ]
             for (format, enabled) in active where enabled {
                 inline.addAttribute(format.attribute, value: true, range: range)
+            }
+            if let color = run.effectiveHighlight {
+                inline.addAttribute(RichInlineFormat.highlight.attribute, value: color.rawValue, range: range)
             }
             if let link = run.link { inline.addAttribute(linkAttribute, value: Data(link.utf8), range: range) }
         }
@@ -175,10 +202,11 @@ public enum RichBodyEdit: Codable, Sendable {
         inline.enumerateAttributes(in: NSRange(location: 0, length: inline.length)) { attributes, range, _ in
             func present(_ format: RichInlineFormat) -> Bool { attributes[format.attribute] != nil }
             let link = (attributes[linkAttribute] as? Data).flatMap { String(data: $0, encoding: .utf8) }
+            let color = (attributes[RichInlineFormat.highlight.attribute] as? String).flatMap(RichHighlightColor.init(rawValue:))
             let run = RichInlineRun(location: range.location, length: range.length,
                                     bold: present(.bold), italic: present(.italic), underline: present(.underline),
                                     strikethrough: present(.strikethrough), highlight: present(.highlight),
-                                    code: present(.code), link: link)
+                                    code: present(.code), link: link, highlightColor: color)
             if !run.isEmpty { runs.append(run) }
         }
         return runs
@@ -201,10 +229,19 @@ public enum RichBodyEdit: Codable, Sendable {
         let affectedBlocks = body.blocks.filter {
             NSIntersectionRange(NSRange(location: $0.location, length: $0.length), touched).length > 0
         }
+        let codeID = affectedBlocks.first?.codeBlockID
+        let joinsCodeParagraphs = mergesParagraphs && codeID != nil &&
+            !splitsCRLF(text, at: range.location) && !splitsCRLF(text, at: NSMaxRange(range)) &&
+            affectedBlocks.allSatisfy { $0.codeBlockID == codeID } &&
+            affectedBlocks.reduce(0) { $0 + $1.length } == touched.length
         let blocks = try body.blocks.flatMap { block -> [RichBlockRun] in
             let annotated = NSRange(location: block.location, length: block.length)
             var copy = block
             if NSIntersectionRange(annotated, touched).length > 0 {
+                if joinsCodeParagraphs {
+                    guard block.location == touched.location else { return [] }
+                    return try splitParagraph(copy, editedLength: touched.length + delta, anchor: touched.location, in: editedText)
+                }
                 guard !mergesParagraphs else { throw RichBodyEditError.styledParagraphBoundary }
                 guard annotated == start, start == end, !block.rule, affectedBlocks.count == 1
                 else { throw RichBodyEditError.invalidParagraph }
@@ -313,7 +350,8 @@ public enum RichBodyEdit: Codable, Sendable {
             let retainsOriginal = NSLocationInRange(anchor, paragraph)
             let block = RichBlockRun(location: offset, length: paragraph.length,
                                      heading: retainsOriginal ? original.heading : nil, quote: original.quote,
-                                     list: original.list, checked: retainsOriginal ? original.checked : nil)
+                                     list: original.list, checked: retainsOriginal ? original.checked : nil,
+                                     codeBlockID: original.codeBlockID)
             if !block.isEmpty { paragraphs.append(block) }
             offset = NSMaxRange(paragraph)
         }
@@ -345,10 +383,13 @@ public enum RichBodyEdit: Codable, Sendable {
             switch edit {
             case .heading(let level):
                 if let level, !(1...6).contains(level) { throw RichBodyEditError.invalidParagraph }
+                block.codeBlockID = nil
                 block.heading = level
             case .quote(let enabled):
+                block.codeBlockID = nil
                 block.quote = enabled
             case .list(let style):
+                block.codeBlockID = nil
                 if style != block.list { block.checked = nil }
                 block.list = style
             case .checklistChecked(let checked):
@@ -356,7 +397,11 @@ public enum RichBodyEdit: Codable, Sendable {
                 block.checked = checked ? true : nil
             case .horizontalRule(let enabled):
                 guard !enabled || contentEnd == offset else { throw RichBodyEditError.invalidParagraph }
+                block.codeBlockID = nil
                 block.rule = enabled
+            case .codeBlock(let id):
+                if let id { block = .init(location: offset, length: paragraph.length, codeBlockID: id) }
+                else { block.codeBlockID = nil }
             case .clear:
                 block = RichBlockRun(location: offset, length: paragraph.length)
             }
@@ -397,27 +442,30 @@ public enum RichMarkdownTyping {
     }
 
     public static func change(for inserted: String, at range: NSRange, in body: RichBody) -> Change? {
-        guard (inserted == " " || inserted == "-"), range.length == 0,
+        let isReturn = inserted == "\n" || inserted == "\r" || inserted == "\r\n"
+        guard (isReturn || inserted == " " || inserted == "-"), range.length == 0,
               (try? RichBodyEdit.validate(range, in: body.text)) != nil else { return nil }
         let source = body.text as NSString
         var start = 0, end = 0, contentEnd = 0
         source.getParagraphStart(&start, end: &end, contentsEnd: &contentEnd, for: range)
         let caret = range.location
-        guard start <= caret, caret <= contentEnd, caret - start <= 4096 else { return nil }
+        guard start <= caret, caret <= contentEnd else { return nil }
+        let paragraph = NSRange(location: start, length: end - start)
+        if isReturn { return codeReturn(inserted, at: range, paragraph: paragraph, contentEnd: contentEnd, in: body) }
+        guard caret - start <= 4096, !body.isInCodeParagraph(at: caret) else { return nil }
         let prefixRange = NSRange(location: start, length: caret - start)
         let prefix = source.substring(with: prefixRange)
         if inserted == "-" {
             guard prefix == "--", caret == contentEnd, !protected(prefixRange, in: body),
-                  !insideFence(before: start, in: source),
+                  !insideFence(before: start, in: body),
                   !body.blocks.contains(where: { $0.location == start }) else { return nil }
             let terminator = caret == end ? "\n" : source.substring(with: NSRange(location: caret, length: end - caret))
             return styledParagraph(terminator, replacing: NSRange(location: start, length: end - start),
                                    block: .init(location: 0, length: 0, rule: true),
                                    caret: start + terminator.utf16.count)
         }
-        let paragraph = NSRange(location: start, length: end - start)
         if let block = block(for: prefix, at: start, in: body), !protected(prefixRange, in: body),
-           !insideFence(before: start, in: source) {
+           !insideFence(before: start, in: body) {
             if caret == contentEnd {
                 let newCaret = NSRange(location: start, length: 0)
                 let arm = ArmedParagraph(caret: newCaret, text: source.replacingCharacters(in: prefixRange, with: ""), block: block)
@@ -428,8 +476,37 @@ public enum RichMarkdownTyping {
             return styledParagraph(fragment.text, replacing: paragraph, block: block, runs: fragment.runs, caret: start)
         }
         guard let change = inlineChange(prefix, start: start, in: body),
-              !insideFence(before: start, in: source) else { return nil }
+              !insideFence(before: start, in: body) else { return nil }
         return change
+    }
+
+    private static func codeReturn(_ inserted: String, at range: NSRange, paragraph: NSRange,
+                                   contentEnd: Int, in body: RichBody) -> Change? {
+        let source = body.text as NSString
+        let end = NSMaxRange(paragraph)
+        let content = NSRange(location: paragraph.location, length: contentEnd - paragraph.location)
+        let current = body.blocks.first { $0.location == paragraph.location }
+        let existingBreak = source.substring(with: NSRange(location: contentEnd, length: end - contentEnd))
+        let lineBreak = existingBreak.isEmpty ? inserted : existingBreak
+        let isFence = range.location == contentEnd && content.length == 3 && source.substring(with: content) == "```"
+        if current?.codeBlockID != nil {
+            if isFence {
+                // Leave a plain caret line ahead of existing text. At EOF the
+                // preceding code paragraph already provides its separator.
+                let text = end < source.length ? existingBreak : ""
+                return Change(edit: .paste(paragraph, fragment: RichBody(text: text)),
+                              caret: NSRange(location: paragraph.location, length: 0), armedParagraph: nil)
+            }
+            // If the last code paragraph has no terminator, keep a second
+            // separator as the blank code paragraph the caret enters.
+            let replacement = range.location == source.length ? lineBreak + lineBreak : lineBreak
+            return Change(edit: .replace(range, with: replacement, style: .plain),
+                          caret: NSRange(location: range.location + lineBreak.utf16.count, length: 0), armedParagraph: nil)
+        }
+        guard isFence, current == nil, !protected(content, in: body),
+              !insideFence(before: paragraph.location, in: body) else { return nil }
+        return styledParagraph(lineBreak, replacing: paragraph, block: .init(location: 0, length: 0, codeBlockID: UUID()),
+                               caret: paragraph.location)
     }
 
     private static func block(for marker: String, at start: Int, in body: RichBody) -> RichBlockRun? {
@@ -507,13 +584,22 @@ public enum RichMarkdownTyping {
         }
     }
 
-    private static func insideFence(before offset: Int, in source: NSString) -> Bool {
+    private static func insideFence(before limit: Int, in body: RichBody) -> Bool {
+        let source = body.text as NSString
+        let codeStarts = Set(body.blocks.compactMap { $0.codeBlockID == nil ? nil : $0.location })
         var fence: Substring?
-        source.substring(to: offset).enumerateLines { line, _ in
+        var offset = 0
+        while offset < limit {
+            let start = offset
+            var contentEnd = 0
+            source.getParagraphStart(nil, end: &offset, contentsEnd: &contentEnd,
+                                     for: NSRange(location: start, length: 1))
+            if codeStarts.contains(start) { continue }
+            let line = source.substring(with: NSRange(location: start, length: contentEnd - start))
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            guard let first = trimmed.first, first == "`" || first == "~" else { return }
+            guard let first = trimmed.first, first == "`" || first == "~" else { continue }
             let marker = trimmed.prefix { $0 == first }
-            guard marker.count >= 3 else { return }
+            guard marker.count >= 3 else { continue }
             if let open = fence {
                 if marker.hasPrefix(open), marker.count == trimmed.count { fence = nil }
             } else {
@@ -532,6 +618,11 @@ public enum RichBodyClipboard {
     private struct Payload: Codable {
         let version: Int
         let fragment: RichBody
+    }
+
+    private static func version(for fragment: RichBody) -> Int {
+        if fragment.hasCustomHighlightColors { return 3 }
+        return fragment.hasCodeBlocks ? 2 : 1
     }
 
     public static func fragment(from body: RichBody, selection: NSRange) -> RichBody? {
@@ -553,7 +644,8 @@ public enum RichBodyClipboard {
         let blocks = preview.paragraphs.compactMap { paragraph -> RichBlockRun? in
             guard NSIntersectionRange(paragraph.range, selection) == paragraph.range else { return nil }
             var block = RichBlockRun(location: paragraph.range.location - selection.location, length: paragraph.range.length,
-                                     heading: paragraph.heading, quote: paragraph.quote, rule: paragraph.rule)
+                                     heading: paragraph.heading, quote: paragraph.quote, rule: paragraph.rule,
+                                     codeBlockID: paragraph.codeBlockID)
             switch paragraph.marker {
             case .bullet: block.list = .bullet
             case .number: block.list = .numbered
@@ -567,17 +659,26 @@ public enum RichBodyClipboard {
 
     public static func encode(_ fragment: RichBody) -> Data? {
         guard !fragment.text.isEmpty, isValid(fragment),
-              let bytes = try? JSONEncoder().encode(Payload(version: 1, fragment: fragment)),
+              let bytes = try? JSONEncoder().encode(Payload(version: version(for: fragment), fragment: fragment)),
               bytes.count <= maximumPayloadBytes else { return nil }
         return bytes
     }
 
     public static func decode(_ bytes: Data, matching text: String) -> RichBody? {
         guard bytes.count <= maximumPayloadBytes,
-              let payload = try? JSONDecoder().decode(Payload.self, from: bytes), payload.version == 1,
+              let payload = try? JSONDecoder().decode(Payload.self, from: bytes),
+              payload.version == version(for: payload.fragment),
               RichBody.sameCodeUnits(payload.fragment.text, text), isValid(payload.fragment),
               !payload.fragment.text.isEmpty else { return nil }
-        return payload.fragment
+        var fragment = payload.fragment
+        var newIDs: [UUID: UUID] = [:]
+        for index in fragment.blocks.indices {
+            guard let id = fragment.blocks[index].codeBlockID else { continue }
+            let fresh = newIDs[id] ?? UUID()
+            newIDs[id] = fresh
+            fragment.blocks[index].codeBlockID = fresh
+        }
+        return fragment
     }
 
     private static let paragraphPrefix = try! NSRegularExpression(pattern: #"^(#{1,6}|-|[1-9][0-9]{0,8}\.|>) (\S.*)$"#)
@@ -609,6 +710,21 @@ public enum RichBodyClipboard {
             inputOffset = end
 
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if fence == nil, line == "```", !terminator.isEmpty,
+               combined.paragraphRange(for: NSRange(location: inserted.location, length: 1)) == inserted,
+               let code = codeFence(in: input, from: end, insertedAt: selection.location, in: combined) {
+                let id = UUID()
+                let start = inputOffset
+                let span = NSUnionRange(code.paragraphs[0], code.paragraphs[code.paragraphs.count - 1])
+                result.text += input.substring(with: span)
+                result.blocks += code.paragraphs.map {
+                    .init(location: outputOffset + $0.location - start, length: $0.length, codeBlockID: id)
+                }
+                outputOffset += span.length
+                inputOffset = code.end
+                listNumber = 0
+                continue
+            }
             let delimiter = trimmed.prefix { $0 == trimmed.first && ($0 == "`" || $0 == "~") }
             let isFence = delimiter.count >= 3
             if let open = fence {
@@ -653,6 +769,27 @@ public enum RichBodyClipboard {
             outputOffset += length
         }
         return result.isEmpty ? nil : result
+    }
+
+    private static func codeFence(in input: NSString, from start: Int, insertedAt destination: Int,
+                                  in combined: NSString) -> (paragraphs: [NSRange], end: Int)? {
+        var offset = start
+        var paragraphs: [NSRange] = []
+        while offset < input.length {
+            var end = 0
+            var contentEnd = 0
+            input.getParagraphStart(nil, end: &end, contentsEnd: &contentEnd, for: NSRange(location: offset, length: 1))
+            let range = NSRange(location: offset, length: end - offset)
+            if input.substring(with: NSRange(location: offset, length: contentEnd - offset)) == "```" {
+                let inserted = NSRange(location: destination + offset, length: range.length)
+                guard !paragraphs.isEmpty,
+                      combined.paragraphRange(for: NSRange(location: inserted.location, length: 1)) == inserted else { return nil }
+                return (paragraphs, end)
+            }
+            paragraphs.append(range)
+            offset = end
+        }
+        return nil
     }
 
     private static func formattedInline(_ text: String, offset: Int, runs: inout [RichInlineRun]) -> String {

@@ -20,8 +20,10 @@ struct CalendarEditorDraft: Identifiable {
     var listID: UUID?
     var canRescheduleOccurrence = false
     var hasOccurrenceOverride = false
+    var skipBaseline: CalendarScheduleSnapshot?
     var scope: CalendarScheduleScope = .series
     var restoreOccurrence = false
+    var skipOccurrence = false
 }
 
 private struct CalendarOccurrenceChange {
@@ -31,6 +33,7 @@ private struct CalendarOccurrenceChange {
 }
 
 struct TaskCalendarWorkspace: View {
+    private static let shortcutModes: [TaskCalendarMode] = [.day, .week, .month, .year, .agenda]
     @ObservedObject var store: TaskStore
     var onOpenTask: (UUID) -> Void
     var onComplete: (UUID) -> Void
@@ -115,11 +118,15 @@ struct TaskCalendarWorkspace: View {
         .background(Color(nsColor: .textBackgroundColor))
         .focusedSceneValue(\.calendarDateJump, dateJumpAction)
         .background {
-            CalendarKeyboardInput(optionChanged: { optionHeld = $0 }) { next in
-                guard !embeddedInTasks, editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions else { return false }
+            WindowKeyboardInput(optionChanged: { optionHeld = $0 }, handleKeyDown: { event in
+                guard !embeddedInTasks, editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions,
+                      event.modifierFlags.intersection([.command, .control, .option, .shift, .function]).isEmpty,
+                      let characters = event.characters, let digit = Int(characters),
+                      (1...Self.shortcutModes.count).contains(digit) else { return false }
+                let next = Self.shortcutModes[digit - 1]
                 if mode != next { options.wrappedValue.mode = next }
                 return true
-            }
+            })
             .frame(width: 0, height: 0).accessibilityHidden(true)
         }
         .tint(CalendarAppearance.accent)
@@ -198,7 +205,7 @@ struct TaskCalendarWorkspace: View {
                     Button { options.wrappedValue.mode = value } label: {
                         HStack {
                             Label(value.title, systemImage: mode == value ? "checkmark" : "calendar")
-                            if let index = CalendarKeyboardInput.modes.firstIndex(of: value) {
+                            if let index = Self.shortcutModes.firstIndex(of: value) {
                                 Spacer()
                                 Text(String(index + 1)).foregroundStyle(.secondary)
                             }
@@ -271,7 +278,16 @@ struct TaskCalendarWorkspace: View {
     private func navigate(_ direction: Int) {
         focus = CalendarDates.navigate(focus, direction: direction, mode: mode, options: options.wrappedValue, calendar: calendar)
     }
-    private func complete(_ id: UUID) { undo = nil; notice = ""; onComplete(id) }
+    private func complete(_ entry: CalendarEntry) {
+        guard entry.canChangeCompletion else { return }
+        if let itemID = entry.checklistID {
+            store.setChecklistItemCompleted(taskID: entry.taskID, itemID: itemID, completed: !entry.isCompleted)
+        } else {
+            undo = nil
+            notice = ""
+            onComplete(entry.taskID)
+        }
+    }
     private func create(on day: Date) {
         let start = mode.isHourly ? CalendarDates.instant(on: day, minute: 9 * 60, calendar: calendar) : calendar.startOfDay(for: day)
         createRange(start, mode.isHourly ? start.addingTimeInterval(1_800) : start, !mode.isHourly)
@@ -289,11 +305,19 @@ struct TaskCalendarWorkspace: View {
         editor = CalendarEditorDraft(taskID: task.id, title: task.title,
             schedule: CalendarScheduleDraft(task: task, focus: focus, hourly: mode.isHourly, calendar: calendar), listID: task.listID,
             canRescheduleOccurrence: CalendarScheduling.canRescheduleCurrentOccurrence(task, in: store.data.tasks),
-            hasOccurrenceOverride: task.originalOccurrenceSchedule != nil)
+            hasOccurrenceOverride: task.originalOccurrenceSchedule != nil,
+            skipBaseline: CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: calendar)
+                ? CalendarScheduleSnapshot(task) : nil)
     }
     private func save(_ draft: CalendarEditorDraft) {
         if let id = draft.taskID {
-            if draft.restoreOccurrence { commitSchedule(id, .restoreOccurrence, scope: .series) }
+            if draft.skipOccurrence {
+                if let baseline = draft.skipBaseline, let current = store.data.tasks.first(where: { $0.id == id }),
+                   CalendarScheduleSnapshot(current) == baseline,
+                   CalendarScheduling.canSkipCurrentOccurrence(current, in: store.data.tasks, calendar: calendar) {
+                    commitSchedule(id, .skipOccurrence, scope: .series)
+                } else { notice = "Schedule changed. Open the current task and try again." }
+            } else if draft.restoreOccurrence { commitSchedule(id, .restoreOccurrence, scope: .series) }
             else if let operation = draft.schedule.operation { commitSchedule(id, operation, scope: draft.scope) }
             else { notice = "Schedule unchanged"; undo = nil }
         } else {
@@ -325,7 +349,11 @@ struct TaskCalendarWorkspace: View {
     }
     private func commitSchedule(_ id: UUID, _ operation: CalendarScheduleOperation, scope: CalendarScheduleScope) {
         if let token = store.scheduleOnCalendar(id: id, operation: operation, calendar: calendar, scope: scope) {
-            undo = token; notice = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated"
+            undo = token
+            if case .skipOccurrence = operation { notice = "Occurrence skipped" }
+            else { notice = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated" }
+        } else if case .skipOccurrence = operation {
+            notice = store.storageError ?? "Could not skip this occurrence."
         }
     }
     private func moveToDay(_ id: UUID, _ day: Date, _ forceAllDay: Bool) {
@@ -358,23 +386,26 @@ private struct CalendarDateJumpPicker: View {
     }
 }
 
-private struct CalendarKeyboardInput: NSViewRepresentable {
-    static let modes: [TaskCalendarMode] = [.day, .week, .month, .year, .agenda]
+struct WindowKeyboardInput: NSViewRepresentable {
     let optionChanged: (Bool) -> Void
-    let select: (TaskCalendarMode) -> Bool
+    var handleKeyDown: ((NSEvent) -> Bool)? = nil
 
-    func makeNSView(context: Context) -> KeyView { KeyView(frame: .zero) }
+    func makeNSView(context: Context) -> KeyView {
+        let view = KeyView(frame: .zero)
+        updateNSView(view, context: context)
+        return view
+    }
 
     func updateNSView(_ view: KeyView, context: Context) {
         view.optionChanged = optionChanged
-        view.select = select
+        view.handleKeyDown = handleKeyDown
     }
 
     static func dismantleNSView(_ view: KeyView, coordinator: ()) { view.stopMonitoring() }
 
     final class KeyView: NSView {
         var optionChanged: ((Bool) -> Void)?
-        var select: ((TaskCalendarMode) -> Bool)?
+        var handleKeyDown: ((NSEvent) -> Bool)?
         private var monitor: Any?
 
         override func viewDidMoveToWindow() {
@@ -387,7 +418,8 @@ private struct CalendarKeyboardInput: NSViewRepresentable {
             center.addObserver(self, selector: #selector(clearOption(_:)), name: NSWindow.willBeginSheetNotification, object: window)
             center.addObserver(self, selector: #selector(resumeOptionMonitoring(_:)), name: NSWindow.didEndSheetNotification, object: window)
             DispatchQueue.main.async { [weak self] in self?.syncOption(NSEvent.modifierFlags) }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+            let mask: NSEvent.EventTypeMask = handleKeyDown == nil ? .flagsChanged : [.flagsChanged, .keyDown]
+            monitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
                 if event.type == .flagsChanged {
                     self?.syncOption(event.modifierFlags)
                     return event
@@ -396,10 +428,7 @@ private struct CalendarKeyboardInput: NSViewRepresentable {
                       window.attachedSheet == nil, NSApp.modalWindow == nil,
                       !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
                       !(window.firstResponder is NSDatePicker), !event.isARepeat,
-                      event.modifierFlags.intersection([.command, .control, .option, .shift, .function]).isEmpty,
-                      let characters = event.characters, let digit = Int(characters),
-                      (1...CalendarKeyboardInput.modes.count).contains(digit),
-                      select?(CalendarKeyboardInput.modes[digit - 1]) == true else { return event }
+                      handleKeyDown?(event) == true else { return event }
                 return nil
             }
         }
@@ -430,7 +459,7 @@ struct CalendarTaskEditor: View {
     var save: (CalendarEditorDraft) -> Void
     @FocusState private var titleFocused: Bool
     private var valid: Bool {
-        draft.restoreOccurrence ||
+        draft.restoreOccurrence || draft.skipOccurrence ||
             ((draft.taskID != nil || !draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) && draft.schedule.isValid)
     }
     var body: some View {
@@ -439,41 +468,13 @@ struct CalendarTaskEditor: View {
             if draft.taskID == nil {
                 TextField("Task title", text: $draft.title).focused($titleFocused).accessibilityLabel("Calendar task title")
             } else { Text(draft.title).font(.headline).lineLimit(2) }
-            Toggle("All day", isOn: Binding(get: { draft.schedule.allDay }, set: { draft.schedule.setAllDay($0, calendar: calendar) }))
-            if draft.taskID != nil {
-                Toggle("Duration", isOn: Binding(get: { draft.schedule.hasDuration }, set: { draft.schedule.setDuration($0) }))
-                    .accessibilityLabel("Calendar schedule duration")
-            }
-            if draft.canRescheduleOccurrence {
-                if draft.restoreOccurrence {
-                    Text("Save restores the original schedule for this occurrence.").font(.caption)
-                    Button("Keep editing") { draft.restoreOccurrence = false }
-                } else {
-                    Picker("Apply change to", selection: $draft.scope) {
-                        Text("This occurrence").tag(CalendarScheduleScope.currentOccurrence)
-                        Text("Series").tag(CalendarScheduleScope.series)
-                    }.pickerStyle(.segmented)
-                    if draft.hasOccurrenceOverride {
-                        Button("Restore original schedule") { draft.restoreOccurrence = true }
-                    }
-                }
-            }
-            DatePicker(draft.schedule.hasDuration ? "Start" : "Date", selection: $draft.schedule.start,
-                displayedComponents: draft.schedule.allDay ? [.date] : [.date, .hourAndMinute])
-            if draft.schedule.hasDuration {
-                DatePicker("End", selection: $draft.schedule.end, displayedComponents: draft.schedule.allDay ? [.date] : [.date, .hourAndMinute])
-            }
-            if !draft.schedule.isValid { Text("End must not precede start.").foregroundStyle(.red).font(.caption) }
-            if draft.taskID == nil {
-                Picker("List", selection: $draft.listID) {
-                    Text("Inbox").tag(UUID?.none)
-                    ForEach(lists) { Text($0.name).tag(Optional($0.id)) }
-                }
-            }
-            if draft.taskID != nil { Text("Remove date also removes repeat rules and reminders. Undo schedule restores them.").font(.caption).foregroundStyle(.secondary) }
+            if draft.skipOccurrence {
+                Text("Save moves this open task to its next scheduled occurrence.").font(.caption)
+                Button("Keep editing") { draft.skipOccurrence = false }
+            } else { scheduleFields }
             HStack {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                if draft.taskID != nil && !draft.restoreOccurrence { Button("Remove date") { removeDate(); dismiss() } }
+                if draft.taskID != nil && !draft.restoreOccurrence && !draft.skipOccurrence { Button("Remove date") { removeDate(); dismiss() } }
                 Spacer()
                 Button(draft.taskID == nil ? "Add Task" : "Save") { save(draft); dismiss() }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!valid)
@@ -481,6 +482,44 @@ struct CalendarTaskEditor: View {
         }.textFieldStyle(.roundedBorder).padding(22).frame(width: 410)
             .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
             .onAppear { titleFocused = draft.taskID == nil }
+    }
+
+    @ViewBuilder private var scheduleFields: some View {
+        Toggle("All day", isOn: Binding(get: { draft.schedule.allDay }, set: { draft.schedule.setAllDay($0, calendar: calendar) }))
+        if draft.taskID != nil {
+            Toggle("Duration", isOn: Binding(get: { draft.schedule.hasDuration }, set: { draft.schedule.setDuration($0) }))
+                .accessibilityLabel("Calendar schedule duration")
+        }
+        if draft.canRescheduleOccurrence {
+            if draft.restoreOccurrence {
+                Text("Save restores the original schedule for this occurrence.").font(.caption)
+                Button("Keep editing") { draft.restoreOccurrence = false }
+            } else {
+                Picker("Apply change to", selection: $draft.scope) {
+                    Text("This occurrence").tag(CalendarScheduleScope.currentOccurrence)
+                    Text("Series").tag(CalendarScheduleScope.series)
+                }.pickerStyle(.segmented)
+                if draft.skipBaseline != nil {
+                    Button("Skip this occurrence") { draft.skipOccurrence = true }
+                }
+                if draft.hasOccurrenceOverride {
+                    Button("Restore original schedule") { draft.restoreOccurrence = true }
+                }
+            }
+        }
+        DatePicker(draft.schedule.hasDuration ? "Start" : "Date", selection: $draft.schedule.start,
+            displayedComponents: draft.schedule.allDay ? [.date] : [.date, .hourAndMinute])
+        if draft.schedule.hasDuration {
+            DatePicker("End", selection: $draft.schedule.end, displayedComponents: draft.schedule.allDay ? [.date] : [.date, .hourAndMinute])
+        }
+        if !draft.schedule.isValid { Text("End must not precede start.").foregroundStyle(.red).font(.caption) }
+        if draft.taskID == nil {
+            Picker("List", selection: $draft.listID) {
+                Text("Inbox").tag(UUID?.none)
+                ForEach(lists) { Text($0.name).tag(Optional($0.id)) }
+            }
+        }
+        if draft.taskID != nil { Text("Remove date also removes repeat rules and reminders. Undo schedule restores them.").font(.caption).foregroundStyle(.secondary) }
     }
 }
 
@@ -506,7 +545,7 @@ struct CalendarViewOptions: View {
                     Toggle("Show Task Icons", isOn: $options.showTaskIcons)
                     Toggle("Show Note Icons", isOn: $options.showNoteIcons)
                 }.disabled(!options.showItemIcons)
-                Text("With task icons hidden, use a task's context menu to complete or reopen it.")
+                Text("With task icons hidden, use the card menu to complete or reopen a task or checklist item.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Divider()

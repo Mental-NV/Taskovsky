@@ -1,34 +1,45 @@
 import Foundation
 
-public struct SummaryReportOptions: Equatable, Sendable {
-    public enum Period: String, CaseIterable, Sendable {
+public struct SummaryReportOptions: Codable, Equatable, Sendable {
+    public enum Period: String, Codable, CaseIterable, Sendable {
         case thisWeek = "This Week", lastWeek = "Last Week", thisMonth = "This Month", today = "Today", custom = "Custom"
     }
-    public enum Grouping: String, CaseIterable, Sendable {
+    public enum Grouping: String, Codable, CaseIterable, Sendable {
         case status = "By Completion Status", list = "By List", date = "By Date"
     }
-    public enum Field: String, CaseIterable, Sendable {
+    public enum Sort: String, Codable, CaseIterable, Sendable {
+        case workspace = "Workspace Order", date = "Date", priority = "Priority", title = "Title"
+    }
+    public enum Field: String, Codable, CaseIterable, Sendable {
         case date = "Date", list = "List", description = "Description", tags = "Tags", priority = "Priority"
+        case completionDate = "Completion Date", status = "Status", progress = "Progress"
     }
 
     public var period: Period
     public var customStart: Date
     public var customEnd: Date
     public var listIDs: Set<UUID>
+    public var tagIDs: Set<UUID>
+    public var priorities: Set<TaskPriority>
     public var status: FilterStatus
     public var grouping: Grouping
+    public var sort: Sort
     public var fields: Set<Field>
     public var nextPeriod: Bool
 
     public init(period: Period = .thisWeek, customStart: Date, customEnd: Date, listIDs: Set<UUID> = [],
                 status: FilterStatus = .all, grouping: Grouping = .status,
-                fields: Set<Field> = [.date, .list, .description], nextPeriod: Bool = false) {
+                fields: Set<Field> = [.date, .list, .description], nextPeriod: Bool = false,
+                tagIDs: Set<UUID> = [], priorities: Set<TaskPriority> = [], sort: Sort = .workspace) {
         self.period = period
         self.customStart = customStart
         self.customEnd = customEnd
         self.listIDs = listIDs
+        self.tagIDs = tagIDs
+        self.priorities = priorities
         self.status = status
         self.grouping = grouping
+        self.sort = sort
         self.fields = fields
         self.nextPeriod = nextPeriod
     }
@@ -63,6 +74,59 @@ public struct SummaryReportOptions: Equatable, Sendable {
             count = calendar.dateComponents([.day], from: interval.start, to: interval.end).day ?? 1
         }
         return calendar.date(byAdding: component, value: count, to: interval.end) ?? interval.end
+    }
+}
+
+public struct SummaryReportPreset: Codable, Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public let name: String
+    public let options: SummaryReportOptions
+}
+
+/// Device-local preferences. This data is separate from workspace settings and report text.
+public struct SummaryReportPresets: Codable, Equatable, Sendable {
+    public private(set) var entries: [SummaryReportPreset] = []
+
+    public init?(stored: Data) {
+        if !stored.isEmpty {
+            guard let decoded = try? JSONDecoder().decode(Self.self, from: stored) else { return nil }
+            self = decoded
+        }
+    }
+
+    public func encoded() throws -> Data {
+        try JSONEncoder().encode(self)
+    }
+
+    public func accepts(_ name: String, renaming id: UUID? = nil) -> Bool {
+        availableName(name, renaming: id) != nil
+    }
+
+    private func availableName(_ name: String, renaming id: UUID?) -> String? {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !entries.contains(where: {
+            $0.id != id && $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }) else { return nil }
+        return name
+    }
+
+    @discardableResult
+    public mutating func save(_ name: String, options: SummaryReportOptions) -> Bool {
+        guard let name = availableName(name, renaming: nil) else { return false }
+        entries.append(SummaryReportPreset(id: UUID(), name: name, options: options))
+        return true
+    }
+
+    @discardableResult
+    public mutating func rename(_ id: UUID, to name: String) -> Bool {
+        guard let name = availableName(name, renaming: id),
+              let index = entries.firstIndex(where: { $0.id == id }) else { return false }
+        entries[index] = SummaryReportPreset(id: id, name: name, options: entries[index].options)
+        return true
+    }
+
+    public mutating func remove(_ id: UUID) {
+        entries.removeAll { $0.id == id }
     }
 }
 
@@ -101,6 +165,15 @@ public struct SummaryReport: Sendable {
             if options.fields.contains(.priority), task.priority != .none {
                 fields.append(task.priority.rawValue.capitalized + " priority")
             }
+            if options.fields.contains(.completionDate), let stamp = task.completedAt {
+                fields.append("Finished " + dayHeading(stamp, calendar: calendar))
+            }
+            if options.fields.contains(.status) {
+                fields.append(task.completedAt != nil ? "Completed" : task.wontDoAt != nil ? "Won't Do" : "Undone")
+            }
+            if options.fields.contains(.progress) {
+                fields.append("\(task.progressPercent)% progress")
+            }
             var line = "- " + task.title + (fields.isEmpty ? "" : " (" + fields.joined(separator: " · ") + ")")
             if options.fields.contains(.description), !task.body.isEmpty {
                 line += "\n  " + task.body.replacingOccurrences(of: "\n", with: "\n  ")
@@ -108,11 +181,16 @@ public struct SummaryReport: Sendable {
             return line
         }
 
-        let eligible = data.tasks.filter { task in
+        var tagScope = options.tagIDs
+        for id in options.tagIDs { tagScope.formUnion(TagHierarchy.descendants(of: id, in: data.tags).map(\.id)) }
+        let matching = data.tasks.filter { task in
             let selected = options.listIDs.contains(task.listID ?? TaskFilter.inboxListID)
             return task.deletedAt == nil && task.kind == .task && (options.listIDs.isEmpty || selected) &&
-                statusMatches(task) && (selected || !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists))
+                statusMatches(task) && (selected || !SmartListEligibility.isExcludedFromSmart(task, lists: data.lists)) &&
+                (options.priorities.isEmpty || options.priorities.contains(task.priority)) &&
+                (tagScope.isEmpty || !tagScope.isDisjoint(with: task.tagIDs))
         }
+        let eligible = ordered(matching, by: options.sort)
         let current = eligible.filter { inPeriod($0.dueDate) || inPeriod($0.completedAt) || inPeriod($0.wontDoAt) }
         let sections: [(String, [TaskItem])]
         switch options.grouping {
@@ -144,6 +222,20 @@ public struct SummaryReport: Sendable {
             }
         }
         return Self(range: range, text: lines.joined(separator: "\n"))
+    }
+
+    private static func ordered(_ tasks: [TaskItem], by sort: SummaryReportOptions.Sort) -> [TaskItem] {
+        switch sort {
+        case .workspace: return tasks
+        case .date:
+            func date(_ task: TaskItem) -> Date { task.dueDate ?? task.completedAt ?? task.wontDoAt ?? .distantFuture }
+            return tasks.sorted { date($0) < date($1) }
+        case .priority:
+            let ranks = Dictionary(uniqueKeysWithValues: TaskPriority.allCases.enumerated().map { ($1, $0) })
+            return tasks.sorted { ranks[$0.priority, default: 0] > ranks[$1.priority, default: 0] }
+        case .title:
+            return tasks.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+        }
     }
 
     private static func dayHeading(_ date: Date, calendar: Calendar) -> String {

@@ -166,6 +166,9 @@ extension TaskPriority {
 extension RepeatRule { var label: String { self == .none ? "Does not repeat" : rawValue.capitalized } }
 extension TaskItem {
     var scheduleCalendar: Calendar { var cal = Calendar.current; if let timeZoneID, let zone = TimeZone(identifier: timeZoneID) { cal.timeZone = zone }; return cal }
+    var expandedScheduleLabel: String? {
+        DueLabels.expandedRowLabel(for: self, calendar: scheduleCalendar, dayText: dayText, timeText: timeText)
+    }
     func dayText(_ date: Date) -> String { let formatter = DateFormatter(); formatter.timeZone = scheduleCalendar.timeZone; formatter.setLocalizedDateFormatFromTemplate("d MMM"); return formatter.string(from: date) }
     func timeText(_ date: Date) -> String {
         let formatter = DateFormatter(); formatter.timeZone = scheduleCalendar.timeZone; formatter.timeStyle = .short
@@ -213,6 +216,18 @@ struct TagMergeDraft: Identifiable {
     var sourceID: UUID
 }
 
+private struct DisplayedTaskGroup: Identifiable {
+    let id: String
+    let title: String
+    let tasks: [TaskItem]
+
+    init(_ title: String, _ tasks: [TaskItem], id: String? = nil) {
+        self.id = id ?? title
+        self.title = title
+        self.tasks = tasks
+    }
+}
+
 struct WorkspaceView: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
@@ -228,7 +243,13 @@ struct WorkspaceView: View {
     // relaunched onto the default Date sort. Legacy "Manual" reads as "None";
     // both mean stored-array order and enable drag reordering.
     @AppStorage("Taskovsky.taskSort", store: IsolatedDefaults.store) private var sort = "Date"
-    private var isManualSort: Bool { TaskSortPolicy.isManual(sort) }
+    @AppStorage("Taskovsky.taskGroupByCreated", store: IsolatedDefaults.store) private var groupsByCreationDate = false
+    private var canGroupByCreationDate: Bool { destination.supportsCreatedDateGrouping && listViewBinding.wrappedValue == .list }
+    private var isGroupingByCreationDate: Bool { groupsByCreationDate && canGroupByCreationDate }
+    private var reorderUnavailableMessage: String? {
+        if isGroupingByCreationDate { return "Turn off Group by Created Date and choose None in Sort to reorder tasks." }
+        return TaskSortPolicy.isManual(sort) ? nil : TaskSortPolicy.reorderDisabledMessage
+    }
     @State private var showCompleted = true
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
@@ -310,12 +331,16 @@ struct WorkspaceView: View {
     @State private var quickFocused = false
     @State private var detailState = DetailSelectionState()
     @State private var viewOptions = false
+    @State private var boardDisplaySettings = false
+    @AppStorage("Taskovsky.boardColumnSize", store: IsolatedDefaults.store) private var boardColumnSize = BoardColumnSize.medium
+    @AppStorage("Taskovsky.showBoardTaskInput", store: IsolatedDefaults.store) private var showBoardTaskInput = true
     @State private var openPopups = Set<UUID>()
     @State private var listContentHeight: CGFloat = 0
     @State private var listViewportHeight: CGFloat = 0
     private var listFillerHeight: CGFloat { max(0, listViewportHeight - listContentHeight) }
     @AppStorage("Taskovsky.showDetailsPreview", store: IsolatedDefaults.store) private var showDetailsPreview = false
     @AppStorage("Taskovsky.calendarActive", store: IsolatedDefaults.store) private var calendarActive = false
+    @State private var showsFullTaskTimes = false
     @AppStorage("Taskovsky.calendarBesideTasks", store: IsolatedDefaults.store) private var calendarBesideTasks = false
     @AppStorage("Taskovsky.showChecklistItems", store: IsolatedDefaults.store) private var showChecklistItems = false
     @AppStorage("Taskovsky.detailLayout", store: IsolatedDefaults.store) private var detailLayout = "sidePeek"
@@ -492,6 +517,11 @@ struct WorkspaceView: View {
                     sidebarDrag.cancel()
                 }
             }
+            .environment(\.showsFullTaskTimes, showsFullTaskTimes)
+            .background {
+                WindowKeyboardInput(optionChanged: { showsFullTaskTimes = $0 })
+                    .frame(width: 0, height: 0).accessibilityHidden(true)
+            }
             .background(Color(nsColor: .textBackgroundColor))
             .tint(accent)
             .overlay(alignment: .bottom) {
@@ -563,6 +593,9 @@ struct WorkspaceView: View {
         }
         .sheet(isPresented: $creatingFilter) { FilterEditorView(store: store) }
         .sheet(isPresented: $viewOptions) { ViewOptionsView(layout: $detailLayout) }
+        .sheet(isPresented: $boardDisplaySettings) {
+            BoardDisplaySettings(size: $boardColumnSize, showsTaskInput: $showBoardTaskInput)
+        }
         .sheet(item: $sectionEditor) { list in
             MacTaskSectionsSheet(store: store, listID: list.id)
         }
@@ -1315,6 +1348,24 @@ struct WorkspaceView: View {
         }.labelsHidden().accessibilityIdentifier("taskDestinationViewMode")
     }
 
+    private var taskSortMenu: some View {
+        Menu {
+            Picker("Sort by", selection: Binding(get: { TaskSortPolicy.normalized(sort) }, set: { sort = $0 })) {
+                ForEach(["None", "Date", "Priority", "Title"], id: \.self) { Text($0).tag($0) }
+                ForEach(TaskTimestampSort.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+            }
+            if canGroupByCreationDate { Toggle("Group by Created Date", isOn: $groupsByCreationDate) }
+            Text(isGroupingByCreationDate ? "Turn off creation grouping to reorder tasks." : "None follows your drags and is saved.")
+                .font(.caption)
+            if destination != .completed && destination != .trash && destination != .wontDo {
+                Toggle("Show Completed & Won't Do", isOn: $showCompleted)
+            }
+        } label: {
+            HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) }
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor))
+            .fixedSize().help("Sort and display (None enables drag reordering when creation grouping is off)")
+    }
+
     private func taskPane(now: Date, overlay: Bool, paneWidth: CGFloat) -> some View {
         let tasks = filteredTasks(now: now)
         let groups = grouped(tasks, now: now)
@@ -1334,14 +1385,7 @@ struct WorkspaceView: View {
                     .contentShape(Rectangle())
                     .onTapGesture { closeDrawer() }
                 if mode != .timeline && !(mode == .board && supportsScopedBoard) {
-                    Menu {
-                        Picker("Sort by", selection: Binding(get: { TaskSortPolicy.normalized(sort) }, set: { sort = $0 })) {
-                            ForEach(["None", "Date", "Priority", "Title"], id: \.self) { Text($0).tag($0) }
-                            ForEach(TaskTimestampSort.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
-                        }
-                        Text("None follows your drags and is saved.").font(.caption)
-                        if destination != .completed && destination != .trash && destination != .wontDo { Toggle("Show Completed & Won't Do", isOn: $showCompleted) }
-                    } label: { HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Sort and display (None enables drag reordering)")
+                    taskSortMenu
                 }
                 if activeList != nil || timelineScope != nil || supportsScopedBoard {
                     if paneWidth < 420 {
@@ -1362,6 +1406,9 @@ struct WorkspaceView: View {
                     if let list = activeList, !list.isArchived {
                         Button("Manage Sections…") { sectionEditor = list }
                     }
+                    if mode == .board {
+                        Button("Display Settings…") { boardDisplaySettings = true }
+                    }
                     Button("View Options…") { viewOptions = true }
                 } label: { HoverIcon { Image(systemName: "ellipsis").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("More actions")
             }.padding(.horizontal, 20).frame(height: 58)
@@ -1374,16 +1421,18 @@ struct WorkspaceView: View {
                         Button("Clear Section") { self.sectionCaptureID = nil }
                     }.padding(.horizontal, 20).padding(.bottom, 4)
                 }
-                QuickEntry(store: store, title: $quickTitle, kind: $quickKind, focused: $quickFocused, onTemplate: { templatePicker = true }) { body, recognizeDates in
+                QuickEntry(store: store, title: $quickTitle, kind: $quickKind, focused: $quickFocused,
+                           showsWhenIdle: mode != .board || showBoardTaskInput || sectionCaptureID != nil,
+                           onTemplate: { templatePicker = true }) { body, recognizeDates in
                     addTask(body: body, recognizeDates: recognizeDates)
-                }.padding(.horizontal, 20).padding(.bottom, 16)
+                }.padding(.horizontal, 20)
             }
             if destination == .reminders { Text("Check due and upcoming reminders here. New items are set for one hour from now.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if destination == .trash { Text("Deleted items stay here until you restore them.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if isArchivedView { Text("Archived lists are read-only. Unarchive the list from the sidebar to edit, or use a row's Move to for a deliberate move.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if let scope = timelineScope, mode == .timeline {
                 DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask).id(scope)
-            } else if let list = activeList, !list.sections.isEmpty {
+            } else if let list = activeList, !list.sections.isEmpty && !isGroupingByCreationDate {
                 if mode == .board {
                     sectionBoard(list, overlay: overlay, now: now)
                 } else {
@@ -1400,7 +1449,7 @@ struct WorkspaceView: View {
                 kanbanBoard(tasks: BoardProjection.tasks(forList: boardListID, in: store.data), overlay: overlay, now: now)
             } else if mode == .board, supportsScopedBoard {
                 DesktopScopedBoard(store: store, destination: destination, selection: $detailState.selection,
-                                   now: now, open: selectTask, toggle: complete).id(destination)
+                                   now: now, columnWidth: boardColumnSize.width, open: selectTask, toggle: complete).id(destination)
             } else if tasks.isEmpty {
                 VStack(spacing: 12) { Spacer(); Image(systemName: destination == .trash ? "trash" : "checkmark.circle").font(.system(size: 40, weight: .ultraLight)).foregroundStyle(accent.opacity(0.5)); Text(destination == .trash ? "Trash is empty" : "All clear").font(.system(size: 17, weight: .medium)); Text(destination == .today ? "Enjoy the space. Add something for today." : "Your \(destination == .notes ? "notes" : "tasks") will appear here.").font(.system(size: 12)).foregroundStyle(.secondary); Spacer(); Spacer() }.frame(maxWidth: .infinity, maxHeight: .infinity)
                     .contentShape(Rectangle())
@@ -1408,9 +1457,11 @@ struct WorkspaceView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(groups, id: \.0) { title, items in
-                            Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { if collapsed.contains(title) { collapsed.remove(title) } else { collapsed.insert(title) } } } label: {
-                                HStack(spacing: 7) { Image(systemName: collapsed.contains(title) ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)); Text(title).font(.system(size: 12, weight: .semibold)); Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary); Spacer() }.foregroundStyle(title == "Overdue" || title == "Due reminders" ? .red : .secondary).padding(.vertical, 10)
+                        ForEach(groups) { group in
+                            let title = group.title
+                            let items = group.tasks
+                            Button { withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { if collapsed.contains(group.id) { collapsed.remove(group.id) } else { collapsed.insert(group.id) } } } label: {
+                                HStack(spacing: 7) { Image(systemName: collapsed.contains(group.id) ? "chevron.right" : "chevron.down").font(.system(size: 9, weight: .semibold)); Text(title).font(.system(size: 12, weight: .semibold)); Text("\(items.count)").font(.system(size: 11)).foregroundStyle(.tertiary); Spacer() }.foregroundStyle(title == "Overdue" || title == "Due reminders" ? .red : .secondary).padding(.vertical, 10)
                             }.buttonStyle(.plain)
                             // None (manual) is one group: reorder by dropping on
                             // the top or bottom half of a row, with an
@@ -1420,7 +1471,7 @@ struct WorkspaceView: View {
                             // message: order there is computed, and reordering
                             // must never silently rewrite dates, priorities,
                             // or status. Ordinary list moves still work.
-                            if !collapsed.contains(title) {
+                            if !collapsed.contains(group.id) {
                                 let groupIDs = items.map(\.id)
                                 // Subtasks nest directly under their parent when
                                 // the parent is in the same group; orphans
@@ -1452,6 +1503,7 @@ struct WorkspaceView: View {
                 .onPreferenceChange(ListViewportHeightKey.self) { listViewportHeight = $0 }
             }
         }
+        .frame(maxHeight: mode == .board ? .infinity : nil, alignment: .top)
     }
     private func sectionList(_ list: TaskList, tasks: [TaskItem], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
         let pinned = PinnedGrouping.partition(tasks)
@@ -1504,7 +1556,7 @@ struct WorkspaceView: View {
             HStack(alignment: .top, spacing: 12) {
                 ForEach(TaskSectionGroup.project(rows, for: list, in: store.data)) { group in
                     KanbanColumnView(title: group.title, items: group.tasks, readOnly: list.isArchived,
-                                     store: store, selection: $detailState.selection, now: now,
+                                     width: boardColumnSize.width, store: store, selection: $detailState.selection, now: now,
                                      onSelect: { selectTask($0) }, onToggle: { complete($0) },
                                      onDrop: { moveToSection($0, section: group.id, in: list.id) },
                                      sectionList: list, addTask: group.id.map { id in { beginSectionCapture(id) } })
@@ -1601,11 +1653,11 @@ struct WorkspaceView: View {
             return store.settings.defaultAddTo == .top ? a.createdAt > b.createdAt : a.createdAt < b.createdAt
         }
     }
-    private func grouped(_ tasks: [TaskItem], now: Date) -> [(String, [TaskItem])] {
+    private func grouped(_ tasks: [TaskItem], now: Date) -> [DisplayedTaskGroup] {
         // Manual order and timestamp sorts use one active group across due
         // dates. Reminders and Trash retain their semantic groups.
         let usesFlatOrder = TaskSortPolicy.isManual(sort) || TaskTimestampSort(rawValue: sort) != nil
-        if usesFlatOrder && destination != .trash && destination != .reminders {
+        if isGroupingByCreationDate || (usesFlatOrder && destination != .trash && destination != .reminders) {
             var active: [TaskItem] = []; var history: [TaskItem] = []
             for task in tasks {
                 switch ManualGroupPolicy.bucket(completedAt: task.completedAt, wontDoAt: task.wontDoAt, deletedAt: task.deletedAt) {
@@ -1613,14 +1665,21 @@ struct WorkspaceView: View {
                 case .history, .deleted: history.append(task)
                 }
             }
-            var result: [(String, [TaskItem])] = []
+            var result: [DisplayedTaskGroup] = []
             // Pinned items keep their own group and follow the selected order.
             let (pinned, rest) = PinnedGrouping.partition(active)
-            if !pinned.isEmpty { result.append((PinnedGrouping.pinnedGroupTitle, pinned)) }
-            if !rest.isEmpty { result.append((ManualGroupPolicy.activeGroupTitle, rest)) }
+            if !pinned.isEmpty { result.append(.init(PinnedGrouping.pinnedGroupTitle, pinned)) }
+            if isGroupingByCreationDate {
+                let calendar = store.settings.calendar
+                result += TaskCreationDayGroup.group(rest, calendar: calendar, sort: TaskTimestampSort(rawValue: sort)).map {
+                    .init($0.title(calendar: calendar), $0.tasks, id: "created-\($0.day.timeIntervalSinceReferenceDate)")
+                }
+            } else if !rest.isEmpty {
+                result.append(.init(ManualGroupPolicy.activeGroupTitle, rest))
+            }
             if !history.isEmpty {
                 let title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : tasks.contains(where: { $0.wontDoAt != nil }) ? "Completed & Won't Do" : "Completed"
-                result.append((title, history))
+                result.append(.init(title, history))
             }
             return result
         }
@@ -1648,8 +1707,8 @@ struct WorkspaceView: View {
         }
         if let i = keys.firstIndex(of: "Note") { keys.remove(at: i); keys.insert("Note", at: keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
         if store.settings.overduePosition == .bottom, let i = keys.firstIndex(of: "Overdue") { keys.remove(at: i); keys.insert("Overdue", at: keys.firstIndex(of: "Note") ?? keys.firstIndex(of: "Completed & Won't Do") ?? keys.firstIndex(of: "Completed") ?? keys.endIndex) }
-        var result = keys.map { ($0, values[$0]!) }
-        if !pinned.isEmpty { result.insert((PinnedGrouping.pinnedGroupTitle, pinned), at: 0) }
+        var result = keys.map { DisplayedTaskGroup($0, values[$0]!) }
+        if !pinned.isEmpty { result.insert(.init(PinnedGrouping.pinnedGroupTitle, pinned), at: 0) }
         return result
     }
     private func addTask(body: String = "", recognizeDates: Bool = true) {
@@ -1766,8 +1825,8 @@ private extension WorkspaceView {
         // selection; the drag source lives on the grip only. Tapping the grip
         // selects in manual mode and reports the sorted-mode notice otherwise.
         return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, readOnly: readOnly, depth: depth, gripActive: interactive, onGripActivate: interactive ? {
-            if isManualSort { selectTask(task.id) }
-            else { actions.notice(TaskSortPolicy.reorderDisabledMessage) }
+            if let message = reorderUnavailableMessage { actions.notice(message) }
+            else { selectTask(task.id) }
         } : nil, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
             .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: interactive, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
             .contextMenu { taskMenu(task) }
@@ -1779,7 +1838,7 @@ private extension WorkspaceView {
     /// records and saves once.
     func acceptTaskReorder(_ ids: [UUID], before target: UUID, after: Bool, group: [UUID]) -> Bool {
         guard !isArchivedView else { actions.notice("Archived lists are read-only."); return false }
-        guard isManualSort else { actions.notice(TaskSortPolicy.reorderDisabledMessage); return false }
+        if let message = reorderUnavailableMessage { actions.notice(message); return false }
         guard !ids.isEmpty, !ids.contains(target),
               Set(ids).isSubset(of: Set(group)), group.contains(target) else {
             // Pinned boundary crossings explain themselves; every other
@@ -1818,7 +1877,7 @@ private extension WorkspaceView {
 
     private func kanbanColumn(_ column: KanbanColumn, items: [TaskItem], boardIDs: Set<UUID>, overlay: Bool, now: Date, readOnly: Bool) -> some View {
         KanbanColumnView(
-            title: column.title, items: items, readOnly: readOnly,
+            title: column.title, items: items, readOnly: readOnly, width: boardColumnSize.width,
             store: store, selection: $detailState.selection, now: now,
             onSelect: { selectTask($0) },
             onToggle: { complete($0) },
@@ -1880,6 +1939,7 @@ private struct DesktopScopedBoard: View {
     let destination: TaskDestination
     @Binding var selection: UUID?
     let now: Date
+    let columnWidth: CGFloat
     let open: (UUID) -> Void
     let toggle: (UUID) -> Void
     @State private var grouping: ScopedBoardGrouping
@@ -1904,11 +1964,12 @@ private struct DesktopScopedBoard: View {
     }
 
     init(store: TaskStore, destination: TaskDestination, selection: Binding<UUID?>, now: Date,
-         open: @escaping (UUID) -> Void, toggle: @escaping (UUID) -> Void) {
+         columnWidth: CGFloat, open: @escaping (UUID) -> Void, toggle: @escaping (UUID) -> Void) {
         self.store = store
         self.destination = destination
         self._selection = selection
         self.now = now
+        self.columnWidth = columnWidth
         self.open = open
         self.toggle = toggle
         _grouping = State(initialValue: ScopedBoardProjection.defaultGrouping(for: destination))
@@ -1941,8 +2002,8 @@ private struct DesktopScopedBoard: View {
                 ScrollView([.horizontal, .vertical]) {
                     HStack(alignment: .top, spacing: 12) {
                         ForEach(board.columns) { column in
-                            KanbanColumnView(title: column.title, items: column.tasks, readOnly: false, store: store,
-                                             selection: $selection, now: now, onSelect: open, onToggle: toggle,
+                            KanbanColumnView(title: column.title, items: column.tasks, readOnly: false,
+                                             width: columnWidth, store: store, selection: $selection, now: now, onSelect: open, onToggle: toggle,
                                              onDrop: { ids in
                                 if ids.count == 1, let id = ids.first { move(id, to: column.id) }
                             }, scoped: ScopedBoardColumnInteraction(
@@ -1973,6 +2034,7 @@ private struct DesktopScopedBoard: View {
             }
         }
         .onChange(of: grouping) { _, _ in cancelDrag() }
+        .onChange(of: columnWidth) { _, _ in cancelDrag() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in cancelDrag() }
         .onKeyPress(.escape) {
             guard drag != nil else { return .ignored }
@@ -2098,6 +2160,7 @@ private struct KanbanColumnView: View {
     let title: String
     let items: [TaskItem]
     let readOnly: Bool
+    let width: CGFloat
     @ObservedObject var store: TaskStore
     @Binding var selection: UUID?
     let now: Date
@@ -2145,7 +2208,7 @@ private struct KanbanColumnView: View {
             }
         }
         .padding(8)
-        .frame(width: 250, alignment: .top)
+        .frame(width: width, alignment: .top)
         .frame(minHeight: scoped?.minimumHeight, alignment: .top)
         .background(isTargeted ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 10))
         .overlay { if isTargeted { RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor.opacity(0.4), lineWidth: 1) } }
@@ -2215,6 +2278,7 @@ private struct KanbanCard: View {
     let onToggle: () -> Void
     var scopedGrip: ScopedBoardDragGrip?
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.showsFullTaskTimes) private var showsFullTaskTimes
     private var task: TaskItem { store.data.tasks.first { $0.id == id } ?? TaskItem(id: id, title: "") }
     private var finished: Bool { task.completedAt != nil || task.wontDoAt != nil }
 
@@ -2230,6 +2294,7 @@ private struct KanbanCard: View {
             }
         }
         .accessibilityElement(children: .combine).accessibilityLabel(task.title.isEmpty ? "Untitled" : task.title)
+        .accessibilityValue(showsFullTaskTimes ? task.expandedScheduleLabel ?? "" : "")
         .accessibilityAddTraits(.isButton).accessibilityAction { onSelect() }
         .overlay(alignment: .topTrailing) {
             if let scopedGrip { scopedGrip.padding(4) }
@@ -2253,7 +2318,10 @@ private struct KanbanCard: View {
             }
             HStack(spacing: 6) {
                 if let due = task.dueDate {
-                    Text(due.formatted(date: .abbreviated, time: .omitted)).font(.system(size: 10)).foregroundStyle(.secondary)
+                    let label = showsFullTaskTimes ? task.expandedScheduleLabel : nil
+                    Text(label ?? due.formatted(date: .abbreviated, time: .omitted))
+                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                        .help(label ?? "")
                 }
                 if task.isRepeating {
                     Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(.secondary).help(task.repeatLabel())

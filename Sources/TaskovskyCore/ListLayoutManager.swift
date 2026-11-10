@@ -89,6 +89,18 @@ open class ListLayoutManager: NSLayoutManager {
         return (markers, quotes)
     }
 
+    public func checklistMarker(at point: NSPoint, origin: NSPoint) -> DrawnMarker? {
+        guard let container = textContainers.first else { return nil }
+        let left = origin.x + container.lineFragmentPadding
+        guard point.x >= left, point.x < left + ListDecoration.gutterWidth else { return nil }
+        let glyphs = glyphRange(for: container)
+        return decorationsToDraw(forGlyphRange: glyphs, at: origin).markers.first { marker in
+            guard case .checkbox = marker.kind else { return false }
+            let hit = marker.rect.insetBy(dx: -3, dy: -3)
+            return hit.contains(point) && point.y >= marker.textRect.minY && point.y < marker.textRect.maxY
+        }
+    }
+
     override public func drawBackground(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
         super.drawBackground(forGlyphRange: glyphsToShow, at: origin)
         guard let storage = textStorage, storage.length > 0,

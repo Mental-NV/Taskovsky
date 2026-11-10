@@ -5,26 +5,23 @@ import TaskovskyCore
 /// A local, editable plain-text report. Changing a filter regenerates the report.
 struct SummaryView: View {
     @ObservedObject var store: TaskStore
-    @State private var period: Period = .thisWeek
-    @State private var customStart = Date()
-    @State private var customEnd = Date()
-    @State private var listIDs: Set<UUID> = []
-    @State private var status: FilterStatus = .all
-    @State private var grouping: Grouping = .status
-    @State private var fields: Set<Field> = [.date, .list, .description]
-    @State private var nextPeriod = false
+    @State private var reportOptions = SummaryReportOptions(customStart: Date(), customEnd: Date())
     @State private var output = ""
     @State private var showOptions = false
     @State private var saved = false
+    @AppStorage("Taskovsky.summaryPresets.v1", store: IsolatedDefaults.store) private var presetData = Data()
+    @State private var showPresetName = false
+    @State private var presetName = ""
+    @State private var renamingPreset: SummaryReportPreset?
+    @State private var showPresetDelete = false
+    @State private var deletingPreset: SummaryReportPreset?
+    @State private var presetError = false
 
     private typealias Period = SummaryReportOptions.Period
     private typealias Grouping = SummaryReportOptions.Grouping
     private typealias Field = SummaryReportOptions.Field
     private var calendar: Calendar { store.settings.calendar }
-    private var reportOptions: SummaryReportOptions {
-        SummaryReportOptions(period: period, customStart: customStart, customEnd: customEnd, listIDs: listIDs,
-                             status: status, grouping: grouping, fields: fields, nextPeriod: nextPeriod)
-    }
+    private var presets: SummaryReportPresets? { SummaryReportPresets(stored: presetData) }
     private var rangeLabel: String {
         SummaryReport.rangeLabel(for: reportOptions.interval(now: Date(), calendar: calendar), calendar: calendar)
     }
@@ -37,7 +34,11 @@ struct SummaryView: View {
                     Button { regenerate() } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain).help("Regenerate summary")
                     if geometry.size.width < 650 {
                         Button { showOptions.toggle() } label: { Label("Filter", systemImage: "line.3.horizontal.decrease.circle") }
-                            .popover(isPresented: $showOptions, arrowEdge: .bottom) { options.frame(width: 250).padding(16) }
+                            .popover(isPresented: $showOptions, arrowEdge: .bottom) {
+                                ScrollView { options.padding(16) }
+                                    .frame(width: 282)
+                                    .frame(maxHeight: max(120, min(520, geometry.size.height - 96)))
+                            }
                     }
                 }.padding(.horizontal, 24).frame(height: 58)
                 Divider()
@@ -60,52 +61,144 @@ struct SummaryView: View {
             }
         }
         .onAppear(perform: regenerate)
-        .onChange(of: period) { _, _ in regenerate() }
-        .onChange(of: customStart) { _, _ in if period == .custom { regenerate() } }
-        .onChange(of: customEnd) { _, _ in if period == .custom { regenerate() } }
-        .onChange(of: listIDs) { _, _ in regenerate() }
-        .onChange(of: status) { _, _ in regenerate() }
-        .onChange(of: grouping) { _, _ in regenerate() }
-        .onChange(of: fields) { _, _ in regenerate() }
-        .onChange(of: nextPeriod) { _, _ in regenerate() }
+        .onChange(of: reportOptions) { _, _ in regenerate() }
+        .alert(renamingPreset == nil ? "Save Summary Preset" : "Rename Summary Preset", isPresented: $showPresetName) {
+            TextField("Name", text: $presetName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save", action: savePreset)
+                .disabled(presets?.accepts(presetName, renaming: renamingPreset?.id) != true)
+        } message: {
+            Text("Choose a unique name for this preset.")
+        }
+        .alert("Delete Summary Preset?", isPresented: $showPresetDelete, presenting: deletingPreset) { preset in
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                guard var updated = presets else { return }
+                updated.remove(preset.id)
+                storePresets(updated)
+            }
+        } message: { preset in
+            Text(preset.name)
+        }
+        .alert("Could Not Save Summary Presets", isPresented: $presetError) {
+            Button("OK", role: .cancel) {}
+        }
     }
+
+    private var presetMenu: some View {
+        Menu {
+            Button("Save Current Options…") { editPresetName() }
+            if let entries = presets?.entries, !entries.isEmpty {
+                Divider()
+                ForEach(entries) { preset in
+                    Button(preset.name) { reportOptions = preset.options }
+                }
+                Menu("Manage Presets") {
+                    ForEach(entries) { preset in
+                        Menu(preset.name) {
+                            Button("Rename…") { editPresetName(preset) }
+                            Button("Delete…", role: .destructive) {
+                                deletingPreset = preset
+                                showPresetDelete = true
+                            }
+                        }
+                    }
+                }
+            }
+        } label: {
+            valueLabel(presets == nil ? "Presets Unavailable" : "Presets")
+        }
+        .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+        .accessibilityLabel("Summary presets")
+        .disabled(presets == nil)
+    }
+
+    private func editPresetName(_ preset: SummaryReportPreset? = nil) {
+        renamingPreset = preset
+        presetName = preset?.name ?? ""
+        showPresetName = true
+    }
+
+    private func savePreset() {
+        guard var updated = presets else { return }
+        let changed = if let renamingPreset {
+            updated.rename(renamingPreset.id, to: presetName)
+        } else {
+            updated.save(presetName, options: reportOptions)
+        }
+        if changed { storePresets(updated) }
+        else { presetError = true }
+    }
+
+    private func storePresets(_ updated: SummaryReportPresets) {
+        do { presetData = try updated.encoded() }
+        catch { presetError = true }
+    }
+
     private var options: some View {
         VStack(alignment: .leading, spacing: 14) {
+            presetMenu
+            Divider()
             Text("Filter").font(.system(size: 14, weight: .semibold))
             optionRow("Date") {
                 Menu {
-                    ForEach(Period.allCases, id: \.self) { value in Button(value.rawValue) { period = value } }
-                } label: { valueLabel(period.rawValue) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+                    ForEach(Period.allCases, id: \.self) { value in Button(value.rawValue) { reportOptions.period = value } }
+                } label: { valueLabel(reportOptions.period.rawValue) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
             }
             Text(rangeLabel).font(.system(size: 11)).foregroundStyle(.secondary)
-            if period == .custom {
-                DatePicker("From", selection: $customStart, displayedComponents: .date)
-                DatePicker("To", selection: $customEnd, displayedComponents: .date)
+            if reportOptions.period == .custom {
+                DatePicker("From", selection: $reportOptions.customStart, displayedComponents: .date)
+                DatePicker("To", selection: $reportOptions.customEnd, displayedComponents: .date)
             }
             optionRow("Lists") {
                 Menu {
-                    Button("All Lists") { listIDs.removeAll() }
-                    Toggle("Inbox", isOn: listMembership(TaskFilter.inboxListID))
-                    ForEach(store.data.lists) { list in Toggle(list.name, isOn: listMembership(list.id)) }
-                } label: { valueLabel(listIDs.isEmpty ? "All Lists" : "\(listIDs.count) selected") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+                    Button("All Lists") { reportOptions.listIDs.removeAll() }
+                    Toggle("Inbox", isOn: membership(TaskFilter.inboxListID, in: $reportOptions.listIDs))
+                    ForEach(store.data.lists) { list in Toggle(list.name, isOn: membership(list.id, in: $reportOptions.listIDs)) }
+                } label: { valueLabel(reportOptions.listIDs.isEmpty ? "All Lists" : "\(reportOptions.listIDs.count) selected") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
             }
             optionRow("Status") {
                 Menu {
-                    Button("All Status") { status = .all }; Button("Undone") { status = .active }
-                    Button("Completed") { status = .completed }; Button("Won't Do") { status = .wontDo }
-                } label: { valueLabel(statusName(status)) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+                    Button("All Status") { reportOptions.status = .all }; Button("Undone") { reportOptions.status = .active }
+                    Button("Completed") { reportOptions.status = .completed }; Button("Won't Do") { reportOptions.status = .wontDo }
+                } label: { valueLabel(statusName(reportOptions.status)) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+            }
+            optionRow("Tags") {
+                Menu {
+                    Button("All Tags") { reportOptions.tagIDs.removeAll() }
+                    ForEach(store.data.tags) { tag in
+                        Toggle(tag.name, isOn: membership(tag.id, in: $reportOptions.tagIDs))
+                    }
+                } label: { valueLabel(reportOptions.tagIDs.isEmpty ? "All Tags" : "\(reportOptions.tagIDs.count) selected") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("Summary tags")
+            }
+            optionRow("Priority") {
+                Menu {
+                    Button("All Priorities") { reportOptions.priorities.removeAll() }
+                    ForEach(TaskPriority.allCases.reversed(), id: \.self) { priority in
+                        Toggle(priority.label, isOn: membership(priority, in: $reportOptions.priorities))
+                    }
+                } label: { valueLabel(reportOptions.priorities.isEmpty ? "All Priorities" : "\(reportOptions.priorities.count) selected") }
+                    .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("Summary priority")
             }
             Divider()
             Text("Display Options").font(.system(size: 14, weight: .semibold))
             optionRow("Grouping") {
-                Menu { ForEach(Grouping.allCases, id: \.self) { value in Button(value.rawValue) { grouping = value } } }
-                label: { valueLabel(grouping.rawValue) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+                Menu { ForEach(Grouping.allCases, id: \.self) { value in Button(value.rawValue) { reportOptions.grouping = value } } }
+                label: { valueLabel(reportOptions.grouping.rawValue) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+            }
+            optionRow("Sort") {
+                Menu { ForEach(SummaryReportOptions.Sort.allCases, id: \.self) { value in Button(value.rawValue) { reportOptions.sort = value } } }
+                label: { valueLabel(reportOptions.sort.rawValue) }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                    .accessibilityLabel("Summary sort")
             }
             optionRow("Fields") {
-                Menu { ForEach(Field.allCases, id: \.self) { field in Toggle(field.rawValue, isOn: fieldMembership(field)) } }
-                label: { valueLabel("\(fields.count) selected") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
+                Menu { ForEach(Field.allCases, id: \.self) { field in Toggle(field.rawValue, isOn: membership(field, in: $reportOptions.fields)) } }
+                label: { valueLabel("\(reportOptions.fields.count) selected") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
             }
-            Toggle("Next Period Tasks", isOn: $nextPeriod).toggleStyle(.switch).controlSize(.small)
+            Toggle("Next Period Tasks", isOn: $reportOptions.nextPeriod).toggleStyle(.switch).controlSize(.small)
             Spacer(minLength: 0)
         }.font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -113,8 +206,12 @@ struct SummaryView: View {
         VStack(alignment: .leading, spacing: 4) { Text(title).foregroundStyle(.secondary); content() }.frame(maxWidth: .infinity, alignment: .leading)
     }
     private func valueLabel(_ value: String) -> some View { HStack(spacing: 5) { Text(value); Image(systemName: "chevron.down").font(.system(size: 9)) } }
-    private func listMembership(_ id: UUID) -> Binding<Bool> { Binding(get: { listIDs.contains(id) }, set: { if $0 { listIDs.insert(id) } else { listIDs.remove(id) } }) }
-    private func fieldMembership(_ field: Field) -> Binding<Bool> { Binding(get: { fields.contains(field) }, set: { if $0 { fields.insert(field) } else { fields.remove(field) } }) }
+    private func membership<Value: Hashable>(_ value: Value, in set: Binding<Set<Value>>) -> Binding<Bool> {
+        Binding(get: { set.wrappedValue.contains(value) }, set: { selected in
+            if selected { set.wrappedValue.insert(value) }
+            else { set.wrappedValue.remove(value) }
+        })
+    }
     private func statusName(_ value: FilterStatus) -> String { switch value { case .all: "All Status"; case .active: "Undone"; case .completed: "Completed"; case .wontDo: "Won't Do" } }
     private func regenerate() {
         saved = false

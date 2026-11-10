@@ -1616,6 +1616,31 @@ extension ReadOnlyWorkspaceTests {
 }
 
 extension ReadOnlyWorkspaceTests {
+    func testCalendarSkipCommitsOnceAndRestoresThroughRepositoryUndo() async throws {
+        let due = Date(timeIntervalSinceReferenceDate: 815_914_800)
+        let task = TaskItem(title: "Recurring", dueDate: due, hasDueTime: true, recurrence: .weekly,
+                            recurrenceEndDate: due + 7 * 86_400)
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), initial = try await repo.load()
+        let calendar = initial.snapshot.settings.calendar
+        guard case .saved(let skipped, let undo?) = await repo.apply(.skipOccurrence, to: task.id,
+                expected: initial.revision, calendar: calendar) else { return XCTFail("Expected saved skip and Undo") }
+        let current = try XCTUnwrap(skipped.snapshot.workspace.tasks.first)
+        XCTAssertEqual(skipped.snapshot.workspace.tasks.count, 1)
+        XCTAssertEqual(current.id, task.id)
+        XCTAssertEqual(current.dueDate, calendar.date(byAdding: .day, value: 7, to: due))
+        guard case .refused(.stale) = await repo.apply(.skipOccurrence, to: task.id,
+                expected: initial.revision, calendar: calendar) else { return XCTFail("Expected stale refusal") }
+        guard case .refused(.invalidCalendarOperation) = await repo.apply(.skipOccurrence, to: task.id,
+                expected: skipped.revision, calendar: calendar) else { return XCTFail("Expected terminal refusal") }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), skipped.snapshot.workspaceBytes)
+        guard case .saved(let restored, nil) = await repo.undo(undo) else { return XCTFail("Expected saved Undo") }
+        XCTAssertEqual(restored.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        XCTAssertEqual(CalendarScheduleSnapshot(try XCTUnwrap(restored.snapshot.workspace.tasks.first)),
+                       CalendarScheduleSnapshot(task))
+    }
+
     func testCalendarMoveShiftsManualReminderAndUndoPreservesLaterTitle() async throws {
         let due = Date(timeIntervalSinceReferenceDate: 815_914_800.125)
         let rule = CustomRecurrence(unit: .months, monthDays: [9], skipWeekends: true)
@@ -1921,6 +1946,40 @@ extension ReadOnlyWorkspaceTests {
         }
         XCTAssertEqual(saved.snapshot.workspace.tasks.first?.priority, .medium)
         assertRefused(await repo.apply(.metadata(.priority(.high)), to: task.id, expected: start.revision), .stale)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
+    }
+}
+
+extension ReadOnlyWorkspaceTests {
+    func testTaskProgressWritesOnlyProgressAndRefusesStaleOrFailedWrites() async throws {
+        let date = Date(timeIntervalSinceReferenceDate: 815_914_800)
+        let task = TaskItem(title: "Project", body: "Keep these details", dueDate: date,
+                            hasDueTime: true, reminderDate: date - 900, recurrence: .daily)
+        let note = TaskItem(title: "Note", kind: .note)
+        let files = try fixture(WorkspaceData(tasks: [task, note]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let start = try await repo.load()
+        let failedRepo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings, write: { _, _ in
+            throw CocoaError(.fileWriteNoPermission)
+        })
+        guard case .persistenceFailed = await failedRepo.apply(.metadata(.progress(60)), to: task.id, expected: start.revision) else {
+            return XCTFail("Expected a refused disk write")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+        assertRefused(await repo.apply(.metadata(.progress(80)), to: note.id, expected: start.revision), .metadata(.unavailableProgress))
+        guard case .saved(let saved) = await repo.apply(.metadata(.progress(100)), to: task.id,
+                                                       expected: start.revision, now: date + 1) else {
+            return XCTFail("Expected saved progress")
+        }
+        var expected = try XCTUnwrap(TaskMetadataChange.progress(100).applying(to: task, availableTags: []))
+        expected.updatedAt = date + 1
+        XCTAssertEqual(saved.snapshot.workspace.tasks, [expected, note])
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+        assertRefused(await repo.apply(.metadata(.progress(50)), to: task.id, expected: start.revision), .stale)
+        guard case .unchanged = await repo.apply(.metadata(.progress(100)), to: task.id, expected: saved.revision) else {
+            return XCTFail("Expected no write for the same percentage")
+        }
         XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
     }
 }
