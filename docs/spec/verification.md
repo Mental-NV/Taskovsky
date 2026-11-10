@@ -107,3 +107,10 @@ This documentation-only change reconciles [the canonical iPhone specification](i
 - Not run: Swift tests, macOS build/signature/archive checks, native UI checks, and a hosted execution or restoration probe. This is a workflow-filename and documentation change, not fresh runtime verification.
 - Exact published commit, PR URL and observed check/run status are recorded in the PR. An empty run list is a point-in-time observation, not a passing test result or proof that all other branches are paused.
 - Main and the separate [docs-filter PR #5](https://github.com/Mental-NV/Taskovsky/pull/5) remain unchanged. Integration, cancellation of existing runs and restoration were not performed.
+
+
+### Immediate repository workflow pause
+
+After publication, the user's request to disable remote CI was applied without merging the PR. On the connected Mac, `gh workflow list --repo Mental-NV/Taskovsky --all --json id,name,path,state` reported one active workflow: `macOS CI`, ID `411265830`. `gh workflow disable 411265830 --repo Mental-NV/Taskovsky` succeeded. Both a fresh workflow listing and `gh api repos/Mental-NV/Taskovsky/actions/workflows/411265830` confirmed `disabled_manually`, updated `2026-11-10T06:01:00Z`.
+
+This is an immediate workflow-state pause across the repository, independent of the proposed branch rename. No local repository files, existing branch heads, protection rules or token permissions were changed. No active runs were cancelled. Restoration requires explicit re-enabling; if the filename change is integrated, restore that filename too. Application tests and a live re-enable probe remain not run.
