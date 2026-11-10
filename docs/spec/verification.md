@@ -1561,3 +1561,7 @@ The simulator checks cover the named fixtures and touch workflows. The Move earl
 Physical iPhone and VoiceOver interactions are outside this run.
 
 Final source-manifest SHA-256 `b1e0cc1f1133e75a96df5965e0cec6a0c031878fe68b199f49f7a49717f18e92`. Guarded Mac manifest SHA-256 `752d9ab6250dc5338023ff32902ceb647d84736163157d2c4ee490985e484f41`, captured before the later iPhone-only changes.
+
+### Mac pointer follow-up on merged main
+
+The signed Mac app from [PR #24 CI](https://github.com/Mental-NV/Taskovsky/actions/runs/42810287633) matches the source tree merged at `aba0b9b78a2b6af3dede10542234ba3eed0bc805`. In the guarded app, dragging Travel bag by its grip onto the open lower portion of the Weekly setup card moved Travel bag to the middle. Releasing outside the card grid preserved the new order. The saved workspace changed only in template order. Template IDs and values, unrelated workspace records and settings matched the fixture. The previous guarded app, preferences and disposable fixture were restored. Source-manifest SHA-256 `739579adb07c281ce836c591607bf4eca92d9f8f137504ab402ad48852419aa0`.
