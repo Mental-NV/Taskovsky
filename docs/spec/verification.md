@@ -316,3 +316,292 @@ The first simulator invocation used the wrong test target name and ran no cases.
 A valid custom rule that is opened and saved without changes keeps its saved representation and position. The simulator exercised daily custom rule creation and cancellation. The other custom patterns use the existing shared rule engine and still need focused native field-by-field checks. Direct Calendar moves and resize, Calendar Arrange, device notification delivery and physical-device accessibility remain open. External calendar integrations stay deferred in the parity record.
 
 The source archive is `taskovsky-checkpoints/MobileSchedule-2026-11-09.zip`. Compact evidence includes the Mac build and test logs, simulator summaries, neutral screenshots and QA audit results. The Mac desktop source still matches its 98-entry sealed manifest. A separate live recheck of an older Desktop QA bundle verified input, Month scrolling and window reflow. The old bundle used regular app settings and saved Month over the observed Week view. The workspace file modification time predates the recheck. The desktop evidence records the settings incident and restoration status.
+
+<a id="mobile-calendar-arrange"></a>
+## Calendar Arrange and direct scheduling on iPhone — November 9, 2026
+
+The isolated worktree is `codex/mobile-local-prealpha` at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The [Arrange change](../changes/mobile-calendar-arrange-2026-11-09.md) ports Calendar scheduling, grouping and scoped Undo. The original Desktop worktree is checked independently against its 98-entry source manifest.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **540 tests passed** and signed release verified | 451 Core, 8 Domain, 47 Workspace and 34 Swift Testing. Shared Calendar tests check a fractional range move with shifted manual reminders, nominal cadence, exact no-op, revision refusal and Undo that preserves an unrelated title but refuses a later status change. Release SHA-256 `92a7a64a5f27df1d0b9fa8368e06ae1733266bb4f01c1d53ff1db6e022b3fa61`. |
+| Native Calendar | **Five Arrange and direct edit cases passed** | Scope, overdue inclusion, priority grouping, Cancel and focused-day save through relaunch. Card removal and Undo. Hourly drop creates a snapped 30-minute timed range. Month drop retains an all-day date. The timed resize saves the intended 30-minute extension. |
+| Full simulator | **95 tests passed** with zero skips and one UIKit runtime warning | 55 shared contracts and 40 native UI cases on the full-suite build. The warning occurred while opening Calendar actions. The follow-up replaces the system menu with the Calendar view picker's popover pattern. |
+| Final popover verification | **Eight simulator cases and eight Mac reloads passed** | No warnings, skips or failures. The focused run covers Arrange and relaunch, removal/Undo, source filters, Hour and Month drag, timed resize, all seven modes and task-detail date editing from Calendar. Each final fixture passes its exact file audit. |
+| Full file audit | **39 fixtures passed and 38 Mac reloads passed** | The unknown-data fixture stayed byte-identical and skipped Mac reload. All five new Calendar fixtures reopened without writes. |
+| Source identity | `arrange-source-manifest.json` SHA-256 `5510aab21f0de8f3aa43c47a5662047df062f02511151dd1c9f20433d89d2530` | The 129 final inputs differ from the full-suite manifest `8a04647fee4d7988cac6dfb7fb21608c63815122a8d73be18c6c7b6cd9ed79eb` only in the Calendar actions presentation in TaskovskyMobileApp.swift. Final simulator debug code SHA-256 `c882737c84b50c7b42907034b85c1fb88ca7f9104aff6fb2eeb8c32ed5afbd71`. The evidence separates the launcher from the code library. |
+
+The first native run encountered repeated animation-idle waits when the same touch surface handled drag and the context menu. A separate visible grip allowed both workflows to complete. The subsequent UI run reported a successful resize, but the persisted file showed a 15-minute change from a 30-minute gesture. The final build measures the drag in a fixed coordinate space so the moving handle does not change the measurement. The persisted range now ends exactly 30 minutes later and keeps its start. The file audit independently checks the changed due date and automatic reminder.
+
+Verification uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a), Swift 6.4 and the owned iPhone 13 Pro simulator with iOS 26.3.1 (23D8133). The app targets iOS 17.0. The Mac release uses local ad hoc signing. Simulator tests use fresh Debug UUID fixtures and disabled parallel execution. App settings files are outside the Calendar write scope.
+
+Arrange uses a sheet with staged placement. Card dragging stays inside the same phone Calendar session. Timed resize handles are available on sufficiently tall final segments. The card menu and named accessibility actions cover other supported shapes. Additional gesture combinations, dense target sizing, VoiceOver, Dynamic Type, physical devices, advanced Calendar display controls and reference-matched visuals require separate verification. External calendar integrations remain deferred in the parity record.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileCalendarArrange-2026-11-09.zip`. The companion evidence includes both simulator summaries, fixture audit reports, build manifests, the isolated popover diff and neutral screenshots. All 98 Desktop source inputs still match their sealed manifest.
+
+<a id="mobile-calendar-preferences"></a>
+## Calendar view preferences on iPhone — November 9, 2026
+
+The isolated checkout is `codex/mobile-local-prealpha` at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The [Calendar preference change](../changes/mobile-calendar-preferences-2026-11-09.md) separates writes to the Calendar options object from task transactions. Original workspace bytes and every byte outside the settings object's Calendar value are checked independently.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **543 tests passed** and signed release verified | 451 Core, 8 Domain, 50 Workspace and 34 Swift Testing. New contracts cover sparse and legacy settings, absent Calendar objects, exact adjacent bytes, no-op, stale edits, unknown values, duplicate keys, failed replacement and confirmation after a write reports an error. Release SHA-256 `92a7a64a5f27df1d0b9fa8368e06ae1733266bb4f01c1d53ff1db6e022b3fa61`. |
+| Focused simulator and file audit | **Five native preference/navigation cases and five Mac reloads passed** | Saved filters and All reset, seven modes, appearance and visibility, named ruler staging/capacity and failed preference save. The initial full-contract focused run passed 63 cases with no runtime warnings. |
+| Full simulator | **101 tests passed** | 58 shared contracts and 43 native cases. Zero failures, skips or runtime warnings. The final build also checks temporary mode navigation when a save fails and recovery of the prior saved mode on relaunch. |
+| Full file audit | **42 fixture audits and 41 Mac reloads passed** | Nine cases changed saved settings within the Calendar value. Unrelated setting bytes match the start of each session. Task writes remain independently scoped. Unknown task data stays byte-identical and skips Mac reload. |
+| Source identity | `prefs-source-manifest.json` SHA-256 `a489dc8c368cc1c894d479b48defe07cb27208a7524abe59dbbe56a3af47f377` | 131 build/test inputs. Final simulator debug code SHA-256 `4830497a6286502b059f1dbe30d69e6a4289cac9ad0721be8451b9919c764db9`. The build record separately identifies the launcher, code library and test bundles. |
+
+The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Simulator evidence uses the isolated iPhone 13 Pro on iOS 26.3.1 (23D8133). The app targets iOS 17.0. Native tests use UUID-owned Debug fixtures, and the audit reopens eligible cases through Mac TaskStore without writes.
+
+Mode is saved on an explicit view change. Filter and View Options sheets save on Done, and the nested zone editor changes only the outer draft until that save. Source controls stay in a phone sheet, and the stored Mac sidebar value passes through. Focus date and Arrange remain session state. Rulers use the first displayed day for conversions, matching the current Mac rule. The settings file audit allows the documented legacy first-zone alias when rulers are shown and checks exact bytes outside Calendar options.
+
+The native checks verify named ruler search, nested Cancel, the four-ruler limit, and persistence across relaunch. Reordering and removing rulers, every range endpoint, cross-column DST presentation, physical devices, Dynamic Type and VoiceOver require separate native checks. External calendar integrations remain deferred in the parity record.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileCalendarPreferences-2026-11-09.zip`. The companion evidence includes the Mac and simulator results, preference and task file audits, build identity, and neutral screenshots. The original Desktop checkout still matches all 98 sealed source inputs.
+
+<a id="mobile-rich-description-preview"></a>
+## Rich description preview on iPhone — November 9, 2026
+
+The isolated mobile checkout is `codex/mobile-local-prealpha` at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The [rich description change](../changes/mobile-rich-description-preview-2026-11-09.md) projects known inline runs and paragraph decorations without changing their stored UTF-16 text. Task and note detail and protected template capture use the native preview.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **545 tests passed** and signed release verified | 451 Core, 10 Domain, 50 Workspace and 34 Swift Testing. New projection cases check exact decomposed text and emoji code units, numbered-group reset, headings, quote/checklist/rule decorations, mirrored-text mismatch, overflow and split surrogate pairs. Release SHA-256 `1a1fe35c013b8ea888d2461ee5334d09bcd8a870fd6d03149176bfffcb6c0473`. |
+| Focused simulator and file audit | **65 cases passed**, including five native flows and five Mac reloads | Styled description, compound formatting through title edit and relaunch, malformed fallback, Mac-authored styled task title edit and protected template instantiation. The focused run reported zero failures, skips or runtime warnings. |
+| Full simulator | **105 tests passed** | 60 shared contracts and 45 native cases. Zero skips, failures or runtime warnings. |
+| Full file audit | **44 fixture audits and 43 Mac reloads passed** | The compound rich title edit changed only title and modification time. The malformed case was byte-identical. The unknown workspace case preserved its bytes and skipped Mac reload. |
+| Dark appearance | **One focused case and one Mac reload passed** | Same tested app binary. The dark screenshot shows the same decorations, selection surface and contrast-dependent styles. The owned simulator returned to its original light appearance. |
+| Source identity | `rich-preview-source-manifest.json` SHA-256 `a14430cadda9b1e723436082ce5de078aeac80aff0535f181e2b9dc325d38cf7` | 133 final source, resource and test inputs. Final simulator debug code SHA-256 `b3b39d93a3c258d0cf903dbb327faefba0148c88984274d1c1e5f448ce4ca917`. The Mac and simulator builds are independently identified. |
+
+The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Phone evidence uses an owned iPhone 13 Pro simulator on iOS 26.3.1 (23D8133), with the app targeting iOS 17.0. The audit includes the existing Mac-written styled task fixture, a compound neutral fixture generated by the shared model, and a malformed-range variant. Mac TaskStore reopens the compound fixture and compares it to the expected description, inline and block values.
+
+The compound screenshot shows heading, underline, highlight, inline code and strike, two numbered paragraphs, a quote, a bullet, a checked rich paragraph, a rule and a link. The simulator displays the puzzle emoji as a missing glyph in the earlier SwiftUI plain preview and the new UIKit preview. Both the native text value and file audit retain its exact code units. The preview leaves the styled body read-only. Clipboard, link activation, mixed-direction layout, VoiceOver, physical-device behavior and styled authoring have separate verification gates.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileRichDescriptionPreview-2026-11-09.zip`. The companion evidence includes light and dark previews, the earlier plain screenshot for the simulator glyph comparison, and the full fixture audits. All 98 original Desktop source inputs still match their sealed manifest.
+
+<a id="mobile-task-metadata"></a>
+## Task priority, tags and checklists on iPhone — November 9, 2026
+
+The [metadata change](../changes/mobile-task-metadata-checklists-2026-11-09.md) runs in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. Existing tasks can set priority, select existing tags and edit embedded checklist items. The repository applies revision-checked changes to the owned fields and modification time.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **548 tests passed** and signed release verified | 451 Core, 10 Domain, 53 Workspace and 34 Swift Testing. The new cases cover scoped writes, unavailable tag retention, exact checklist text and order, archive and identity guards, stale revision and confirmation after a reported write failure. Release SHA-256 `2e1a594596f3e9b42e920b55bf229deaa2efa4697d756a007c36439ee5ba2387`. |
+| Focused discard | **One native test and one Mac reload passed** | Keep Editing retains typed text. Discard restores the saved checklist view, with unchanged workspace and settings bytes. |
+| Full simulator | **112 tests passed** | 63 shared contracts and 49 native cases. No failures, skips or runtime warnings. New native cases verify priority and tag persistence after relaunch, checklist check/rename/add/remove and Calendar display, Discard and retention of a failed draft. |
+| Full file audit | **48 fixture audits and 47 Mac reloads passed** | Metadata writes preserve the exact description, linked subtask, schedule and unrelated records. The checklist visibility case changes only the expected Calendar setting. The unknown workspace retains its bytes and skips Mac reload. |
+| Dark appearance | **One checklist workflow and one Mac reload passed** | The same app binary saved the checklist and showed it in Calendar. The simulator returned to its original light appearance. The screenshot retains the previously observed missing puzzle glyph. |
+| Source identity | `metadata-source-manifest.json` SHA-256 `d2813e584468360a399d82e58ee5f7ff86d8a42d34539f092050f54aa176ede5` | 135 source, resource and test inputs. Simulator debug code SHA-256 `ae731c951aba0accf5d186337f918c7c7a24f0acd078627c4d5d400c622d7348`. |
+
+The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Native checks use an owned iPhone 13 Pro simulator on iOS 26.3.1 (23D8133). The app targets iOS 17.0.
+
+Tag and checklist drafts live in the open sheet. The new tests use isolated neutral samples with a styled description, linked subtask and unavailable saved tag. Checklist order is exercised at the file contract. Native reorder gestures, physical-device input, Dynamic Type and VoiceOver have separate verification gates.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileTaskMetadata-2026-11-09.zip`. Its companion evidence includes the file audits, build identity, test results and neutral screenshots. The 98 original Desktop source inputs still match their sealed manifest.
+
+<a id="mobile-task-hierarchy"></a>
+## Linked subtasks on iPhone — November 9, 2026
+
+The [hierarchy change](../changes/mobile-task-hierarchy-2026-11-09.md) runs in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. Task detail can add and complete a child, open either side of a parent link, move a subtree and detach a child. The phone uses the existing local task record and the graph operations shared with Mac TaskStore.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **550 tests passed** and signed release verified | 451 Core, 10 Domain, 55 Workspace and 34 Swift Testing. The new cases cover insertion preference, child identity and exact title, write-after-replacement confirmation, refusals, whole-subtree move including a trashed descendant and a byte-stable no-op. Release SHA-256 `21a6ec6cdfaebe15f39b62e509792ef4230676b7d70d5c4a3ebae7f7c048f1da`. |
+| Focused simulator | **Nine tests and three Mac fixture reloads passed** | Six workspace contracts and three native flows. The phone creates and completes a child independently, excludes descendants from the parent picker, moves a subtree across lists, reloads, discards and detaches. |
+| Simulator regression | **116 of 117 passed in the full run, and the corrected case passed on rerun** | The Trash test's sheet-wide badge lookup found the independently trashed child after restoring the parent. The corrected test checks parent editability, opens the still-trashed child and checks that its detail stays locked. The rerun used identical app code. Both runs reported zero skips and runtime warnings. |
+| File audit | **51 fixture audits and 50 Mac reloads passed** | The unknown workspace retained its bytes. The corrected Trash case also passed a separate file comparison and Mac reload. |
+| Source identity | `hierarchy-source-manifest.json` SHA-256 `57303d6ce681ab987edce2a6d697f463c53c2412c5fb51c29137557af2434a46` | 136 source, resource and test inputs. Only the UI test source changed after the full run. Simulator debug code SHA-256 `f57b3df255796a32647f80e47f8b21d0416f666efbd13ecb81f546d8c39ed860` in both runs. |
+
+Native evidence uses the owned iPhone 13 Pro on iOS 26.3.1 (23D8133). The app targets iOS 17.0. The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. File comparisons use UUID-isolated samples and check the saved parent, direct child and relocated subtree through Mac TaskStore.
+
+The phone lists open parent candidates. It stages changes in the open sheet and previews cross-list moves. Row indentation is capped at four levels to leave room for titles on narrow screens. The underlying links and navigation retain deeper levels. Native physical-device, VoiceOver and Dynamic Type checks remain open.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileTaskHierarchy-2026-11-09.zip`. Its companion evidence records both simulator runs, file comparisons, build identity and neutral screenshots. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-list-organization"></a>
+## Lists and folders on iPhone — November 9, 2026
+
+The [list and folder change](../changes/mobile-list-organization-2026-11-09.md) runs in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. Desktop and the phone use shared list duplication, deletion, ungrouping and reorder operations. The phone also stages edits in revision-checked forms.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **553 tests passed** and signed release verified | 451 Core, 10 Domain, 58 Workspace and 34 Swift Testing. The new cases cover revision, compatibility and validation refusal, exact no-op, list/folder moves, Board value preservation, list copy identity, filter retention and confirmation after replacement. Release SHA-256 `c8cff823780098509deec0e710f296dca8fed67e51f2d48488baf2c67ef44cf1`. |
+| Focused checks | **Four native workflows and four Mac reloads passed across focused runs** | Folder ordering, naming, placement, collapse/expand, ungroup and relaunch passed on the final build. The first build also passed archive/exclusion, copy/delete and write-failure cases. |
+| Full simulator | **124 tests passed** | 68 shared contracts and 56 native workflows. No failures, skips or runtime warnings. All four organization workflows passed on the final build. |
+| Full file audit | **55 fixture audits and 54 Mac reloads passed** | Confirmed ungrouping kept both lists, archiving and unarchiving preserved tasks, copying remapped the hierarchy, and deleting moved originals to Inbox while retaining the missing-list filter. Unknown workspace data retained its bytes and skipped Mac reload. |
+| Dark appearance | **One folder workflow and one Mac reload passed** | Folder reorder, editing, drawer expansion, ungroup and relaunch used the same simulator build. The simulator returned to its original light appearance. |
+| Source identity | `organization-source-manifest.json` SHA-256 `de9fdb8c0aaa93f932bdaff8f05830632ee4b1bf1d945214c09f13c9a72557b1` | 138 source, resource and test inputs. Simulator debug code SHA-256 `ee497df63cb06e432bc55e7357da7e7473b6212fcf25c44f8ee2207dda9c2ac7`. |
+
+Native checks use the owned iPhone 13 Pro simulator on iOS 26.3.1 (23D8133). The app targets iOS 17.0. The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Changes run against disposable UUID-isolated workspaces.
+
+Folder expansion and unsaved forms live in the phone session. Reorder moves within an active group, while the placement picker moves between groups. The phone preserves the stored Board value and displays tasks in the list interface. VoiceOver, Dynamic Type and physical-device checks remain open.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileListOrganization-2026-11-09.zip`. The companion evidence records the full and focused results, fixture comparisons, build identity, and light and dark screenshots. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-smart-lists"></a>
+## Smart List visibility and order on iPhone — November 9, 2026
+
+The [Smart List change](../changes/mobile-smart-lists-2026-11-09.md) runs in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The drawer uses saved top, history, Tags and Filters preferences. The settings sheet saves selected visibility and within-group order on Done.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **556 tests passed** and signed release verified | 451 Core, 10 Domain, 61 Workspace and 34 Swift Testing. Three new cases cover byte-scoped writes, sparse settings, rejection of duplicate visibility keys, stale and unchanged saves, and confirmation after replacement. Release SHA-256 `c013d487df9d226ff5f9a6cf9a702cc2d446c57aa9a963e5f0368d722fc39c9a`. |
+| Focused simulator | **32 tests and two Mac reloads passed** | Two native workflows verify staged Cancel, visibility, grouped reorder, fallback, relaunch and failed-save draft retention. Zero skips, failures or runtime warnings. |
+| Full simulator | **129 tests passed** | 71 shared contracts and 58 native workflows. Zero skips, failures or runtime warnings. |
+| Full file audit | **57 fixture audits and 56 Mac reloads passed** | Smart List edits leave Calendar and other preference bytes and the workspace file intact. The unknown-workspace case retains its bytes and skips Mac reload. |
+| Dark appearance | **One Smart List workflow and one Mac reload passed** | The same simulator build verified order and visibility after relaunch. The simulator returned to its original light appearance. |
+| Source identity | `smart-lists-source-manifest.json` SHA-256 `e5bca05b03ded796f88adabae972013a939146651e87afc11691b50ba4bdb711` | 139 source, resource and test inputs. Simulator debug code SHA-256 `47708a8545df538abdce68a93ee9aed9aca16eb74b56f30c2f3b078a060d7c5d`. |
+
+The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Native checks use the owned iPhone 13 Pro simulator on iOS 26.3.1 (23D8133), with an iOS 17.0 deployment target. The scoped settings audit compares the exact bytes outside the edited members and checks workspace bytes unchanged.
+
+The Summary report and its phone controls remain open, and its saved visibility value is retained. Smart List settings drafts live in the open form. VoiceOver, Dynamic Type and physical-device checks remain separate.
+
+The Desktop drawer uses the same group keys and visibility cases as before, now through the shared value rules. Its layout and interaction code remain platform-specific. The evidence for the Desktop adapter in this slice is the Mac regression suite, release verification and source comparison. Native UI evidence is from the iPhone simulator.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileSmartLists-2026-11-09.zip`. Its companion evidence includes native light and dark screenshots, result summaries and file checks. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-saved-filters"></a>
+## Saved filter authoring on iPhone — November 9, 2026
+
+The [saved filter change](../changes/mobile-saved-filters-2026-11-09.md) runs in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The phone's own filter manager and editors use the Desktop filter model, predicates and rule transformations.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **558 tests passed** and signed release verified | 451 Core, 10 Domain, 63 Workspace and 34 Swift Testing. Two added cases cover an exact advanced rename, unavailable IDs, unchanged and stale commands, custom-bound validation and confirmation after replacement. Release SHA-256 `229ac585cc354698abbe3cbde2443adc26385ae56363efc0341fd133bf20b442`. |
+| Focused simulator | **36 tests and four Mac reloads passed** | Normal creation, pin, match and deletion. Nested Advanced AND/OR authoring and relaunch. Canceling mode replacement and renaming a filter with unavailable list and negated tag references. Failed-save draft retention. Zero skips, failures or runtime warnings. |
+| Full simulator | **135 tests passed** | 73 shared contracts and 62 native workflows. Zero skips, failures or runtime warnings. |
+| Full file audit | **61 fixture audits and 60 Mac reloads passed** | Checked the nested rule tree and unrelated data, retained references, the create/delete cycle and exact failed-save bytes. The unknown-workspace fixture retains its bytes and skips Mac reload. |
+| Dark appearance | **One nested Advanced workflow and one Mac reload passed** | The same simulator build authored and reopened the rule. The simulator returned to its original light appearance. |
+| Source identity | `saved-filters-source-manifest.json` SHA-256 `7f556953049d4c7e281044921760a752a7cc3d15abcaa022ab13b6eabc370455` | 141 source, resource and test inputs. Simulator debug code SHA-256 `d25bbed165917c449ca97ce2c0b50799b33c1962a2f4adb63d55a11cc03839d5`. |
+
+The Mac host uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Native checks use the owned iPhone 13 Pro simulator on iOS 26.3.1 (23D8133), with iOS 17.0 as the deployment target. The file comparison checks the exact saved tree and original settings. Mac TaskStore reopens the fixtures and evaluates the saved filters.
+
+Native evidence covers the workflows above. Every combination of date, status and entity conditions has separate coverage needs, as do VoiceOver, Dynamic Type and physical devices. Filter drafts live in the open form. Calendar sources retain their own list/tag selector.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileSavedFilters-2026-11-09.zip`. Its companion evidence includes the focused and full simulator results, exact fixture checks, build identity, and light and dark screenshots. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-tag-management"></a>
+## Tag management on iPhone — November 9, 2026
+
+The [tag management change](../changes/mobile-tag-management-2026-11-09.md) runs in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`. The phone owns its tag forms and drawer controls and shares the hierarchy and reference rules with Desktop.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac | **563 tests passed** and signed release verified | 451 Core, 10 Domain, 68 Workspace and 34 Swift Testing. New cases cover interrupted paired writes, merge into a descendant, unavailable filter rules, post-replacement confirmation, preserving unexpected bytes and blocking writes until journal cleanup. Release SHA-256 `82d8930223c8ed37007e9bcff62398f4e645c9f16b5d92c4adf21f091f27a2dc`. |
+| Focused simulator | **41 tests and four Mac reloads passed** | 37 shared workspace contracts and four native tag workflows. Nested creation, pinning, drawer disclosure and task assignment; sibling reorder, canceled edit, reparent and relaunch; descendant merge and filter reload; delete with a retained filter. Zero skips, failures or runtime warnings. |
+| Full simulator | **144 tests passed** | 78 shared contracts and 66 native workflows. Zero skips, failures or runtime warnings. |
+| Full file audit | **65 fixture audits and 64 Mac reloads passed** | Exact comparisons covered sibling order, hierarchy, task and template memberships, saved rules, timestamps and default-tag settings. The unknown-workspace fixture retains its bytes and skips Mac reload. |
+| Dark appearance | **One tag workflow and one Mac reload passed** | The same simulator build reordered siblings, discarded a rename, saved a new name and parent, then reopened the tag. The simulator returned to light appearance. |
+| Source identity | `tags-source-manifest.json` SHA-256 `0f8b79d0341e473cc02b10fd0b88635909a742db3bb176508a7a501f5bf0b38c` | 143 source, resource and test inputs. Simulator debug code SHA-256 `fee6c06f4ab2962d4b6650262cdc22b17c07bb3dda949e8f6ede065eee658ef7`. |
+
+Mac testing uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Native testing uses the owned iPhone 13 Pro simulator on iOS 26.3.1 (23D8133). The deployment target remains iOS 17.0.
+
+Tag form drafts live in the open editor. Native verification did not exercise changing the color, VoiceOver, Dynamic Type or a physical device.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileTagManagement-2026-11-09.zip`. Its companion evidence includes the focused and full results, exact file checks, build identity and light and dark screenshots. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="nested-filter-layout"></a>
+## Board and separate nested-filter layouts — November 9, 2026
+
+The [iPhone Board](../changes/mobile-board-2026-11-09.md) and [nested filter layout](../changes/nested-filter-layout-2026-11-09.md) run in the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac tests and release | **565 tests passed** and release signature verified | 451 Core, 10 Domain, 70 Workspace and 34 Swift Testing. New Board contracts cover per-list scope and recurring completion from Won’t Do with Undo. Release SHA-256 `0669a707bc5c3525e2720b44c9e3b0ad66938d81ecafd9e2d23b72dd5d9538d5`. |
+| Native Mac editor | **Passed** | Disposable fixture with AND, OR and NOT. Converted OR to AND, unwrapped NOT, added and removed a deeper group, and dismissed with Escape. The files kept their checksums. A keyboard rename and Save changed only the filter name. A separate reopen preserved the exact rule and unavailable tag without writing either file. |
+| Native Mac appearance | **Light and dark captured** | The standard release produced the light and reopened screenshots. The guarded dark QA build adds only `.preferredColorScheme(.dark)` to the root view. Its files matched after close. |
+| First Board simulator run | **Four workflows and four Mac reloads passed** | Per-list mode persisted through relaunch, archived completed-only board remained read-only, drag rejected a note and moved a task, and recurring completion from Won’t Do could be undone. |
+| Initial combined simulator run | **150 tests, 69 fixture audits and 68 Mac reloads passed** | The first filter layout build produced one UIKit warning when opening the first Add menu. The iPhone structural actions were moved to native action sheets. |
+| Final focused simulator | **47 tests and eight Mac reloads passed** | Four filter workflows, four Board workflows and 39 shared contracts. Zero skips, failures or runtime warnings. |
+| Compact iPhone | **One nested workflow and one Mac reload passed** | iPhone SE (3rd generation), 375-point screen. The same app code exercised deep groups, action sheets, keyword editing, keyboard dismissal and saved results. Zero runtime warnings. The disposable simulator was removed. |
+| Final full simulator | **150 tests passed** | 80 shared contracts and 70 native workflows. Zero skips, failures or runtime warnings. |
+| Final file audit | **69 fixture audits and 68 Mac reloads passed** | Exact comparisons cover saved filter rules, unavailable references, Board mode scope, archived no-op, drag and recurring Undo. The unknown-workspace fixture retains its bytes and skips Mac reload. |
+| Final iPhone dark appearance | **One nested workflow and one Mac reload passed** | Zero runtime warnings. The original light appearance was restored. |
+| Source identity | `filter-layout-source-manifest.json` SHA-256 `a5c7ee88facf7e2ee5bb7b97e3be93b61e27ef9cbdb628f3c13c97070cf0ab9d` | 144 inputs. Simulator debug code SHA-256 `a5008140dc85fdeab1e77e583df374451ea89b8cbb02769f8f610259345a63ec`. |
+
+Mac testing uses macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. iPhone testing uses iOS 26.3.1 (23D8133) on disposable iPhone 13 Pro and iPhone SE (3rd generation) simulators. The app targets iOS 17.0.
+
+An initial baseline Mac launch showed the regular workspace and was closed before editing. The two regular files had modification times predating the launch. Their first hashes were taken after that launch and matched again after guarded testing. Subsequent QA launchers required both disposable files and always supplied their absolute paths. Each launcher exited without opening the app when either file was missing. The isolation evidence records the actual process arguments, file checksums and the timing of the checks.
+
+The native checks cover the recorded workflows. VoiceOver, Dynamic Type and physical-device checks remain open.
+
+The uncommitted source archive is `taskovsky-checkpoints/BoardAndFilterLayout-2026-11-09.zip`. Companion evidence includes matched Mac before and after captures, iPhone before and after captures, compact and dark screenshots, and isolation and reload reports. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-summary"></a>
+## Editable local Summary — November 9, 2026
+
+The [Summary implementation](../changes/mobile-summary-2026-11-09.md) uses the same report generator on Mac and iPhone. The native editors keep separate UI and draft state. This checkpoint uses the isolated `codex/mobile-local-prealpha` checkout at base `6ee96eeb8f88e74a105c518de2202233ea528efa`.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Time zone reproduction and regression | **Reproduced and fixed** | At 11:30 UTC on November 9, the report selected November 10 in Pacific/Kiritimati while the Moscow test host printed November 9 in the range and heading. The fixed generator uses the report calendar for the range, date headings and due fields without an explicit task time zone. The same test verifies that a New York task retains its local due time and zone abbreviation. Four focused Summary contracts passed on Mac. |
+| Guarded native Mac Summary | **Passed on the initial build** | All Lists excluded the archived completed fixture. An explicit archived list selection included it. Regeneration and saving an edited report left settings and all existing records intact. The new Inbox note preserved the exact UTF-8 text, including a decomposed accent and emoji, and had no schedule, priority or tags. The launcher refused to open when either disposable file was missing. |
+| Final Mac tests and release | **569 tests passed** and release signature verified | 451 Core, 14 Domain, 70 Workspace and 34 Swift Testing. Release executable SHA-256 `e421bb87272fc90cd1673025713ba02632f985b0ad1bd6a711ef4652d8d0ccf6`. |
+| Original full iPhone | **153 passed of 155** | Two existing native tests failed. The advanced-filter test checked for the NOT heading immediately after wrapping. It passed on a same-build rerun. The Smart List save error was below the visible rows. All 71 fixture audits and 70 Mac reloads passed. |
+| Time zone build | **16 focused tests and two Mac reloads passed** | Fourteen shared Domain contracts and both native Summary workflows. Its full suite passed 155 of 156 and reproduced the Smart List error visibility problem. All 71 fixture audits and 70 Mac reloads passed. |
+| Final focused iPhone | **22 tests and eight Mac reloads passed** | Fourteen shared Domain contracts and eight native Summary, Smart List and saved-filter workflows. The Smart List error stays visible above the scrolling rows, and the saved-filter test waits for the NOT heading and checks its label. Summary checks cover filters and cancellation, regeneration, Copy feedback, exact-text Inbox save and reopen, and recovery after a failed write and relaunch. |
+| Final full iPhone | **156 tests, 71 fixture audits and 70 Mac reloads passed** | 84 shared contracts and 72 native cases. The unknown-workspace fixture preserved its bytes and skipped Mac reload. No failures, skips or runtime warnings. |
+| iPhone dark appearance | **One native Summary workflow and one Mac reload passed on the initial and final builds** | Generated and edited the report and saved the exact text as a note. The original light appearance was restored. Disposable acceptance devices were removed after evidence export. |
+| Final source identity | `summary-acceptance-source-manifest.json` SHA-256 `acc8b64f73ce040c657964575d738050ba9a455505fd8cf62a1c9a2d21398e83` | 146 inputs. The initial, time zone and acceptance manifests and build records preserve the exact source and binary identity of each run. The acceptance build changes the Smart List error placement and the NOT assertion. The Mac release inputs match the time zone build. |
+
+Mac testing used macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. iPhone testing used disposable iPhone 13 Pro simulators with iOS 26.3.1 (23D8133). The app targets iOS 17.0.
+
+The iPhone Copy check verified UI feedback. The file audit compared the edited report to the saved note byte for byte. Freeform report edits live in the open report. Recoverable drafts cover Save as Note. Physical-device, VoiceOver and Dynamic Type checks remain open. External integrations remain deferred.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileSummary-2026-11-09.zip`. The companion evidence includes the failing and passing time zone test, separate build identities, full fixture audits and native screenshots. All 98 sealed inputs in the original Desktop checkout still match.
+
+<a id="mobile-search"></a>
+## Local Search and saved queries — November 9, 2026
+
+The [iPhone Search implementation](../changes/mobile-search-2026-11-09.md) uses the Mac full-search task rules with a native criteria sheet, organization links and local history. The work is on `codex/mobile-local-prealpha` at base `6ee96eeb8f88e74a105c518de2202233ea528efa`.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Initial focused test | **Three passed of four** | The first related-task test expected a Back button after the parent link had already returned to the starting task. The corrected test checks the child Back action and parent link separately and verifies the query after closing the task. |
+| Final focused iPhone | **Four tests and four Mac reloads passed** | Title, body and embedded-step matches, task and note results, Trash exclusion, default and explicit archive scope, related-task navigation, distinct list/tag/filter routes, staged criteria cancellation, history deduplication and clearing, and Save as Filter after relaunch. |
+| Final full iPhone | **159 tests passed** | 84 shared and 75 native tests. Zero failures, skips or runtime warnings. |
+| File audit | **74 fixture checks and 73 Mac reloads passed** | The unknown-workspace fixture retains its bytes and skips Mac reload. Search-only workflows preserved workspace and settings bytes. Saving a search added one filter with its exact query, status and explicit archived-list selection. Mac Taskovsky resolved the saved filter to the expected archived task without writing either file. |
+| Dark appearance | **One native workflow and one Mac reload passed** | The checklist search and organization routing workflow ran again in dark appearance. The owned simulator returned to light appearance before removal. |
+| Mac tests and build | **569 tests passed and release signature verified** | The Search change leaves Mac app source as in the Summary checkpoint. The Mac fixture helper separately verifies saved search criteria. Release executable SHA-256 `50a5e9ded7f8451342a8edd02fd8098b06cc61c702471d48d2734dc33eab4a43`. |
+| Source identity | **147 inputs verified** | `search-final-source-manifest.json` SHA-256 `963deb063066fff613d4bcd120ac728e015a0d8b6ceb42ed7e7b21c012324235`. Eight inputs differ from the sealed Summary checkpoint. |
+
+Mac tests ran on macOS 27.0.1 ARM64 with Xcode 27.0 (27A266a) and Swift 6.4. The iPhone simulator was an owned iPhone 13 Pro on iOS 26.3.1 (23D8133). Search history uses device-local preferences and a separate key for each QA session. The native history case verifies deduplication, clearing and relaunch. The ten-entry cap follows the implementation. Reference visual matching, physical-device, VoiceOver and Dynamic Type remain open.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileSearch-2026-11-09.zip`. Its companion evidence includes light and dark screenshots, exact build checksums, and the initial and final results. All 98 sealed Desktop inputs still match. External search remains deferred.
+
+<a id="mobile-templates"></a>
+## Local Templates and Mac edit preservation — November 9, 2026
+
+The [Templates implementation](../changes/mobile-templates-2026-11-09.md) is on `codex/mobile-local-prealpha` at base `6ee96eeb8f88e74a105c518de2202233ea528efa`.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Mac tests and release | **571 tests passed and release signature verified** | The focused storage tests cover an unchanged save, a protected styled body, an explicit Mac body replacement, invalid and stale writes, hierarchy, copied checklist identities and schedule reconciliation. Release executable SHA-256 `c1a40441fa8a87adc022c8e61c0c1791c97e3ba1e4fe5eed7fa309b2f457b1fd`. |
+| Guarded Mac editor | **Cancel, Save and reopen passed** | The guard refused to launch without either fixture file. Escape preserved both files byte for byte. Renaming the styled template preserved the checked step, formatting, recurrence and duration. The name was the only change in the decoded workspace, and the settings bytes were unchanged. Mac TaskStore reopened both files without writing. The guarded app was closed. |
+| Focused iPhone | **Four tests and two Mac reloads passed** | Two workspace tests and two native workflows. Created, reopened, renamed and deleted a template. Saved a styled task as a template and applied it to a linked child. The file audit compared exact styled content, regenerated checklist identities and unowned fields. Mac TaskStore independently reopened the result. |
+| Full iPhone | **163 tests, 76 fixture checks and 75 Mac reloads passed** | 86 shared and 77 native tests, including the existing Add flow for a styled template. Zero failures, skips or runtime warnings. The unknown-workspace fixture retained its bytes and skipped Mac reload. |
+| Dark appearance | **One native workflow and one Mac reload passed** | The styled-template Save and Apply workflow ran again in dark appearance. The simulator returned to light appearance before removal. |
+| Final source identity | **149 inputs verified** | `template-final-source-manifest.json` SHA-256 `a6c6cae4796d7d5bb289d34dda1dd9f7d74e9625b694bc04c06512d3459445a1`. Thirteen inputs differ from the Search checkpoint, including the two audit tools. |
+
+Mac tests ran on macOS 27.0.1 ARM64, Xcode 27.0 (27A266a) and Swift 6.4. Native iPhone tests ran on an owned iPhone 13 Pro simulator with iOS 26.3.1 (23D8133). Styled authoring on the phone remains outside the reduced template editor. Physical-device, VoiceOver, Dynamic Type and reference visual matching remain open.
+
+The uncommitted source archive is `taskovsky-checkpoints/MobileTemplates-2026-11-09.zip`. The companion evidence includes light and dark application screenshots, native Mac isolation and save logs, exact build checksums and the file audits. All 98 sealed inputs of the original Desktop checkout still match.
+
+<a id="mobile-local-settings"></a>
+## Local iPhone Settings — November 9, 2026
+
+The [local Settings implementation](../changes/mobile-local-settings-2026-11-09.md) is on `codex/mobile-local-prealpha` at base `6ee96eeb8f88e74a105c518de2202233ea528efa`.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Initial native attempts | **Two issues isolated** | The Work selector matched both the drawer row and the picker option. Scoping the assertion to the picker addressed the ambiguity. The next attempt exposed the drawer gesture dismissing the sheet while trying to reach Settings. The entry moved to the drawer toolbar. |
+| Final focused iPhone | **Two tests and one Mac reload passed** | The UI discarded an unsaved priority, saved Work, High and Sunday, then relaunched. Add used Work and High, and Calendar exposed Sunday in the week view. The storage test covered stale and invalid writes, a no-op, retention of a saved unavailable default and exact preservation of an opaque sibling. |
+| Final full iPhone | **165 tests, 77 fixture checks and 76 Mac reloads passed** | 87 shared and 78 native tests. Zero failures, skips or runtime warnings. The Settings audit found only the three selected values changed and the task file remained byte-for-byte identical. Mac Taskovsky reopened the saved preferences without writes. The unknown-workspace fixture retained its bytes and skipped Mac reload. |
+| Dark appearance | **One native workflow and one Mac reload passed** | The settings save, relaunch, Add and Calendar workflow ran again in dark appearance. The simulator returned to light before removal. |
+| Mac tests and release | **572 tests passed and release signature verified** | 451 Core, 14 Domain, 73 Workspace and 34 Swift Testing. The iPhone styling changes do not enter the Mac build. Release executable SHA-256 `80b378a53aec3c96ed82588c406eb7bd7acee2309e8512e63994ade632ad834c`. |
+| Final source identity | **151 inputs verified** | `local-settings-visual-source-manifest.json` SHA-256 `688bb1b94258958f3aed6153fb6d394e731a038009d159d61151788a6c061037`. Ten inputs differ from the Templates checkpoint. The final appearance change makes the circular confirmation control blue. |
+
+Mac tests ran on macOS 27.0.1 ARM64 with Xcode 27.0 (27A266a) and Swift 6.4. The native tests used an owned iPhone 13 Pro simulator with iOS 26.3.1 (23D8133). The staged Settings screenshot shows the rounded sheet, centered title, grouped controls and blue confirmation button. Physical-device, VoiceOver, Dynamic Type, reference measurement and OS reminder delivery remain open.
+
+The uncommitted archive is `taskovsky-checkpoints/MobileLocalSettings-2026-11-09.zip`. Companion evidence includes Settings in light and dark, the resulting Add defaults and Sunday Calendar, exact build checksums, and the fixture audits. All 98 sealed inputs of the original Desktop checkout still match.

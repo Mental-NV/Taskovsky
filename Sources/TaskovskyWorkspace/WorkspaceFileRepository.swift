@@ -9,6 +9,18 @@ public struct WorkspaceRevision: Codable, Equatable, Sendable {
         workspaceDigest = Data(SHA256.hash(data: workspace))
         settingsDigest = Data(SHA256.hash(data: settings))
     }
+
+    fileprivate func canFinish(from before: Self, to after: Self) -> Bool {
+        (workspaceDigest == before.workspaceDigest || workspaceDigest == after.workspaceDigest) &&
+            (settingsDigest == before.settingsDigest || settingsDigest == after.settingsDigest)
+    }
+}
+
+private struct PendingTagTransaction: Codable {
+    let version: Int
+    let expected: WorkspaceRevision
+    let workspace: Data
+    let settings: Data
 }
 
 public struct WorkspaceDocument: Sendable {
@@ -17,9 +29,12 @@ public struct WorkspaceDocument: Sendable {
     public let allowsKnownFieldWrites: Bool
 }
 
-public enum WorkspaceFieldPatch: Sendable { case title(String), plainBody(String) }
+public enum WorkspaceFieldPatch: Sendable {
+    case title(String), plainBody(String), metadata(TaskMetadataChange)
+}
 public enum WorkspaceWriteRefusal: Equatable, Sendable {
     case stale, compatibility, missing, readOnlyRecord, emptyTitle, styledBody
+    case metadata(TaskMetadataValidation)
 }
 public enum WorkspaceWriteOutcome: Sendable {
     case saved(WorkspaceDocument), unchanged(WorkspaceDocument)
@@ -54,19 +69,35 @@ public enum WorkspaceLifecycleOutcome: Sendable {
     case persistenceFailed
 }
 
-public enum WorkspaceScheduleRefusal: Equatable, Sendable {
-    case stale, compatibility, missing, readOnlyRecord
+public enum WorkspaceScheduleRefusal: Error, Equatable, Sendable {
+    case stale, compatibility, missing, readOnlyRecord, invalidCalendarOperation, changedSinceCalendarEdit
     case invalid(TaskScheduleValidation)
 }
 
+public struct WorkspaceCalendarUndo: Sendable {
+    fileprivate let schedule: CalendarScheduleUndo
+
+    public func canRestore(in data: WorkspaceData) -> Bool {
+        guard let task = data.tasks.first(where: { $0.id == schedule.taskID }) else { return false }
+        return schedule.canRestore(task, lists: data.lists)
+    }
+}
+
 public enum WorkspaceScheduleOutcome: Sendable {
-    case saved(WorkspaceDocument), unchanged(WorkspaceDocument)
+    case saved(WorkspaceDocument, undo: WorkspaceCalendarUndo?)
+    case unchanged(WorkspaceDocument)
     case refused(WorkspaceScheduleRefusal)
     case persistenceFailed
 }
 
-/// Single-process local-file adapter. No default path, migration, recovery,
-/// networking, or whole-record update API. Other processes must not share it.
+public enum WorkspaceSettingsOutcome: Sendable {
+    case saved(WorkspaceDocument), unchanged(WorkspaceDocument)
+    case stale, incompatible, invalid, persistenceFailed
+}
+public typealias WorkspaceCalendarPreferencesOutcome = WorkspaceSettingsOutcome
+
+/// Single-process local-file adapter. An interrupted tag/default change can
+/// finish from its journal. Other processes must not share these live files.
 public actor WorkspaceFileRepository {
     private let workspaceURL: URL
     private let settingsURL: URL
@@ -79,7 +110,121 @@ public actor WorkspaceFileRepository {
     }
 
     public func load() throws -> WorkspaceDocument {
+        if FileManager.default.fileExists(atPath: tagTransactionURL.path) {
+            return try finishTagTransaction()
+        }
+        return try readCurrentFiles()
+    }
+
+    private func readCurrentFiles() throws -> WorkspaceDocument {
         try document(workspace: Data(contentsOf: workspaceURL), settings: Data(contentsOf: settingsURL))
+    }
+
+    private var tagTransactionURL: URL { workspaceURL.appendingPathExtension("tag-transaction") }
+
+    private func finishTagTransaction() throws -> WorkspaceDocument {
+        let raw = try Data(contentsOf: tagTransactionURL)
+        let pending = try JSONDecoder().decode(PendingTagTransaction.self, from: raw)
+        guard pending.version == 1, JSONKeySafety.hasUniqueKeys(raw) else { throw CocoaError(.fileReadCorruptFile) }
+        let before = try readCurrentFiles()
+        let after = try document(workspace: pending.workspace, settings: pending.settings)
+        guard after.allowsKnownFieldWrites, before.revision.canFinish(from: pending.expected, to: after.revision)
+        else { throw CocoaError(.fileWriteUnknown) }
+        try replaceIfNeeded(pending.workspace, current: before.snapshot.workspaceBytes, at: workspaceURL)
+        try replaceIfNeeded(pending.settings, current: before.snapshot.settingsBytes, at: settingsURL)
+        let saved = try readCurrentFiles()
+        guard saved.revision == after.revision else { throw CocoaError(.fileWriteUnknown) }
+        // Keep later writes blocked until this transaction can be retired.
+        try FileManager.default.removeItem(at: tagTransactionURL)
+        return saved
+    }
+
+    private func replaceIfNeeded(_ bytes: Data, current: Data, at url: URL) throws {
+        guard bytes != current else { return }
+        do { try write(bytes, url) } catch {
+            guard (try? Data(contentsOf: url)) == bytes else { throw error }
+        }
+    }
+
+    public func saveCalendarOptions(_ options: TaskCalendarOptions, expected: WorkspaceRevision) -> WorkspaceCalendarPreferencesOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .persistenceFailed }
+        guard current.revision == expected else { return .stale }
+        let snapshot = current.snapshot
+        guard options != snapshot.settings.calendarOptions else { return .unchanged(current) }
+        do {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys]
+            let replacement = try encoder.encode(options)
+            guard try JSONDecoder().decode(TaskCalendarOptions.self, from: replacement) == options else { return .invalid }
+            guard let bytes = try CalendarSettingsPatch.replacing(snapshot.settingsBytes,
+                                                                 current: snapshot.settings.calendarOptions,
+                                                                 with: replacement) else { return .incompatible }
+            return try saveSettings(bytes, workspace: snapshot.workspaceBytes)
+        } catch { return .persistenceFailed }
+    }
+
+    public func saveSmartLists(_ draft: AppSettings, expected: WorkspaceRevision) -> WorkspaceSettingsOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .persistenceFailed }
+        guard current.revision == expected else { return .stale }
+        let snapshot = current.snapshot
+        let visibilityChanged = draft.smartListVisibility != snapshot.settings.smartListVisibility
+        let orderChanged = draft.effectiveSmartListOrder != snapshot.settings.effectiveSmartListOrder
+        guard visibilityChanged || orderChanged else { return .unchanged(current) }
+        do {
+            let encoder = JSONEncoder()
+            let decoder = JSONDecoder()
+            var bytes = snapshot.settingsBytes
+            if visibilityChanged {
+                guard draft.smartListVisibility.count == SmartListKey.allCases.count else { return .invalid }
+                let pairs = SmartListKey.allCases.flatMap { key in [key.rawValue, draft.smartListVisibility[key]!.rawValue] }
+                guard let patched = try SettingsMemberPatch.replacing("smartListVisibility", in: bytes, with: encoder.encode(pairs),
+                                                                     validate: { existing in
+                    if existing == Data("null".utf8) { return true }
+                    let pairs = try decoder.decode([String].self, from: existing)
+                    let keys = stride(from: 0, to: pairs.count, by: 2).map { pairs[$0] }
+                    return pairs.count.isMultiple(of: 2) && Set(keys).count == keys.count
+                }) else { return .incompatible }
+                bytes = patched
+            }
+            if orderChanged {
+                let order = draft.effectiveSmartListOrder
+                guard let patched = try SettingsMemberPatch.replacing("smartListOrder", in: bytes, with: encoder.encode(order),
+                                                                     validate: { existing in
+                    existing == Data("null".utf8) || (try? decoder.decode([SmartListKey].self, from: existing)) != nil
+                }) else { return .incompatible }
+                bytes = patched
+            }
+            let decoded = try decoder.decode(AppSettings.self, from: bytes)
+            guard decoded.smartListVisibility == draft.smartListVisibility,
+                  decoded.effectiveSmartListOrder == draft.effectiveSmartListOrder else { return .invalid }
+            return try saveSettings(bytes, workspace: snapshot.workspaceBytes)
+        } catch { return .persistenceFailed }
+    }
+
+    public func saveLocalPreferences(_ draft: LocalWorkspacePreferences, expected: WorkspaceRevision) -> WorkspaceSettingsOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .persistenceFailed }
+        guard current.revision == expected else { return .stale }
+        let snapshot = current.snapshot
+        let previous = LocalWorkspacePreferences(snapshot.settings)
+        guard draft != previous else { return .unchanged(current) }
+        guard draft.valid(from: previous, workspace: snapshot.workspace) else { return .invalid }
+        do {
+            guard let bytes = try draft.patch(snapshot.settingsBytes, from: snapshot.settings) else { return .incompatible }
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: bytes)
+            guard LocalWorkspacePreferences(decoded) == draft else { return .invalid }
+            return try saveSettings(bytes, workspace: snapshot.workspaceBytes)
+        } catch { return .persistenceFailed }
+    }
+
+    private func saveSettings(_ bytes: Data, workspace: Data) throws -> WorkspaceSettingsOutcome {
+        let staged = try document(workspace: workspace, settings: bytes)
+        do { try write(bytes, settingsURL) } catch {
+            guard (try? load())?.revision == staged.revision else { return .persistenceFailed }
+        }
+        return .saved(staged)
     }
 
     public func apply(_ command: TaskLifecycleCommand, to taskID: UUID,
@@ -93,7 +238,8 @@ public actor WorkspaceFileRepository {
         var lifecycle = TaskLifecycle(data: current.snapshot.workspace, completionSnapshots: completionSnapshots)
         do {
             guard try lifecycle.apply(command, to: taskID, now: now,
-                                      calendar: calendar ?? current.snapshot.settings.calendar) else {
+                                      calendar: calendar ?? current.snapshot.settings.calendar,
+                                      addPosition: current.snapshot.settings.defaultAddTo) else {
                 return .unchanged(current)
             }
             let bytes = try JSONEncoder().encode(lifecycle.data)
@@ -107,6 +253,8 @@ public actor WorkspaceFileRepository {
             completionSnapshots = lifecycle.completionSnapshots
             let undoCommand: TaskLifecycleCommand? = switch command {
             case .complete: .reopen
+            case .completeFromWontDo:
+                current.snapshot.workspace.tasks.first { $0.id == taskID }?.wontDoAt.map(TaskLifecycleCommand.undoBoardCompletionToWontDo)
             case .trash: .restore
             default: nil
             }
@@ -164,17 +312,61 @@ public actor WorkspaceFileRepository {
 
     public func apply(_ edit: TaskScheduleEdit, expected: WorkspaceRevision,
                       now: Date = Date()) -> WorkspaceScheduleOutcome {
+        editSchedule(taskID: edit.taskID, expected: expected, now: now) { task, document in
+            guard task.kind == .task else { throw WorkspaceScheduleRefusal.readOnlyRecord }
+            return (try edit.applying(to: task, settings: document.snapshot.settings), nil)
+        }
+    }
+
+    public func apply(_ operation: CalendarScheduleOperation, to taskID: UUID, expected: WorkspaceRevision,
+                      calendar: Calendar, now: Date = Date()) -> WorkspaceScheduleOutcome {
+        editSchedule(taskID: taskID, expected: expected, now: now) { task, document in
+            if case .unschedule = operation {
+                // Explicit removal also works for an unrecognized zone.
+            } else {
+                let local = TaskCalendarProjection.taskCalendar(task, fallback: calendar)
+                guard task.timeZoneID.map({ TimeZone(identifier: $0) != nil }) ?? true else {
+                    throw TaskScheduleValidation.invalidTimeZone
+                }
+                guard task.scheduledDuration.map({ $0.validated(in: local) != nil }) ?? true else {
+                    throw TaskScheduleValidation.invalidDuration
+                }
+                guard task.customRecurrence?.isValid != false else { throw TaskScheduleValidation.invalidRepeat }
+            }
+            guard let changed = CalendarScheduling.prepared(operation, to: task, displayCalendar: calendar,
+                                                             settings: document.snapshot.settings, policyCalendar: calendar) else {
+                throw WorkspaceScheduleRefusal.invalidCalendarOperation
+            }
+            let undo = CalendarScheduleUndo(taskID: task.id, before: CalendarScheduleSnapshot(task),
+                                            after: CalendarScheduleSnapshot(changed),
+                                            completedAt: task.completedAt, wontDoAt: task.wontDoAt)
+            return (changed, WorkspaceCalendarUndo(schedule: undo))
+        }
+    }
+
+    public func undo(_ undo: WorkspaceCalendarUndo, now: Date = Date()) -> WorkspaceScheduleOutcome {
+        editSchedule(taskID: undo.schedule.taskID, expected: nil, now: now) { task, document in
+            guard let restored = undo.schedule.restoring(on: task, lists: document.snapshot.workspace.lists) else {
+                throw WorkspaceScheduleRefusal.changedSinceCalendarEdit
+            }
+            return (restored, nil)
+        }
+    }
+
+    private func editSchedule(taskID: UUID, expected: WorkspaceRevision?, now: Date,
+                              change: (TaskItem, WorkspaceDocument) throws -> (TaskItem, WorkspaceCalendarUndo?)) -> WorkspaceScheduleOutcome {
         let current: WorkspaceDocument
         do { current = try load() } catch { return .persistenceFailed }
-        guard current.revision == expected else { return .refused(.stale) }
+        if let expected, current.revision != expected { return .refused(.stale) }
         guard current.allowsKnownFieldWrites else { return .refused(.compatibility) }
         var data = current.snapshot.workspace
-        guard let index = data.tasks.firstIndex(where: { $0.id == edit.taskID }) else { return .refused(.missing) }
+        guard let index = data.tasks.firstIndex(where: { $0.id == taskID }) else { return .refused(.missing) }
         let original = data.tasks[index]
-        guard original.kind == .task, original.deletedAt == nil,
-              !SmartListEligibility.isArchived(original, lists: data.lists) else { return .refused(.readOnlyRecord) }
+        guard original.deletedAt == nil, !SmartListEligibility.isArchived(original, lists: data.lists) else {
+            return .refused(.readOnlyRecord)
+        }
         do {
-            var task = try edit.applying(to: original, settings: current.snapshot.settings)
+            var (task, undo) = try change(original, current)
             guard CalendarScheduleSnapshot(task) != CalendarScheduleSnapshot(original) else { return .unchanged(current) }
             task.updatedAt = now
             data.tasks[index] = task
@@ -184,12 +376,75 @@ public actor WorkspaceFileRepository {
             do { try write(bytes, workspaceURL) } catch {
                 guard (try? load())?.revision == staged.revision else { return .persistenceFailed }
             }
-            return .saved(staged)
+            return .saved(staged, undo: undo)
+        } catch let reason as WorkspaceScheduleRefusal {
+            return .refused(reason)
         } catch let reason as TaskScheduleValidation {
             return .refused(.invalid(reason))
         } catch {
             return .persistenceFailed
         }
+    }
+
+    public func apply(_ command: ListOrganizationCommand, expected: WorkspaceRevision,
+                      now: Date = Date()) -> WorkspaceWriteOutcome {
+        editKnownWorkspace(expected: expected) { data, _ in command.apply(to: &data, now: now) }
+    }
+
+    public func apply(_ command: SavedFilterChange, expected: WorkspaceRevision) -> WorkspaceWriteOutcome {
+        editKnownWorkspace(expected: expected) { data, _ in try command.apply(to: &data) }
+    }
+
+    public func apply(_ command: TaskTemplateChange, expected: WorkspaceRevision,
+                      now: Date = Date(), calendar: Calendar? = nil) -> WorkspaceWriteOutcome {
+        editKnownWorkspace(expected: expected) { data, settings in
+            try command.apply(to: &data, settings: settings, now: now, calendar: calendar ?? settings.calendar)
+        }
+    }
+
+    public func apply(_ command: TagOrganizationCommand, expected: WorkspaceRevision,
+                      now: Date = Date()) -> WorkspaceWriteOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .persistenceFailed }
+        guard current.revision == expected else { return .refused(.stale) }
+        guard current.allowsKnownFieldWrites else { return .refused(.compatibility) }
+        var data = current.snapshot.workspace
+        let oldDefault = current.snapshot.settings.defaultTagID
+        var newDefault = oldDefault
+        guard let changed = command.apply(to: &data, defaultTagID: &newDefault, now: now) else { return .refused(.missing) }
+        guard changed else { return .unchanged(current) }
+        guard oldDefault != newDefault else { return saveKnownWorkspace(data, current: current) }
+        do {
+            let encoder = JSONEncoder()
+            let workspace = try encoder.encode(data)
+            let rawDefault = try encoder.encode(newDefault)
+            guard let settings = try SettingsMemberPatch.replacing("defaultTagID", in: current.snapshot.settingsBytes,
+                                                                   with: rawDefault, validate: { raw in
+                try JSONDecoder().decode(UUID?.self, from: raw) == oldDefault
+            }) else { return .refused(.compatibility) }
+            let staged = try document(workspace: workspace, settings: settings)
+            guard staged.allowsKnownFieldWrites else { return .refused(.compatibility) }
+            let journal = try encoder.encode(PendingTagTransaction(version: 1, expected: current.revision,
+                                                                    workspace: workspace, settings: settings))
+            do { try write(journal, tagTransactionURL) } catch {
+                guard (try? Data(contentsOf: tagTransactionURL)) == journal else { return .persistenceFailed }
+            }
+            return .saved(try finishTagTransaction())
+        } catch { return .persistenceFailed }
+    }
+
+    private func editKnownWorkspace(expected: WorkspaceRevision,
+                                    edit: (inout WorkspaceData, AppSettings) throws -> Bool?) -> WorkspaceWriteOutcome {
+        let current: WorkspaceDocument
+        do { current = try load() } catch { return .persistenceFailed }
+        guard current.revision == expected else { return .refused(.stale) }
+        guard current.allowsKnownFieldWrites else { return .refused(.compatibility) }
+        var data = current.snapshot.workspace
+        do {
+            guard let changed = try edit(&data, current.snapshot.settings) else { return .refused(.missing) }
+            guard changed else { return .unchanged(current) }
+            return saveKnownWorkspace(data, current: current)
+        } catch { return .persistenceFailed }
     }
 
     public func apply(_ patch: WorkspaceFieldPatch, to taskID: UUID, expected: WorkspaceRevision,
@@ -211,14 +466,30 @@ public actor WorkspaceFileRepository {
             guard original.richBody == nil else { return .refused(.styledBody) }
             if value.utf16.elementsEqual(original.body.utf16) { return .unchanged(current) }
             data.tasks[index].body = value
+        case .metadata(let command):
+            do {
+                guard let updated = try command.applying(to: original, availableTags: data.tags) else {
+                    return .unchanged(current)
+                }
+                data.tasks[index] = updated
+            } catch let reason as TaskMetadataValidation {
+                return .refused(.metadata(reason))
+            } catch { return .persistenceFailed }
         }
         data.tasks[index].updatedAt = now
+        return saveKnownWorkspace(data, current: current)
+    }
+
+    private func saveKnownWorkspace(_ data: WorkspaceData, current: WorkspaceDocument) -> WorkspaceWriteOutcome {
         do {
             let bytes = try JSONEncoder().encode(data)
             let staged = try document(workspace: bytes, settings: current.snapshot.settingsBytes)
             // No await between revision check and replacement. This serializes
             // this actor, not an independent process or a shared live file.
-            try write(bytes, workspaceURL)
+            guard staged.allowsKnownFieldWrites else { return .refused(.compatibility) }
+            do { try write(bytes, workspaceURL) } catch {
+                guard (try? load())?.revision == staged.revision else { return .persistenceFailed }
+            }
             return .saved(staged)
         } catch { return .persistenceFailed }
     }
@@ -233,9 +504,10 @@ public actor WorkspaceFileRepository {
     }
     private func canonicalSettings(_ bytes: Data) throws -> Data {
         var object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] ?? [:]
+        if object["defaultTagID"] is NSNull { object.removeValue(forKey: "defaultTagID") }
         // Codable represents this enum-keyed dictionary as alternating pairs.
-        // Its iteration order is not persisted intent. Settings are never
-        // rewritten by these commands; compare the known map semantically.
+        // Its iteration order is not persisted intent. The Calendar options
+        // patch preserves this map as stored; compare it semantically.
         if let pairs = object["smartListVisibility"] as? [String], pairs.count.isMultiple(of: 2) {
             var values: [String: String] = [:]
             for index in stride(from: 0, to: pairs.count, by: 2) { values[pairs[index]] = pairs[index + 1] }
@@ -259,6 +531,34 @@ struct JSONKeySafety {
         var scanner = Self(bytes: Array(data))
         return scanner.value(depth: 0)
     }
+    /// The lexical bounds of one root member, or a zero-width insertion
+    /// point before the closing brace. The caller verifies unique keys.
+    mutating func rootMember(named wanted: String) -> (range: Range<Int>, hasMembers: Bool)? {
+        whitespace()
+        guard index < bytes.count, bytes[index] == 123 else { return nil }
+        index += 1
+        whitespace()
+        let hasMembers = index < bytes.count && bytes[index] != 125
+        while index < bytes.count && bytes[index] != 125 {
+            guard let keyRange = string(), let key = try? JSONDecoder().decode(String.self, from: Data(bytes[keyRange])) else { return nil }
+            whitespace()
+            guard index < bytes.count, bytes[index] == 58 else { return nil }
+            index += 1
+            whitespace()
+            let start = index
+            guard value(depth: 1) else { return nil }
+            if key == wanted { return (start..<index, hasMembers) }
+            whitespace()
+            guard index < bytes.count else { return nil }
+            if bytes[index] == 125 { break }
+            guard bytes[index] == 44 else { return nil }
+            index += 1
+            whitespace()
+        }
+        guard index < bytes.count, bytes[index] == 125 else { return nil }
+        return (index..<index, hasMembers)
+    }
+
     mutating func whitespace() { while index < bytes.count && [9, 10, 13, 32].contains(bytes[index]) { index += 1 } }
     mutating func string() -> Range<Int>? {
         guard index < bytes.count, bytes[index] == 34 else { return nil }

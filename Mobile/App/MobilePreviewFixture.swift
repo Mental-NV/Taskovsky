@@ -11,6 +11,42 @@ enum MobilePreviewFixture {
         Date()
         #endif
     }
+    #if DEBUG
+    static var styledDescription: RichBody {
+        let lines = ["Launch plan", "Check e\u{301} 🧩 with care", "Draft the outline", "Review the checklist",
+                     "Keep decisions together", "Collect references", "Bring notes", "", "Reference link"]
+        let text = lines.joined(separator: "\n")
+        let string = text as NSString
+        func inline(_ phrase: String, style: (inout RichInlineRun) -> Void) -> RichInlineRun {
+            let range = string.range(of: phrase)
+            var run = RichInlineRun(location: range.location, length: range.length)
+            style(&run)
+            return run
+        }
+        func block(_ phrase: String, style: (inout RichBlockRun) -> Void) -> RichBlockRun {
+            let range = string.paragraphRange(for: string.range(of: phrase))
+            var run = RichBlockRun(location: range.location, length: range.length)
+            style(&run)
+            return run
+        }
+        let rule = string.range(of: "\n\n").location + 1
+        return RichBody(text: text, runs: [
+            inline("Check") { $0.bold = true; $0.underline = true },
+            inline("e\u{301} 🧩") { $0.italic = true; $0.highlight = true },
+            inline("with care") { $0.code = true; $0.strikethrough = true },
+            inline("Reference link") { $0.link = "https://example.invalid/reference" },
+        ], blocks: [
+            block(lines[0]) { $0.heading = 1 },
+            block(lines[2]) { $0.list = .numbered },
+            block(lines[3]) { $0.list = .numbered },
+            block(lines[4]) { $0.quote = true },
+            block(lines[5]) { $0.list = .bullet },
+            block(lines[6]) { $0.list = .checklist; $0.checked = true },
+            RichBlockRun(location: rule, length: 1, rule: true),
+        ])
+    }
+    #endif
+
     static var day: Date { now }
     private static func id(_ n: Int) -> UUID { UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", n))! }
     static func session(samples: Bool = false, unknownData: Bool = false) throws -> ReadOnlyWorkspaceSnapshot {

@@ -248,12 +248,7 @@ struct TaskCalendarWorkspace: View {
     }
     private func moveToDay(_ id: UUID, _ day: Date, _ forceAllDay: Bool) {
         guard let task = store.data.tasks.first(where: { $0.id == id }) else { return }
-        if !forceAllDay, task.hasDueTime, let due = task.dueDate {
-            let start = task.scheduledDuration?.start ?? due
-            let parts = calendar.dateComponents([.hour, .minute], from: start)
-            let target = CalendarDates.instant(on: day, minute: (parts.hour ?? 0) * 60 + (parts.minute ?? 0), calendar: calendar)
-            schedule(id, .move(start: target, allDay: false))
-        } else { schedule(id, .move(start: day, allDay: true)) }
+        schedule(id, CalendarScheduling.moveOnDay(task, day: day, forceAllDay: forceAllDay, calendar: calendar))
     }
 }
 

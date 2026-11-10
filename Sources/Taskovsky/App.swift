@@ -192,24 +192,7 @@ extension TaskDestination {
         }
     }
 
-    var smartKey: SmartListKey? {
-        switch self { case .all: .all; case .today: .today; case .tomorrow: .tomorrow; case .week: .week; case .inbox: .inbox; case .summary: .summary; case .completed: .completed; case .wontDo: .wontDo; case .trash: .trash; default: nil }
-    }
-    init(smartKey: SmartListKey, lists: [TaskList]) {
-        switch smartKey {
-        case .all: self = .all
-        case .today: self = .today
-        case .tomorrow: self = .tomorrow
-        case .week: self = .week
-        case .inbox: self = .inbox
-        case .summary: self = .summary
-        case .completed: self = .completed
-        case .wontDo: self = .wontDo
-        case .trash: self = .trash
-        case .tags, .filters: self = .all
-        }
-        _ = lists
-    }
+
 }
 
 struct FolderSheetDraft: Identifiable {
@@ -1101,17 +1084,14 @@ struct WorkspaceView: View {
     private func topSmartDestinations(now: Date) -> [Destination] {
         store.settings.effectiveSmartListOrder.compactMap { key -> Destination? in
             guard AppSettings.topSmartGroup.contains(key) else { return nil }
-            let dest = Destination(smartKey: key, lists: store.data.lists)
-            // tags/filters keys map to .all above but are never draggable rows;
-            // skip them here so section headings aren't advertised as targets.
-            if key == .tags || key == .filters { return nil }
+            guard let dest = Destination(smartKey: key) else { return nil }
             return visible(dest, now: now) ? dest : nil
         }
     }
     private func bottomSmartDestinations(now: Date) -> [Destination] {
         store.settings.effectiveSmartListOrder.compactMap { key -> Destination? in
             guard AppSettings.bottomSmartGroup.contains(key) else { return nil }
-            let dest = Destination(smartKey: key, lists: store.data.lists)
+            guard let dest = Destination(smartKey: key) else { return nil }
             return visible(dest, now: now) ? dest : nil
         }
     }
@@ -1523,7 +1503,7 @@ struct WorkspaceView: View {
         return destination == .today || destination == .week ? cal.startOfDay(for: Date()) : destination == .tomorrow ? cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) : nil
     }
     private func sectionVisible(_ key: SmartListKey, count: Int) -> Bool {
-        switch store.settings.smartListVisibility[key] ?? .show { case .show: true; case .hidden: false; case .showIfNotEmpty: count > 0 }
+        store.settings.isSmartListVisible(key, count: count)
     }
     private func visible(_ dest: Destination, now: Date) -> Bool {
         guard let key = dest.smartKey else { return true }

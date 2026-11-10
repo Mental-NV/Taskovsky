@@ -50,7 +50,12 @@ struct PhoneCaptureSheet: View {
                                 if draft.input.title.isEmpty { Text("Title").font(.title2).foregroundStyle(.tertiary).allowsHitTesting(false).accessibilityHidden(true) }
                             }
                         if draft.input.protectsBody {
-                            Text(draft.input.body).textSelection(.enabled)
+                            if let rich = draft.input.template?.richBody,
+                               let preview = RichDescriptionPreview(body: draft.input.body, rich: rich), !rich.isEmpty {
+                                PhoneRichDescription(preview: preview, identifier: "captureRichDescription")
+                            } else {
+                                Text(draft.input.body).textSelection(.enabled)
+                            }
                             Text("Template formatting is preserved. This description is read-only.").font(.footnote).foregroundStyle(.secondary)
                                 .accessibilityIdentifier("captureProtectedBody")
                         } else {

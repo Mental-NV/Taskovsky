@@ -43,6 +43,535 @@ final class ReadOnlyWorkspaceTests: XCTestCase {
 private enum FixtureWriteError: Error { case denied }
 
 extension ReadOnlyWorkspaceTests {
+    func testTemplateReducedEditPreservesRichContentAndUnownedFields() async throws {
+        let body = "e\u{301} 🧩"
+        let rich = RichBody(text: body, runs: [.init(location: 0, length: 2, bold: true)])
+        let checked = ChecklistItem(title: "Preserved step", isCompleted: true)
+        let tag = TaskTag(name: "Planning", color: "#123456")
+        let due = Date(timeIntervalSinceReferenceDate: 815_907_600)
+        let template = TaskTemplate(name: "Plan", title: "Task", body: body, checklist: [checked],
+                                    tagIDs: [tag.id], kind: .note, richBody: rich,
+                                    customRecurrence: CustomRecurrence(),
+                                    scheduledDuration: .init(start: due.addingTimeInterval(-3_600), end: due))
+        let data = WorkspaceData(tags: [tag], templates: [template])
+        let files = try fixture(data)
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        var draft = TaskTemplateFields(template: template)
+        guard case .unchanged(let untouched) = await repo.apply(
+            TaskTemplateChange.update(id: template.id, fields: draft), expected: initial.revision
+        ) else { return XCTFail("Unchanged Done must preserve the source bytes") }
+        XCTAssertEqual(untouched.snapshot.workspaceBytes, initial.snapshot.workspaceBytes)
+        draft.name = " Revised "
+        draft.priority = .high
+        guard case .saved(let saved) = await repo.apply(
+            TaskTemplateChange.update(id: template.id, fields: draft), expected: initial.revision
+        ) else { return XCTFail("Expected a template-only edit") }
+        var expected = template
+        expected.name = "Revised"
+        expected.priority = .high
+        let updated = try XCTUnwrap(saved.snapshot.workspace.templates.first)
+        XCTAssertEqual(updated, expected)
+        XCTAssertTrue(RichBody.sameCodeUnits(updated.body, body))
+        XCTAssertTrue(RichBody.sameCodeUnits(updated.richBody?.text ?? "", body))
+        XCTAssertEqual(saved.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        draft.body = "é 🧩"
+        assertRefused(await repo.apply(TaskTemplateChange.update(id: template.id, fields: draft),
+                                       expected: saved.revision), .missing)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
+        let desktopEdit = try XCTUnwrap(draft.updated(id: template.id, original: updated, allowsReplacingStyledBody: true))
+        XCTAssertTrue(RichBody.sameCodeUnits(desktopEdit.body, draft.body))
+        XCTAssertNil(desktopEdit.richBody)
+        XCTAssertEqual(desktopEdit.checklist, expected.checklist)
+        XCTAssertEqual(desktopEdit.scheduledDuration, expected.scheduledDuration)
+        XCTAssertEqual(desktopEdit.customRecurrence, expected.customRecurrence)
+    }
+
+    func testTemplateApplicationKeepsLinksAndCopiesPairedBodyAndSchedule() async throws {
+        let list = TaskList(name: "Work", color: "#123456")
+        let archive = TaskList(name: "Archive", color: "#654321", isArchived: true)
+        let start = Date(timeIntervalSinceReferenceDate: 815_907_600)
+        let end = start.addingTimeInterval(3_600)
+        let oldDue = start.addingTimeInterval(-3_600)
+        let manualReminder = oldDue.addingTimeInterval(-600)
+        let tag = TaskTag(name: "Planning", color: "#123456")
+        var task = TaskItem(title: "Original", listID: list.id, dueDate: oldDue, hasDueTime: true)
+        task.timeZoneID = "America/New_York"
+        task.reminderDates = [manualReminder]
+        task.reminderFollowsSchedule = false
+        task.occurrenceIndex = 5
+        let child = TaskItem(title: "Child", listID: list.id, parentID: task.id)
+        let archived = TaskItem(title: "Archived", listID: archive.id)
+        let rich = RichBody(text: "Read 🧩", runs: [.init(location: 0, length: 4, bold: true)])
+        let step = ChecklistItem(title: "One step", isCompleted: true)
+        let template = TaskTemplate(name: "Template", title: "Updated", body: rich.text, checklist: [step],
+                                    priority: .high, tagIDs: [tag.id, UUID()], richBody: rich,
+                                    customRecurrence: CustomRecurrence(), scheduledDuration: .init(start: start, end: end))
+        let files = try fixture(WorkspaceData(tasks: [task, child, archived], lists: [list, archive],
+                                             tags: [tag], templates: [template]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        let apply = TaskTemplateChange.applyToTask(templateID: template.id, taskID: task.id)
+        guard case .saved(let saved) = await repo.apply(apply, expected: initial.revision, now: start)
+        else { return XCTFail("Expected a saved template application") }
+        let result = saved.snapshot.workspace.tasks[0]
+        XCTAssertEqual(result.id, task.id)
+        XCTAssertEqual(result.listID, list.id)
+        XCTAssertEqual(Array(saved.snapshot.workspace.tasks.dropFirst()), [child, archived])
+        XCTAssertEqual(result.richBody, rich)
+        XCTAssertTrue(RichBody.sameCodeUnits(result.body, rich.text))
+        XCTAssertEqual(result.tagIDs, [tag.id])
+        XCTAssertEqual(result.checklist.map(\.title), [step.title])
+        XCTAssertEqual(result.checklist.map(\.isCompleted), [true])
+        XCTAssertNotEqual(result.checklist.first?.id, step.id)
+        XCTAssertEqual(result.scheduledDuration, template.scheduledDuration)
+        XCTAssertEqual(result.dueDate, end)
+        XCTAssertEqual(result.occurrenceIndex, 1)
+        XCTAssertEqual(result.recurrenceNominalDate, end)
+        XCTAssertEqual(result.reminderDates, [manualReminder])
+        XCTAssertEqual(result.timeZoneID, task.timeZoneID)
+        XCTAssertEqual(saved.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        assertRefused(await repo.apply(apply, expected: initial.revision), .stale)
+        assertRefused(await repo.apply(TaskTemplateChange.applyToTask(templateID: template.id, taskID: archived.id),
+                                       expected: saved.revision), .missing)
+    }
+
+    func testBoardModeOwnsOnlyTheActiveListViewValue() async throws {
+        let work = TaskList(name: "Work", color: "#123456", isPinned: true)
+        let archive = TaskList(name: "Archive", color: "#654321", viewMode: .board, isArchived: true)
+        let task = TaskItem(title: "Review", listID: work.id)
+        let data = WorkspaceData(tasks: [task], lists: [work, archive])
+        let files = try fixture(data)
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        let change = ListOrganizationCommand.setListViewMode(work.id, .board)
+        guard case .saved(let saved) = await repo.apply(change, expected: initial.revision)
+        else { return XCTFail("Expected one list-mode write") }
+        var expected = data
+        expected.lists[0].viewMode = .board
+        XCTAssertEqual(saved.snapshot.workspace, expected)
+        XCTAssertEqual(saved.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        guard case .unchanged(let unchanged) = await repo.apply(change, expected: saved.revision)
+        else { return XCTFail("Repeated mode selection must preserve its bytes") }
+        XCTAssertEqual(unchanged.revision, saved.revision)
+        assertRefused(await repo.apply(ListOrganizationCommand.setListViewMode(archive.id, .list), expected: saved.revision), .missing)
+        assertRefused(await repo.apply(change, expected: initial.revision), .stale)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
+    }
+
+    func testBoardCompletionFromWontDoAndUndoShareRecurringLifecycle() async throws {
+        let now = Date(timeIntervalSinceReferenceDate: 815_907_600)
+        let stamp = now.addingTimeInterval(-1_800)
+        let list = TaskList(name: "Work", color: "#123456", viewMode: .board)
+        var task = TaskItem(title: "Recurring", listID: list.id, dueDate: now)
+        task.recurrence = .daily
+        task.wontDoAt = stamp
+        let note = TaskItem(title: "Note", listID: list.id, kind: .note)
+        let files = try fixture(WorkspaceData(tasks: [task, note], lists: [list]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        XCTAssertNil(BoardProjection.move(note, to: .completed))
+        XCTAssertNil(BoardProjection.move(task, to: .wontDo))
+        let command = try XCTUnwrap(BoardProjection.move(task, to: .completed))
+        guard case .saved(let saved, let undo?) = await repo.apply(command, to: task.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected atomic completion and an Undo token") }
+        XCTAssertEqual(saved.snapshot.workspace.tasks[0].completedAt, now)
+        XCTAssertNil(saved.snapshot.workspace.tasks[0].wontDoAt)
+        XCTAssertEqual(saved.snapshot.workspace.tasks[1], note)
+        XCTAssertEqual(saved.snapshot.workspace.tasks.count, 3)
+        XCTAssertEqual(saved.snapshot.workspace.tasks.last?.recurrenceSourceID, task.id)
+        guard case .saved(let undone, nil) = await repo.undo(undo, now: now.addingTimeInterval(5))
+        else { return XCTFail("Expected Board Undo") }
+        XCTAssertEqual(undone.snapshot.workspace.tasks.count, 2)
+        XCTAssertNil(undone.snapshot.workspace.tasks[0].completedAt)
+        XCTAssertEqual(undone.snapshot.workspace.tasks[0].wontDoAt, stamp)
+        XCTAssertEqual(undone.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+    }
+
+    func testTagMergeResumesAnInterruptedDefaultTagChange() async throws {
+        let source = TaskTag(name: "Planning", color: "#123456")
+        let ancestor = TaskTag(name: "Weekly", color: "#123456", parentID: source.id)
+        let target = TaskTag(name: "Sprint", color: "#123456", parentID: ancestor.id)
+        let sibling = TaskTag(name: "Review", color: "#123456", parentID: source.id)
+        let task = TaskItem(title: "Task", tagIDs: [source.id, target.id])
+        let template = TaskTemplate(name: "Template", title: "Template task", tagIDs: [source.id, target.id])
+        let sourceRule = FilterRule.condition(.init(kind: .tag, tagID: source.id))
+        let targetRule = FilterRule.condition(.init(kind: .tag, tagID: target.id))
+        let filter = TaskFilter(name: "Filter", tagIDs: [source.id, target.id], ruleRoot: .and([sourceRule, targetRule]))
+        let files = try fixture(WorkspaceData(tasks: [task], tags: [source, ancestor, target, sibling],
+                                             filters: [filter], templates: [template]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        var settings = AppSettings()
+        settings.defaultTagID = source.id
+        settings.defaultDurationMinutes = 37
+        let settingsBefore = try JSONEncoder().encode(settings)
+        try settingsBefore.write(to: files.settings)
+        let failing = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            if url.lastPathComponent == "settings.json" { throw FixtureWriteError.denied }
+            try bytes.write(to: url, options: .atomic)
+        }
+        let start = try await failing.load()
+        let command = TagOrganizationCommand.merge(source.id, into: target.id)
+        guard case .persistenceFailed = await failing.apply(command, expected: start.revision)
+        else { return XCTFail("Expected an interrupted two-file write") }
+        XCTAssertNotEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: files.settings), settingsBefore)
+        let journal = files.workspace.appendingPathExtension("tag-transaction")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: journal.path))
+        let reopened = repository(files)
+        let saved = try await reopened.load()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: journal.path))
+        XCTAssertEqual(saved.snapshot.settings.defaultTagID, target.id)
+        XCTAssertEqual(saved.snapshot.settings.defaultDurationMinutes, 37)
+        XCTAssertEqual(saved.snapshot.workspace.tasks[0].tagIDs, [target.id])
+        XCTAssertEqual(saved.snapshot.workspace.templates[0].tagIDs, [target.id])
+        XCTAssertEqual(saved.snapshot.workspace.filters[0].tagIDs, [target.id])
+        XCTAssertEqual(saved.snapshot.workspace.filters[0].ruleRoot, .and([targetRule]))
+        XCTAssertNil(saved.snapshot.workspace.tags.first(where: { $0.id == target.id })?.parentID)
+        XCTAssertNil(saved.snapshot.workspace.tags.first(where: { $0.id == ancestor.id })?.parentID)
+        XCTAssertEqual(saved.snapshot.workspace.tags.first(where: { $0.id == sibling.id })?.parentID, target.id)
+        assertRefused(await reopened.apply(command, expected: start.revision), .stale)
+    }
+
+    func testTagDeletePreservesUnavailableRulesAndClearsDefault() async throws {
+        let source = TaskTag(name: "Planning", color: "#123456")
+        let child = TaskTag(name: "Weekly", color: "#123456", parentID: source.id)
+        let task = TaskItem(title: "Task", tagIDs: [source.id, child.id])
+        let filter = TaskFilter(name: "Filter", tagIDs: [source.id],
+                                ruleRoot: .condition(.init(kind: .tag, tagID: source.id)))
+        let files = try fixture(WorkspaceData(tasks: [task], tags: [source, child], filters: [filter]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        var settings = AppSettings()
+        settings.defaultTagID = source.id
+        try JSONEncoder().encode(settings).write(to: files.settings)
+        let repo = repository(files), initial = try await repo.load()
+        let outcome = await repo.apply(TagOrganizationCommand.delete(source.id), expected: initial.revision)
+        guard case .saved(let saved) = outcome
+        else { return XCTFail("Expected confirmed tag deletion, got \(outcome)") }
+        XCTAssertTrue(saved.allowsKnownFieldWrites)
+        XCTAssertNil(saved.snapshot.settings.defaultTagID)
+        XCTAssertEqual(saved.snapshot.workspace.tasks[0].tagIDs, [child.id])
+        XCTAssertNil(saved.snapshot.workspace.tags[0].parentID)
+        XCTAssertEqual(saved.snapshot.workspace.filters, [filter])
+        XCTAssertTrue(TaskDestination.filter(filter.id).matchingTasks(in: saved.snapshot.workspace).isEmpty)
+    }
+
+    func testTagRecoveryKeepsUnexpectedFilesAndPendingJournal() async throws {
+        let source = TaskTag(name: "Planning", color: "#123456")
+        let files = try fixture(WorkspaceData(tags: [source]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        var settings = AppSettings()
+        settings.defaultTagID = source.id
+        try JSONEncoder().encode(settings).write(to: files.settings)
+        let failing = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            if url.lastPathComponent == "settings.json" { throw FixtureWriteError.denied }
+            try bytes.write(to: url, options: .atomic)
+        }
+        let initial = try await failing.load()
+        let outcome = await failing.apply(TagOrganizationCommand.delete(source.id), expected: initial.revision)
+        guard case .persistenceFailed = outcome
+        else { return XCTFail("Expected an interrupted two-file write, got \(outcome)") }
+        settings.defaultDurationMinutes = 47
+        let unexpected = try JSONEncoder().encode(settings)
+        try unexpected.write(to: files.settings)
+        let workspace = try Data(contentsOf: files.workspace)
+        let journal = files.workspace.appendingPathExtension("tag-transaction")
+        let pending = try Data(contentsOf: journal)
+        let reopened = repository(files)
+        do {
+            _ = try await reopened.load()
+            XCTFail("Recovery must not replace an unexpected file")
+        } catch {}
+        XCTAssertEqual(try Data(contentsOf: files.settings), unexpected)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), workspace)
+        XCTAssertEqual(try Data(contentsOf: journal), pending)
+    }
+
+    func testTagRecoveryBlocksOtherWritesUntilTheJournalCanBeRemoved() async throws {
+        let source = TaskTag(name: "Planning", color: "#123456")
+        let child = TaskTag(name: "Weekly", color: "#123456", parentID: source.id)
+        let files = try fixture(WorkspaceData(tags: [source, child]))
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: files.directory.path)
+            try? FileManager.default.removeItem(at: files.directory)
+        }
+        var settings = AppSettings()
+        settings.defaultTagID = source.id
+        try JSONEncoder().encode(settings).write(to: files.settings)
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            if url == files.settings {
+                try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: files.directory.path)
+            }
+        }
+        let start = try await repo.load()
+        let deletion = await repo.apply(TagOrganizationCommand.delete(source.id), expected: start.revision)
+        guard case .persistenceFailed = deletion else { return XCTFail("Expected a pending transaction until cleanup") }
+        let journal = files.workspace.appendingPathExtension("tag-transaction")
+        let pending = try Data(contentsOf: journal)
+        let workspace = try Data(contentsOf: files.workspace)
+        let savedSettings = try Data(contentsOf: files.settings)
+        XCTAssertNotEqual(workspace, start.snapshot.workspaceBytes)
+        XCTAssertNotEqual(savedSettings, start.snapshot.settingsBytes)
+        let next = TagOrganizationCommand.setCollapsed(child.id, true)
+        let blocked = await repo.apply(next, expected: start.revision)
+        guard case .persistenceFailed = blocked else { return XCTFail("Expected other writes to wait for journal cleanup") }
+        XCTAssertEqual(try Data(contentsOf: journal), pending)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), workspace)
+        XCTAssertEqual(try Data(contentsOf: files.settings), savedSettings)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: files.directory.path)
+        let recovered = try await repo.load()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: journal.path))
+        XCTAssertNil(recovered.snapshot.settings.defaultTagID)
+        guard case .saved(let saved) = await repo.apply(next, expected: recovered.revision)
+        else { return XCTFail("Expected writes to resume after journal cleanup") }
+        XCTAssertEqual(saved.snapshot.workspace.tags.map(\.id), [child.id])
+        XCTAssertTrue(saved.snapshot.workspace.tags[0].isCollapsed)
+    }
+
+    func testTagTransactionConfirmsJournalAndBothWritesAfterReportedFailure() async throws {
+        let source = TaskTag(name: "Planning", color: "#123456")
+        let target = TaskTag(name: "Sprint", color: "#123456")
+        let files = try fixture(WorkspaceData(tags: [source, target]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        var settings = AppSettings()
+        settings.defaultTagID = source.id
+        try JSONEncoder().encode(settings).write(to: files.settings)
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        let start = try await repo.load()
+        let command = TagOrganizationCommand.merge(source.id, into: target.id)
+        guard case .saved(let saved) = await repo.apply(command, expected: start.revision)
+        else { return XCTFail("Expected exact durable bytes to confirm the tag merge") }
+        XCTAssertEqual(saved.snapshot.settings.defaultTagID, target.id)
+        XCTAssertEqual(saved.snapshot.workspace.tags, [target])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: files.workspace.appendingPathExtension("tag-transaction").path))
+    }
+
+    func testSavedFilterRenameRetainsAdvancedRuleAndUnavailableReferences() async throws {
+        let missingList = UUID(), missingTag = UUID()
+        let rule: FilterRule = .and([.condition(.init(kind: .list, listID: missingList)),
+                                     .not(.condition(.init(kind: .tag, tagID: missingTag)))])
+        let filter = TaskFilter(name: "Old name", listIDs: [missingList], tagIDs: [missingTag], isPinned: true, ruleRoot: rule)
+        let task = TaskItem(title: "Ordinary task", body: "e\u{301}")
+        let files = try fixture(WorkspaceData(tasks: [task], filters: [filter]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), start = try await repo.load()
+        var draft = filter
+        draft.name = " Project filter "
+        guard case .saved(let saved) = await repo.apply(.update(draft), expected: start.revision),
+              case .unchanged = await repo.apply(.update(draft), expected: saved.revision),
+              case .refused(.stale) = await repo.apply(.delete(filter.id), expected: start.revision)
+        else { return XCTFail("Expected saved, no-op and stale outcomes") }
+        draft.name = "Project filter"
+        XCTAssertEqual(saved.snapshot.workspace.filters, [draft])
+        XCTAssertEqual(saved.snapshot.workspace.tasks, [task])
+        XCTAssertTrue(TaskDestination.filter(filter.id).matchingTasks(in: saved.snapshot.workspace).isEmpty)
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+
+    func testSavedFilterCreateAndDeleteValidateAndKeepSettingsOnConfirmedWrite() async throws {
+        let files = try fixture(WorkspaceData(tasks: [TaskItem(title: "Ordinary task")]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        let start = try await repo.load()
+        var draft = TaskFilter(name: "Custom", dateRules: [.custom])
+        assertRefused(await repo.apply(.create(draft), expected: start.revision), .missing)
+        draft.customDateFrom = Date(timeIntervalSinceReferenceDate: 815_909_000)
+        guard case .saved(let saved) = await repo.apply(.create(draft), expected: start.revision),
+              case .saved(let removed) = await repo.apply(.delete(draft.id), expected: saved.revision)
+        else { return XCTFail("Expected confirmed filter creation and deletion") }
+        XCTAssertEqual(saved.snapshot.workspace.filters, [draft])
+        XCTAssertEqual(removed.snapshot.workspace, start.snapshot.workspace)
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+
+    func testLocalPreferencesPatchOnlyOwnedValuesAndRetainUnavailableDefaults() async throws {
+        let archive = TaskList(name: "Archive", color: "#123456", isArchived: true)
+        let active = TaskList(name: "Active", color: "#123456")
+        let files = try fixture(WorkspaceData(tasks: [TaskItem(title: "Existing")], lists: [archive, active]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let initialSettings = Data(#"{ "future" : {"opaque":true}, "startWeekOn" : 2, "urlParsing":true, "defaultReminder":"onTime", "defaultListID":"\#(archive.id.uuidString)" }"#.utf8)
+        try initialSettings.write(to: files.settings)
+        let repo = repository(files)
+        let start = try await repo.load()
+        var draft = LocalWorkspacePreferences(start.snapshot.settings)
+        draft.startWeekOn = 1
+        draft.defaultPriority = .high
+        draft.timedReminders = []
+        guard case .saved(let saved) = await repo.saveLocalPreferences(draft, expected: start.revision),
+              case .unchanged = await repo.saveLocalPreferences(draft, expected: saved.revision),
+              case .stale = await repo.saveLocalPreferences(draft, expected: start.revision)
+        else { return XCTFail("Expected saved, unchanged and stale outcomes") }
+        let after = String(decoding: saved.snapshot.settingsBytes, as: UTF8.self)
+        XCTAssertTrue(after.hasPrefix(#"{ "future" : {"opaque":true}, "startWeekOn" : 1, "urlParsing":true, "defaultReminder":"onTime""#))
+        XCTAssertEqual(saved.snapshot.settings.defaultListID, archive.id)
+        XCTAssertEqual(saved.snapshot.settings.timedReminderDefaults, [])
+        XCTAssertEqual(LocalWorkspacePreferences(saved.snapshot.settings), draft)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+
+        draft.defaultListID = UUID()
+        guard case .invalid = await repo.saveLocalPreferences(draft, expected: saved.revision) else {
+            return XCTFail("A newly unavailable default list must be rejected")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.settings), saved.snapshot.settingsBytes)
+        draft.defaultListID = active.id
+        guard case .saved(let activeDefault) = await repo.saveLocalPreferences(draft, expected: saved.revision) else {
+            return XCTFail("An active default list can be chosen explicitly")
+        }
+        XCTAssertEqual(activeDefault.snapshot.settings.defaultListID, active.id)
+    }
+
+    func testSmartListsPatchOwnedMembersAndPreserveOpaqueSettingsAndWorkspace() async throws {
+        let task = TaskItem(title: "Existing task")
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let initialSettings = Data(#"{ "opaque" : {"future":true}, "smartListVisibility" : ["today","show"], "calendarOptions" : {"futureCalendarField":true}, "startWeekOn" : 2 }"#.utf8)
+        try initialSettings.write(to: files.settings)
+        let repo = repository(files), start = try await repo.load()
+        XCTAssertFalse(start.allowsKnownFieldWrites)
+        var draft = start.snapshot.settings
+        draft.smartListVisibility[.today] = .hidden
+        XCTAssertTrue(draft.reorderSmartList(moving: .inbox, before: .week))
+        guard case .saved(let saved) = await repo.saveSmartLists(draft, expected: start.revision),
+              case .unchanged = await repo.saveSmartLists(draft, expected: saved.revision),
+              case .stale = await repo.saveSmartLists(draft, expected: start.revision)
+        else { return XCTFail("Expected saved, unchanged and stale outcomes") }
+        let after = String(decoding: saved.snapshot.settingsBytes, as: UTF8.self)
+        XCTAssertTrue(after.hasPrefix(#"{ "opaque" : {"future":true}, "smartListVisibility" : "#))
+        XCTAssertTrue(after.contains(#", "calendarOptions" : {"futureCalendarField":true}, "startWeekOn" : 2 ,"smartListOrder":"#))
+        XCTAssertEqual(saved.snapshot.settings.smartListVisibility[.today], .hidden)
+        XCTAssertEqual(saved.snapshot.settings.effectiveSmartListOrder, draft.effectiveSmartListOrder)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: files.settings), saved.snapshot.settingsBytes)
+    }
+
+    func testSmartListsRejectDuplicateVisibilityPairsAndKeepMalformedBytes() async throws {
+        let files = try fixture(WorkspaceData())
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let bytes = Data(#"{"smartListVisibility":["today","show","today","hidden"],"startWeekOn":2}"#.utf8)
+        try bytes.write(to: files.settings)
+        let repo = repository(files), start = try await repo.load()
+        var draft = start.snapshot.settings
+        draft.smartListVisibility[.all] = .show
+        guard case .incompatible = await repo.saveSmartLists(draft, expected: start.revision)
+        else { return XCTFail("Expected duplicate-key refusal") }
+        XCTAssertEqual(try Data(contentsOf: files.settings), bytes)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+    }
+
+    func testSmartListsInsertSparseVisibilityAndConfirmAfterWriteThrow() async throws {
+        let files = try fixture(WorkspaceData())
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        try Data(#"{ "unrelated" : [1, 2, 3] }"#.utf8).write(to: files.settings)
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        let start = try await repo.load()
+        var draft = start.snapshot.settings
+        draft.smartListVisibility[.all] = .show
+        guard case .saved(let saved) = await repo.saveSmartLists(draft, expected: start.revision)
+        else { return XCTFail("Expected confirmed settings replacement") }
+        XCTAssertTrue(String(decoding: saved.snapshot.settingsBytes, as: UTF8.self).hasPrefix(#"{ "unrelated" : [1, 2, 3] ,"smartListVisibility":"#))
+        XCTAssertNil(saved.snapshot.settings.smartListOrder)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+    }
+
+    func testListOrganizationMovesAndUngroupsWhilePreservingRecordsAndLegacyView() async throws {
+        let parent = ListFolder(name: "Projects")
+        let work = TaskList(name: "Work", color: "#123456", viewMode: .board, folderID: parent.id, isPinned: true)
+        let task = TaskItem(title: "Keep task", listID: work.id, checklist: [ChecklistItem(title: "Keep step")])
+        let files = try fixture(WorkspaceData(tasks: [task], lists: [work], folders: [parent]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), start = try await repo.load()
+        let other = ListFolder(name: " Extra ")
+        guard case .saved(let added) = await repo.apply(.saveFolder(other, creating: true), expected: start.revision),
+              case .saved(let reordered) = await repo.apply(.reorderFolder(other.id, relativeTo: parent.id, after: false), expected: added.revision)
+        else { return XCTFail("Expected folder creation and order") }
+        XCTAssertEqual(reordered.snapshot.workspace.folders.map(\.name), ["Extra", "Projects"])
+        var edit = work
+        edit.name = " Work renamed "
+        edit.viewMode = .list
+        edit.isArchived = true
+        edit.showsInSmartLists = false
+        ListPlacement.folder(other.id).apply(to: &edit)
+        guard case .saved(let moved) = await repo.apply(.saveList(edit, creating: false), expected: reordered.revision),
+              case .unchanged = await repo.apply(.saveList(edit, creating: false), expected: moved.revision),
+              case .saved(let ungrouped) = await repo.apply(.ungroupFolder(other.id), expected: moved.revision)
+        else { return XCTFail("Expected a move, exact no-op and ungroup") }
+        var expected = edit
+        expected.name = "Work renamed"
+        expected.viewMode = .board
+        ListPlacement.aboveFolders.apply(to: &expected)
+        XCTAssertEqual(ungrouped.snapshot.workspace.lists, [expected])
+        XCTAssertEqual(ungrouped.snapshot.workspace.tasks, [task])
+        XCTAssertEqual(ungrouped.snapshot.workspace.folders, [parent])
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+
+    func testListOrganizationCopiesHierarchyAndDeletesWithoutBroadeningFilter() async throws {
+        let list = TaskList(name: "Work", color: "#123456", isArchived: true, isPinned: true)
+        let body = "e\u{301}"
+        let task = TaskItem(title: "Parent", body: body, listID: list.id, checklist: [ChecklistItem(title: "Step")],
+                            richBody: RichBody(text: body, runs: [.init(location: 0, length: 2, bold: true)]))
+        let child = TaskItem(title: "Child", listID: list.id, parentID: task.id)
+        let deleted = TaskItem(title: "Deleted", listID: list.id, deletedAt: Date(), parentID: task.id)
+        var filter = TaskFilter(name: "Only Work")
+        filter.listIDs = [list.id]
+        let files = try fixture(WorkspaceData(tasks: [task, child, deleted], lists: [list], filters: [filter]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        let copyID = UUID(), start = try await repo.load()
+        guard case .saved(let copied) = await repo.apply(.duplicateList(list.id, copyID: copyID), expected: start.revision),
+              case .refused(.stale) = await repo.apply(.duplicateList(list.id, copyID: copyID), expected: start.revision),
+              case .refused(.missing) = await repo.apply(.duplicateList(list.id, copyID: copyID), expected: copied.revision),
+              case .saved(let saved) = await repo.apply(.deleteList(list.id), expected: copied.revision)
+        else { return XCTFail("Expected durable copy, safe retry refusal and deletion") }
+        let data = saved.snapshot.workspace
+        XCTAssertEqual(data.tasks.count, 5)
+        XCTAssertEqual(data.lists, [TaskList(id: copyID, name: "Work copy", color: list.color)])
+        let copies = data.tasks.filter { $0.listID == copyID }
+        XCTAssertEqual(copies[1].parentID, copies[0].id)
+        XCTAssertTrue(copies[0].body.utf16.elementsEqual(body.utf16))
+        XCTAssertEqual(copies[0].richBody, task.richBody)
+        XCTAssertNotEqual(copies[0].checklist[0].id, task.checklist[0].id)
+        XCTAssertEqual(data.tasks.prefix(3).map(\.listID), [nil, nil, nil])
+        XCTAssertEqual(data.tasks[2].deletedAt, deleted.deletedAt)
+        XCTAssertEqual(data.filters, [filter])
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+
+    func testListOrganizationRefusesInvalidAndUnknownWritesWithoutChangingBytes() async throws {
+        let files = try fixture(WorkspaceData())
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), start = try await repo.load()
+        assertRefused(await repo.apply(.saveFolder(ListFolder(name: "  "), creating: true), expected: start.revision), .missing)
+        let list = TaskList(name: "Orphaned", color: "#123456", folderID: UUID())
+        assertRefused(await repo.apply(.saveList(list, creating: true), expected: start.revision), .missing)
+        var unknown = try XCTUnwrap(JSONSerialization.jsonObject(with: start.snapshot.workspaceBytes) as? [String: Any])
+        unknown["unknownOrganization"] = ["retain": true]
+        let bytes = try JSONSerialization.data(withJSONObject: unknown)
+        try bytes.write(to: files.workspace)
+        let protected = try await repo.load()
+        assertRefused(await repo.apply(.saveFolder(ListFolder(name: "Known"), creating: true), expected: protected.revision), .compatibility)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), bytes)
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+
     private struct Fixture {
         let directory: URL
         var workspace: URL { directory.appendingPathComponent("workspace.json") }
@@ -524,6 +1053,72 @@ final class LifecycleRepositoryTests: XCTestCase {
         return (directory, workspace, settings)
     }
 
+    func testSubtaskCreationUsesListAndInsertionOrderAndConfirmsDurableWrite() async throws {
+        let list = TaskList(name: "Work", color: "#123456")
+        let parent = TaskItem(title: "Parent", listID: list.id, dueDate: now,
+                              priority: .high, checklist: [ChecklistItem(title: "Quick step")])
+        let (directory, workspace, settings) = try files(WorkspaceData(tasks: [parent], lists: [list]))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        var configuration = AppSettings()
+        configuration.defaultAddTo = .bottom
+        try JSONEncoder().encode(configuration).write(to: settings)
+        let repository = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        let initial = try await repository.load()
+        let id = UUID(), title = "e\u{301}"
+        let command = TaskLifecycleCommand.addSubtask(id: id, title: " " + title + " ")
+        guard case .saved(let saved, nil) = await repository.apply(command, to: parent.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected a durable linked subtask") }
+        XCTAssertEqual(saved.snapshot.workspace.tasks, [parent, TaskItem(id: id, title: title, listID: list.id,
+                                                                        createdAt: now, updatedAt: now, parentID: parent.id)])
+        XCTAssertTrue(saved.snapshot.workspace.tasks[1].title.utf16.elementsEqual(title.utf16))
+        guard case .refused(.stale) = await repository.apply(command, to: parent.id, expected: initial.revision),
+              case .refused(.task(.invalidChild)) = await repository.apply(command, to: parent.id, expected: saved.revision),
+              case .refused(.task(.invalidChild)) = await repository.apply(.addSubtask(id: UUID(), title: "  "), to: parent.id, expected: saved.revision)
+        else { return XCTFail("Duplicate, stale and blank submissions must refuse") }
+        XCTAssertEqual(try Data(contentsOf: workspace), saved.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
+    }
+
+    func testParentChangesMoveTheWholeSubtreeAndRefuseCyclesAndUnavailableParents() async throws {
+        let work = TaskList(name: "Work", color: "#123456")
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let root = TaskItem(title: "Root", body: "Styled", checklist: [ChecklistItem(title: "Quick step")],
+                            richBody: RichBody(text: "Styled", runs: [.init(location: 0, length: 6, bold: true)]))
+        let child = TaskItem(title: "Child", dueDate: now, parentID: root.id)
+        let grandchild = TaskItem(title: "Grandchild", deletedAt: now, parentID: child.id)
+        let parent = TaskItem(title: "Work parent", listID: work.id)
+        let archived = TaskItem(title: "Archived parent", listID: archive.id)
+        let note = TaskItem(title: "Note", kind: .note)
+        let records = [root, child, grandchild, parent, archived, note]
+        let (directory, workspace, settings) = try files(WorkspaceData(tasks: records, lists: [work, archive]))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let initial = try await repository.load()
+        for candidate in [root.id, child.id, archived.id, note.id, UUID()] {
+            guard case .refused(.task(.invalidParent)) = await repository.apply(.setParent(candidate), to: root.id, expected: initial.revision)
+            else { return XCTFail("Expected invalid parent refusal") }
+        }
+        XCTAssertEqual(try Data(contentsOf: workspace), initial.snapshot.workspaceBytes)
+        guard case .saved(let saved, nil) = await repository.apply(.setParent(parent.id), to: root.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected the cross-list link") }
+        var expected = records
+        expected[0].parentID = parent.id
+        for index in 0...2 { expected[index].listID = work.id }
+        for index in 1...2 { expected[index].updatedAt = now }
+        XCTAssertEqual(saved.snapshot.workspace.tasks, expected)
+        guard case .saved(let detached, nil) = await repository.apply(.setParent(nil), to: root.id, expected: saved.revision),
+              case .unchanged = await repository.apply(.setParent(nil), to: root.id, expected: detached.revision)
+        else { return XCTFail("Expected one detach followed by a no-op") }
+        expected[0].parentID = nil
+        XCTAssertEqual(detached.snapshot.workspace.tasks, expected)
+        XCTAssertEqual(try Data(contentsOf: workspace), detached.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
+    }
+
     func testLifecycleCompletionCommitsOneTreeAndUndoConsumesItsRevision() async throws {
         var parent = TaskItem(title: "Parent")
         parent.dueDate = now
@@ -661,7 +1256,7 @@ extension ReadOnlyWorkspaceTests {
 
         let next = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: due))
         edit.chooseDay(next)
-        guard case .saved(let saved) = await repo.apply(edit, expected: original.revision) else {
+        guard case .saved(let saved, nil) = await repo.apply(edit, expected: original.revision) else {
             return XCTFail("Expected day move")
         }
         let result = try XCTUnwrap(saved.snapshot.workspace.tasks.first)
@@ -762,5 +1357,253 @@ extension ReadOnlyWorkspaceTests {
         XCTAssertEqual(restarted.customRecurrence, rule)
         XCTAssertEqual(restarted.occurrenceIndex, 1)
         XCTAssertEqual(restarted.recurrenceNominalDate, due)
+    }
+}
+
+extension ReadOnlyWorkspaceTests {
+    func testCalendarMoveShiftsManualReminderAndUndoPreservesLaterTitle() async throws {
+        let due = Date(timeIntervalSinceReferenceDate: 815_914_800.125)
+        let rule = CustomRecurrence(unit: .months, monthDays: [9], skipWeekends: true)
+        var task = TaskItem(title: "Move a short range", dueDate: due, hasDueTime: true,
+                            reminderFollowsSchedule: false, timeZoneID: "Europe/Moscow", customRecurrence: rule,
+                            occurrenceIndex: 4, scheduledDuration: TaskDurationRange(start: due - 75.375, end: due),
+                            recurrenceNominalDate: due - 172_800)
+        task.reminderDates = [due - 900]
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), initial = try await repo.load()
+        let calendar = initial.snapshot.settings.calendar
+        let target = due + 3_600
+        guard case .saved(let moved, let undo?) = await repo.apply(.move(start: target, allDay: false), to: task.id,
+                                                                   expected: initial.revision, calendar: calendar) else {
+            return XCTFail("Expected the Calendar move and scoped Undo")
+        }
+        let changed = try XCTUnwrap(moved.snapshot.workspace.tasks.first)
+        let newDue = target + 75.375
+        XCTAssertEqual(changed.dueDate, newDue)
+        XCTAssertEqual(changed.scheduledDuration?.start, target)
+        XCTAssertEqual(changed.reminderDates, [newDue - 900])
+        XCTAssertEqual(changed.occurrenceIndex, 4)
+        XCTAssertEqual(changed.recurrenceNominalDate, newDue)
+        guard case .saved(let renamed) = await repo.apply(.title("Later title"), to: task.id, expected: moved.revision) else {
+            return XCTFail("Expected a durable unrelated edit")
+        }
+        XCTAssertTrue(undo.canRestore(in: renamed.snapshot.workspace))
+        guard case .saved(let restored, nil) = await repo.undo(undo) else { return XCTFail("Expected schedule Undo") }
+        let result = try XCTUnwrap(restored.snapshot.workspace.tasks.first)
+        XCTAssertEqual(CalendarScheduleSnapshot(result), CalendarScheduleSnapshot(task))
+        XCTAssertEqual(result.title, "Later title")
+        XCTAssertEqual(restored.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+    }
+
+    func testCalendarNoOpAndStaleUndoDoNotWrite() async throws {
+        let due = Date(timeIntervalSinceReferenceDate: 815_914_800.125)
+        let task = TaskItem(title: "Point", dueDate: due, hasDueTime: true)
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), initial = try await repo.load()
+        let calendar = initial.snapshot.settings.calendar
+        guard case .unchanged = await repo.apply(.setPoint(date: due, allDay: false), to: task.id,
+                                                 expected: initial.revision, calendar: calendar) else {
+            return XCTFail("Expected unchanged point")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), initial.snapshot.workspaceBytes)
+        let tomorrow = try XCTUnwrap(calendar.date(byAdding: .day, value: 1, to: due))
+        let move = CalendarScheduling.moveOnDay(task, day: tomorrow, forceAllDay: false, calendar: calendar)
+        guard case .saved(let moved, let undo?) = await repo.apply(move, to: task.id, expected: initial.revision, calendar: calendar) else {
+            return XCTFail("Expected move")
+        }
+        XCTAssertEqual(moved.snapshot.workspace.tasks.first?.dueDate, tomorrow)
+        XCTAssertNil(moved.snapshot.workspace.tasks.first?.scheduledDuration)
+        guard case .refused(.stale) = await repo.apply(.unschedule, to: task.id, expected: initial.revision, calendar: calendar) else {
+            return XCTFail("Expected a stale schedule refusal")
+        }
+        guard case .saved(let completed, _) = await repo.apply(.complete, to: task.id, expected: moved.revision) else {
+            return XCTFail("Expected completed task")
+        }
+        XCTAssertFalse(undo.canRestore(in: completed.snapshot.workspace))
+        guard case .refused(.changedSinceCalendarEdit) = await repo.undo(undo) else {
+            return XCTFail("Expected a status guard refusal")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), completed.snapshot.workspaceBytes)
+    }
+}
+
+extension ReadOnlyWorkspaceTests {
+    func testCalendarPreferencesOnlyReplaceOwnedBytesAndSupportSparseLegacySettings() async throws {
+        let task = TaskItem(title: "Keep the workspace exact")
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let prefix = "{\n  \"futurePreference\": { \"text\": \"e\\u0301\", \"array\": [1, 2] }, \"calendarOptions\" : "
+        let suffix = " ,\n  \"defaultDurationMinutes\": 45\n}\n"
+        let original = Data((prefix + "{\"additionalTimeZoneID\":\"Europe/London\"}" + suffix).utf8)
+        try original.write(to: files.settings)
+        let repo = repository(files), before = try await repo.load()
+        XCTAssertEqual(before.snapshot.settings.calendarOptions.additionalTimeZoneID, "Europe/London")
+        var options = before.snapshot.settings.calendarOptions
+        options.mode = .multiWeek
+        options.multiWeekCount = 6
+        options.showCompleted = false
+        guard case .saved(let saved) = await repo.saveCalendarOptions(options, expected: before.revision) else {
+            return XCTFail("Expected scoped Calendar preference write")
+        }
+        let persisted = try Data(contentsOf: files.settings)
+        XCTAssertTrue(persisted.starts(with: prefix.utf8))
+        XCTAssertTrue(String(decoding: persisted, as: UTF8.self).hasSuffix(suffix))
+        XCTAssertEqual(saved.snapshot.settings.calendarOptions, options)
+        XCTAssertEqual(saved.snapshot.settings.defaultDurationMinutes, 45)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), before.snapshot.workspaceBytes)
+        guard case .unchanged = await repo.saveCalendarOptions(options, expected: saved.revision) else {
+            return XCTFail("Expected unchanged Done")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.settings), persisted)
+        guard case .stale = await repo.saveCalendarOptions(.init(), expected: before.revision) else {
+            return XCTFail("Expected stale preference refusal")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.settings), persisted)
+    }
+
+    func testCalendarPreferencesPreserveUnknownAndDuplicateCalendarFields() async throws {
+        let files = try fixture(WorkspaceData())
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        for input in [
+            "{\"calendarOptions\":{\"mode\":\"future-view\"}}",
+            "{\"calendarOptions\":{\"futureOption\":[\"keep\"]}}",
+            "{\"calendarOptions\":{\"showCompleted\":true,\"showCompleted\":false}}"
+        ] {
+            let original = Data(input.utf8)
+            try original.write(to: files.settings)
+            let before = try await repo.load()
+            var options = before.snapshot.settings.calendarOptions
+            options.mode = .month
+            guard case .incompatible = await repo.saveCalendarOptions(options, expected: before.revision) else {
+                return XCTFail("Expected refusal of an unsupported Calendar object")
+            }
+            XCTAssertEqual(try Data(contentsOf: files.settings), original)
+            XCTAssertEqual(try Data(contentsOf: files.workspace), before.snapshot.workspaceBytes)
+        }
+    }
+
+    func testCalendarPreferencesInsertMissingObjectAndConfirmAfterWriteThrow() async throws {
+        let files = try fixture(WorkspaceData())
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let original = Data("{ \"defaultDurationMinutes\" : 45 }\n".utf8)
+        try original.write(to: files.settings)
+        let failing = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { _, _ in
+            throw FixtureWriteError.denied
+        }
+        let before = try await failing.load()
+        var options = before.snapshot.settings.calendarOptions
+        options.mode = .agenda
+        guard case .persistenceFailed = await failing.saveCalendarOptions(options, expected: before.revision) else {
+            return XCTFail("Expected a confirmed failed write")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.settings), original)
+        let afterWrite = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        guard case .saved(let saved) = await afterWrite.saveCalendarOptions(options, expected: before.revision) else {
+            return XCTFail("Expected confirmation from the durable settings")
+        }
+        XCTAssertEqual(saved.snapshot.settings.calendarOptions, options)
+        XCTAssertEqual(saved.snapshot.settings.defaultDurationMinutes, 45)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), before.snapshot.workspaceBytes)
+    }
+}
+
+extension ReadOnlyWorkspaceTests {
+    func testTaskMetadataWritesPreserveRichBodyScheduleHierarchyAndSettings() async throws {
+        let tag = TaskTag(name: "Planning", color: "#334455")
+        let unavailable = UUID()
+        let body = "Plan e\u{301} 🧩"
+        let due = Date(timeIntervalSinceReferenceDate: 815_914_800.125)
+        let oldStep = ChecklistItem(title: "e\u{301}")
+        let blank = ChecklistItem(title: " ")
+        let task = TaskItem(title: "Project", body: body, tagIDs: [unavailable], dueDate: due, hasDueTime: true,
+                            checklist: [oldStep, blank], timeZoneID: "Europe/Moscow",
+                            scheduledDuration: .init(start: due - 60.375, end: due),
+                            richBody: RichBody(text: body, runs: [.init(location: 0, length: 4, bold: true)]))
+        let child = TaskItem(title: "Linked child", parentID: task.id)
+        let files = try fixture(WorkspaceData(tasks: [task, child], tags: [tag]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), start = try await repo.load()
+        let now = due + 900
+        guard case .saved(let prioritized) = await repo.apply(.metadata(.priority(.high)), to: task.id, expected: start.revision, now: now),
+              case .saved(let tagged) = await repo.apply(.metadata(.tags([unavailable, tag.id])), to: task.id, expected: prioritized.revision, now: now) else {
+            return XCTFail("Expected durable priority and tag edits")
+        }
+        var renamed = oldStep
+        renamed.title = "é"
+        guard case .saved(let checked) = await repo.apply(.metadata(.setChecklistCompleted(id: blank.id, completed: true)),
+                                                          to: task.id, expected: tagged.revision, now: now) else {
+            return XCTFail("Expected direct check of an existing blank row")
+        }
+        var checkedBlank = blank
+        checkedBlank.isCompleted = true
+        let new = ChecklistItem(title: "Bring notes")
+        let items = [new, checkedBlank, renamed]
+        guard case .saved(let saved) = await repo.apply(.metadata(.checklist(items)), to: task.id, expected: checked.revision, now: now) else {
+            return XCTFail("Expected staged order, title and new item to save")
+        }
+        var expected = task
+        expected.priority = .high
+        expected.tagIDs.append(tag.id)
+        expected.checklist = items
+        expected.updatedAt = now
+        let actual = try XCTUnwrap(saved.snapshot.workspace.tasks.first)
+        XCTAssertTrue(TaskMetadataChange.sameChecklist(actual.checklist, items))
+        XCTAssertTrue(actual.body.utf16.elementsEqual(body.utf16))
+        XCTAssertEqual(actual.richBody, task.richBody)
+        XCTAssertEqual(saved.snapshot.workspace.tasks, [expected, child])
+        XCTAssertEqual(saved.snapshot.workspace.tags, [tag])
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+        guard case .unchanged = await repo.apply(.metadata(.checklist(items)), to: task.id, expected: saved.revision) else {
+            return XCTFail("Expected exact no-op")
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
+    }
+
+    func testTaskMetadataRefusalsPreserveBytes() async throws {
+        var archive = TaskList(name: "Archive", color: "#334455")
+        archive.isArchived = true
+        let item = ChecklistItem(title: "Existing")
+        let task = TaskItem(title: "Task", checklist: [item])
+        let locked = TaskItem(title: "Archived", listID: archive.id, checklist: [item])
+        let ambiguous = TaskItem(title: "Ambiguous", checklist: [item, item])
+        let files = try fixture(WorkspaceData(tasks: [task, locked, ambiguous], lists: [archive]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), start = try await repo.load()
+        let cases: [(TaskItem, TaskMetadataChange, WorkspaceWriteRefusal)] = [
+            (task, .tags([UUID()]), .metadata(.unavailableTag)),
+            (task, .checklist([ChecklistItem(title: "\n  ")]), .metadata(.emptyChecklistTitle)),
+            (task, .setChecklistCompleted(id: UUID(), completed: true), .metadata(.missingChecklistItem)),
+            (ambiguous, .setChecklistCompleted(id: item.id, completed: true), .metadata(.ambiguousChecklist)),
+            (locked, .priority(.high), .readOnlyRecord)
+        ]
+        for (record, command, refusal) in cases {
+            let outcome = await repo.apply(.metadata(command), to: record.id, expected: start.revision)
+            assertRefused(outcome, refusal)
+        }
+        XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
+    }
+
+    func testTaskMetadataConfirmsAfterWriteThrowAndRefusesStaleRetry() async throws {
+        let task = TaskItem(title: "Set priority")
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = WorkspaceFileRepository(workspaceURL: files.workspace, settingsURL: files.settings) { bytes, url in
+            try bytes.write(to: url, options: .atomic)
+            throw FixtureWriteError.denied
+        }
+        let start = try await repo.load()
+        guard case .saved(let saved) = await repo.apply(.metadata(.priority(.medium)), to: task.id, expected: start.revision) else {
+            return XCTFail("Expected durable write confirmation")
+        }
+        XCTAssertEqual(saved.snapshot.workspace.tasks.first?.priority, .medium)
+        assertRefused(await repo.apply(.metadata(.priority(.high)), to: task.id, expected: start.revision), .stale)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), saved.snapshot.workspaceBytes)
     }
 }

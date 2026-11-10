@@ -189,6 +189,16 @@ public struct TaskCaptureInput: Codable, Equatable, Sendable {
     public private(set) var dateWasChosen = false
     public private(set) var preserveTemplateDuration = true
 
+    public static func summaryNote(title: String, body: String) -> Self {
+        var value = Self()
+        value.title = title
+        value.body = body
+        value.kind = .note
+        value.recognizeDates = false
+        value.recognizeTags = false
+        return value
+    }
+
     public static func start(destination: TaskDestination, calendarDate: Date? = nil, workspace: WorkspaceData,
                              settings: AppSettings, now: Date, calendar: Calendar) -> Self {
         var value = Self()

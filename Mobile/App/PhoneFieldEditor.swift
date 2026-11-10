@@ -55,6 +55,8 @@ struct NativeFieldInput: UIViewRepresentable {
     var focusOnAppear = true
     var accessibilityID = "fieldEditor"
     var focusRequest: UUID? = nil
+    var fieldLabel: String? = nil
+    var next: (() -> Void)? = nil
     func makeCoordinator() -> Coordinator { Coordinator(self) }
     func makeUIView(context: Context) -> FocusTextView {
         let view = FocusTextView(); view.shouldFocus = focusOnAppear
@@ -65,7 +67,9 @@ struct NativeFieldInput: UIViewRepresentable {
         view.font = .preferredFont(forTextStyle: title ? .title2 : .body)
         view.adjustsFontForContentSizeCategory = true
         view.text = text; view.selectedRange = NSRange(location: text.utf16.count, length: 0)
-        view.accessibilityIdentifier = accessibilityID; view.accessibilityLabel = title ? "Title" : "Description"
+        view.accessibilityIdentifier = accessibilityID
+        view.accessibilityLabel = fieldLabel ?? (title ? "Title" : "Description")
+        if next != nil { view.returnKeyType = .next }
         view.delegate = context.coordinator
         return view
     }
@@ -77,7 +81,7 @@ struct NativeFieldInput: UIViewRepresentable {
         if let focusRequest, editable, context.coordinator.lastFocusRequest != focusRequest {
             context.coordinator.lastFocusRequest = focusRequest
             DispatchQueue.main.async { [weak view] in
-                guard let view, view.window != nil, view.isEditable else { return }
+                guard let view, view.window != nil, view.isEditable, !view.isFirstResponder else { return }
                 view.selectedRange = NSRange(location: view.text.utf16.count, length: 0)
                 view.becomeFirstResponder()
             }
@@ -97,6 +101,11 @@ struct NativeFieldInput: UIViewRepresentable {
         var updating = false
         var lastFocusRequest: UUID?
         init(_ parent: NativeFieldInput) { self.parent = parent }
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            guard text == "\n", textView.markedTextRange == nil, let next = parent.next else { return true }
+            next()
+            return false
+        }
         func textViewDidChange(_ textView: UITextView) { publish(textView) }
         func textViewDidChangeSelection(_ textView: UITextView) {
             guard !updating else { return }

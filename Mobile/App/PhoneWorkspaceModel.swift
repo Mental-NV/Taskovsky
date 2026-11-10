@@ -2,12 +2,13 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private enum PhoneQACase: String { case known, lifecycle, captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, lifecycle, arrange, organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var document: WorkspaceDocument?
     @Published private(set) var failure: String?
+    @Published private(set) var recentSearches: [String] = []
     @Published private(set) var activeDraft: TaskFieldDraft?
     @Published private(set) var recoveredDraft: TaskFieldDraft?
     @Published private(set) var protectedDraft = false
@@ -22,6 +23,8 @@ final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var createdTaskID: UUID?
     @Published private(set) var creationNotice: String?
     @Published private(set) var lifecycleNotice: String?
+    @Published private(set) var calendarNotice: String?
+    @Published private var calendarUndo: WorkspaceCalendarUndo?
     @Published private var lifecycleUndo: WorkspaceLifecycleUndo?
     @Published var captureIsComposing = false
     @Published var confirmCaptureDiscard = false
@@ -82,9 +85,29 @@ final class PhoneWorkspaceModel: ObservableObject {
         return document.allowsKnownFieldWrites && !isBusy && !isComposing && !staleDraft &&
             (draft.field != .title || !draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
+    private var searchHistoryKey: String? {
+        guard let directory else { return nil }
+        return isQA ? "TaskovskyMobile.qaSearches." + directory.lastPathComponent : "TaskovskyMobile.recentSearches"
+    }
+
+    func rememberSearch(_ query: String) {
+        guard let key = searchHistoryKey, !query.isEmpty else { return }
+        recentSearches.removeAll { $0.localizedCaseInsensitiveCompare(query) == .orderedSame }
+        recentSearches.insert(query, at: 0)
+        recentSearches = Array(recentSearches.prefix(10))
+        UserDefaults.standard.set(recentSearches, forKey: key)
+    }
+
+    func clearSearchHistory() {
+        guard let key = searchHistoryKey else { return }
+        recentSearches = []
+        UserDefaults.standard.removeObject(forKey: key)
+    }
+
     func open() async {
         guard !opened else { return }; opened = true
         guard let directory else { failure = "The requested test workspace is invalid. No local files were opened."; return }
+        if let key = searchHistoryKey { recentSearches = UserDefaults.standard.stringArray(forKey: key) ?? [] }
         readTicket = UUID(); isBusy = true
         do {
             var initial = try MobilePreviewFixture.session(samples: isQA && qaCase != .captureEmpty, unknownData: qaCase == .unknownWorkspace)
@@ -112,12 +135,131 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.lists[1].isArchived = true
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
+            if isQA && qaCase == .arrange {
+                var data = initial.workspace
+                guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[2].priority = .high
+                data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && (qaCase == .summary || qaCase == .summarySaveFailure) {
+                var settings = initial.settings
+                settings.smartListVisibility[.summary] = .show
+                settings.defaultListID = initial.workspace.lists.first?.id
+                settings.defaultTagID = initial.workspace.tags.first?.id
+                settings.defaultDate = .today
+                settings.defaultPriority = .high
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: initial.workspaceBytes, settingsBytes: JSONEncoder().encode(settings))
+            }
+            if isQA && qaCase == .board {
+                var data = initial.workspace
+                guard data.tasks.count == 8, data.lists.count == 2 else { throw CocoaError(.fileReadCorruptFile) }
+                let archive = TaskList(id: UUID(uuidString: "00000000-0000-0000-0000-000000000105")!,
+                                       name: "Reference Board", color: "#4E64D8", viewMode: .board, isArchived: true)
+                data.lists.append(archive)
+                data.tasks[1].recurrence = .daily
+                data.tasks[1].wontDoAt = MobilePreviewFixture.now.addingTimeInterval(-7_200)
+                data.tasks[2].listID = archive.id
+                data.tasks[2].completedAt = MobilePreviewFixture.now.addingTimeInterval(-3_600)
+                data.tasks[4].listID = data.lists[0].id
+                data.tasks[4].kind = .note
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .tagOrganization {
+                var data = initial.workspace
+                var settings = initial.settings
+                guard let source = data.tags.first, !data.tasks.isEmpty, !data.filters.isEmpty else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                let target = TaskTag(id: UUID(uuidString: "00000000-0000-0000-0000-000000000201")!,
+                                     name: "Sprint", color: "#4E64D8", parentID: source.id)
+                let sibling = TaskTag(id: UUID(uuidString: "00000000-0000-0000-0000-000000000202")!,
+                                      name: "Review group", color: "#4E64D8", parentID: source.id)
+                data.tags += [target, sibling]
+                data.tasks[0].tagIDs = [source.id, target.id]
+                data.templates = [TaskTemplate(name: "Tagged example", title: "Review notes", tagIDs: [source.id, target.id])]
+                data.filters[0].name = "Tagged review"
+                data.filters[0].tagIDs = [source.id, target.id]
+                data.filters[0].ruleRoot = .and([.condition(.init(kind: .tag, tagID: source.id)),
+                                                 .condition(.init(kind: .tag, tagID: target.id))])
+                settings.defaultTagID = source.id
+                let encoder = JSONEncoder()
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: encoder.encode(data), settingsBytes: encoder.encode(settings))
+            }
+            if isQA && qaCase == .savedFilter {
+                var data = initial.workspace
+                guard !data.filters.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                let missingList = UUID(uuidString: "00000000-0000-0000-0000-000000000598")!
+                let missingTag = UUID(uuidString: "00000000-0000-0000-0000-000000000599")!
+                data.filters[0].name = "Unavailable work"
+                data.filters[0].listIDs = [missingList]
+                data.filters[0].tagIDs = [missingTag]
+                data.filters[0].ruleRoot = .and([.condition(.init(kind: .list, listID: missingList)),
+                                                 .not(.condition(.init(kind: .tag, tagID: missingTag)))])
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .organization {
+                var data = initial.workspace
+                guard data.tasks.count == 8, let work = data.lists.first?.id, !data.filters.isEmpty else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                data.tasks[0].listID = work
+                data.tasks[0].checklist = [ChecklistItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000501")!,
+                                                         title: "Review the first step", isCompleted: true)]
+                data.tasks[1].parentID = data.tasks[0].id
+                data.tasks[7].deletedAt = MobilePreviewFixture.now.addingTimeInterval(-3_600)
+                data.filters[0].name = "Original Work only"
+                data.filters[0].listIDs = [work]
+                data.filters[0].tagIDs = []
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .calendarOptions {
+                var data = initial.workspace
+                var settings = initial.settings
+                guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[0].recurrence = .daily
+                data.tasks[0].checklist = [ChecklistItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000501")!, title: "Review the first step")]
+                data.tasks[3].completedAt = MobilePreviewFixture.now
+                settings.calendarOptions.additionalTimeZones = Array(settings.calendarOptions.additionalTimeZones.prefix(2))
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.sortedKeys]
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: encoder.encode(data), settingsBytes: encoder.encode(settings))
+            }
+            if isQA && qaCase == .taskMetadata {
+                var data = initial.workspace
+                guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[0].tagIDs = [UUID(uuidString: "00000000-0000-0000-0000-000000000599")!]
+                data.tasks[0].checklist = [
+                    ChecklistItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000501")!, title: "First step"),
+                    ChecklistItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000502")!, title: "Second step")
+                ]
+                data.tasks[3].parentID = data.tasks[0].id
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            #if DEBUG
+            if isQA && (qaCase == .richPreview || qaCase == .malformedRich) {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                if qaCase == .richPreview {
+                    let rich = MobilePreviewFixture.styledDescription
+                    data.tasks[0].body = rich.text
+                    data.tasks[0].richBody = rich
+                } else {
+                    guard var rich = data.tasks[0].richBody, !rich.runs.isEmpty else {
+                        throw CocoaError(.fileReadCorruptFile)
+                    }
+                    rich.runs[0].length = Int.max
+                    data.tasks[0].richBody = rich
+                }
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            #endif
             let wasNew = !FileManager.default.fileExists(atPath: directory.appendingPathComponent("workspace.json").path) &&
                 !FileManager.default.fileExists(atPath: directory.appendingPathComponent("settings.json").path)
             let bootstrap = initial
             try await Task.detached { try WorkspaceBootstrap.prepare(directory: directory, initial: bootstrap) }.value
             let repo: WorkspaceFileRepository
-            if isQA && qaCase == .saveFailure {
+            if isQA && (qaCase == .saveFailure || qaCase == .summarySaveFailure) {
                 repo = WorkspaceFileRepository(workspaceURL: directory.appendingPathComponent("workspace.json"), settingsURL: directory.appendingPathComponent("settings.json"), write: { _, _ in throw CocoaError(.fileWriteNoPermission) })
             } else if isQA && qaCase == .afterWrite {
                 repo = WorkspaceFileRepository(workspaceURL: directory.appendingPathComponent("workspace.json"), settingsURL: directory.appendingPathComponent("settings.json"), write: { bytes, url in
@@ -154,30 +296,245 @@ final class PhoneWorkspaceModel: ObservableObject {
         }
     }
 
-    func saveSchedule(_ edit: TaskScheduleEdit, expected: WorkspaceRevision) async -> String? {
+    func saveCalendarOptions(_ options: TaskCalendarOptions, expected: WorkspaceRevision) async -> String? {
+        guard !isBusy, let repository else { return "The workspace is busy. Try again." }
+        guard activeDraft == nil, recoveredDraft == nil, !protectedDraft,
+              captureDraft == nil, recoveredCapture == nil, !protectedCapture else {
+            return "Resolve the pending task edit before saving Calendar preferences."
+        }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.saveCalendarOptions(options, expected: expected) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .stale:
+            if let latest = try? await repository.load() { document = latest }
+            return "Saved preferences changed. Open this editor again to review them."
+        case .incompatible: return "This build cannot safely replace the saved Calendar preferences."
+        case .invalid: return "Review the Calendar ranges and time zones before saving."
+        case .persistenceFailed: return "Could not confirm the Calendar preference save. You can retry."
+        }
+    }
+
+    func saveSmartLists(_ draft: AppSettings, expected: WorkspaceRevision) async -> String? {
+        guard !isBusy, let repository else { return "The workspace is busy. Try again." }
+        guard activeDraft == nil, recoveredDraft == nil, !protectedDraft,
+              captureDraft == nil, recoveredCapture == nil, !protectedCapture else {
+            return "Resolve the pending task edit before saving Smart Lists."
+        }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.saveSmartLists(draft, expected: expected) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .stale:
+            if let latest = try? await repository.load() { document = latest }
+            return "Saved preferences changed. Open this editor again to review them."
+        case .incompatible: return "This build cannot safely edit these saved Smart List preferences."
+        case .invalid: return "Review the Smart List choices before saving."
+        case .persistenceFailed: return "Could not save Smart Lists. You can retry."
+        }
+    }
+
+    func saveLocalPreferences(_ draft: LocalWorkspacePreferences, expected: WorkspaceRevision) async -> String? {
+        guard !isBusy, let repository else { return "The workspace is busy. Try again." }
+        guard activeDraft == nil, recoveredDraft == nil, !protectedDraft,
+              captureDraft == nil, recoveredCapture == nil, !protectedCapture else {
+            return "Resolve the pending task edit before saving local settings."
+        }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.saveLocalPreferences(draft, expected: expected) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .stale:
+            if let latest = try? await repository.load() { document = latest }
+            return "Saved preferences changed. Open this editor again to review them."
+        case .incompatible: return "This build cannot safely edit these saved local settings."
+        case .invalid: return "Review the local settings choices before saving."
+        case .persistenceFailed: return "Could not save local settings. You can retry."
+        }
+    }
+
+    func saveTaskMetadata(_ command: TaskMetadataChange, taskID: UUID,
+                          expected: WorkspaceRevision) async -> String? {
         guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
         readTicket = UUID()
         isBusy = true
         defer { isBusy = false }
-        switch await repository.apply(edit, expected: expected, now: now) {
+        switch await repository.apply(.metadata(command), to: taskID, expected: expected, now: now) {
         case .saved(let saved), .unchanged(let saved):
             document = saved
             return nil
-        case .refused(.stale), .refused(.invalid(.changedTask)):
+        case .refused(.stale):
             if let latest = try? await repository.load() { document = latest }
-            return "The workspace changed. Reopen Schedule to edit the current task."
+            return "The workspace changed. Reopen this editor to review the current task."
         case .refused(.compatibility):
             return "This workspace contains data this build cannot safely rewrite."
-        case .refused(.invalid(.invalidDuration)):
-            return "The end must be on or after the start."
-        case .refused(.invalid(.invalidTimeZone)):
-            return "Choose a supported time zone."
-        case .refused(.invalid(.invalidRepeat)):
-            return "Edit or explicitly replace the invalid repeat rule."
-        case .refused(.missing), .refused(.readOnlyRecord):
-            return "Scheduling is unavailable for this task."
+        case .refused(.metadata(.emptyChecklistTitle)):
+            return "Enter a title for each changed checklist item."
+        case .refused(.metadata(.unavailableTag)):
+            return "Select available tags before saving."
+        case .refused(.metadata(.ambiguousChecklist)):
+            return "This checklist contains ambiguous item identities."
+        case .refused(.metadata(.missingChecklistItem)), .refused(.missing), .refused(.readOnlyRecord):
+            return "This task or checklist item is no longer editable."
+        case .refused(.emptyTitle), .refused(.styledBody):
+            return "The task edit could not be applied."
         case .persistenceFailed:
-            return "Could not confirm the save. Your edits are still here."
+            return "Could not save the task change. You can retry."
+        }
+    }
+
+    func saveOrganization(_ command: ListOrganizationCommand, expected: WorkspaceRevision) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.apply(command, expected: expected, now: now) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Reopen this editor to review the current lists and folders."
+        case .refused(.compatibility):
+            return "This workspace contains data this build cannot safely rewrite."
+        case .refused:
+            return "The list or folder is unavailable, or the proposed change is invalid."
+        case .persistenceFailed:
+            return "Could not save the change. You can retry."
+        }
+    }
+
+    func saveTag(_ command: TagOrganizationCommand, expected: WorkspaceRevision) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.apply(command, expected: expected, now: now) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Reopen this tag to review it."
+        case .refused(.compatibility): return "This workspace contains data this build cannot safely rewrite."
+        case .refused: return "Check the tag name and parent. The name must be unique and the parent cannot create a cycle."
+        case .persistenceFailed: return "Could not confirm the tag change. Reopen the workspace to review it before retrying."
+        }
+    }
+
+    func saveTemplate(_ command: TaskTemplateChange, expected: WorkspaceRevision) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.apply(command, expected: expected, now: now, calendar: calendar) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Reopen the template action and try again."
+        case .refused(.compatibility): return "This workspace contains data this build cannot safely rewrite."
+        case .refused: return "Check the template fields, formatting and destination task."
+        case .persistenceFailed: return "Could not save the template change. You can retry."
+        }
+    }
+
+    func saveFilter(_ command: SavedFilterChange, expected: WorkspaceRevision) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.apply(command, expected: expected) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Reopen the filter to review the current rules."
+        case .refused(.compatibility): return "This workspace contains data this build cannot safely rewrite."
+        case .refused: return "Check the filter name, dates, and saved record."
+        case .persistenceFailed: return "Could not save the filter. You can retry."
+        }
+    }
+
+    func saveSchedule(_ edit: TaskScheduleEdit, expected: WorkspaceRevision) async -> String? {
+        await commitSchedule { await $0.apply(edit, expected: expected, now: now) }
+    }
+
+    func saveCalendarSchedule(_ operation: CalendarScheduleOperation, taskID: UUID,
+                              expected: WorkspaceRevision) async -> String? {
+        await commitSchedule(calendarMessage: "Schedule updated") {
+            await $0.apply(operation, to: taskID, expected: expected, calendar: calendar, now: now)
+        }
+    }
+
+    var canUndoCalendar: Bool {
+        guard canBeginEditing, let calendarUndo, let document else { return false }
+        return calendarUndo.canRestore(in: document.snapshot.workspace)
+    }
+
+    func undoCalendarSchedule() async {
+        guard canUndoCalendar, let calendarUndo else { return }
+        if let error = await commitSchedule(calendarMessage: "Schedule restored", action: {
+            await $0.undo(calendarUndo, now: now)
+        }) { calendarNotice = error }
+    }
+
+    func dropCalendarTask(_ operation: CalendarScheduleOperation, taskID: UUID,
+                          expected: WorkspaceRevision) async {
+        if let error = await saveCalendarSchedule(operation, taskID: taskID, expected: expected) {
+            calendarNotice = error
+        }
+    }
+
+    private func commitSchedule(calendarMessage: String? = nil,
+                                action: (WorkspaceFileRepository) async -> WorkspaceScheduleOutcome) async -> String? {
+        guard canBeginEditing, let repository else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await action(repository) {
+        case .saved(let saved, let undo):
+            document = saved
+            if let calendarMessage {
+                calendarUndo = undo
+                calendarNotice = calendarMessage
+            }
+            return nil
+        case .unchanged(let current):
+            document = current
+            return nil
+        case .refused(.stale), .refused(.invalid(.changedTask)):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Open the schedule again to edit the current task."
+        case .refused(.compatibility):
+            return "This workspace contains data this build cannot safely rewrite."
+        case .refused(.invalid(.invalidDuration)), .refused(.invalidCalendarOperation):
+            return "The schedule has an invalid date or range."
+        case .refused(.invalid(.invalidTimeZone)):
+            return "Choose a supported time zone in the task's Schedule."
+        case .refused(.invalid(.invalidRepeat)):
+            return "Edit or explicitly replace the invalid repeat rule in the task's Schedule."
+        case .refused(.missing), .refused(.readOnlyRecord):
+            if let latest = try? await repository.load() { document = latest }
+            return "Scheduling is unavailable for this task."
+        case .refused(.changedSinceCalendarEdit):
+            if let latest = try? await repository.load() { document = latest }
+            return "The schedule or task status changed since this edit."
+        case .persistenceFailed:
+            return calendarMessage == nil
+                ? "Could not confirm the save. Your edits are still here."
+                : "Could not confirm the save. Review the schedule before retrying."
         }
     }
 
@@ -187,20 +544,23 @@ final class PhoneWorkspaceModel: ObservableObject {
 
     @discardableResult
     func performLifecycle(_ command: TaskLifecycleCommand, taskID: UUID,
-                          expected: WorkspaceRevision) async -> Bool {
+                          expected: WorkspaceRevision, fromSubtaskRow: Bool = false) async -> Bool {
         guard canBeginEditing, let repository else { return false }
         readTicket = UUID()
         isBusy = true
         let outcome = await repository.apply(command, to: taskID, expected: expected, calendar: calendar)
         let message: String = switch command {
-        case .complete: "Task completed"
-        case .reopen: "Task reopened"
+        case .complete, .completeFromWontDo: fromSubtaskRow ? "Subtask completed" : "Task completed"
+        case .undoBoardCompletionToWontDo: "Change undone"
+        case .reopen: fromSubtaskRow ? "Subtask reopened" : "Task reopened"
         case .wontDo: "Marked Won't Do"
         case .trash: "Moved to Trash"
         case .restore: "Restored"
         case .purge: "Deleted forever"
         case .setPinned(let pinned): pinned ? "Pinned" : "Unpinned"
         case .move: "Moved to list"
+        case .setParent(let parentID): parentID == nil ? "Moved to top level" : "Parent task changed"
+        case .addSubtask: "Subtask added"
         }
         return await finishLifecycle(outcome, message: message)
     }
@@ -233,6 +593,10 @@ final class PhoneWorkspaceModel: ObservableObject {
             lifecycleNotice = "This workspace contains data this build cannot safely rewrite."
         case .refused(.task(.invalidDestination)):
             lifecycleNotice = "Choose Inbox or an active list."
+        case .refused(.task(.invalidParent)):
+            lifecycleNotice = "Choose a parent task outside this task’s own subtree."
+        case .refused(.task(.invalidChild)):
+            lifecycleNotice = "Could not add this subtask. Check the title and current task."
         case .refused(.task):
             lifecycleNotice = "This action is unavailable for the current task."
         case .persistenceFailed:
@@ -313,6 +677,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         case .refused(.styledBody): editorError = "Formatting is protected. The description cannot be replaced with plain text."
         case .refused(.readOnlyRecord), .refused(.missing): editorError = "This task is no longer editable. Your text is kept."
         case .refused(.emptyTitle): editorError = "Enter a title before saving."
+        case .refused(.metadata): editorError = "This task edit could not be applied."
         case .persistenceFailed: editorError = "Could not save. Your edit is still here. Retry when storage is available."
         }
         isBusy = false
@@ -349,10 +714,23 @@ final class PhoneWorkspaceModel: ObservableObject {
             (captureDraft?.preparedTask != nil || (!staleCapture && capturePreview?.title.isEmpty == false))
     }
     func beginCapture(destination: TaskDestination, calendarDate: Date?) async {
-        guard canBeginCapture, let document, let captures else { return }
-        readTicket = UUID(); isBusy = true; captureError = nil; creationNotice = nil; createdTaskID = nil; captureIsComposing = false
+        guard canBeginCapture, let document else { return }
         let input = TaskCaptureInput.start(destination: destination, calendarDate: calendarDate, workspace: document.snapshot.workspace,
                                            settings: document.snapshot.settings, now: now, calendar: calendar)
+        await stageCapture(input, in: document)
+    }
+
+    func saveSummaryNote(title: String, body: String) async -> Bool {
+        guard canBeginCapture, let document else { return false }
+        await stageCapture(.summaryNote(title: title, body: body), in: document)
+        guard captureDraft != nil else { return false }
+        await createCapturedTask()
+        return createdTaskID != nil
+    }
+
+    private func stageCapture(_ input: TaskCaptureInput, in document: WorkspaceDocument) async {
+        guard let captures else { return }
+        readTicket = UUID(); isBusy = true; captureError = nil; creationNotice = nil; createdTaskID = nil; captureIsComposing = false
         let value = TaskCaptureDraft(baseRevision: document.revision, input: input, now: now, calendar: calendar)
         let result = await captures.begin(value)
         if result == .refused { await readCaptureRecovery(); captureError = "Handle the existing saved capture before creating another." }

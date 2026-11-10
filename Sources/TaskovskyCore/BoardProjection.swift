@@ -11,22 +11,52 @@ import Foundation
 /// them read-only). Notes stay in Open; terminal-column drops arriving from
 /// the UI refuse them with a message.
 public enum BoardProjection {
+    public enum Column: String, CaseIterable, Sendable {
+        case open, completed, wontDo
+
+        public var title: String {
+            switch self {
+            case .open: "Open"
+            case .completed: "Completed"
+            case .wontDo: "Won't Do"
+            }
+        }
+    }
+
+    public static func column(for task: TaskItem) -> Column {
+        if task.completedAt != nil { return .completed }
+        if task.wontDoAt != nil { return .wontDo }
+        return .open
+    }
+
+    /// Maps a change of board column to one local lifecycle transaction.
+    public static func move(_ task: TaskItem, to target: Column) -> TaskLifecycleCommand? {
+        let source = column(for: task)
+        guard task.kind == .task, task.deletedAt == nil, source != target else { return nil }
+        switch target {
+        case .open: return .reopen
+        case .completed: return source == .wontDo ? .completeFromWontDo : .complete
+        case .wontDo: return .wontDo
+        }
+    }
+
     /// Every non-deleted task in `listID` (nil = Inbox), in stored order.
     public static func tasks(forList listID: UUID?, in data: WorkspaceData) -> [TaskItem] {
         data.tasks.filter { $0.deletedAt == nil && $0.listID == listID }
     }
 
-    /// Status split over a board dataset. Each record appears exactly once;
-    /// notes always land in Open regardless of status flags (a note can
-    /// never be completed or marked Won't Do through the store layer).
+    /// Each record appears exactly once according to its saved status.
+    /// Notes created and edited through the app stay in Open.
     public static func split(_ tasks: [TaskItem]) -> (open: [TaskItem], completed: [TaskItem], wontDo: [TaskItem]) {
         var open: [TaskItem] = []
         var completed: [TaskItem] = []
         var wont: [TaskItem] = []
         for task in tasks {
-            if task.completedAt != nil { completed.append(task) }
-            else if task.wontDoAt != nil { wont.append(task) }
-            else { open.append(task) }
+            switch column(for: task) {
+            case .open: open.append(task)
+            case .completed: completed.append(task)
+            case .wontDo: wont.append(task)
+            }
         }
         return (open, completed, wont)
     }

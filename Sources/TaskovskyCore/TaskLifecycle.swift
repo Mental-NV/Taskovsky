@@ -2,12 +2,16 @@ import Foundation
 
 public enum TaskLifecycleCommand: Equatable, Sendable {
     case complete, reopen, wontDo, trash, restore, purge
+    case completeFromWontDo
+    case undoBoardCompletionToWontDo(Date)
     case setPinned(Bool)
     case move(UUID?)
+    case setParent(UUID?)
+    case addSubtask(id: UUID, title: String)
 }
 
 public enum TaskLifecycleRefusal: Error, Equatable, Sendable {
-    case missing, archived, wrongStatus, invalidDestination
+    case missing, archived, wrongStatus, invalidDestination, invalidParent, invalidChild
 }
 
 /// Shared graph mutations and transient snapshots used to prove pristine
@@ -44,20 +48,31 @@ public struct TaskLifecycle {
         let active = task.completedAt == nil && task.wontDoAt == nil
         switch command {
         case .complete: return task.kind == .task && active ? nil : .wrongStatus
+        case .completeFromWontDo:
+            return task.kind == .task && task.completedAt == nil && task.wontDoAt != nil ? nil : .wrongStatus
+        case .undoBoardCompletionToWontDo:
+            return task.kind == .task && task.completedAt != nil ? nil : .wrongStatus
         case .reopen: return task.kind == .task && !active ? nil : .wrongStatus
         case .wontDo: return task.kind == .task && task.wontDoAt == nil ? nil : .wrongStatus
         case .setPinned: return active ? nil : .wrongStatus
+        case .addSubtask, .setParent: return task.kind == .task ? nil : .wrongStatus
         case .trash, .move: return nil
         case .restore, .purge: return .wrongStatus
         }
     }
 
     public mutating func apply(_ command: TaskLifecycleCommand, to id: UUID,
-                               now: Date, calendar: Calendar) throws -> Bool {
+                               now: Date, calendar: Calendar, addPosition: TaskPosition = .top) throws -> Bool {
         guard let task = data.tasks.first(where: { $0.id == id }) else { throw TaskLifecycleRefusal.missing }
         if let refusal = Self.refusal(for: command, task: task, lists: data.lists) { throw refusal }
         switch command {
-        case .complete: return toggleComplete(id: id, now: now, calendar: calendar)
+        case .complete, .completeFromWontDo:
+            return toggleComplete(id: id, now: now, calendar: calendar)
+        case .undoBoardCompletionToWontDo(let stamp):
+            guard undoCompletion(id: id, now: now),
+                  let index = data.tasks.firstIndex(where: { $0.id == id }) else { return false }
+            data.tasks[index].wontDoAt = stamp
+            return true
         case .reopen: return reopenTask(id: id, now: now)
         case .wontDo: return markWontDo(id: id, now: now)
         case .trash: return trashTask(id: id, now: now)
@@ -65,6 +80,17 @@ public struct TaskLifecycle {
         case .purge: return purgeTask(id: id, now: now)
         case .setPinned(let pinned): return setPinned(id: id, pinned: pinned, now: now) ?? false
         case .move(let listID): return moveTasksToList(ids: [id], listID: listID, now: now) ?? false
+        case .setParent(let parentID):
+            guard let changed = TaskHierarchy.setParent(childID: id, parentID: parentID, in: &data, now: now) else {
+                throw TaskLifecycleRefusal.invalidParent
+            }
+            return changed
+        case .addSubtask(let childID, let title):
+            guard TaskHierarchy.addChild(id: childID, to: id, title: title, in: &data,
+                                         position: addPosition, now: now) else {
+                throw TaskLifecycleRefusal.invalidChild
+            }
+            return true
         }
     }
 

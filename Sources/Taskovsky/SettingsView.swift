@@ -384,12 +384,20 @@ private struct TemplateEditor: View {
             TextEditor(text: $checklist).frame(height: 90).border(Color.secondary.opacity(0.25))
             Picker("Priority", selection: $priority) { ForEach(TaskPriority.allCases, id: \.self) { Text($0.label).tag($0) } }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button("Save") {
-                let lines = checklist.components(separatedBy: .newlines).map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
-                // Plain-text template edits keep styles only when the body is
-                // untouched; a replaced body clears stale styles instead of
-                // silently reapplying them to different text.
-                let richBody = bodyText == (draft.original?.body ?? "") ? draft.original?.richBody?.valid(for: bodyText) : nil
-                let template = TaskTemplate(id: draft.id, name: name.trimmingCharacters(in: .whitespacesAndNewlines), title: title.trimmingCharacters(in: .whitespacesAndNewlines), body: bodyText, checklist: lines.map { ChecklistItem(title: $0) }, priority: priority, tagIDs: draft.original?.tagIDs ?? [], kind: draft.original?.kind ?? .task, richBody: richBody)
+                var fields = TaskTemplateFields(template: draft.original)
+                fields.name = name
+                fields.title = title
+                fields.body = bodyText
+                fields.priority = priority
+                let originalChecklist = fields.checklist.map(\.title).joined(separator: "\n")
+                if !RichBody.sameCodeUnits(checklist, originalChecklist) {
+                    let lines = checklist.components(separatedBy: .newlines)
+                        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                        .filter { !$0.isEmpty }
+                    fields.checklist = lines.map { ChecklistItem(title: $0) }
+                }
+                guard let template = fields.updated(id: draft.id, original: draft.original,
+                                                    allowsReplacingStyledBody: true) else { return }
                 save(template); dismiss()
             }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 480).tint(accent)

@@ -49,14 +49,13 @@ struct FilterEditorView: View {
                 Text("Advanced").tag(true)
             }.pickerStyle(.segmented)
             if advanced {
-                Text("Rules combine with AND / OR / NOT. An empty AND or OR group matches everything; NOT inverts its rule.").font(.caption).foregroundStyle(.secondary)
                 ScrollView {
                     if let root = Binding($ruleRoot) {
-                        RuleNodeView(store: store, rule: root, depth: 0, onDelete: { ruleRoot = nil; advanced = false })
+                        RuleNodeView(store: store, rule: root, depth: 0, path: "root", onDelete: { ruleRoot = nil; advanced = false })
                     } else {
                         Button("Add Rule Group") { ruleRoot = .and([]) }
                     }
-                    customRangeRow
+                    customRangeRow.padding(.top, 10)
                 }.frame(height: 340)
             } else {
                 Form {
@@ -172,65 +171,103 @@ private struct RuleNodeView: View {
     @ObservedObject var store: TaskStore
     @Binding var rule: FilterRule
     var depth: Int
-    var onDelete: () -> Void
+    var path: String
+    var onDelete: (() -> Void)? = nil
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        switch rule {
+        case .and(let children): group("AND", detail: "All conditions", children: children)
+        case .or(let children): group("OR", detail: "Any condition", children: children)
+        case .not(let child):
+            VStack(alignment: .leading, spacing: 6) {
+                operatorHeader("NOT", detail: "Invert condition")
+                nested {
+                    RuleNodeView(store: store, rule: childBindingSingle(child), depth: depth + 1, path: path + "-not")
+                }
+            }.modifier(MacFilterGroupSurface())
+        case .condition(let condition):
             HStack(spacing: 8) {
-                Menu {
-                    // Conversions preserve conditions (see FilterRuleEdit):
-                    // groups keep their children with no inserted placeholder,
-                    // leaves wrap. The single-condition collapse is offered
-                    // only when it loses nothing.
-                    Button("All of (AND)") { rule = FilterRuleEdit.convertToAnd(rule) }
-                    Button("Any of (OR)") { rule = FilterRuleEdit.convertToOr(rule) }
-                    Button("Not") { rule = FilterRuleEdit.convertToNot(rule, depth: depth) }.disabled(depth >= FilterRuleEdit.maxDepth)
-                    if FilterRuleEdit.convertToCondition(rule) != rule {
-                        Button("Unwrap single condition") { rule = FilterRuleEdit.convertToCondition(rule) }
-                    }
-                } label: {
-                    HStack(spacing: 4) { Text(nodeTitle).font(.system(size: 13, weight: .semibold)); Image(systemName: "chevron.down").font(.system(size: 9)) }.foregroundStyle(.secondary)
-                }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
-                Spacer()
-                Button { onDelete() } label: { Image(systemName: "minus.circle").foregroundStyle(.secondary) }.buttonStyle(.plain).help("Remove rule")
+                FilterConditionView(store: store, condition: conditionBinding(condition), path: path)
+                Spacer(minLength: 0)
+                actions
             }
-            switch rule {
-            case .and(let children), .or(let children):
-                if children.isEmpty {
-                    Text("Empty group matches everything.").font(.caption).foregroundStyle(.secondary)
-                }
-                ForEach(children.indices, id: \.self) { index in
-                    RuleNodeView(store: store, rule: childBinding(index), depth: depth + 1, onDelete: { removeChild(index) })
-                        .padding(.leading, 12)
-                        .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 2).padding(.vertical, 2) }
-                }
-                if depth < 3 {
-                    HStack(spacing: 12) {
-                        Button("Add Condition") { addChild(.condition(FilterCondition(kind: .keyword, keyword: ""))) }
-                        Button("Add AND Group") { addChild(.and([])) }
-                        Button("Add OR Group") { addChild(.or([])) }
-                        Button("Add NOT") { addChild(.not(.condition(FilterCondition(kind: .keyword, keyword: "")))) }
-                    }.font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(accent)
-                } else {
-                    Button("Add Condition") { addChild(.condition(FilterCondition(kind: .keyword, keyword: ""))) }.font(.system(size: 12)).buttonStyle(.plain).foregroundStyle(accent)
-                }
-            case .not(let child):
-                // A NOT wraps exactly one child, so removing the child
-                // removes the NOT itself (never a silent match-all swap).
-                RuleNodeView(store: store, rule: childBindingSingle(child), depth: depth + 1, onDelete: onDelete)
-                    .padding(.leading, 12)
-                    .overlay(alignment: .leading) { Rectangle().fill(Color.secondary.opacity(0.25)).frame(width: 2).padding(.vertical, 2) }
-            case .condition(let condition):
-                FilterConditionView(store: store, condition: conditionBinding(condition))
-            }
+            .padding(.leading, 8)
+            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 6))
         }
-        .padding(10)
-        .background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 8))
     }
 
-    private var nodeTitle: String {
-        switch rule { case .and: return "All of"; case .or: return "Any of"; case .not: return "Not"; case .condition: return "If" }
+    private func operatorHeader(_ title: String, detail: String) -> some View {
+        HStack(spacing: 8) {
+            Text(title).font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(accent)
+                .padding(.horizontal, 6).padding(.vertical, 3)
+                .background(accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                .accessibilityIdentifier("macFilterOperator-" + path)
+            Text(detail).font(.system(size: 12)).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            actions
+        }
     }
+
+    private var actions: some View {
+        Menu {
+            switch rule {
+            case .and:
+                Button("Change to OR") { rule = FilterRuleEdit.convertToOr(rule) }
+            case .or:
+                Button("Change to AND") { rule = FilterRuleEdit.convertToAnd(rule) }
+            case .not(let child):
+                Button("Remove NOT") { rule = child }
+                Button("Group with AND") { rule = FilterRuleEdit.convertToAnd(rule) }
+                Button("Group with OR") { rule = FilterRuleEdit.convertToOr(rule) }
+            case .condition:
+                Button("Group with AND") { rule = FilterRuleEdit.convertToAnd(rule) }
+                Button("Group with OR") { rule = FilterRuleEdit.convertToOr(rule) }
+            }
+            Button("Wrap in NOT") { rule = FilterRuleEdit.convertToNot(rule, depth: depth) }
+                .disabled(depth >= FilterRuleEdit.maxDepth)
+            if FilterRuleEdit.convertToCondition(rule) != rule {
+                Button("Unwrap single condition") { rule = FilterRuleEdit.convertToCondition(rule) }
+            }
+            if let onDelete { Button("Remove rule", role: .destructive, action: onDelete) }
+        } label: {
+            Image(systemName: "ellipsis").frame(width: 28, height: 24).contentShape(Rectangle())
+        }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+            .help("Rule actions").accessibilityLabel("Rule actions").accessibilityIdentifier("macFilterActions-" + path)
+    }
+
+    private func group(_ title: String, detail: String, children: [FilterRule]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            operatorHeader(title, detail: detail)
+            if children.isEmpty {
+                Text("Empty group matches all eligible tasks.").font(.caption).foregroundStyle(.secondary)
+            }
+            ForEach(children.indices, id: \.self) { index in
+                nested {
+                    RuleNodeView(store: store, rule: childBinding(index), depth: depth + 1,
+                                 path: path + "-\(index)", onDelete: { removeChild(index) })
+                }
+            }
+            Menu {
+                Button("Add Condition") { addChild(Self.staleCondition) }
+                if depth < FilterRuleEdit.maxDepth {
+                    Button("Add AND Group") { addChild(.and([])) }
+                    Button("Add OR Group") { addChild(.or([])) }
+                    Button("Add NOT") { addChild(.not(Self.staleCondition)) }
+                }
+            } label: {
+                Label("Add", systemImage: "plus").font(.system(size: 12)).foregroundStyle(accent)
+            }.menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
+                .accessibilityIdentifier("macFilterAdd-" + path)
+        }.modifier(MacFilterGroupSurface())
+    }
+
+    private func nested<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(.leading, depth < FilterRuleEdit.maxDepth ? 9 : 4)
+            .overlay(alignment: .leading) { Capsule().fill(accent.opacity(0.28)).frame(width: 2) }
+    }
+
     /// A stale index (the tree changed under the row) reads as an empty
     /// condition and writes/removals no-op instead of trapping.
     private static let staleCondition = FilterRule.condition(FilterCondition(kind: .keyword, keyword: ""))
@@ -249,7 +286,7 @@ private struct RuleNodeView: View {
         Binding(get: {
             if case .not(let c) = rule { return c }
             return child
-        }, set: { rule = .not($0) })
+        }, set: { if case .not = rule { rule = .not($0) } })
     }
     private func conditionBinding(_ condition: FilterCondition) -> Binding<FilterCondition> {
         Binding(get: {
@@ -273,16 +310,24 @@ private struct RuleNodeView: View {
     }
 }
 
+private struct MacFilterGroupSurface: ViewModifier {
+    func body(content: Content) -> some View {
+        content.padding(8)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 8))
+    }
+}
+
 private struct FilterConditionView: View {
     @ObservedObject var store: TaskStore
     @Binding var condition: FilterCondition
+    let path: String
 
     var body: some View {
         HStack(spacing: 8) {
             Picker("Kind", selection: $condition.kind) {
                 ForEach(FilterConditionKind.allCases, id: \.self) { Text($0.label).tag($0) }
             }.pickerStyle(.menu).fixedSize().labelsHidden()
-            .accessibilityLabel("Condition kind")
+            .accessibilityLabel("Condition kind").accessibilityIdentifier("macFilterKind-" + path)
             .onChange(of: condition.kind) { _, kind in seedDefaults(for: kind) }
             valueView
         }
@@ -330,19 +375,20 @@ private struct FilterConditionView: View {
                 Text("Won't Do").tag(FilterStatus.wontDo); Text("All").tag(FilterStatus.all)
             }.pickerStyle(.menu).fixedSize().labelsHidden()
         case .keyword:
-            TextField("Keyword", text: Binding(get: { condition.keyword ?? "" }, set: { condition.keyword = $0 })).textFieldStyle(.roundedBorder)
+            TextField("Keyword", text: Binding(get: { condition.keyword ?? "" }, set: { condition.keyword = $0 }))
+                .textFieldStyle(.roundedBorder).accessibilityIdentifier("macFilterKeyword-" + path)
         case .noTags, .repeating:
-            Text(condition.kind.label).font(.system(size: 13)).foregroundStyle(.secondary)
+            EmptyView()
         }
     }
 
     private var listName: String {
         guard let id = condition.listID else { return "Choose list" }
         if id == TaskFilter.inboxListID { return "Inbox" }
-        return store.data.lists.first { $0.id == id }?.name ?? "Unknown list"
+        return store.data.lists.first { $0.id == id }?.name ?? "Unavailable list"
     }
     private var tagName: String {
         guard let id = condition.tagID else { return "Choose tag" }
-        return store.data.tags.first { $0.id == id }?.name ?? "Unknown tag"
+        return store.data.tags.first { $0.id == id }?.name ?? "Unavailable tag"
     }
 }

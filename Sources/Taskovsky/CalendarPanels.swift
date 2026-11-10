@@ -297,17 +297,7 @@ struct CalendarArrangePanel: View {
             overdue: overdue, calendar: calendar, selection: selection)
     }
     private var groups: [(String, [TaskItem])] {
-        var result: [String: [TaskItem]] = [:]
-        for task in tasks {
-            let key: String
-            switch grouping {
-            case .list: key = task.listID.flatMap { id in store.data.lists.first { $0.id == id }?.name } ?? "Inbox"
-            case .tag: key = task.tagIDs.first.flatMap { id in store.data.tags.first { $0.id == id }?.name } ?? "No Tags"
-            case .priority: key = task.priority.rawValue.capitalized
-            }
-            result[key, default: []].append(task)
-        }
-        return result.keys.sorted().map { ($0, result[$0] ?? []) }
+        TaskCalendarProjection.arrangementGroups(tasks, data: store.data, grouping: grouping)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {

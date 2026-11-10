@@ -4,6 +4,36 @@ import Foundation
 /// other clients supply a frozen clock and fallback calendar explicitly.
 public enum TaskDestination: Hashable, Sendable {
     case all, today, tomorrow, week, inbox, notes, reminders, completed, wontDo, summary, search, trash, list(UUID), tag(UUID), filter(UUID)
+
+    public var smartKey: SmartListKey? {
+        switch self {
+        case .all: .all
+        case .today: .today
+        case .tomorrow: .tomorrow
+        case .week: .week
+        case .inbox: .inbox
+        case .summary: .summary
+        case .completed: .completed
+        case .wontDo: .wontDo
+        case .trash: .trash
+        default: nil
+        }
+    }
+
+    public init?(smartKey: SmartListKey) {
+        switch smartKey {
+        case .all: self = .all
+        case .today: self = .today
+        case .tomorrow: self = .tomorrow
+        case .week: self = .week
+        case .inbox: self = .inbox
+        case .summary: self = .summary
+        case .completed: self = .completed
+        case .wontDo: self = .wontDo
+        case .trash: self = .trash
+        case .tags, .filters: return nil
+        }
+    }
     public func includes(_ task: TaskItem, data: WorkspaceData, now: Date = Date(), calendar: Calendar = .current) -> Bool {
         if self == .trash { return task.deletedAt != nil }
         guard task.deletedAt == nil else { return false }
