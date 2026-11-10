@@ -1489,6 +1489,42 @@ final class LifecycleRepositoryTests: XCTestCase {
 }
 
 extension ReadOnlyWorkspaceTests {
+    func testEndReminderRoundTripsAndCalendarUndoRestoresItsAnchor() async throws {
+        let due = Date(timeIntervalSinceReferenceDate: 815_918_400)
+        let task = TaskItem(title: "Timed task", dueDate: due, hasDueTime: true,
+                            reminderFollowsSchedule: false, scheduledDuration: .init(start: due - 3_600, end: due))
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let first = repository(files), initial = try await first.load()
+        let calendar = initial.snapshot.settings.calendar
+        let originalJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: initial.snapshot.workspaceBytes) as? [String: Any])
+        XCTAssertTrue(originalJSON["tasks"] is [[String: Any]])
+        var edit = TaskScheduleEdit(task: task, settings: initial.snapshot.settings, calendar: calendar, now: due)
+        edit.remindsAtEnd = true
+        guard case .saved(let saved, nil) = await first.apply(edit, expected: initial.revision) else {
+            return XCTFail("Expected a durable end reminder")
+        }
+        let savedJSON = try XCTUnwrap(JSONSerialization.jsonObject(with: saved.snapshot.workspaceBytes) as? [String: Any])
+        XCTAssertEqual((savedJSON["tasks"] as? [String: Any])?["format"] as? String, "endRemindersV1")
+        XCTAssertEqual(saved.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        let second = repository(files), reloaded = try await second.load()
+        XCTAssertEqual(reloaded.snapshot.workspace.tasks.first?.effectiveReminderDates, [due])
+        XCTAssertEqual(reloaded.snapshot.workspace.tasks.first?.reminderDates, [])
+        guard case .saved(let moved, let undo?) = await second.apply(.resizeEnd(due + 900), to: task.id,
+                                                                    expected: reloaded.revision, calendar: calendar) else {
+            return XCTFail("Expected an end edit and Undo")
+        }
+        XCTAssertEqual(moved.snapshot.workspace.tasks.first?.endReminderDate, due + 900)
+        guard case .saved(let renamed) = await second.apply(.title("Renamed"), to: task.id, expected: moved.revision),
+              case .saved(let restored, nil) = await second.undo(undo) else {
+            return XCTFail("Expected title edit and scoped Undo in the protected file")
+        }
+        XCTAssertEqual(renamed.snapshot.workspace.tasks.first?.endReminderDate, due + 900)
+        XCTAssertEqual(restored.snapshot.workspace.tasks.first?.title, "Renamed")
+        XCTAssertEqual(restored.snapshot.workspace.tasks.first?.endReminderDate, due)
+        XCTAssertEqual(restored.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+    }
+
     func testScheduleNoOpPreservesPreciseRolledSeriesAndBytes() async throws {
         let due = Date(timeIntervalSinceReferenceDate: 815_918_400.125)
         var task = TaskItem(title: "Precise recurring task", dueDate: due, hasDueTime: true,

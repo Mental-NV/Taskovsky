@@ -5,6 +5,10 @@ public enum TaskScheduleValidation: Error, Equatable, Sendable {
 }
 
 extension TaskSchedulePolicy {
+    package static func normalizeEndReminder(of task: inout TaskItem) {
+        if task.endReminderDate == nil { task.endReminderEnabled = false }
+    }
+
     public static func usesDefaultReminder(_ task: TaskItem, settings: AppSettings, calendar: Calendar) -> Bool {
         if let follows = task.reminderFollowsSchedule { return follows }
         guard !task.reminderDates.isEmpty else { return true }
@@ -59,6 +63,7 @@ public struct TaskScheduleEdit: Sendable {
     public private(set) var zoneID: String?
     public var usesAutomaticReminders: Bool
     public var manualReminders: [Date]
+    public var remindsAtEnd: Bool
     public private(set) var repeatRule: RepeatRule
     public private(set) var customRule: CustomRecurrence?
     public var repeatEnd: Date?
@@ -70,6 +75,7 @@ public struct TaskScheduleEdit: Sendable {
         initiallyAutomatic = TaskSchedulePolicy.usesDefaultReminder(task, settings: settings, calendar: calendar)
         usesAutomaticReminders = initiallyAutomatic
         manualReminders = task.reminderDates
+        remindsAtEnd = task.endReminderEnabled
         repeatRule = task.recurrence
         customRule = task.customRecurrence
         repeatEnd = task.recurrenceEndDate
@@ -86,6 +92,13 @@ public struct TaskScheduleEdit: Sendable {
     }
 
     public var hasKnownZone: Bool { zoneID.map { TimeZone(identifier: $0) != nil } ?? true }
+
+    public var timedDurationEnd: Date? {
+        guard hasDate, let duration = schedule.duration, !duration.isAllDay,
+              let valid = duration.validated(in: calendar), valid.start.timeIntervalSinceReferenceDate.isFinite,
+              valid.end.timeIntervalSinceReferenceDate.isFinite else { return nil }
+        return valid.end
+    }
 
     public mutating func chooseDay(_ day: Date) {
         let calendar = calendar
@@ -177,6 +190,7 @@ public struct TaskScheduleEdit: Sendable {
             cleared.timeZoneID = nil
             cleared.reminderDates = []
             cleared.reminderFollowsSchedule = nil
+            cleared.endReminderEnabled = false
             cleared.recurrence = .none
             cleared.customRecurrence = nil
             cleared.recurrenceEndDate = nil
@@ -194,7 +208,8 @@ public struct TaskScheduleEdit: Sendable {
         let repeatChanged = repeatRule != original.rule || customRule != original.custom || repeatEnd != original.end
         let remindersChanged = usesAutomaticReminders != initiallyAutomatic ||
             (!usesAutomaticReminders && manualReminders != original.reminders)
-        guard shapeChanged || repeatChanged || remindersChanged else { return task }
+        let endReminder = remindsAtEnd && timedDurationEnd != nil
+        guard shapeChanged || repeatChanged || remindersChanged || endReminder != task.endReminderEnabled else { return task }
         guard hasKnownZone else { throw TaskScheduleValidation.invalidTimeZone }
         guard customRule?.isValid != false else { throw TaskScheduleValidation.invalidRepeat }
         var updated = task
@@ -225,6 +240,7 @@ public struct TaskScheduleEdit: Sendable {
             updated.reminderDates = manualReminders
             updated.reminderFollowsSchedule = false
         }
+        updated.endReminderEnabled = endReminder
         TaskSchedulePolicy.reconcileSeries(of: &updated, from: task)
         return updated
     }

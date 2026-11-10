@@ -182,6 +182,8 @@ Mac and iPhone Tasks can skip an eligible open occurrence through the same sched
 
 **Current rule.** Multiple reminder instants are stored as a sorted, deduplicated set through the `reminderDates` accessor. Defaults distinguish timed offsets from all-day reminders at 09:00 on selected relative days. Provenance distinguishes schedule-following defaults from manual reminders: schedule/zone changes recalculate defaults while manual choices remain explicit. Detail shows the earliest reminder and total count; dismiss clears all, and snooze replaces the earliest reminder. Archived lists suppress reminder presentation/eligibility; smart-list exclusion alone does not remove reminders.
 
+Timed task durations can have a separate At the end reminder. Its effective instant comes from the saved endpoint. Default and manual reminders keep their existing behavior, and coincident instants display once. A saved point or all-day conversion clears the end reminder. Schedule Undo and occurrence baselines include the preference. [Duration end reminder](../changes/task-duration-end-reminders-2026-11-10.md).
+
 Taskovsky stores these reminders and exposes in-app reminder information. There is no operating-system notification scheduling/delivery implementation in the inspected package. An optional zone ID is not a complete TickTick Fixed/Floating Time mode: an explicit floating-time model is absent.
 
 **Acceptance.** Select multiple defaults, move the due date and inspect recalculated reminders; manually override one and repeat. Check all-day 09:00 and task-zone DST behavior. Archive/unarchive a list without deleting its reminder data. Do not use a stored reminder as proof that a notification will fire.

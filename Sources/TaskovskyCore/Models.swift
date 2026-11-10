@@ -13,12 +13,14 @@ public struct OccurrenceSchedule: Codable, Equatable, Sendable {
     let reminder: Date?
     let additionalReminders: [Date]?
     let followsSchedule: Bool?
+    let reminderAtEnd: Bool?
 
     init?(task: TaskItem) {
         guard let due = task.dueDate else { return nil }
         self.due = due; timed = task.hasDueTime; window = task.scheduledDuration
         reminder = task.reminderDate; additionalReminders = task.additionalReminderDates
         followsSchedule = task.reminderFollowsSchedule
+        reminderAtEnd = task.endReminderEnabled ? true : nil
     }
 
     func restoring(on task: TaskItem) -> TaskItem {
@@ -26,6 +28,7 @@ public struct OccurrenceSchedule: Codable, Equatable, Sendable {
         task.dueDate = due; task.hasDueTime = timed; task.scheduledDuration = window
         task.reminderDate = reminder; task.additionalReminderDates = additionalReminders
         task.reminderFollowsSchedule = followsSchedule
+        task.endReminderEnabled = reminderAtEnd == true
         task.originalOccurrenceSchedule = nil
         return task
     }
@@ -65,6 +68,23 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
     }
     /// Whether the reminder follows the configured schedule default; nil denotes legacy data.
     public var reminderFollowsSchedule: Bool?
+    private var reminderAtEnd: Bool? = nil
+    public var endReminderEnabled: Bool {
+        get { reminderAtEnd == true }
+        set { reminderAtEnd = newValue ? true : nil }
+    }
+    public var endReminderDate: Date? {
+        guard endReminderEnabled, hasDueTime, let window = scheduledDuration, !window.isAllDay,
+              dueDate == window.end, window.start <= window.end,
+              window.start.timeIntervalSinceReferenceDate.isFinite, window.end.timeIntervalSinceReferenceDate.isFinite else { return nil }
+        return window.end
+    }
+    /// The visible reminders include the derived endpoint without adding it to the stored manual/default dates.
+    public var effectiveReminderDates: [Date] {
+        let dates = reminderDates
+        guard let end = endReminderDate, !dates.contains(end) else { return dates }
+        return (dates + [end]).sorted()
+    }
     public var priority: TaskPriority
     public var recurrence: RepeatRule
     public var checklist: [ChecklistItem]
@@ -221,7 +241,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
              additionalReminderDates, reminderFollowsSchedule, priority, recurrence, checklist,
              completedAt, deletedAt, createdAt, updatedAt, recurrenceAnchorDay, recurrenceAnchorMonth,
              recurrenceSourceID, recurrenceEndDate, wontDoAt, timeZoneID, customRecurrence, occurrenceIndex, parentID, scheduledDuration,
-             richBody, isPinned, recurrenceNominalDate, originalOccurrenceSchedule, sectionID, manualProgress
+             richBody, isPinned, recurrenceNominalDate, originalOccurrenceSchedule, sectionID, manualProgress, reminderAtEnd
     }
 
     public init(from decoder: Decoder) throws {
@@ -238,6 +258,7 @@ public struct TaskItem: Codable, Identifiable, Equatable, Sendable {
         reminderDate = try c.decodeIfPresent(Date.self, forKey: .reminderDate)
         additionalReminderDates = try c.decodeIfPresent([Date].self, forKey: .additionalReminderDates)
         reminderFollowsSchedule = try c.decodeIfPresent(Bool.self, forKey: .reminderFollowsSchedule)
+        reminderAtEnd = try c.decodeIfPresent(Bool.self, forKey: .reminderAtEnd)
         priority = try c.decode(TaskPriority.self, forKey: .priority)
         recurrence = try c.decode(RepeatRule.self, forKey: .recurrence)
         checklist = try c.decode([ChecklistItem].self, forKey: .checklist)
@@ -448,11 +469,12 @@ public struct WorkspaceData: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey { case tasks, lists, tags, filters, templates, folders, completionCascades, trashCascades }
     // Older writers require an array or a recognized envelope before saving.
     private struct ProtectedTaskRecords: Codable {
-        enum Format: String, Codable { case occurrenceSchedulesV1, listSectionsV1, richCodeBlocksV1, richHighlightColorsV1, taskProgressV1 }
+        enum Format: String, Codable { case occurrenceSchedulesV1, listSectionsV1, richCodeBlocksV1, richHighlightColorsV1, taskProgressV1, endRemindersV1 }
         let format: Format
         let records: [TaskItem]
     }
     private var protectedTaskFormat: ProtectedTaskRecords.Format? {
+        if tasks.contains(where: { $0.endReminderEnabled || $0.originalOccurrenceSchedule?.reminderAtEnd == true }) { return .endRemindersV1 }
         if tasks.contains(where: { $0.manualProgress != nil }) { return .taskProgressV1 }
         if tasks.contains(where: { $0.richBody?.hasCustomHighlightColors == true }) ||
             templates.contains(where: { $0.richBody?.hasCustomHighlightColors == true }) {

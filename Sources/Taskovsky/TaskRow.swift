@@ -211,7 +211,9 @@ struct TaskRow: View {
                 }
                 if showTag, let tag { Text("#" + tag.name).foregroundStyle(finished ? metaColor : Color(hex: tag.color)).truncationMode(.tail).frame(maxWidth: 96, alignment: .trailing) }
                 if task.isRepeating { Image(systemName: "repeat").foregroundStyle(metaColor).help(task.repeatLabel()) }
-                if task.reminderDate != nil { Image(systemName: "bell").foregroundStyle(finished ? metaColor : task.reminderDate! <= now ? .orange : .secondary) }
+                if let reminder = task.effectiveReminderDates.first {
+                    Image(systemName: "bell").foregroundStyle(finished ? metaColor : reminder <= now ? .orange : .secondary)
+                }
             }
             if let due = task.dueDate { Text(dueText(due)).foregroundStyle(dueColor(due)) }
         }.font(.system(size: 10)).lineLimit(1)

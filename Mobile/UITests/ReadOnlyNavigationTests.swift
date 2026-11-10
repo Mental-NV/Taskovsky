@@ -1723,6 +1723,41 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(app.buttons["editSchedule"].label, original)
     }
 
+    @MainActor func testTimedDurationEndReminderStagesAndSurvivesRelaunch() {
+        let app = launch(), task = "Prepare the weekly plan"
+        _ = openSchedule(app, task: task)
+        let toggle = app.switches["scheduleReminderAtEnd"]
+        let caption = app.staticTexts["scheduleEndReminderDate"]
+        func enable() {
+            reveal(toggle, in: app)
+            XCTAssertEqual(toggle.value as? String, "0")
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+            XCTAssertEqual(toggle.value as? String, "1")
+            XCTAssertTrue(caption.exists)
+        }
+        enable()
+        app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(app.buttons["scheduleDone"].waitForExistence(timeout: 5))
+        enable()
+        attach(app, "Timed duration reminder at the end")
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        _ = openSchedule(app, task: task)
+        reveal(toggle, in: app)
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertTrue(caption.exists)
+        let duration = app.switches["scheduleDuration"]
+        reveal(duration, in: app, towardTop: true)
+        duration.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertFalse(toggle.exists)
+        app.buttons["scheduleCancel"].tap()
+    }
+
     @MainActor private func stageTaskScheduleSkip(in app: XCUIApplication) {
         let skip = app.buttons["scheduleSkipOccurrence"]
         reveal(skip, in: app)

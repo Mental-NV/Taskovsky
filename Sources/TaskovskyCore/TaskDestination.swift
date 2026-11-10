@@ -70,7 +70,7 @@ public enum TaskDestination: Hashable, Sendable {
         case .week: return task.dueDate.map { $0 < cal.date(byAdding: .day, value: 7, to: day)! } == true
         case .inbox: return task.listID == nil
         case .notes: return task.kind == .note
-        case .reminders: return task.reminderDate != nil
+        case .reminders: return !task.effectiveReminderDates.isEmpty
         case .list(let id): return task.listID == id
         case .folder(let id):
             return data.folders.contains { $0.id == id } && data.lists.contains {

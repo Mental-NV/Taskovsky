@@ -144,13 +144,14 @@ struct TaskDetail: View {
 
     @ViewBuilder
     private var reminderSection: some View {
-        if let reminder = task.reminderDates.first, !archivedView {
+        let dates = task.effectiveReminderDates
+        if let reminder = dates.first, !archivedView {
             HStack(spacing: 8) {
                 Image(systemName: "bell")
-                Text((reminder <= Date() ? "Reminder due · " : "Remind me ") + task.dayText(reminder) + " at " + task.timeText(reminder) + (task.reminderDates.count > 1 ? " · \(task.reminderDates.count) reminders" : ""))
+                Text((reminder <= Date() ? "Reminder due · " : "Remind me ") + task.dayText(reminder) + " at " + task.timeText(reminder) + (dates.count > 1 ? " · \(dates.count) reminders" : ""))
                 Spacer()
                 if reminder <= Date() && !isDeleted { Menu { Button("In 10 minutes") { setReminder(Date().addingTimeInterval(600)) }; Button("In 1 hour") { setReminder(Date().addingTimeInterval(3600)) }; Button("Tomorrow") { setReminder(Calendar.current.date(byAdding: .day, value: 1, to: Date())!) } } label: { Image(systemName: "clock.arrow.circlepath") }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Snooze reminder") }
-                if !isDeleted { Button { var updated = task; updated.reminderDates = []; store.updateTask(updated) } label: { Image(systemName: "xmark").font(.system(size: 9)) }.buttonStyle(.plain).help("Dismiss all reminders") }
+                if !isDeleted { Button { var updated = task; updated.reminderDates = []; updated.endReminderEnabled = false; store.updateTask(updated) } label: { Image(systemName: "xmark").font(.system(size: 9)) }.buttonStyle(.plain).help("Dismiss all reminders") }
             }.font(.system(size: 11)).foregroundStyle(reminder <= Date() ? .orange : .secondary).padding(10).background(Color.primary.opacity(0.03), in: RoundedRectangle(cornerRadius: 6))
         }
     }
@@ -381,7 +382,13 @@ struct TaskDetail: View {
         if store.addSubtask(to: task.id, title: title) != nil { newSubtask.wrappedValue = "" }
         subtaskFocused = true
     }
-    private func setReminder(_ date: Date) { var updated = task; var dates = task.reminderDates; if !dates.isEmpty { dates.removeFirst() }; dates.append(date); updated.reminderDates = dates; store.updateTask(updated) }
+    private func setReminder(_ date: Date) {
+        guard let earliest = task.effectiveReminderDates.first else { return }
+        var updated = task
+        if earliest == task.endReminderDate { updated.endReminderEnabled = false }
+        updated.reminderDates = task.reminderDates.filter { $0 != earliest } + [date]
+        store.updateTask(updated)
+    }
     private func dueHeaderText(_ due: Date) -> String {
         let cal = task.scheduleCalendar
         let timed = task.hasDueTime ? ", " + task.timeText(due) : ""
