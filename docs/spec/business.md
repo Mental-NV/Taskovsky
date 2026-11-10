@@ -78,6 +78,8 @@ Date recognition is a limited English parser: today, tomorrow, day after tomorro
 
 Bulk list moves validate the entire explicit batch before writing: empty, duplicate, unknown or deleted IDs and invalid/archived destinations refuse without a partial move. Descendants follow a valid parent move, including descendants whose deleted state is retained. Moving out of an archived list is allowed.
 
+On iPhone, the parent picker stages the link and names the destination for a cross-list move. It lists active task candidates. Adding a child gives it the parent’s list and the configured insertion position. Desktop and the phone repository call the same graph operations. [Phone verification](verification.md#mobile-task-hierarchy).
+
 **Acceptance.** Move a parent with a grandchild, then move only the child to a different list; verify list membership and parent links. Reject a cycle without saving it. Filter to a child alone and verify it remains visible. Reject one invalid ID mixed into an otherwise valid move.
 
 **Evidence.** [TaskStore parenting](../../Sources/TaskovskyCore/TaskStore.swift); [Shared list movement](../../Sources/TaskovskyCore/TaskLifecycle.swift); [TaskHierarchy](../../Sources/TaskovskyCore/Organization.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [ReorderTests](../../Tests/TaskovskyCoreTests/ReorderTests.swift).
@@ -124,7 +126,7 @@ Undo removes a spawned record only when it can prove that record is unchanged fr
 
 **Current rule.** Duplicating a task copies its non-deleted subtree with fresh IDs and remapped internal links; the root reopens, descendant statuses remain, and recurrence-source links are cut. Duplicating a list copies its non-deleted records, remaps parents within the copy, preserves content/schedule/status/view mode, and makes the new list unarchived and unpinned.
 
-Templates capture one record's title, body/styles, quick steps, priority, valid tags, kind, custom rule and duration shape. They do not recursively capture linked children or the complete live record (for example, ordinary due/reminder settings and legacy recurrence are not a full template snapshot). Applying a template changes its supported fields on the current record and preserves existing hierarchy; custom-rule changes reset the occurrence index. Template creation/use regenerates quick-step IDs. Save as Template appends a new template; Settings cards open direct editing of that existing template. Built-ins include a travel checklist with five quick steps. Active task pins form a Pinned group; pin state survives completion/trash even though inactive records cannot be newly pinned.
+Templates capture one record's title, body/styles, quick steps, priority, valid tags, kind, custom rule and duration shape. They do not recursively capture linked children or the complete live record (for example, ordinary due/reminder settings and legacy recurrence are not a full template snapshot). Applying a template changes its supported fields on the current record and preserves existing hierarchy; custom-rule changes reset the occurrence index. Instantiating or applying a template regenerates quick-step IDs. Save as Template appends a new template. Mac Settings cards and the iPhone drawer open the saved template for editing. Unchanged description and checklist content, the custom repeat rule and the duration survive metadata edits. The iPhone reduced editor protects styled descriptions. [Template verification](verification.md#mobile-templates). Built-ins include a travel checklist with five quick steps. Active task pins form a Pinned group; pin state survives completion/trash even though inactive records cannot be newly pinned.
 
 **Acceptance.** Duplicate a nested task and check no copied child points to an original ancestor inside the copied subtree. Instantiate a template after deleting one of its tags; the missing tag must not return. Apply a template to a task with children and verify those links remain. Reopen a previously pinned task and inspect its grouping.
 
@@ -190,6 +192,8 @@ Taskovsky stores these reminders and exposes in-app reminder information. There 
 
 **Current rule.** Lists have name, color/symbol, task/note kind, optional folder, list/board mode, smart-list inclusion, archive and pin state. Folders group lists one level deep. List/folder names are validated in their editors; a store operation is not a substitute for UI validation. Ungroup preserves lists and tasks. Deleting a list moves its records to Inbox rather than deleting them, and keeps saved-filter references to the now-unavailable list instead of broadening that filter. List moves/reorders preserve task membership except when the operation explicitly moves tasks.
 
+The phone manager uses staged list and folder edits. It shares deletion, duplication, ungrouping and reorder operations with Desktop. [Phone verification](verification.md#mobile-list-organization).
+
 **Acceptance.** Create a list in a folder, rename it, move it to the root, then ungroup the folder and reload. Verify task IDs/content remain. Delete a list referenced by a filter and inspect both Inbox records and the unavailable filter selection.
 
 **Evidence.** [Models](../../Sources/TaskovskyCore/Models.swift); [TaskStore list/folder operations](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail entity editor](../../Sources/Taskovsky/TaskDetail.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
@@ -210,13 +214,15 @@ Eligibility is **not universal**. In `Destination.includes`, All/Today/Tomorrow/
 
 ### BUS-017 — Tags, hierarchy and merging
 
-**Current rule.** Tags have name, color, parent, collapse and pin state. Creation trims leading `#` characters and reuses case-insensitive normalized names. Parent changes refuse unknown/self/cyclic links. Parent-tag navigation includes descendant tags; saved-filter tag predicates match selected IDs rather than automatically expanding the hierarchy.
+**Current rule.** Tags have name, color, parent, collapse and pin state. Creation trims leading `#` characters. Desktop returns an existing case-insensitive normalized match. The iPhone form asks for a unique name when creating or renaming. Parent changes refuse unknown/self/cyclic links. Parent-tag navigation includes descendant tags; saved-filter tag predicates match selected IDs rather than automatically expanding the hierarchy.
 
 Merge rewrites task/template/filter references, deduplicates IDs, follows the default tag and reparents children without cycles before deleting the source. Delete removes memberships from tasks/templates and clears a matching default, promotes children, but deliberately retains unavailable tag IDs in filter criteria/rules so deletion does not broaden the filter.
 
 **Acceptance.** Merge a parent into a descendant with both tags already on a task; verify one target membership, acyclic hierarchy and updated filter predicates. Delete a referenced tag and inspect unavailable criteria. Compare parent-tag navigation with a filter selecting that parent ID.
 
-**Evidence.** [TaskStore tag operations](../../Sources/TaskovskyCore/TaskStore.swift); [TagHierarchy](../../Sources/TaskovskyCore/Organization.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
+The phone stages name, color, parent and pin edits. It saves sibling reorder and collapse directly. A merge or delete that changes the default tag journals the paired workspace and settings writes, and recovery stops if either file differs from both recorded revisions.
+
+**Evidence.** [Shared tag rules](../../Sources/TaskovskyCore/TagOrganization.swift); [TaskStore tag operations](../../Sources/TaskovskyCore/TaskStore.swift); [TagHierarchy](../../Sources/TaskovskyCore/Organization.swift); [iPhone verification](verification.md#mobile-tag-management); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
 
 <a id="bus-018"></a>
 
@@ -225,6 +231,8 @@ Merge rewrites task/template/filter references, deduplicates IDs, follows the de
 **Current rule.** Configurable smart entries include All, Today, Tomorrow, Next 7 Days, Inbox, Summary, Tags, Filters, Completed, Won't Do and Trash. Settings support Show, Hide and Show if not empty, plus persisted ordering within the supported smart groups. Hiding the active destination selects a visible fallback. Notes and Reminders also exist as application destinations, not additional members of `SmartListKey`.
 
 Today includes all active dated records before tomorrow, including overdue work. Next 7 Days includes all active dated records before the seventh day boundary, also including overdue work. Tomorrow is a same-day match. These destination predicates differ from the bounded Today/Next 7 filter rules. Counts and presentation should be reviewed against the actual destination, not assumed interchangeable with search criteria.
+
+The phone uses the shared visibility and ordering rules for its drawer. It saves the changes together on Done and reselects a visible destination when the active one disappears. [Phone verification](verification.md#mobile-smart-lists).
 
 **Acceptance.** Give one task an overdue due date and inspect Today/Next 7 Days versus their saved-filter equivalents. Hide/show/reorder entries, reload and verify hidden slots and group boundaries remain meaningful.
 
@@ -244,7 +252,7 @@ Today includes all active dated records before tomorrow, including overdue work.
 
 ### BUS-020 — Status board
 
-**Current rule.** List/Board is persisted per list and copied by list duplication. The board projects all non-deleted records of its list regardless of the list-row Show Completed toggle, with fixed Open, Completed and Won't Do columns. Cards are flat rather than nested. UI status drops reuse shared task actions and refuse terminal-state drops for notes; archive remains read-only. There is no custom section/column model. The projection itself splits stored status flags, so UI note restrictions must not be mistaken for a model-wide normalization guarantee.
+**Current rule.** List/Board is persisted per list and copied by list duplication. The board projects all non-deleted records of its list regardless of the list-row Show Completed toggle, with fixed Open, Completed and Won't Do columns. Cards are flat rather than nested. UI status drops reuse shared task actions and refuse terminal-state drops for notes; archive remains read-only. There is no custom section/column model. The projection splits stored status flags. The iPhone status tabs and card menu use the shared lifecycle. Undo after completing from Won’t Do restores the previous Won’t Do timestamp and removes an untouched successor. A view-mode edit changes only the selected list.
 
 **Acceptance.** Use a list containing only completed tasks and verify the board still shows them. Complete/drop a recurring task and inspect the shared successor behavior. Switch another list's mode and confirm the first list's preference is unchanged. Attempt a note completion drop and inspect refusal.
 
@@ -268,6 +276,8 @@ Dates include Today/Tomorrow, bounded Next 7, Overdue, No Date, this/next/last w
 
 ### BUS-022 — Advanced filters
 
+The iPhone uses the shared filter predicate and a separate rule editor. It stages tree edits, preserves unavailable references, and asks before saving Normal criteria over an advanced tree. [Phone verification](verification.md#mobile-saved-filters).
+
 **Current rule.** A non-nil AND/OR/NOT condition tree replaces normal criteria, including the normal keyword/status; the deleted guard and eligibility rules still apply. Both empty AND and empty OR evaluate true. NOT inverts its child. Conditions support list, tag, no tags, priority, date, kind, status, keyword and repeating. Only positive list references (including double negation) grant an explicit archive/exclusion override. Unconfigured list/tag conditions with no selected ID match nothing. Deleted-entity IDs remain stored and normally match nothing after membership cleanup; the matcher compares selected IDs directly rather than requiring the entity to exist. Editor conversions preserve existing conditions or refuse a lossy conversion; depth limits and stale-index guards apply.
 
 **Acceptance.** Save a rule with nested NOT, reload, and compare its meaning. Verify NOT(list A) does not reveal archived list A just because it was mentioned. Test empty groups intentionally. Try collapsing a multi-child group to a single condition and verify constraints are not silently discarded.
@@ -280,7 +290,9 @@ Dates include Today/Tomorrow, bounded Next 7, Overdue, No Date, this/next/last w
 
 **Current rule.** Local search is case-insensitive over title/body/quick-step text. Quick search also searches list, tag and filter names, displays up to five task results and eight per other category, and retains up to ten recent queries in preferences. Arrow navigation selects results; Return opens the selection or full search. Quick search excludes Trash but can include archived, completed and Won't Do matches.
 
-Full search retains its query/filter state while opening detail and combines text matching with a `TaskFilter`-backed date/list/tag/type/status selection. It does not have cloud search. Save as Filter transfers the selected criteria and keyword to the editor. Full search applies archive/exclusion unless a list is explicitly selected, so its default scope can differ from quick search.
+Full search retains its query/filter state while opening detail and combines text matching with a `TaskFilter`-backed date/list/tag/type/status selection. It does not have cloud search. Save as Filter transfers the selected criteria and keyword to the editor. Full search applies archive and Smart List exclusion unless a list is explicitly selected, so its default scope can differ from quick search.
+
+**iPhone.** Search uses the full-search task scope, with native staged criteria and separate results for lists, tags and saved filters. Query and criteria remain in place during related-task navigation. Recent queries live in iPhone preferences and use the same ten-entry limit and case-insensitive deduplication. [iPhone Search verification](verification.md#mobile-search).
 
 **Acceptance.** Search a quick-step title and a body match; open a result without losing the full-search query. Compare an archived match in quick versus full search. Save a filtered query, reopen the filter, and verify criteria round-trip.
 
@@ -290,11 +302,11 @@ Full search retains its query/filter state while opening detail and combines tex
 
 ### BUS-024 — Editable Summary reports
 
-**Current rule.** Summary generates editable plain text for Today, This/Last Week, This Month or a custom inclusive day range. It includes non-deleted task records (not notes) whose due, completed or Won't Do date falls in the period, subject to selected lists/status and archive/exclusion rules. Grouping is by status/list/date; optional fields are date, list, description, tags and priority. Next Period Tasks appends open dated tasks in the following period. Changing options regenerates and replaces edits. Copy uses the clipboard. Save as Note creates an Inbox note from the current output and clears its date/reminders/tags/priority; it is not an external share or generated AI summary.
+**Current rule.** Summary generates editable plain text for Today, This Week, Last Week, This Month or a custom inclusive day range. It includes tasks whose due, completion or Won’t Do date falls in the period. All Lists excludes archived and opted-out lists. Selecting a list explicitly includes it, subject to the status and period filters. Notes and trashed tasks are excluded. The report groups by status, list or date and can include dates, lists, descriptions, tags and priority. Next Period Tasks appends open tasks dated in the following period. The report calendar controls period boundaries, range labels and date headings. Due fields use an explicit task time zone when set and the report time zone otherwise. Changing options regenerates the report and replaces edits. Copy puts the current text on the clipboard. Save as Note preserves the edited text in an Inbox note without a date, reminders, tags or priority.
 
 **Acceptance.** Include a completed undated task by completion date, exclude a note, adjust fields and observe regeneration. Edit the report, save as a note and inspect the saved text and cleared defaults. Explicitly select an archived list and compare the result with All Lists.
 
-**Evidence.** [SummaryView](../../Sources/Taskovsky/SummaryView.swift); [TaskStore](../../Sources/TaskovskyCore/TaskStore.swift). No dedicated Summary generation test file was identified; end-to-end generation/copy/save needs macOS verification.
+**Evidence.** [Shared Summary generator](../../Sources/TaskovskyCore/SummaryReport.swift), [Mac editor](../../Sources/Taskovsky/SummaryView.swift), [iPhone editor](../../Mobile/App/PhoneSummaryView.swift) and [verification record](verification.md#mobile-summary).
 
 ## Settings, persistence and evolution
 
@@ -302,7 +314,7 @@ Full search retains its query/filter state while opening detail and combines tex
 
 ### BUS-025 — Settings and durable local state
 
-**Current rule.** Workspace and settings are separate JSON files. Normal storage is under the application-support Taskovsky directory; legacy Taskvovsky migration preserves the original if moving fails and does not overwrite an existing current directory. Workspace writes are atomic. A workspace decode failure preserves the original and blocks writes until explicit recovery backs it up; settings decode failure similarly prevents overwriting the unreadable settings. Calendar display options are stored in settings JSON with backward-compatible defaults: Week, five days/two weeks, sidebar/completed/repeat on, checklist off, List colors, Filled style, all active lists plus Inbox and unrestricted tags. Additional zones and Calendar source union persist too, including restrictive empty/unavailable selections; changing source scope writes preferences, not task data. Focus date and Arrange visibility are transient. Calendar View Options is separate from the four main Settings sections. Some UI state, including recent searches and layout preferences, uses UserDefaults rather than workspace JSON.
+**Current rule.** Workspace and settings are separate JSON files. Normal storage is under the application-support Taskovsky directory; legacy Taskvovsky migration preserves the original if moving fails and does not overwrite an existing current directory. Workspace writes are atomic. A workspace decode failure preserves the original and blocks writes until explicit recovery backs it up; settings decode failure similarly prevents overwriting the unreadable settings. Calendar display options are stored in settings JSON with backward-compatible defaults: Week, five days/two weeks, sidebar/completed/repeat on, checklist off, List colors, Filled style, all active lists plus Inbox and unrestricted tags. Additional zones and Calendar source union persist too, including restrictive empty/unavailable selections; changing source scope writes preferences, not task data. Focus date and Arrange visibility are transient. Calendar View Options is separate from the four main Settings sections. Some UI state, including recent searches and layout preferences, uses UserDefaults rather than workspace JSON. The iPhone Settings editor saves its changed preference members together and preserves the remaining settings and workspace bytes. [iPhone settings verification](verification.md#mobile-local-settings).
 
 The four Settings sections are Smart Lists, Date & Time, More and About. Configurable behavior includes week start/numbers, time-zone/date/tag recognition, URL title parsing, default creation choices/reminders/duration, task/overdue position, completion sound and templates. Optional legacy fields decode with defaults; malformed hierarchy references are sanitized without intentionally deleting content. This is not arbitrary corrupt-file recovery or a cross-device synchronization system.
 

@@ -134,6 +134,19 @@ public enum TaskCalendarProjection {
             return true
         }
     }
+
+    public static func arrangementGroups(_ tasks: [TaskItem], data: WorkspaceData,
+                                         grouping: CalendarColorMode) -> [(name: String, tasks: [TaskItem])] {
+        let groups = Dictionary(grouping: tasks) { task in
+            switch grouping {
+            case .list: task.listID.flatMap { id in data.lists.first { $0.id == id }?.name } ?? "Inbox"
+            case .tag: task.tagIDs.first.flatMap { id in data.tags.first { $0.id == id }?.name } ?? "No Tags"
+            case .priority: task.priority.rawValue.capitalized
+            }
+        }
+        return groups.keys.sorted().map { ($0, groups[$0] ?? []) }
+    }
+
 }
 
 public struct CalendarTimedPlacement: Identifiable, Equatable, Sendable {

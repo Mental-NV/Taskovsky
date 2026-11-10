@@ -9,6 +9,42 @@ public enum CalendarScheduleOperation: Sendable {
 }
 
 public enum CalendarScheduling {
+    /// Prepare the exact schedule both stores persist, including reminder
+    /// provenance and recurring series position. Invalid commands return nil.
+    public static func prepared(_ operation: CalendarScheduleOperation, to original: TaskItem,
+                                displayCalendar: Calendar, settings: AppSettings, policyCalendar: Calendar) -> TaskItem? {
+        let minutes = settings.defaultDurationMinutes > 0 ? settings.defaultDurationMinutes : 30
+        guard var task = applying(operation, to: original, displayCalendar: displayCalendar, defaultMinutes: minutes) else { return nil }
+        guard CalendarScheduleSnapshot(task) != CalendarScheduleSnapshot(original) else { return original }
+        let calendar = TaskCalendarProjection.taskCalendar(task, fallback: policyCalendar)
+        let shape = TaskSchedulePolicy.coherentSchedule(dueDate: task.dueDate, hasDueTime: task.hasDueTime,
+                                                        window: task.scheduledDuration, calendar: calendar)
+        task.dueDate = shape.dueDate
+        task.hasDueTime = shape.hasDueTime
+        task.scheduledDuration = shape.window
+        if TaskSchedulePolicy.usesDefaultReminder(original, settings: settings, calendar: policyCalendar) {
+            task.reminderDates = original.reminderDates
+            task.reminderFollowsSchedule = true
+        }
+        TaskSchedulePolicy.reconcileReminders(of: &task, from: original, settings: settings, calendar: policyCalendar)
+        TaskSchedulePolicy.reconcileSeries(of: &task, from: original)
+        return task
+    }
+
+    public static func moveOnDay(_ task: TaskItem, day: Date, forceAllDay: Bool, calendar: Calendar) -> CalendarScheduleOperation {
+        if !forceAllDay, task.hasDueTime, let due = task.dueDate {
+            let start = task.scheduledDuration?.start ?? due
+            if calendar.isDate(start, inSameDayAs: day) { return .move(start: start, allDay: false) }
+            let clock = calendar.dateComponents([.hour, .minute, .second], from: start)
+            let interval = start.timeIntervalSinceReferenceDate
+            let wholeSecond = calendar.date(bySettingHour: clock.hour ?? 0, minute: clock.minute ?? 0,
+                                            second: clock.second ?? 0, of: day, matchingPolicy: .nextTime,
+                                            repeatedTimePolicy: .first, direction: .forward) ?? day
+            return .move(start: wholeSecond.addingTimeInterval(interval - floor(interval)), allDay: false)
+        }
+        return .move(start: day, allDay: true)
+    }
+
     /// Local Calendar policy: 15-minute grid snapping, 30-minute new timed
     /// blocks unless a task already has a duration. These are independent
     /// design choices, not recovered TickTick gesture algorithms.
@@ -132,4 +168,15 @@ public struct CalendarScheduleUndo: Sendable {
         self.taskID = taskID; self.before = before; self.after = after
         self.completedAt = completedAt; self.wontDoAt = wontDoAt
     }
+
+    public func canRestore(_ task: TaskItem, lists: [TaskList]) -> Bool {
+        task.id == taskID && task.deletedAt == nil && !SmartListEligibility.isArchived(task, lists: lists) &&
+            task.completedAt == completedAt && task.wontDoAt == wontDoAt && CalendarScheduleSnapshot(task) == after
+    }
+
+    public func restoring(on task: TaskItem, lists: [TaskList]) -> TaskItem? {
+        guard canRestore(task, lists: lists) else { return nil }
+        return before.restoring(on: task)
+    }
+
 }

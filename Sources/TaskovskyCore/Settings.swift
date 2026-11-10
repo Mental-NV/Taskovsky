@@ -75,6 +75,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
 }
 
 extension AppSettings {
+    public func isSmartListVisible(_ key: SmartListKey, count: @autoclosure () -> Int) -> Bool {
+        switch smartListVisibility[key] ?? .show {
+        case .show: true
+        case .hidden: false
+        case .showIfNotEmpty: count() > 0
+        }
+    }
+
     /// Canonical sidebar order. Sidebar group structure (documented boundary):
     /// top destinations `[all, today, tomorrow, week, inbox, summary]` render
     /// above the Lists/Filters/Tags sections; bottom system destinations

@@ -305,7 +305,7 @@ Full Search replaces center content and hides the docked sidebar. Selected resul
 
 Filter editor: width 520/padding 24/spacing 16, title 18 bold, name field, Normal/Advanced segments. Normal grouped form is height 300: keyword, multi-list/tag/priority/date/type, status, inclusive custom range. Missing referenced lists/tags stay selected as Unavailable rather than being silently removed. Saving a name-only edit must not broaden dead-reference intent.
 
-Advanced scroll height is 340 with nested AND/OR/NOT/conditions. Nodes use padding 10/radius 8/primary 0.03; child indent 12 with two-point secondary-0.25 guide; node label 13 semibold/chevron 9. Conversion preserves conditions; empty AND and OR groups explicitly match everything; removing a NOT child removes the wrapper. UI group addition is depth-limited and existing stored trees can be deeper. Save requires a nonempty name and advanced root; normal custom dates require at least one bound. Cancel dismisses without writing. Save as Filter carries the full current query/criteria into its draft.
+Advanced scroll height is 340. AND, OR and NOT groups use compact badges, a plain-language label, shaded surfaces and two-point indent guides. Condition type and value share a row. An ellipsis contains conversion and removal actions, and Add opens the group's creation menu. Remove NOT unwraps its child. Empty groups explicitly match all eligible tasks. Existing deeper trees remain editable. Save requires a nonempty name and advanced root. Normal custom dates require at least one bound. Escape or Cancel discards the draft. Save as Filter carries the full current query and criteria into its draft. [Native verification](verification.md#nested-filter-layout).
 
 <a id="ux-012"></a>
 

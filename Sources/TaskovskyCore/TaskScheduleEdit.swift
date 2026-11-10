@@ -16,6 +16,21 @@ extension TaskSchedulePolicy {
             zip(expected, task.reminderDates).allSatisfy { abs($0.timeIntervalSince($1)) < 1 }
     }
 
+    public static func reconcileReminders(of task: inout TaskItem, from original: TaskItem,
+                                   settings: AppSettings, calendar: Calendar) {
+        if task.reminderDates != original.reminderDates, task.reminderFollowsSchedule == original.reminderFollowsSchedule {
+            task.reminderFollowsSchedule = false
+        }
+        guard task.reminderDates == original.reminderDates,
+              original.dueDate != task.dueDate || original.hasDueTime != task.hasDueTime || original.timeZoneID != task.timeZoneID,
+              usesDefaultReminder(original, settings: settings, calendar: calendar),
+              task.reminderFollowsSchedule != false else { return }
+        var calendar = calendar
+        if let id = task.timeZoneID, let zone = TimeZone(identifier: id) { calendar.timeZone = zone }
+        task.reminderDates = task.dueDate.map { defaultReminderDates(due: $0, hasTime: task.hasDueTime, settings: settings, calendar: calendar) } ?? []
+        task.reminderFollowsSchedule = true
+    }
+
     public static func reconcileSeries(of task: inout TaskItem, from original: TaskItem) {
         if original.dueDate != task.dueDate || original.recurrence != task.recurrence {
             task.recurrenceAnchorDay = nil

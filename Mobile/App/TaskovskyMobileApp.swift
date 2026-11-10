@@ -10,7 +10,7 @@ struct TaskovskyMobileApp: App {
 private enum PhoneSection: String, CaseIterable { case tasks = "Tasks", calendar = "Calendar", search = "Search"
     var symbol: String { switch self { case .tasks: "checkmark.square.fill"; case .calendar: "calendar"; case .search: "magnifyingglass" } }
 }
-private enum PhoneStyle {
+enum PhoneStyle {
     static let accent = Color(red: 70/255, green: 112/255, blue: 250/255)
     static let page = Color(uiColor: .systemGroupedBackground)
     static let card = Color(uiColor: .secondarySystemGroupedBackground)
@@ -25,13 +25,31 @@ struct MobileRootView: View {
     @State private var destination: TaskDestination = .today
     @State private var capturePresented = false
     @State private var drawer = false
+    @State private var manageLists = false
+    @State private var smartListRequest: PhoneSmartListRequest?
+    @State private var manageFilters = false
+    @State private var manageTags = false
+    @State private var manageTemplates = false
+    @State private var localSettingsRequest: PhoneLocalSettingsRequest?
+    @State private var tagDrawerError: String?
+    @State private var collapsedFolders: Set<UUID> = []
     @State private var selectedTask: PhoneTaskRoute?
-    @State private var search = ""
+    @State private var search = TaskFilter(name: "", status: .all)
     @State private var focus = MobilePreviewFixture.day
-    @State private var options = TaskCalendarOptions()
-    @State private var filterSheet = false
+    @State private var sessionCalendarMode: TaskCalendarMode?
+    @State private var calendarPreferenceRoute: PhoneCalendarPreferenceRoute?
+    @State private var preferenceNotice: String?
     @State private var viewPicker = false
+    @State private var showArrange = false
+    @State private var showCalendarActions = false
+    @State private var calendarEdit: PhoneCalendarEditRequest?
+    @State private var calendarDragSession = UUID()
     private var calendar: Calendar { model.calendar }
+    private var options: TaskCalendarOptions {
+        var displayed = model.document?.snapshot.settings.calendarOptions ?? TaskCalendarOptions()
+        if let sessionCalendarMode { displayed.mode = sessionCalendarMode }
+        return displayed
+    }
     var body: some View {
         Group {
             if let document = model.document { shell(document.snapshot) }
@@ -43,8 +61,9 @@ struct MobileRootView: View {
             } else { ProgressView("Opening workspace…") }
         }.task { await model.open() }
             .onChange(of: model.document?.revision) { _, _ in
-                if !initialized, let document = model.document {
-                    initialized = true; options = document.snapshot.settings.calendarOptions; focus = model.now
+                if !initialized, model.document != nil {
+                    initialized = true
+                    focus = model.now
                 }
             }
             .onChange(of: scenePhase) { _, phase in
@@ -78,7 +97,8 @@ struct MobileRootView: View {
         selectedTask = PhoneTaskRoute(id: draft.taskID, preferEditor: true)
     }
     private func shell(_ snapshot: ReadOnlyWorkspaceSnapshot) -> some View {
-        ZStack(alignment: .bottom) {
+        let visibility = PhoneSmartDrawer(settings: snapshot.settings, data: snapshot.workspace, now: model.now, calendar: calendar)
+        return ZStack(alignment: .bottom) {
             PhoneStyle.page.ignoresSafeArea()
             VStack(spacing: 12) {
                 HStack {
@@ -93,14 +113,25 @@ struct MobileRootView: View {
                             .popover(isPresented: $viewPicker, arrowEdge: .top) {
                                 VStack(spacing: 0) {
                                     ForEach(TaskCalendarMode.allCases, id: \.self) { mode in
-                                        Button { options.mode = mode; viewPicker = false } label: {
+                                        Button { viewPicker = false; selectCalendarMode(mode, at: focus) } label: {
                                             HStack { Text(mode.title); Spacer(); if options.mode == mode { Image(systemName: "checkmark") } }
                                                 .frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
                                         }.buttonStyle(.plain)
                                     }
                                 }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
                             }
-                        circle("Calendar filters", symbol: "line.3.horizontal.decrease") { filterSheet = true }
+                        circle("Calendar filters", symbol: "line.3.horizontal.decrease") { openCalendarPreferences(.filters) }
+                        circle("Calendar actions", symbol: "ellipsis") { showCalendarActions = true }
+                            .popover(isPresented: $showCalendarActions, arrowEdge: .top) {
+                                VStack(spacing: 0) {
+                                    calendarAction("View Options", symbol: "slider.horizontal.3") {
+                                        openCalendarPreferences(.display)
+                                    }
+                                    calendarAction("Arrange Tasks", symbol: "calendar.badge.plus") {
+                                        showArrange = true
+                                    }
+                                }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
+                            }
                     } else { Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary) }
                 }.padding(.horizontal, 16)
                 Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
@@ -118,19 +149,29 @@ struct MobileRootView: View {
                 switch section {
                 case .tasks:
                     Text(title(destination, in: snapshot.workspace)).font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
-                    taskList(destination.matchingTasks(in: snapshot.workspace, now: model.now, calendar: calendar), data: snapshot.workspace)
+                    taskDestination(snapshot.workspace)
                 case .calendar:
+                    if let preferenceNotice {
+                        Text(preferenceNotice).font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("calendarPreferenceNotice").padding(.horizontal, 16)
+                    }
+                    PhoneCalendarFeedback(model: model).padding(.horizontal, 16)
                     calendarBody(data: snapshot.workspace)
                 case .search:
-                    searchBody(data: snapshot.workspace)
+                    PhoneSearchView(model: model, criteria: $search, data: snapshot.workspace,
+                                    open: { destination = $0; section = .tasks }) { tasks, query in
+                        taskList(tasks, data: snapshot.workspace, searchQuery: query)
+                    }
                 }
             }.padding(.top, 4)
             VStack {
                 Spacer()
-                HStack { Spacer(); Button(action: addCapture) {
-                    Image(systemName: "plus").font(.system(size: 22, weight: .medium)).frame(width: 48, height: 48)
-                        .background(PhoneStyle.accent, in: Circle()).foregroundStyle(.white)
-                }.disabled(!model.canBeginCapture).accessibilityLabel("Add").accessibilityIdentifier("openCapture") }
+                if section != .tasks || destination != .summary {
+                    HStack { Spacer(); Button(action: addCapture) {
+                        Image(systemName: "plus").font(.system(size: 22, weight: .medium)).frame(width: 48, height: 48)
+                            .background(PhoneStyle.accent, in: Circle()).foregroundStyle(.white)
+                    }.disabled(!model.canBeginCapture).accessibilityLabel("Add").accessibilityIdentifier("openCapture") }
+                }
             }.padding(.trailing, 20).padding(.bottom, 82)
             HStack(spacing: 8) {
                 ForEach(PhoneSection.allCases, id: \.self) { item in
@@ -145,9 +186,29 @@ struct MobileRootView: View {
                 .overlay(Capsule().stroke(.primary.opacity(0.10), lineWidth: 0.5))
                 .padding(.horizontal, 20).padding(.bottom, 8)
         }.tint(PhoneStyle.accent)
-        .sheet(isPresented: $drawer) { navigation(data: snapshot.workspace).presentationDetents([.large]) }
+        .sheet(isPresented: $drawer) {
+            navigation(model.document?.snapshot ?? snapshot).presentationDetents([.large])
+        }
+        .onChange(of: visibility, initial: true) { prior, current in
+            if !current.shows(destination), prior.shows(destination) || destination.smartKey != nil {
+                destination = current.fallback
+            }
+        }
+        .onChange(of: snapshot.workspace.lists.map(\.id)) { _, ids in
+            if case .list(let id) = destination, !ids.contains(id) { destination = .inbox }
+        }
+        .onChange(of: snapshot.workspace.filters.map(\.id)) { _, ids in
+            if case .filter(let id) = destination, !ids.contains(id) { destination = visibility.fallback }
+        }
+        .onChange(of: snapshot.workspace.tags.map(\.id)) { _, ids in
+            if case .tag(let id) = destination, !ids.contains(id) { destination = visibility.fallback }
+        }
         .sheet(item: $selectedTask) { route in PhoneTaskSheet(model: model, route: route, close: { selectedTask = nil }) }
-        .sheet(isPresented: $filterSheet) { calendarFilters(data: snapshot.workspace) }
+        .sheet(item: $calendarPreferenceRoute) { route in
+            PhoneCalendarPreferences(model: model, route: route)
+        }
+        .sheet(isPresented: $showArrange) { PhoneCalendarArrangeSheet(model: model, focus: focus, options: options) }
+        .sheet(item: $calendarEdit) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(isPresented: $capturePresented, onDismiss: {
             if model.captureDraft != nil { model.requestCloseCapture() }
             else if let id = model.createdTaskID { selectedTask = PhoneTaskRoute(id: id) }
@@ -161,46 +222,69 @@ struct MobileRootView: View {
         switch value {
         case .all: "All"; case .today: "Today"; case .tomorrow: "Tomorrow"; case .week: "Next 7 Days"; case .inbox: "Inbox"
         case .completed: "Completed"; case .wontDo: "Won't Do"; case .trash: "Trash"
+        case .summary: "Summary"
         case .list(let id): data.lists.first { $0.id == id }?.name ?? "List unavailable"
         case .tag(let id): data.tags.first { $0.id == id }?.name ?? "Tag unavailable"
         case .filter(let id): data.filters.first { $0.id == id }?.name ?? "Filter unavailable"
         default: "Tasks"
         }
     }
-    private func taskList(_ tasks: [TaskItem], data: WorkspaceData) -> some View {
+    @ViewBuilder private func taskDestination(_ data: WorkspaceData) -> some View {
+        if destination == .summary {
+            PhoneSummaryView(model: model)
+        } else if case .list(let id) = destination, let list = data.lists.first(where: { $0.id == id }) {
+            PhoneListModeControl(model: model, list: list).id("list-mode-" + id.uuidString)
+            if list.viewMode == .board {
+                PhoneTaskBoard(model: model, list: list, data: data) { selectedTask = PhoneTaskRoute(id: $0) }.id(id)
+            } else {
+                taskList(destination.matchingTasks(in: data, now: model.now, calendar: calendar), data: data)
+            }
+        } else {
+            taskList(destination.matchingTasks(in: data, now: model.now, calendar: calendar), data: data)
+        }
+    }
+
+    private func taskList(_ tasks: [TaskItem], data: WorkspaceData, searchQuery: String? = nil) -> some View {
         let groups = PinnedGrouping.partition(tasks)
-        let separateHistory = section == .search || ![.completed, .wontDo, .trash].contains(destination)
+        let separateHistory = searchQuery != nil || ![.completed, .wontDo, .trash].contains(destination)
         let completed = separateHistory ? groups.rest.filter { $0.deletedAt == nil && $0.completedAt != nil } : []
         let abandoned = separateHistory ? groups.rest.filter { $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt != nil } : []
         let ordinary = separateHistory
             ? groups.rest.filter { $0.deletedAt != nil || ($0.completedAt == nil && $0.wontDoAt == nil) }
             : groups.rest
         return ScrollView {
-            if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text("Add a task or choose another view.")) }
-            taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists)
-            taskRows(ordinary, lists: data.lists)
-            taskGroup("Completed", tasks: completed, lists: data.lists)
-            taskGroup("Won't Do", tasks: abandoned, lists: data.lists)
+            if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
+            taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
+            taskRows(ordinary, lists: data.lists, searchQuery: searchQuery)
+            taskGroup("Completed", tasks: completed, lists: data.lists, searchQuery: searchQuery)
+            taskGroup("Won't Do", tasks: abandoned, lists: data.lists, searchQuery: searchQuery)
             Color.clear.frame(height: 90)
         }
     }
-    @ViewBuilder private func taskGroup(_ title: String, tasks: [TaskItem], lists: [TaskList]) -> some View {
+    @ViewBuilder private func taskGroup(_ title: String, tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
         if !tasks.isEmpty {
             Text(title).font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
-            taskRows(tasks, lists: lists)
+            taskRows(tasks, lists: lists, searchQuery: searchQuery)
         }
     }
-    private func taskRows(_ tasks: [TaskItem], lists: [TaskList]) -> some View {
-        LazyVStack(spacing: 0) {
-            ForEach(tasks) { task in
+    private func taskRows(_ tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
+        let ordered = TaskHierarchy.displayOrder(tasks)
+        return LazyVStack(spacing: 0) {
+            ForEach(ordered, id: \.task.id) { task, depth in
                 HStack(spacing: 0) {
                     PhoneCompletionButton(model: model, task: task, lists: lists)
-                    Button { selectedTask = PhoneTaskRoute(id: task.id) } label: {
+                    Button {
+                        if let searchQuery { model.rememberSearch(searchQuery) }
+                        selectedTask = PhoneTaskRoute(id: task.id)
+                    } label: {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(task.title).font(.body).lineLimit(2)
                                     .foregroundStyle(task.completedAt != nil || task.wontDoAt != nil ? .secondary : .primary)
+                                if let searchQuery {
+                                    PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
+                                }
                                 if let due = task.dueDate {
                                     Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption)
                                         .foregroundStyle(due < calendar.startOfDay(for: model.now) ? .red : .secondary)
@@ -214,83 +298,246 @@ struct MobileRootView: View {
                         .frame(minHeight: 48).padding(.trailing, 18).padding(.vertical, 3)
                         .contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityLabel(task.title)
-                }.padding(.leading, 2)
-                if task.id != tasks.last?.id { Divider().padding(.leading, 46) }
+                }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
+                if task.id != ordered.last?.task.id { Divider().padding(.leading, 46) }
             }
         }.background(PhoneStyle.card, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 16)
     }
-    private func navigation(data: WorkspaceData) -> some View {
-        NavigationStack {
+    private func navigation(_ snapshot: ReadOnlyWorkspaceSnapshot) -> some View {
+        let data = snapshot.workspace
+        let visibility = PhoneSmartDrawer(settings: snapshot.settings, data: data, now: model.now, calendar: calendar)
+        return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Taskovsky").font(.largeTitle.bold()).padding(.vertical, 20)
                     Text("Local preview").font(.caption).opacity(0.7)
-                    ForEach([TaskDestination.all, .today, .tomorrow, .week, .inbox, .completed, .wontDo, .trash], id: \.self) { item in navRow(item, data: data) }
-                    Text("Lists").font(.headline).padding(.top, 20)
-                    ForEach(data.lists) { list in navRow(.list(list.id), data: data) }
-                    Text("Tags").font(.headline).padding(.top, 20)
-                    ForEach(data.tags) { tag in navRow(.tag(tag.id), data: data) }
-                    Text("Filters").font(.headline).padding(.top, 20)
-                    ForEach(data.filters) { filter in navRow(.filter(filter.id), data: data) }
-                    Text("Create tasks or notes locally. Styled descriptions are protected; Board, Summary and further settings are still in development.")
+                    ForEach(visibility.top, id: \.self) { item in navRow(item, data: data) }
+                    organizationNavigation(data: data)
+                    if visibility.filters {
+                        Text("Filters").font(.headline).padding(.top, 20)
+                        ForEach(data.filters) { filter in navRow(.filter(filter.id), data: data) }
+                    }
+                    if visibility.tags {
+                        Text("Tags").font(.headline).padding(.top, 20)
+                        tagDrawerRows(TagHierarchy.roots(in: data.tags), data: data, depth: 0)
+                    }
+                    if let tagDrawerError {
+                        Text(tagDrawerError).font(.footnote).accessibilityIdentifier("tagDrawerError")
+                    }
+                    if !visibility.bottom.isEmpty {
+                        Divider().overlay(.white.opacity(0.16)).padding(.top, 12)
+                        ForEach(visibility.bottom, id: \.self) { item in navRow(item, data: data) }
+                    }
+                    Button { manageTemplates = true } label: {
+                        Label("Manage Templates", systemImage: "doc.on.doc")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("manageTemplates")
+                    Text("Create tasks or notes locally. Styled descriptions are protected. Further settings are still in development.")
                         .font(.footnote).opacity(0.8).padding(.top, 24)
                 }.padding(20)
             }.background(PhoneStyle.indigo).foregroundStyle(.white)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { drawer = false }.tint(.white) } }
-        }
-    }
-    private func navRow(_ item: TaskDestination, data: WorkspaceData) -> some View {
-        let count = item.matchingTasks(in: data, showHistory: false, now: model.now, calendar: calendar).count
-        return Button { destination = item; section = .tasks; drawer = false } label: {
-            HStack { Text(title(item, in: data)); Spacer(); Text("\(count)").opacity(0.65) }
-                .padding(.horizontal, 12).frame(minHeight: 44).background(destination == item ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                .contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel(title(item, in: data))
-            .accessibilityValue(String(count))
-    }
-    private func searchBody(data: WorkspaceData) -> some View {
-        VStack(spacing: 16) {
-            TextField("Search tasks, lists, tags or filters", text: $search).textFieldStyle(.roundedBorder).padding(.horizontal, 16).submitLabel(.search).accessibilityIdentifier("workspaceSearch")
-            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { ContentUnavailableView("Search your preview", systemImage: "magnifyingglass") }
-            else {
-                ScrollView(.horizontal) {
-                    HStack {
-                        ForEach(data.lists.filter { $0.name.localizedCaseInsensitiveContains(search) }) { item in Button(item.name) { destination = .list(item.id); section = .tasks }.buttonStyle(.bordered) }
-                        ForEach(data.tags.filter { $0.name.localizedCaseInsensitiveContains(search) }) { item in Button("#" + item.name) { destination = .tag(item.id); section = .tasks }.buttonStyle(.bordered) }
-                        ForEach(data.filters.filter { $0.name.localizedCaseInsensitiveContains(search) }) { item in Button(item.name) { destination = .filter(item.id); section = .tasks }.buttonStyle(.bordered) }
-                    }.padding(.horizontal, 16)
-                }
-                taskList(data.tasks.filter { TaskFilter(name: "Search", keyword: search).matches($0, lists: data.lists, now: model.now, calendar: calendar) }, data: data)
-            }
-            Spacer(minLength: 0)
-        }
-    }
-    private func calendarBody(data: WorkspaceData) -> some View {
-        MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus, options: $options) { id in selectedTask = PhoneTaskRoute(id: id) }
-    }
-    private func calendarFilters(data: WorkspaceData) -> some View {
-        NavigationStack {
-            List {
-                Section { Button { options.selectAllSources() } label: { Label("All", systemImage: options.isAllSources ? "checkmark.circle.fill" : "circle") } }
-                Section("Lists") {
-                    sourceRow("Inbox", selected: options.isInboxSelected) { options.setInboxSelected(!options.isInboxSelected, data: data) }
-                    ForEach(data.lists.filter { !$0.isArchived }) { list in
-                        sourceRow(list.name, selected: options.selectedListIDs(in: data).contains(list.id)) { options.setListSelected(list.id, !options.selectedListIDs(in: data).contains(list.id), data: data) }
+                .toolbar {
+                    ToolbarItemGroup(placement: .topBarLeading) {
+                        Button {
+                            guard let document = model.document else { return }
+                            localSettingsRequest = PhoneLocalSettingsRequest(settings: document.snapshot.settings,
+                                                                             revision: document.revision)
+                        } label: {
+                            Image(systemName: "gearshape")
+                        }.tint(.white).accessibilityLabel("Settings").accessibilityIdentifier("openLocalSettings")
+                        Button {
+                            guard let document = model.document else { return }
+                            smartListRequest = PhoneSmartListRequest(settings: document.snapshot.settings, revision: document.revision)
+                        } label: {
+                            Image(systemName: "slider.horizontal.3")
+                        }.tint(.white).accessibilityLabel("Smart Lists").accessibilityIdentifier("openSmartLists")
+                        Button { manageFilters = true } label: {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                        }.tint(.white).accessibilityLabel("Manage Filters").accessibilityIdentifier("manageFilters")
+                        Button { manageTags = true } label: {
+                            Image(systemName: "tag")
+                        }.tint(.white).accessibilityLabel("Manage Tags").accessibilityIdentifier("manageTags")
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { drawer = false }.tint(.white).accessibilityIdentifier("drawerDone")
                     }
                 }
-                Section("Tags") { ForEach(data.tags) { tag in
-                    sourceRow(tag.name, selected: options.tagIDs.contains(tag.id)) { options.setTagSelected(tag.id, !options.tagIDs.contains(tag.id), data: data) }
-                } }
-                Section { Text("These preview choices last until the app closes. Saved task data stays unchanged.").font(.footnote).foregroundStyle(.secondary) }
-            }.navigationTitle("Calendar filters").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { filterSheet = false } } }
         }
-    }
-    private func sourceRow(_ name: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack { Text(name); Spacer(); Image(systemName: selected ? "checkmark.square.fill" : "square") }
-                .frame(minHeight: 44).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel(name)
-            .accessibilityValue(selected ? "Selected" : "Not selected")
+        .sheet(isPresented: $manageLists) { PhoneListOrganization(model: model) }
+        .sheet(item: $smartListRequest) { request in PhoneSmartListSettings(model: model, request: request) }
+        .sheet(isPresented: $manageFilters) { PhoneSavedFilters(model: model) }
+        .sheet(isPresented: $manageTags) { PhoneTagManagement(model: model) }
+        .sheet(isPresented: $manageTemplates) { PhoneTemplateManager(model: model) }
+        .sheet(item: $localSettingsRequest) { request in PhoneLocalSettings(model: model, request: request) }
     }
 
+    @ViewBuilder private func organizationNavigation(data: WorkspaceData) -> some View {
+        let active = data.lists.filter { !$0.isArchived }
+        let pinned = active.filter(\.isPinned)
+        let pinnedFolders = data.folders.filter(\.isPinned)
+        let pinnedFilters = data.filters.filter(\.isPinned)
+        let pinnedTags = data.tags.filter(\.isPinned)
+        let archived = data.lists.filter(\.isArchived)
+        if !pinned.isEmpty || !pinnedFolders.isEmpty || !pinnedFilters.isEmpty || !pinnedTags.isEmpty {
+            Text("Pinned").font(.headline).padding(.top, 20)
+            ForEach(pinned) { list in navRow(.list(list.id), data: data, shortcut: true) }
+            ForEach(pinnedFolders) { folder in folderRows(folder, lists: active, data: data, shortcut: true) }
+            ForEach(pinnedFilters) { filter in navRow(.filter(filter.id), data: data, shortcut: true) }
+            ForEach(pinnedTags) { tag in navRow(.tag(tag.id), data: data, shortcut: true) }
+        }
+        HStack {
+            Text("Lists").font(.headline)
+            Spacer()
+            Button { manageLists = true } label: {
+                Image(systemName: "ellipsis.circle").frame(width: 44, height: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityLabel("Manage Lists").accessibilityIdentifier("manageLists")
+        }.padding(.top, 12)
+        ForEach(active.filter { ListPlacement($0) == .aboveFolders }) { list in navRow(.list(list.id), data: data) }
+        ForEach(data.folders) { folder in folderRows(folder, lists: active, data: data) }
+        ForEach(active.filter { ListPlacement($0) == .belowFolders }) { list in navRow(.list(list.id), data: data) }
+        if !archived.isEmpty {
+            Text("Archived Lists").font(.headline).padding(.top, 20)
+            ForEach(archived) { list in navRow(.list(list.id), data: data) }
+        }
+    }
+
+    private func tagDrawerRows(_ tags: [TaskTag], data: WorkspaceData, depth: Int) -> AnyView {
+        AnyView(ForEach(tags) { tag in
+            let children = TagHierarchy.children(of: tag.id, in: data.tags)
+            HStack(spacing: 0) {
+                navRow(.tag(tag.id), data: data)
+                if !children.isEmpty {
+                    Button {
+                        guard let revision = model.document?.revision else { return }
+                        Task { tagDrawerError = await model.saveTag(.setCollapsed(tag.id, !tag.isCollapsed), expected: revision) }
+                    } label: {
+                        Image(systemName: tag.isCollapsed ? "chevron.right" : "chevron.down")
+                            .font(.caption).frame(width: 44, height: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).disabled(!model.canBeginEditing)
+                        .accessibilityLabel((tag.isCollapsed ? "Expand " : "Collapse ") + tag.name)
+                        .accessibilityIdentifier("drawerTagDisclosure-" + tag.id.uuidString)
+                }
+            }.padding(.leading, CGFloat(min(depth, 4)) * 12)
+            if !tag.isCollapsed { tagDrawerRows(children, data: data, depth: depth + 1) }
+        })
+    }
+
+    @ViewBuilder private func folderRows(_ folder: ListFolder, lists: [TaskList], data: WorkspaceData, shortcut: Bool = false) -> some View {
+        let members = lists.filter { $0.folderID == folder.id }
+        let collapsed = collapsedFolders.contains(folder.id)
+        Button {
+            if collapsed { collapsedFolders.remove(folder.id) } else { collapsedFolders.insert(folder.id) }
+        } label: {
+            HStack {
+                Label(shortcut ? "Pinned " + folder.name : folder.name, systemImage: "folder")
+                Spacer()
+                Image(systemName: collapsed ? "chevron.right" : "chevron.down").font(.caption)
+            }.padding(.horizontal, 12).frame(minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityValue(collapsed ? "Collapsed" : "Expanded")
+            .accessibilityIdentifier((shortcut ? "pinnedFolder-" : "drawerFolder-") + folder.id.uuidString)
+        if !collapsed {
+            ForEach(members) { list in navRow(.list(list.id), data: data, shortcut: shortcut).padding(.leading, 12) }
+        }
+    }
+
+    private func navRow(_ item: TaskDestination, data: WorkspaceData, shortcut: Bool = false) -> some View {
+        let count = item.matchingTasks(in: data, showHistory: false, now: model.now, calendar: calendar).count
+        let label = title(item, in: data)
+        let identifier: String
+        if case .tag(let id) = item { identifier = (shortcut ? "pinnedTag-" : "drawerTag-") + id.uuidString }
+        else { identifier = item.smartKey.map { "smartDrawer-" + $0.rawValue } ?? "" }
+        return Button { destination = item; section = .tasks; drawer = false } label: {
+            HStack {
+                if case .list(let id) = item, let list = data.lists.first(where: { $0.id == id }) {
+                    Image(systemName: list.symbol ?? (list.kind == .note ? "doc.text" : "list.bullet"))
+                        .foregroundStyle(list.phoneListColor).accessibilityHidden(true)
+                }
+                if case .tag(let id) = item, let tag = data.tags.first(where: { $0.id == id }) {
+                    Image(systemName: "tag").foregroundStyle(PhoneEntityColor.read(tag.color)).accessibilityHidden(true)
+                }
+                Text(label)
+                Spacer()
+                Text("\(count)").opacity(0.65)
+            }
+                .padding(.horizontal, 12).frame(minHeight: 44).background(destination == item ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel(shortcut ? "Pinned " + label : label)
+            .accessibilityValue(String(count))
+            .accessibilityIdentifier(identifier)
+    }
+    private func calendarBody(data: WorkspaceData) -> some View {
+        let controls = PhoneCalendarControls(
+            drag: { entry in
+                guard entry.canSchedule, model.canBeginEditing, let revision = model.document?.revision else { return nil }
+                return PhoneCalendarDrag(taskID: entry.taskID, session: calendarDragSession, revision: revision)
+            },
+            edit: { entry, mode in
+                guard entry.canSchedule, model.canBeginEditing, let document = model.document,
+                      let task = document.snapshot.workspace.tasks.first(where: { $0.id == entry.taskID }) else { return }
+                calendarEdit = PhoneCalendarEditRequest(task: task, expected: document.revision, focus: focus,
+                                                        hourly: options.mode.isHourly, calendar: calendar, mode: mode)
+            },
+            drop: acceptCalendarDrop,
+            resize: { payload, date in
+                Task { await model.dropCalendarTask(.resizeEnd(date), taskID: payload.taskID, expected: payload.revision) }
+            }
+        )
+        return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
+                                     options: options, controls: controls,
+                                     select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }
+    }
+
+    private func acceptCalendarDrop(_ payload: PhoneCalendarDrag, _ target: PhoneCalendarDropTarget) -> Bool {
+        guard payload.session == calendarDragSession, model.canBeginEditing, let document = model.document,
+              document.revision == payload.revision,
+              let task = document.snapshot.workspace.tasks.first(where: { $0.id == payload.taskID }),
+              task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: document.snapshot.workspace.lists) else { return false }
+        let operation: CalendarScheduleOperation = switch target {
+        case .allDay(let day): .move(start: day, allDay: true)
+        case .hour(let date): .move(start: date, allDay: false)
+        case .day(let day): CalendarScheduling.moveOnDay(task, day: day, forceAllDay: false, calendar: calendar)
+        }
+        Task { await model.dropCalendarTask(operation, taskID: payload.taskID, expected: payload.revision) }
+        return true
+    }
+
+    private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date) {
+        guard !model.isBusy, let document = model.document else { return }
+        var draft = document.snapshot.settings.calendarOptions
+        if mode == draft.mode {
+            sessionCalendarMode = nil
+            preferenceNotice = nil
+            focus = date
+            return
+        }
+        draft.mode = mode
+        Task {
+            if let error = await model.saveCalendarOptions(draft, expected: document.revision) {
+                sessionCalendarMode = mode
+                preferenceNotice = "View changed for this session. " + error
+            } else {
+                sessionCalendarMode = nil
+                preferenceNotice = nil
+            }
+            focus = date
+        }
+    }
+
+    private func openCalendarPreferences(_ kind: PhoneCalendarPreferenceKind) {
+        guard let document = model.document else { return }
+        calendarPreferenceRoute = PhoneCalendarPreferenceRoute(kind: kind, options: document.snapshot.settings.calendarOptions,
+                                                               expected: document.revision)
+    }
+
+    private func calendarAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button {
+            showCalendarActions = false
+            action()
+        } label: {
+            Label(title, systemImage: symbol)
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .padding(.horizontal, 12).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+    }
 }

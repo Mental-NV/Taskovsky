@@ -147,7 +147,7 @@ public final class TaskStore: ObservableObject {
         // Direct parent-link edits route through the same validation as
         // `setTaskParent`; refused links revert to the stored parent.
         if task.parentID != old.parentID {
-            switch Self.resolveParentLink(childID: task.id, parentID: task.parentID, tasks: data.tasks, lists: data.lists) {
+            switch TaskHierarchy.resolveParentLink(childID: task.id, parentID: task.parentID, tasks: data.tasks, lists: data.lists) {
             case .keep: break
             case .relocateSubtree(let listID):
                 task.listID = listID
@@ -176,16 +176,8 @@ public final class TaskStore: ObservableObject {
             task.dueDate = schedule.dueDate; task.hasDueTime = schedule.hasDueTime; task.scheduledDuration = schedule.window
         }
         TaskSchedulePolicy.reconcileSeries(of: &task, from: old)
-        if applyDefaultReminders, task.reminderDates != old.reminderDates, task.reminderFollowsSchedule == old.reminderFollowsSchedule {
-            task.reminderFollowsSchedule = false
-        }
-        if applyDefaultReminders, task.reminderDates == old.reminderDates,
-           (old.dueDate != task.dueDate || old.hasDueTime != task.hasDueTime || old.timeZoneID != task.timeZoneID),
-           Self.usesDefaultReminder(old, settings: settings), task.reminderFollowsSchedule != false {
-            var calendar = settings.calendar
-            if let id = task.timeZoneID, let zone = TimeZone(identifier: id) { calendar.timeZone = zone }
-            task.reminderDates = task.dueDate.map { Self.defaultReminderDates(due: $0, hasTime: task.hasDueTime, settings: settings, calendar: calendar) } ?? []
-            task.reminderFollowsSchedule = true
+        if applyDefaultReminders {
+            TaskSchedulePolicy.reconcileReminders(of: &task, from: old, settings: settings, calendar: settings.calendar)
         }
         task.updatedAt = Date()
         data.tasks[index] = task
@@ -364,30 +356,10 @@ public final class TaskStore: ObservableObject {
     /// recurrence links are cut so the copy never chains to the original.
     /// Tasks keep their relative order, appended after existing records.
     @discardableResult public func duplicateList(id: UUID) -> UUID? {
-        guard let source = data.lists.first(where: { $0.id == id }) else { return nil }
-        var copy = source
-        copy.id = UUID(); copy.name = source.name + " copy"
-        copy.isArchived = false; copy.isPinned = false
-        // View mode travels with the duplicate (a Board list copies as Board).
-        data.lists.append(copy)
-        let now = Date()
-        let members = data.tasks.filter { $0.listID == id && $0.deletedAt == nil }
-        var idMap: [UUID: UUID] = [:]
-        for member in members { idMap[member.id] = UUID() }
-        for task in members {
-            var duplicate = task
-            duplicate.id = idMap[task.id]!
-            duplicate.listID = copy.id
-            // Subtree links remap into the copy. A parent outside the copied
-            // set (original list, another list, trashed) clears to top
-            // level: the copy must never stay silently linked across lists.
-            duplicate.parentID = task.parentID.flatMap { idMap[$0] }
-            duplicate.checklist = task.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
-            duplicate.recurrenceSourceID = nil
-            duplicate.createdAt = now; duplicate.updatedAt = now
-            data.tasks.append(duplicate)
-        }
-        save(); return copy.id
+        let copyID = UUID()
+        guard ListOrganization.duplicateList(id, copyID: copyID, in: &data, now: Date()) else { return nil }
+        save()
+        return copyID
     }
     public func updateList(_ list: TaskList) {
         guard let index = data.lists.firstIndex(where: { $0.id == list.id }) else { return }
@@ -400,29 +372,17 @@ public final class TaskStore: ObservableObject {
         data.lists[index] = list; save()
     }
     public func deleteList(id: UUID) {
-        data.lists.removeAll { $0.id == id }
-        for i in data.tasks.indices where data.tasks[i].listID == id { data.tasks[i].listID = nil; data.tasks[i].updatedAt = Date() }
-        // Dead list IDs persist in saved-filter criteria as no-match (they
-        // can never equal a task's list, and tasks were just repointed to
-        // Inbox): stripping them would broaden a filter whose only
-        // selection was deleted from "nothing" to "everything". The editor
-        // surfaces them as unavailable so the user can deliberately clear or
-        // replace them. Rule-tree conditions are never rewritten either.
+        ListOrganization.deleteList(id, in: &data, now: Date())
         save()
     }
     @discardableResult public func createTag(name: String, color: String, parentID: UUID? = nil) -> UUID {
-        let normalized = Self.normalizedTagName(name)
-        if let existing = data.tags.first(where: { Self.normalizedTagName($0.name).localizedCaseInsensitiveCompare(normalized) == .orderedSame }) {
+        let normalized = TagOrganization.normalizedName(name)
+        if let existing = data.tags.first(where: { TagOrganization.normalizedName($0.name).localizedCaseInsensitiveCompare(normalized) == .orderedSame }) {
             return existing.id
         }
         // Unknown parents clear to top level, matching the load policy.
         let parent = parentID.flatMap { id in data.tags.contains(where: { $0.id == id }) ? id : nil }
         let tag = TaskTag(name: normalized, color: color, parentID: parent); data.tags.append(tag); save(); return tag.id
-    }
-    private static func normalizedTagName(_ name: String) -> String {
-        var result = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        while result.hasPrefix("#") { result.removeFirst(); result = result.trimmingCharacters(in: .whitespacesAndNewlines) }
-        return result
     }
     public func updateTag(_ tag: TaskTag) {
         guard let index = data.tags.firstIndex(where: { $0.id == tag.id }) else { return }
@@ -433,23 +393,9 @@ public final class TaskStore: ObservableObject {
     /// to the deleted tag's parent (top level when it had none); promotion
     /// that would recreate a cycle falls back to top level.
     public func deleteTag(id: UUID) {
-        guard let deleted = data.tags.first(where: { $0.id == id }) else { return }
-        let parent = deleted.parentID
-        let parentCycles = parent.map { TagHierarchy.isDescendant($0, of: id, in: data.tags) } ?? false
-        data.tags.removeAll { $0.id == id }
-        for i in data.tags.indices where data.tags[i].parentID == id {
-            data.tags[i].parentID = parentCycles ? nil : parent
-        }
-        for i in data.tasks.indices where data.tasks[i].tagIDs.contains(id) {
-            data.tasks[i].tagIDs.removeAll { $0 == id }; data.tasks[i].updatedAt = Date()
-        }
-        for i in data.templates.indices {
-            data.templates[i].tagIDs.removeAll { $0 == id }
-        }
-        // Dead tag IDs persist in saved-filter criteria as no-match (no
-        // task can carry them after the sweep above): pruning them would
-        // broaden a filter whose only selection was deleted. The editor
-        // surfaces them as unavailable for deliberate clearing.
+        var updated = data
+        guard TagOrganization.delete(id, in: &updated, now: Date()) else { return }
+        data = updated
         if settings.defaultTagID == id { settings.defaultTagID = nil }
         save()
     }
@@ -459,10 +405,7 @@ public final class TaskStore: ObservableObject {
     /// level. Exactly one save per accepted change.
     @discardableResult public func setTagParent(id: UUID, parentID: UUID?) -> Bool {
         guard let index = data.tags.firstIndex(where: { $0.id == id }) else { return false }
-        if let parentID {
-            guard data.tags.contains(where: { $0.id == parentID }), parentID != id,
-                  !TagHierarchy.isDescendant(parentID, of: id, in: data.tags) else { return false }
-        }
+        guard TagOrganization.allowsParent(parentID, for: id, in: data.tags) else { return false }
         guard data.tags[index].parentID != parentID else { return true }
         data.tags[index].parentID = parentID
         data.tags = WorkspaceData.sanitizedTagParents(data.tags)
@@ -475,74 +418,20 @@ public final class TaskStore: ObservableObject {
         data.tags[index].isCollapsed = collapsed; save(); return true
     }
 
-    /// Parent-link validation shared by `setTaskParent` and direct record
-    /// edits (`updateTask`): unknown IDs, self-parenting, and descendants
-    /// (cycles) refuse, as do note, trashed, and archived parents — and
-    /// archived or trashed children. A cross-list link normalizes by
-    /// relocating the child's subtree into the parent's list instead of
-    /// leaving a relationship that spans lists.
-    enum ParentLinkResolution: Equatable {
-        case keep
-        case relocateSubtree(toList: UUID?)
-        case refuse
-    }
-
-    static func resolveParentLink(childID: UUID, parentID: UUID?, tasks: [TaskItem], lists: [TaskList]) -> ParentLinkResolution {
-        guard let parentID else { return .keep }
-        guard let child = tasks.first(where: { $0.id == childID }),
-              child.deletedAt == nil,
-              !(child.listID.flatMap { id in lists.first { $0.id == id } }?.isArchived ?? false) else { return .refuse }
-        guard parentID != childID,
-              let parent = tasks.first(where: { $0.id == parentID }),
-              parent.deletedAt == nil,
-              parent.kind == .task,
-              !(parent.listID.flatMap { id in lists.first { $0.id == id } }?.isArchived ?? false),
-              !TaskHierarchy.isDescendant(parentID, of: childID, in: tasks) else { return .refuse }
-        if parent.listID != child.listID { return .relocateSubtree(toList: parent.listID) }
-        return .keep
-    }
-
-    /// Parents `id` under `parentID` (nil unparents to top level). Refuses
-    /// unknown IDs, self-parenting, descendants (cycles), note/trashed/
-    /// archived parents, and archived/trashed children. A cross-list link
-    /// relocates the child's subtree into the parent's list. Nil clears to
-    /// top level. Exactly one save per accepted change.
     @discardableResult public func setTaskParent(id: UUID, parentID: UUID?) -> Bool {
-        guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { return false }
-        var relocated = false
-        switch Self.resolveParentLink(childID: id, parentID: parentID, tasks: data.tasks, lists: data.lists) {
-        case .refuse: return false
-        case .keep: break
-        case .relocateSubtree(let listID):
-            relocated = true
-            let now = Date()
-            data.tasks[index].listID = listID
-            for descendant in TaskHierarchy.descendants(of: id, in: data.tasks) {
-                if let i = data.tasks.firstIndex(where: { $0.id == descendant.id }) {
-                    data.tasks[i].listID = listID; data.tasks[i].updatedAt = now
-                }
-            }
+        guard let changed = TaskHierarchy.setParent(childID: id, parentID: parentID, in: &data, now: Date()) else {
+            return false
         }
-        guard data.tasks[index].parentID != parentID || relocated else { return true }
-        data.tasks[index].parentID = parentID
-        data.tasks = WorkspaceData.sanitizedTaskParents(data.tasks)
-        save(); return true
+        if changed { save() }
+        return true
     }
 
-    /// Creates a subtask under `parentID`, inheriting its list. Refuses
-    /// unknown, trashed, archived, or note parents: notes never take
-    /// children and archived content never gains new records. The child
-    /// starts open, unpinned, and uncompleted at the default add position.
     @discardableResult public func addSubtask(to parentID: UUID, title: String) -> UUID? {
-        guard let parent = data.tasks.first(where: { $0.id == parentID }),
-              parent.deletedAt == nil,
-              parent.kind == .task,
-              !isInArchivedList(parent) else { return nil }
-        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        let child = TaskItem(title: trimmed, listID: parent.listID, parentID: parentID)
-        if settings.defaultAddTo == .top { data.tasks.insert(child, at: 0) } else { data.tasks.append(child) }
-        save(); return child.id
+        let id = UUID()
+        guard TaskHierarchy.addChild(id: id, to: parentID, title: title, in: &data,
+                                     position: settings.defaultAddTo, now: Date()) else { return nil }
+        save()
+        return id
     }
 
     /// Merges `source` into `target`: task, template, and saved-filter refs
@@ -553,58 +442,12 @@ public final class TaskStore: ObservableObject {
     /// become siblings at the source's slot. The source is then deleted.
     /// Unrelated fields are untouched; exactly one save.
     @discardableResult public func mergeTags(source: UUID, target: UUID) -> Bool {
-        guard source != target,
-              let sourceTag = data.tags.first(where: { $0.id == source }),
-              data.tags.contains(where: { $0.id == target }) else { return false }
-        let targetIsDescendant = TagHierarchy.isDescendant(target, of: source, in: data.tags)
-        if targetIsDescendant {
-            // Ancestors between source and target, read before anything moves.
-            let ancestors = Set(TagHierarchy.ancestors(of: target, in: data.tags).map(\.id))
-            // Target takes the source's slot first so no link dangles.
-            if let targetIndex = data.tags.firstIndex(where: { $0.id == target }) {
-                data.tags[targetIndex].parentID = sourceTag.parentID
-            }
-            for i in data.tags.indices where data.tags[i].parentID == source {
-                if data.tags[i].id == target || ancestors.contains(data.tags[i].id) {
-                    // Ancestor-of-target links would cycle under the target;
-                    // they become siblings at the source's former slot.
-                    data.tags[i].parentID = sourceTag.parentID
-                } else {
-                    data.tags[i].parentID = target
-                }
-            }
-        } else {
-            for i in data.tags.indices where data.tags[i].parentID == source {
-                data.tags[i].parentID = target
-            }
-        }
-        func repoint(_ ids: [UUID]) -> [UUID] {
-            var seen = Set<UUID>()
-            var result: [UUID] = []
-            for id in ids.map({ $0 == source ? target : $0 }) where seen.insert(id).inserted {
-                result.append(id)
-            }
-            return result
-        }
-        let now = Date()
-        for i in data.tasks.indices where data.tasks[i].tagIDs.contains(source) {
-            data.tasks[i].tagIDs = repoint(data.tasks[i].tagIDs); data.tasks[i].updatedAt = now
-        }
-        for i in data.templates.indices {
-            data.templates[i].tagIDs = repoint(data.templates[i].tagIDs)
-        }
-        for i in data.filters.indices {
-            data.filters[i].tagIDs = repoint(data.filters[i].tagIDs)
-            // Rule-tree conditions move with the merge (semantics-preserving);
-            // deletions never rewrite trees (fail-closed instead).
-            if let root = data.filters[i].ruleRoot {
-                data.filters[i].ruleRoot = FilterRuleRewrite.repointingTag(from: source, to: target, in: root)
-            }
-        }
+        var updated = data
+        guard TagOrganization.merge(source: source, target: target, in: &updated, now: Date()) else { return false }
+        data = updated
         if settings.defaultTagID == source { settings.defaultTagID = target }
-        data.tags.removeAll { $0.id == source }
-        data.tags = WorkspaceData.sanitizedTagParents(data.tags)
-        save(); return true
+        save()
+        return true
     }
 
     @discardableResult public func moveTasksToList(ids: [UUID], listID: UUID?) -> Bool {
@@ -642,14 +485,7 @@ public final class TaskStore: ObservableObject {
     /// order, the mover's folderID, and its trailing flag change; tasks and
     /// list IDs stay.
     @discardableResult public func reorderLists(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
-        guard moving != target else { return false }
-        guard var mover = data.lists.first(where: { $0.id == moving }),
-              let targetList = data.lists.first(where: { $0.id == target }) else { return false }
-        mover.folderID = targetList.folderID
-        mover.belowFolders = targetList.folderID == nil && targetList.belowFolders
-        data.lists.removeAll { $0.id == moving }
-        guard let targetIndex = data.lists.firstIndex(where: { $0.id == target }) else { return false }
-        data.lists.insert(mover, at: afterTarget ? targetIndex + 1 : targetIndex)
+        guard ListOrganization.reorderList(moving, relativeTo: target, after: afterTarget, in: &data) else { return false }
         save()
         return true
     }
@@ -671,19 +507,14 @@ public final class TaskStore: ObservableObject {
     /// Ungroups a folder: the folder row goes away, lists and their tasks stay
     /// (lists keep their IDs, membership clears to top root).
     @discardableResult public func ungroupFolder(id: UUID) -> Bool {
-        guard data.folders.contains(where: { $0.id == id }) else { return false }
-        data.folders.removeAll { $0.id == id }
-        for i in data.lists.indices where data.lists[i].folderID == id { data.lists[i].folderID = nil; data.lists[i].belowFolders = false }
-        save(); return true
+        guard ListOrganization.ungroupFolder(id, in: &data) else { return false }
+        save()
+        return true
     }
     @discardableResult public func reorderFolders(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
-        guard moving != target else { return false }
-        guard let mover = data.folders.first(where: { $0.id == moving }),
-              data.folders.contains(where: { $0.id == target }) else { return false }
-        data.folders.removeAll { $0.id == moving }
-        guard let targetIndex = data.folders.firstIndex(where: { $0.id == target }) else { return false }
-        data.folders.insert(mover, at: afterTarget ? targetIndex + 1 : targetIndex)
-        save(); return true
+        guard ListOrganization.reorderFolder(moving, relativeTo: target, after: afterTarget, in: &data) else { return false }
+        save()
+        return true
     }
     /// Atomically reorders tags in the persisted array order. Self-drops and
     /// unknown IDs abort with no mutation and no save, as do positional
@@ -693,15 +524,9 @@ public final class TaskStore: ObservableObject {
     /// published array is assigned once and only on a real move, with exactly
     /// one save per accepted move.
     @discardableResult public func reorderTags(moving: UUID, before target: UUID, afterTarget: Bool = false) -> Bool {
-        guard moving != target else { return false }
-        guard let from = data.tags.firstIndex(where: { $0.id == moving }),
-              data.tags.contains(where: { $0.id == target }) else { return false }
-        var updated = data.tags
-        let mover = updated.remove(at: from)
-        guard let t = updated.firstIndex(where: { $0.id == target }) else { return false }
-        let insertAt = afterTarget ? t + 1 : t
-        guard insertAt != from else { return true }
-        updated.insert(mover, at: insertAt)
+        guard let updated = TagOrganization.reordered(data.tags, moving: moving, relativeTo: target, after: afterTarget)
+        else { return false }
+        guard updated != data.tags else { return true }
         data.tags = updated
         save(); return true
     }
@@ -773,18 +598,10 @@ public final class TaskStore: ObservableObject {
     @discardableResult public func scheduleOnCalendar(id: UUID, operation: CalendarScheduleOperation, calendar: Calendar? = nil) -> CalendarScheduleUndo? {
         guard let original = data.tasks.first(where: { $0.id == id }), original.deletedAt == nil,
               !SmartListEligibility.isArchived(original, lists: data.lists),
-              var changed = CalendarScheduling.applying(operation, to: original, displayCalendar: calendar ?? settings.calendar,
-                  defaultMinutes: settings.defaultDurationMinutes > 0 ? settings.defaultDurationMinutes : 30) else { return nil }
-        // A schedule no-op must not rewrite reminder policy, recurrence
-        // position, timestamps or the file just because an editor was saved.
-        guard CalendarScheduleSnapshot(changed) != CalendarScheduleSnapshot(original) else { return nil }
-        if Self.usesDefaultReminder(original, settings: settings) {
-            // Let updateTask re-anchor the configured default, including
-            // timed <-> all-day conversion; manual reminders already shifted.
-            changed.reminderDates = original.reminderDates
-            changed.reminderFollowsSchedule = true
-        }
-        updateTask(changed)
+              let changed = CalendarScheduling.prepared(operation, to: original,
+                  displayCalendar: calendar ?? settings.calendar, settings: settings, policyCalendar: settings.calendar),
+              CalendarScheduleSnapshot(changed) != CalendarScheduleSnapshot(original) else { return nil }
+        updateTask(changed, applyDefaultReminders: false)
         guard let saved = data.tasks.first(where: { $0.id == id }) else { return nil }
         let before = CalendarScheduleSnapshot(original), after = CalendarScheduleSnapshot(saved)
         guard before != after else { return nil }
@@ -794,13 +611,7 @@ public final class TaskStore: ObservableObject {
 
     @discardableResult public func undoCalendarSchedule(_ token: CalendarScheduleUndo) -> Bool {
         guard let index = data.tasks.firstIndex(where: { $0.id == token.taskID }) else { return false }
-        let current = data.tasks[index]
-        guard current.deletedAt == nil, !SmartListEligibility.isArchived(current, lists: data.lists),
-              current.completedAt == token.completedAt, current.wontDoAt == token.wontDoAt,
-              CalendarScheduleSnapshot(current) == token.after else { return false }
-        // A known schedule snapshot restores directly: the manual-edit
-        // normalization in updateTask would discard the original nominal.
-        var restored = token.before.restoring(on: current)
+        guard var restored = token.restoring(on: data.tasks[index], lists: data.lists) else { return false }
         restored.updatedAt = Date()
         data.tasks[index] = restored
         save()

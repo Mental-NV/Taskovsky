@@ -223,16 +223,18 @@ struct PhoneScheduleSheet: View {
     fileprivate static func zoneLabel(_ id: String) -> String { id.replacingOccurrences(of: "_", with: " ") }
 }
 
-private struct PhoneScheduleZoneSheet: View {
+struct PhoneScheduleZoneSheet: View {
     @Environment(\.dismiss) private var dismiss
     let current: String?
+    var excluded: Set<String> = []
+    var showsDevice = true
     let choose: (String?) -> Void
     @State private var query = ""
 
     var body: some View {
         NavigationStack {
             List {
-                if query.isEmpty { option("Device time zone", id: nil) }
+                if showsDevice && query.isEmpty { option("Device time zone", id: nil) }
                 ForEach(TimeZone.knownTimeZoneIdentifiers.filter(matches), id: \.self) { id in
                     option(PhoneScheduleSheet.zoneLabel(id), id: id)
                 }
@@ -245,7 +247,8 @@ private struct PhoneScheduleZoneSheet: View {
     }
 
     private func matches(_ id: String) -> Bool {
-        query.isEmpty || PhoneScheduleSheet.zoneLabel(id).localizedCaseInsensitiveContains(PhoneScheduleSheet.zoneLabel(query))
+        !excluded.contains(id) && (query.isEmpty ||
+            PhoneScheduleSheet.zoneLabel(id).localizedCaseInsensitiveContains(PhoneScheduleSheet.zoneLabel(query)))
     }
 
     private func option(_ title: String, id: String?) -> some View {

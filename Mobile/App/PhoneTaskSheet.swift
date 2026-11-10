@@ -13,13 +13,18 @@ struct PhoneTaskSheet: View {
     let close: () -> Void
     @State private var showActions = false
     @State private var scheduleRequest: PhoneScheduleRequest?
-    private var current: TaskItem? { model.document?.snapshot.workspace.tasks.first { $0.id == route.id } }
+    @State private var metadataRequest: PhoneTaskMetadataRequest?
+    @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
+    @State private var relatedTasks: [UUID] = []
+    @State private var checklistError: String?
+    private var taskID: UUID { relatedTasks.last ?? route.id }
+    private var current: TaskItem? { model.document?.snapshot.workspace.tasks.first { $0.id == taskID } }
     private var writable: Bool {
         guard let task = current, let data = model.document?.snapshot.workspace else { return false }
         return model.canBeginEditing && task.deletedAt == nil && !SmartListEligibility.isArchived(task, lists: data.lists)
     }
     private var editor: Binding<TaskFieldDraft?> {
-        Binding(get: { !route.preferEditor && model.activeDraft?.taskID == route.id ? model.activeDraft : nil },
+        Binding(get: { !route.preferEditor && model.activeDraft?.taskID == taskID ? model.activeDraft : nil },
                 set: { value in if value == nil { model.requestCloseEditor() } })
     }
     var body: some View {
@@ -35,6 +40,22 @@ struct PhoneTaskSheet: View {
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled(model.activeDraft?.hasChanges == true || model.isBusy)
     }
+    @ViewBuilder private func description(_ task: TaskItem) -> some View {
+        let preview = task.richBody.flatMap { RichDescriptionPreview(body: task.body, rich: $0) }
+        if let preview, task.richBody?.isEmpty == false {
+            PhoneRichDescription(preview: preview).id(task.id)
+        } else {
+            if task.richBody != nil, preview == nil {
+                Text("This formatting cannot be displayed. The saved description is shown below.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("richDescriptionFallback")
+            }
+            Text(task.body.isEmpty ? "No description" : task.body)
+                .accessibilityIdentifier("taskDescription").textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var reader: some View {
         NavigationStack {
             ScrollView {
@@ -72,42 +93,148 @@ struct PhoneTaskSheet: View {
                             .accessibilityIdentifier("editSchedule")
                             .accessibilityHint("Edit task schedule")
                         }
-                        if task.richBody != nil {
-                            Text("Formatting is shown as plain text in this preview. The original content is preserved.").font(.footnote).foregroundStyle(.secondary)
-                        }
-                        Text(task.body.isEmpty ? "No description" : task.body).accessibilityIdentifier("taskDescription").textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
+                        description(task)
                         Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
                             .disabled(!writable || task.richBody != nil).frame(minHeight: 44)
-                        ForEach(task.checklist) { item in Label(item.title, systemImage: item.isCompleted ? "checkmark.square" : "square") }
+                        metadata(task, data: data)
+                        if task.kind == .task || task.parentID != nil {
+                            PhoneTaskHierarchy(model: model, task: task, data: data, writable: writable,
+                                               navigate: openRelatedTask) { kind in
+                                guard let revision = model.document?.revision else { return }
+                                hierarchyRequest = PhoneTaskHierarchyRequest(task: task, revision: revision, kind: kind)
+                            }
+                        }
                         if let error = model.editorError, model.activeDraft == nil { Text(error).font(.footnote).foregroundStyle(.secondary) }
                     }.padding(20)
                 } else { ContentUnavailableView("Task unavailable", systemImage: "doc.questionmark", description: Text("Any saved edit is kept separately.")) }
-            }.toolbar {
+            }.id(taskID).toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button { showActions = true } label: { Image(systemName: "ellipsis") }
-                        .accessibilityLabel("Task actions").accessibilityIdentifier("taskActions")
-                        .disabled(!model.canBeginEditing || current == nil)
+                    HStack {
+                        if !relatedTasks.isEmpty {
+                            Button { openRelatedTask(relatedTasks.dropLast().last ?? route.id) } label: {
+                                Image(systemName: "chevron.backward")
+                            }.accessibilityLabel("Previous task").accessibilityIdentifier("relatedTaskBack")
+                                .disabled(model.isBusy)
+                        }
+                        Button { showActions = true } label: { Image(systemName: "ellipsis") }
+                            .accessibilityLabel("Task actions").accessibilityIdentifier("taskActions")
+                            .disabled(!model.canBeginEditing || current == nil)
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: close).disabled(model.isBusy).accessibilityIdentifier("taskDetailDone")
                 }
             }
+            .sheet(item: $metadataRequest) { request in
+                PhoneTaskMetadataSheet(model: model, request: request)
+            }
+            .sheet(item: $hierarchyRequest) { request in
+                PhoneTaskHierarchySheet(model: model, request: request)
+            }
             .sheet(item: $scheduleRequest) { request in
                 PhoneScheduleSheet(model: model, request: request)
             }
-            .sheet(isPresented: $showActions, onDismiss: { if current == nil { close() } }) {
-                PhoneTaskActions(model: model, taskID: route.id)
+            .sheet(isPresented: $showActions, onDismiss: {
+                if current == nil {
+                    if relatedTasks.isEmpty { close() }
+                    else { openRelatedTask(relatedTasks.dropLast().last ?? route.id) }
+                }
+            }) {
+                PhoneTaskActions(model: model, taskID: taskID)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
         }
     }
+
+    private func openRelatedTask(_ id: UUID) {
+        guard id != taskID else { return }
+        checklistError = nil
+        if id == route.id { relatedTasks = [] }
+        else if let index = relatedTasks.firstIndex(of: id) {
+            relatedTasks = Array(relatedTasks.prefix(through: index))
+        } else {
+            relatedTasks.append(id)
+        }
+    }
+
+    private func openMetadata(_ kind: PhoneTaskMetadataKind, task: TaskItem) {
+        guard let revision = model.document?.revision else { return }
+        metadataRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: kind)
+    }
+
+    private func metadata(_ task: TaskItem, data: WorkspaceData) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            metadataButton("Priority", detail: task.priority.phoneLabel, symbol: task.priority == .none ? "flag" : "flag.fill",
+                           identifier: "editTaskPriority") { openMetadata(.priority, task: task) }
+            let names = task.tagIDs.compactMap { id in data.tags.first { $0.id == id }?.name }
+            let extra = task.tagIDs.count - names.count
+            let labels = names + (extra > 0 ? ["\(extra) unavailable"] : [])
+            metadataButton("Tags", detail: labels.isEmpty ? "None" : labels.joined(separator: ", "),
+                           symbol: "tag", identifier: "editTaskTags") { openMetadata(.tags, task: task) }
+            if task.kind == .task || !task.checklist.isEmpty {
+                let editable = task.kind == .task && writable && Set(task.checklist.map(\.id)).count == task.checklist.count
+                HStack {
+                    Text("Checklist").font(.headline)
+                    Spacer()
+                    Text("\(task.checklist.filter(\.isCompleted).count) of \(task.checklist.count)").foregroundStyle(.secondary)
+                    if task.kind == .task {
+                        Button(task.checklist.isEmpty ? "Add" : "Edit") { openMetadata(.checklist, task: task) }
+                            .frame(minWidth: 44, minHeight: 44)
+                            .accessibilityLabel(task.checklist.isEmpty ? "Add checklist items" : "Edit checklist")
+                            .accessibilityIdentifier("editTaskChecklist")
+                            .disabled(!editable)
+                    }
+                }
+                ForEach(task.checklist.indices, id: \.self) { index in
+                    let item = task.checklist[index]
+                    Button {
+                        guard let revision = model.document?.revision else { return }
+                        Task {
+                            checklistError = await model.saveTaskMetadata(
+                                .setChecklistCompleted(id: item.id, completed: !item.isCompleted),
+                                taskID: task.id, expected: revision)
+                        }
+                    } label: {
+                        Label(item.title, systemImage: item.isCompleted ? "checkmark.square" : "square")
+                            .strikethrough(item.isCompleted)
+                            .foregroundStyle(item.isCompleted ? .secondary : .primary)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!editable)
+                    .accessibilityLabel((item.isCompleted ? "Uncheck " : "Check ") + item.title)
+                    .accessibilityValue(item.isCompleted ? "Checked" : "Unchecked")
+                    .accessibilityIdentifier("checklistToggle-" + item.id.uuidString)
+                }
+                if let checklistError {
+                    Text(checklistError).font(.footnote).foregroundStyle(.red).accessibilityIdentifier("checklistError")
+                }
+            }
+        }
+    }
+
+    private func metadataButton(_ title: String, detail: String, symbol: String,
+                                identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(title, systemImage: symbol)
+                Spacer()
+                Text(detail).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+            }.frame(minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityLabel(title).accessibilityValue(detail).accessibilityIdentifier(identifier)
+            .disabled(!writable)
+    }
+
 }
 
 struct PhoneCompletionButton: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let task: TaskItem
     let lists: [TaskList]
+    var isSubtaskRow = false
 
     var body: some View {
         let revision = model.document?.revision
@@ -116,16 +243,19 @@ struct PhoneCompletionButton: View {
         let symbol = task.kind == .note ? "doc.text" : task.completedAt != nil ? "checkmark.square" :
             task.wontDoAt != nil ? "xmark.square" : "square"
         let icon = Image(systemName: symbol).font(.system(size: 17))
-            .foregroundStyle(.secondary).frame(width: 44, height: 44).contentShape(Rectangle())
+            .foregroundStyle(isHistory || task.kind == .note ? .secondary : task.priority.phoneColor)
+            .frame(width: 44, height: 44).contentShape(Rectangle())
         if TaskLifecycle.refusal(for: command, task: task, lists: lists) == nil {
             Button {
                 guard let revision else { return }
-                Task { await model.performLifecycle(command, taskID: task.id, expected: revision) }
+                Task {
+                    await model.performLifecycle(command, taskID: task.id, expected: revision, fromSubtaskRow: isSubtaskRow)
+                }
             } label: { icon }
                 .buttonStyle(.plain)
                 .disabled(!model.canBeginEditing)
                 .accessibilityLabel((isHistory ? "Reopen " : "Complete ") + task.title)
-                .accessibilityIdentifier("lifecycleToggle-" + task.id.uuidString)
+                .accessibilityIdentifier((isSubtaskRow ? "subtaskToggle-" : "lifecycleToggle-") + task.id.uuidString)
         } else {
             icon.accessibilityHidden(true)
         }
@@ -190,6 +320,18 @@ private struct PhoneTaskActions: View {
                             }
                         }
                     }.disabled(!model.canBeginEditing)
+                    if task.deletedAt == nil {
+                        Section("Templates") {
+                            NavigationLink("Save as Template") {
+                                PhoneSaveTaskAsTemplate(model: model, task: task, revision: document.revision) { dismiss() }
+                            }
+                            if !SmartListEligibility.isArchived(task, lists: lists), !document.snapshot.workspace.templates.isEmpty {
+                                NavigationLink("Apply Template") {
+                                    PhoneApplyTaskTemplate(model: model, taskID: task.id, revision: document.revision) { dismiss() }
+                                }
+                            }
+                        }.disabled(!model.canBeginEditing)
+                    }
                 }
                 PhoneLifecycleFeedback(model: model)
             }

@@ -7,7 +7,10 @@ let domainSources = [
     "Models.swift",
     "Settings.swift",
     "Organization.swift",
+    "ListOrganization.swift",
+    "TagOrganization.swift",
     "RichText.swift",
+    "RichDescriptionPreview.swift",
     "CustomRecurrence.swift",
     "TaskCalendar.swift",
     "TaskCalendarProjection.swift",
@@ -18,11 +21,15 @@ let domainSources = [
     "ScheduleDraft.swift",
     "TaskScheduleEdit.swift",
     "FilterRuleEdit.swift",
+    "SavedFilterChange.swift",
     "BoardProjection.swift",
+    "SummaryReport.swift",
     "LegacyRecurrence.swift",
     "TaskDestination.swift",
     "TaskCreation.swift",
-    "TaskLifecycle.swift"
+    "TaskTemplateChange.swift",
+    "TaskLifecycle.swift",
+    "TaskMetadataChange.swift"
 ]
 let desktopSources = [
     "AppMigration.swift",

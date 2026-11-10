@@ -17,28 +17,16 @@ struct SummaryView: View {
     @State private var showOptions = false
     @State private var saved = false
 
-    private enum Period: String, CaseIterable { case thisWeek = "This Week", lastWeek = "Last Week", thisMonth = "This Month", today = "Today", custom = "Custom" }
-    private enum Grouping: String, CaseIterable { case status = "By Completion Status", list = "By List", date = "By Date" }
-    private enum Field: String, CaseIterable { case date = "Date", list = "List", description = "Description", tags = "Tags", priority = "Priority" }
+    private typealias Period = SummaryReportOptions.Period
+    private typealias Grouping = SummaryReportOptions.Grouping
+    private typealias Field = SummaryReportOptions.Field
     private var calendar: Calendar { store.settings.calendar }
-    private var interval: DateInterval {
-        let now = Date()
-        switch period {
-        case .today: return calendar.dateInterval(of: .day, for: now)!
-        case .thisWeek: return calendar.dateInterval(of: .weekOfYear, for: now)!
-        case .lastWeek:
-            let week = calendar.dateInterval(of: .weekOfYear, for: now)!
-            return DateInterval(start: calendar.date(byAdding: .weekOfYear, value: -1, to: week.start)!, end: week.start)
-        case .thisMonth: return calendar.dateInterval(of: .month, for: now)!
-        case .custom:
-            let start = calendar.startOfDay(for: min(customStart, customEnd))
-            let end = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: max(customStart, customEnd)))!
-            return DateInterval(start: start, end: end)
-        }
+    private var reportOptions: SummaryReportOptions {
+        SummaryReportOptions(period: period, customStart: customStart, customEnd: customEnd, listIDs: listIDs,
+                             status: status, grouping: grouping, fields: fields, nextPeriod: nextPeriod)
     }
     private var rangeLabel: String {
-        let end = calendar.date(byAdding: .day, value: -1, to: interval.end) ?? interval.end
-        return "\(interval.start.formatted(date: .abbreviated, time: .omitted)) – \(end.formatted(date: .abbreviated, time: .omitted))"
+        SummaryReport.rangeLabel(for: reportOptions.interval(now: Date(), calendar: calendar), calendar: calendar)
     }
     var body: some View {
         GeometryReader { geometry in
@@ -128,55 +116,9 @@ struct SummaryView: View {
     private func listMembership(_ id: UUID) -> Binding<Bool> { Binding(get: { listIDs.contains(id) }, set: { if $0 { listIDs.insert(id) } else { listIDs.remove(id) } }) }
     private func fieldMembership(_ field: Field) -> Binding<Bool> { Binding(get: { fields.contains(field) }, set: { if $0 { fields.insert(field) } else { fields.remove(field) } }) }
     private func statusName(_ value: FilterStatus) -> String { switch value { case .all: "All Status"; case .active: "Undone"; case .completed: "Completed"; case .wontDo: "Won't Do" } }
-    private func listName(_ task: TaskItem) -> String { store.data.lists.first { $0.id == task.listID }?.name ?? "Inbox" }
-    private func inPeriod(_ date: Date?) -> Bool { date.map { $0 >= interval.start && $0 < interval.end } ?? false }
-    private func statusMatches(_ task: TaskItem) -> Bool {
-        switch status { case .all: true; case .active: task.completedAt == nil && task.wontDoAt == nil; case .completed: task.completedAt != nil; case .wontDo: task.wontDoAt != nil }
-    }
-    private func taskLine(_ task: TaskItem) -> String {
-        var details: [String] = []
-        if fields.contains(.date), let due = task.dueDate { details.append(task.dayText(due) + (task.hasDueTime ? " " + task.timeText(due) : "")) }
-        if fields.contains(.list) { details.append(listName(task)) }
-        if fields.contains(.tags) { let names = store.data.tags.filter { task.tagIDs.contains($0.id) }.map { "#" + $0.name }; if !names.isEmpty { details.append(names.joined(separator: " ")) } }
-        if fields.contains(.priority), task.priority != .none { details.append(task.priority.label) }
-        var line = "- " + task.title + (details.isEmpty ? "" : " (" + details.joined(separator: " · ") + ")")
-        if fields.contains(.description), !task.body.isEmpty { line += "\n  " + task.body.replacingOccurrences(of: "\n", with: "\n  ") }
-        return line
-    }
     private func regenerate() {
         saved = false
-        let eligible = store.data.tasks.filter { task in
-            task.deletedAt == nil && task.kind == .task && (listIDs.isEmpty || listIDs.contains(task.listID ?? TaskFilter.inboxListID)) && statusMatches(task)
-                // Same explicit-selection policy as saved filters: archived or
-                // opted-out lists stay out unless explicitly selected.
-                && (listIDs.contains(task.listID ?? TaskFilter.inboxListID) || !SmartListEligibility.isExcludedFromSmart(task, lists: store.data.lists))
-        }
-        let current = eligible.filter { inPeriod($0.dueDate) || inPeriod($0.completedAt) || inPeriod($0.wontDoAt) }
-        var sections: [(String, [TaskItem])] = []
-        switch grouping {
-        case .status:
-            sections = [("Undone", current.filter { $0.completedAt == nil && $0.wontDoAt == nil }), ("Completed", current.filter { $0.completedAt != nil }), ("Won't Do", current.filter { $0.wontDoAt != nil })]
-        case .list:
-            let names = Set(current.map(listName)).sorted()
-            sections = names.map { name in (name, current.filter { listName($0) == name }) }
-        case .date:
-            let keys = Set(current.map { $0.dueDate.map { calendar.startOfDay(for: $0) } ?? calendar.startOfDay(for: $0.completedAt ?? $0.wontDoAt ?? interval.start) }).sorted()
-            sections = keys.map { date in (date.formatted(date: .abbreviated, time: .omitted), current.filter { task in calendar.isDate(task.dueDate ?? task.completedAt ?? task.wontDoAt ?? interval.start, inSameDayAs: date) }) }
-        }
-        var lines = ["Summary · \(rangeLabel)"]
-        for (name, tasks) in sections where !tasks.isEmpty { lines.append("\n\(name)\n" + tasks.map(taskLine).joined(separator: "\n")) }
-        if nextPeriod {
-            let nextEnd: Date
-            switch period {
-            case .today: nextEnd = calendar.date(byAdding: .day, value: 1, to: interval.end) ?? interval.end
-            case .thisWeek, .lastWeek: nextEnd = calendar.date(byAdding: .weekOfYear, value: 1, to: interval.end) ?? interval.end
-            case .thisMonth: nextEnd = calendar.date(byAdding: .month, value: 1, to: interval.end) ?? interval.end
-            case .custom: nextEnd = calendar.date(byAdding: .day, value: calendar.dateComponents([.day], from: interval.start, to: interval.end).day ?? 1, to: interval.end) ?? interval.end
-            }
-            let upcoming = eligible.filter { task in task.completedAt == nil && task.wontDoAt == nil && task.dueDate.map { $0 >= interval.end && $0 < nextEnd } == true }
-            if !upcoming.isEmpty { lines.append("\nNext Period Tasks\n" + upcoming.map(taskLine).joined(separator: "\n")) }
-        }
-        output = lines.joined(separator: "\n")
+        output = SummaryReport.generate(from: store.data, options: reportOptions, now: Date(), calendar: calendar).text
     }
     private func saveAsNote() {
         let id = store.createTask(title: "Summary \(rangeLabel)", kind: .note, useDefaultList: false, recognizeDates: false, body: output)

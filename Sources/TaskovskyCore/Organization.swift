@@ -47,6 +47,69 @@ public enum SmartListEligibility {
 /// clears unknown parents and breaks stored cycles on load, and the store
 /// refuses cycle-creating parents.
 public enum TaskHierarchy {
+    /// Parent-link validation shared by `setTaskParent` and direct record
+    /// edits (`updateTask`): unknown IDs, self-parenting, and descendants
+    /// (cycles) refuse, as do note, trashed, and archived parents — and
+    /// archived or trashed children. A cross-list link normalizes by
+    /// relocating the child's subtree into the parent's list instead of
+    /// leaving a relationship that spans lists.
+    public enum ParentLinkResolution: Equatable {
+        case keep
+        case relocateSubtree(toList: UUID?)
+        case refuse
+    }
+
+    public static func resolveParentLink(childID: UUID, parentID: UUID?, tasks: [TaskItem], lists: [TaskList]) -> ParentLinkResolution {
+        guard let parentID else { return .keep }
+        guard let child = tasks.first(where: { $0.id == childID }),
+              child.deletedAt == nil,
+              !(child.listID.flatMap { id in lists.first { $0.id == id } }?.isArchived ?? false) else { return .refuse }
+        guard parentID != childID,
+              let parent = tasks.first(where: { $0.id == parentID }),
+              parent.deletedAt == nil,
+              parent.kind == .task,
+              !(parent.listID.flatMap { id in lists.first { $0.id == id } }?.isArchived ?? false),
+              !isDescendant(parentID, of: childID, in: tasks) else { return .refuse }
+        if parent.listID != child.listID { return .relocateSubtree(toList: parent.listID) }
+        return .keep
+    }
+
+    /// Returns nil for an invalid link and false when the link is unchanged.
+    public static func setParent(childID: UUID, parentID: UUID?, in data: inout WorkspaceData,
+                                 now: Date) -> Bool? {
+        guard let index = data.tasks.firstIndex(where: { $0.id == childID }) else { return nil }
+        switch resolveParentLink(childID: childID, parentID: parentID, tasks: data.tasks, lists: data.lists) {
+        case .refuse: return nil
+        case .keep:
+            guard data.tasks[index].parentID != parentID else { return false }
+        case .relocateSubtree(let listID):
+            data.tasks[index].listID = listID
+            for descendant in descendants(of: childID, in: data.tasks) {
+                if let i = data.tasks.firstIndex(where: { $0.id == descendant.id }) {
+                    data.tasks[i].listID = listID
+                    data.tasks[i].updatedAt = now
+                }
+            }
+        }
+        data.tasks[index].parentID = parentID
+        data.tasks = WorkspaceData.sanitizedTaskParents(data.tasks)
+        return true
+    }
+
+    /// A child inherits its parent's list and starts with an independent schedule and status.
+    public static func addChild(id: UUID, to parentID: UUID, title: String, in data: inout WorkspaceData,
+                                position: TaskPosition, now: Date) -> Bool {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !data.tasks.contains(where: { $0.id == id }),
+              let parent = data.tasks.first(where: { $0.id == parentID }),
+              parent.kind == .task, parent.deletedAt == nil,
+              !SmartListEligibility.isArchived(parent, lists: data.lists) else { return false }
+        let child = TaskItem(id: id, title: trimmed, listID: parent.listID, createdAt: now,
+                             updatedAt: now, parentID: parentID)
+        if position == .top { data.tasks.insert(child, at: 0) } else { data.tasks.append(child) }
+        return true
+    }
+
     public static func children(of id: UUID, in tasks: [TaskItem]) -> [TaskItem] {
         tasks.filter { $0.parentID == id }
     }
