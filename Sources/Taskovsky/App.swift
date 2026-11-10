@@ -1678,8 +1678,8 @@ struct WorkspaceView: View {
             case "Title": return a.title.localizedStandardCompare(b.title) == .orderedAscending
             default: break
             }
-            let ad = destination == .reminders ? a.reminderDate : a.dueDate
-            let bd = destination == .reminders ? b.reminderDate : b.dueDate
+            let ad = destination == .reminders ? a.effectiveReminderDates.first : a.dueDate
+            let bd = destination == .reminders ? b.effectiveReminderDates.first : b.dueDate
             if ad != bd { return (ad ?? .distantFuture) < (bd ?? .distantFuture) }
             if a.priority != b.priority { return a.priority.rank < b.priority.rank }
             return store.settings.defaultAddTo == .top ? a.createdAt > b.createdAt : a.createdAt < b.createdAt
@@ -1726,7 +1726,7 @@ struct WorkspaceView: View {
             else if task.completedAt != nil || task.wontDoAt != nil {
                 title = destination == .completed ? "Completed" : destination == .wontDo ? "Won't Do" : tasks.contains(where: { $0.wontDoAt != nil }) ? "Completed & Won't Do" : "Completed"
             }
-            else if destination == .reminders { title = task.reminderDate! <= now ? "Due reminders" : "Upcoming reminders" }
+            else if destination == .reminders { title = (task.effectiveReminderDates.first ?? .distantFuture) <= now ? "Due reminders" : "Upcoming reminders" }
             else if task.kind == .note && TaskSortPolicy.normalized(sort) == "Date" { title = "Note" }
             else if TaskSortPolicy.normalized(sort) == "Priority" { title = task.priority.label }
             else if let due = task.dueDate {

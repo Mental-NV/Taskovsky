@@ -73,6 +73,7 @@ public enum CalendarScheduling {
         task.dueDate = shape.dueDate
         task.hasDueTime = shape.hasDueTime
         task.scheduledDuration = shape.window
+        TaskSchedulePolicy.normalizeEndReminder(of: &task)
         switch operation {
         case .resizeStart:
             break // The deadline and its reminder policy are unchanged.
@@ -122,6 +123,7 @@ public enum CalendarScheduling {
             return nil  // Requires the scope and eligibility checks in prepared().
         case .unschedule:
             task.dueDate = nil; task.hasDueTime = false; task.scheduledDuration = nil; task.reminderDates = []
+            task.endReminderEnabled = false
             task.recurrence = .none; task.customRecurrence = nil; task.recurrenceEndDate = nil
             task.recurrenceAnchorDay = nil; task.recurrenceAnchorMonth = nil
             task.recurrenceNominalDate = nil; task.occurrenceIndex = 1
@@ -190,6 +192,7 @@ public enum CalendarScheduling {
                 task.reminderDates = original.reminderDates.map { local.date(byAdding: .day, value: days, to: $0) ?? $0 }
             }
         }
+        TaskSchedulePolicy.normalizeEndReminder(of: &task)
         return task
     }
 }
@@ -212,6 +215,7 @@ public struct CalendarScheduleSnapshot: Equatable, Sendable {
     public var anchorMonth: Int?
     public var end: Date?
     public var occurrence: OccurrenceSchedule?
+    private var endReminderEnabled: Bool
     public init(_ task: TaskItem) {
         due = task.dueDate; timed = task.hasDueTime; window = task.scheduledDuration
         reminders = task.reminderDates; follows = task.reminderFollowsSchedule; zone = task.timeZoneID
@@ -219,6 +223,7 @@ public struct CalendarScheduleSnapshot: Equatable, Sendable {
         nominal = task.recurrenceNominalDate; anchorDay = task.recurrenceAnchorDay
         anchorMonth = task.recurrenceAnchorMonth; end = task.recurrenceEndDate
         occurrence = task.originalOccurrenceSchedule
+        endReminderEnabled = task.endReminderEnabled
     }
     public func restoring(on task: TaskItem) -> TaskItem {
         var task = task
@@ -228,6 +233,7 @@ public struct CalendarScheduleSnapshot: Equatable, Sendable {
         task.recurrenceNominalDate = nominal; task.recurrenceAnchorDay = anchorDay
         task.recurrenceAnchorMonth = anchorMonth; task.recurrenceEndDate = end
         task.originalOccurrenceSchedule = occurrence
+        task.endReminderEnabled = endReminderEnabled
         return task
     }
 }

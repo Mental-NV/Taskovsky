@@ -1426,3 +1426,18 @@ Requested change [CI-DOCS-001](../changes/skip-docs-only-ci.md) is based on main
 | Hosted workflow for final PR head | **Pending:** inspect this draft PR's checks and record its exact head, synthetic merge checkout and run URL in the PR description. The workflow file itself is a non-ignored change, so this PR must run full CI. | Application tests/build/signature/archive are not claimed passed until the exact run completes. |
 
 Live documentation-only skipping, manual dispatch, main-push filtering, rename events, oversized diffs and merge queues are **not exercised** by the local matrix. No temporary PRs or changes to the existing iPhone PR were created for filter probes. No local macOS build, app execution or native UI checks were run. The new filter does not cancel existing runs or alter branch protection. See [CI-002](ci-cd.md#ci-002) for the operational contract and native limits.
+
+
+<a id="task-duration-end-reminders"></a>
+
+### TASK-REMINDER-001 — Timed duration end reminders on Mac and iPhone
+
+[Change contract](../changes/task-duration-end-reminders-2026-11-10.md). The combined local verification branch starts from merged main `36a9e17ad1fac20e7d0c32eb5507f7d22b69b4b8` and carries forward the batch capture checkpoint. The 172-input source manifest SHA-256 is `f2a4b88f6abcebd02a2b7d84fbcbf657ac816103b2339b27e99c7f365eebfdca`. All 685 Mac tests passed on macOS 27.0.1 and the release passed strict signature verification. Five checks on the iPhone 13 Pro simulator with iOS 26.3.1 passed without failures, skips or runtime warnings.
+
+Mac native QA staged the end reminder and pressed Escape. The workspace and settings matched their original bytes. Saving showed the 10:30 reminder in task detail. Tomorrow moved the range and the reminder to the following day. Dragging the Calendar end to 11:00 left the start at 09:00. Undo restored the 10:30 end, and the task still showed its 10:30 reminder after relaunch. Saved-file checks confirmed that the end anchor was present without a second stored reminder date, settings bytes matched, and unrelated records matched after accounting for default-field serialization.
+
+The iPhone simulator verified cancelling the staged toggle, enabling it, relaunching and seeing the saved end time, and hiding the toggle when staging duration removal. A separate run in the same result bundle covered the existing manual reminder editor and Calendar start resize with Undo. The saved file retained only the new reminder preference and modification timestamp on the selected task, with its duration and settings intact. The shared and repository tests covered duplicate reminder instants, preserving manual dates on detail edits, following Calendar endpoint changes, protected file round trips, scoped Undo, and the next recurring occurrence.
+
+The guarded Mac app, preferences and fixture files were restored. The disposable iPhone simulator was removed. Physical-device and notification-delivery verification remain outside this local feature. [TickTick reminder guide](https://help.ticktick.com/articles/7055782395743567872).
+
+The feature-only Git branch was independently verified from the same main revision. Its 167-input source manifest SHA-256 is `ad92d90c0df8e90cf8d202e7d31c36404b99edffa0e5bd4c68bbc0d1b49b3db7`. It passed all 674 Mac tests, the signed release verification and five iPhone simulator checks without runtime warnings. Its saved-file audit confirmed the protected reminder preference and byte-identical settings.

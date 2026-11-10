@@ -207,6 +207,15 @@ struct PhoneScheduleSheet: View {
 
     private var reminderSection: some View {
         Section("Reminders") {
+            if let end = edit.timedDurationEnd {
+                Toggle("At the end", isOn: $edit.remindsAtEnd)
+                    .accessibilityIdentifier("scheduleReminderAtEnd")
+                if edit.remindsAtEnd {
+                    Text(end.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened,
+                                                       calendar: calendar, timeZone: calendar.timeZone)))
+                        .accessibilityIdentifier("scheduleEndReminderDate")
+                }
+            }
             Toggle("Use default reminders", isOn: $edit.usesAutomaticReminders)
                 .accessibilityIdentifier("scheduleAutomaticReminders")
             if edit.usesAutomaticReminders {
@@ -228,8 +237,11 @@ struct PhoneScheduleSheet: View {
                     edit.manualReminders.append(latest.addingTimeInterval(900))
                 }
                 .accessibilityIdentifier("scheduleAddReminder")
-                if !edit.manualReminders.isEmpty {
-                    Button("Remove all reminders", role: .destructive) { edit.manualReminders.removeAll() }
+                if !edit.manualReminders.isEmpty || edit.remindsAtEnd {
+                    Button("Remove all reminders", role: .destructive) {
+                        edit.manualReminders.removeAll()
+                        edit.remindsAtEnd = false
+                    }
                 }
             }
         }

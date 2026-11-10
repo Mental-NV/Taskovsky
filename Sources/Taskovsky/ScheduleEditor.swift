@@ -18,6 +18,7 @@ struct ScheduleEditor: View {
     @State private var endDate: Date
     @State private var hasEnd: Bool
     @State private var reminders: [Date]
+    @State private var remindsAtEnd: Bool
     @State private var zoneID: String
     @State private var automaticReminder = true
     @State private var expanded: Row?
@@ -34,6 +35,7 @@ struct ScheduleEditor: View {
         _hasEnd = State(initialValue: task.recurrenceEndDate != nil)
         _endDate = State(initialValue: task.recurrenceEndDate ?? task.dueDate ?? Date())
         _reminders = State(initialValue: task.reminderDates)
+        _remindsAtEnd = State(initialValue: task.endReminderEnabled)
         _automaticReminder = State(initialValue: TaskStore.usesDefaultReminder(task, settings: settings))
         // A stored window restores verbatim; a fresh one seeds the due date
         // (or today) with the default length so adding one is a single tap.
@@ -144,6 +146,11 @@ struct ScheduleEditor: View {
                 }.font(.system(size: 11)).padding(.horizontal, 8)
             }
             if expanded == .reminder && hasDate {
+                if timedDurationEnd != nil {
+                    Toggle("At the end", isOn: $remindsAtEnd)
+                        .font(.system(size: 11)).padding(.horizontal, 8)
+                        .accessibilityIdentifier("scheduleReminderAtEnd")
+                }
                 ForEach(Array(reminders.indices), id: \.self) { index in
                     HStack {
                         DatePicker("Reminder", selection: Binding(get: { reminders.indices.contains(index) ? reminders[index] : date }, set: { value in if reminders.indices.contains(index) { reminders[index] = value; automaticReminder = false } }), displayedComponents: [.date, .hourAndMinute]).labelsHidden().datePickerStyle(.field)
@@ -234,10 +241,16 @@ struct ScheduleEditor: View {
                 applyReminderDefault()
             }
     }
+    private var timedDurationEnd: Date? {
+        guard hasDate, hasDuration, let window = draftDuration, !window.isAllDay else { return nil }
+        return window.end
+    }
     private var reminderLabel: String {
-        if reminders.isEmpty { return "None" }
-        if reminders.count == 1 { return format(reminders[0], dateStyle: .medium, timeStyle: .short) }
-        return "\(reminders.count) reminders"
+        var dates = Set(reminders)
+        if remindsAtEnd, let end = timedDurationEnd { dates.insert(end) }
+        guard let first = dates.first else { return "None" }
+        if dates.count == 1 { return format(first, dateStyle: .medium, timeStyle: .short) }
+        return "\(dates.count) reminders"
     }
     private var durationLabel: String {
         guard hasDuration else { return "None" }
@@ -320,7 +333,7 @@ struct ScheduleEditor: View {
         hasDate = true
     }
     private func clear() {
-        var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence); updated.scheduledDuration = nil; updated.timeZoneID = nil; save(updated); dismiss()
+        var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.endReminderEnabled = false; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence); updated.scheduledDuration = nil; updated.timeZoneID = nil; save(updated); dismiss()
     }
     private func apply() {
         // Custom and legacy repeats stay mutually exclusive: a valid custom
@@ -340,6 +353,7 @@ struct ScheduleEditor: View {
         updated.recurrenceEndDate = hasDate && custom == nil && repeatDraft.repeatRule != .none && hasEnd ? calendar.startOfDay(for: endDate) : nil
         updated.scheduledDuration = hasDate ? draftDuration : nil
         updated.reminderDates = hasDate ? reminders : []
+        updated.endReminderEnabled = remindsAtEnd && timedDurationEnd != nil
         updated.reminderFollowsSchedule = hasDate ? automaticReminder : nil
         updated.timeZoneID = hasDate && (timed || settings.enableTimeZone || task.timeZoneID != nil) ? zoneID : nil
         if task.dueDate != updated.dueDate || task.recurrence != updated.recurrence { updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil }

@@ -224,6 +224,7 @@ public final class TaskStore: ObservableObject {
             task.dueDate = schedule.dueDate; task.hasDueTime = schedule.hasDueTime; task.scheduledDuration = schedule.window
         }
         TaskSchedulePolicy.reconcileSeries(of: &task, from: old)
+        TaskSchedulePolicy.normalizeEndReminder(of: &task)
         if applyDefaultReminders {
             TaskSchedulePolicy.reconcileReminders(of: &task, from: old, settings: settings, calendar: settings.calendar)
         }

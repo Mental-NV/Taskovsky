@@ -108,6 +108,7 @@ public enum TaskTemplateChange: Sendable {
             task.dueDate = schedule.dueDate
             task.hasDueTime = schedule.hasDueTime
             task.scheduledDuration = schedule.window
+            TaskSchedulePolicy.normalizeEndReminder(of: &task)
             TaskSchedulePolicy.reconcileSeries(of: &task, from: original)
             TaskSchedulePolicy.reconcileReminders(of: &task, from: original, settings: settings, calendar: calendar)
             task.updatedAt = now

@@ -284,6 +284,8 @@ The editor owns document-scoped undo. Switching task IDs, even with identical te
 
 ## UX-010 — Schedule transaction, calendar, and custom recurrence
 
+The task Schedule popover’s Reminder row offers At the end for a valid timed duration. Its staged count includes the end instant once. Save applies the preference, and Escape or Cancel leaves the task unchanged. The task row badge, detail, and Reminders destination use the effective reminder time. [Duration end reminder](../changes/task-duration-end-reminders-2026-11-10.md).
+
 Sources: [ScheduleEditor.swift](../../Sources/Taskovsky/ScheduleEditor.swift), [CalendarGrid.swift](../../Sources/Taskovsky/CalendarGrid.swift), [CustomRecurrenceEditor.swift](../../Sources/Taskovsky/CustomRecurrenceEditor.swift), [ScheduleDraft.swift](../../Sources/TaskovskyCore/ScheduleDraft.swift).
 
 Schedule popover: width 300, padding 14, VStack spacing 8, native text background. Top shortcut icons evenly share width and height 30: `sun.max` Today, `sun.horizon` Tomorrow, `calendar.badge.clock` Next week, `moon.stars` This evening, `calendar.badge.minus` No date. Next week chooses the next configured week boundary, not simply seven elapsed days; This evening chooses 18:00. No date stages removal; Clear commits removal and dismisses immediately.

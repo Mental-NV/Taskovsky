@@ -11,6 +11,65 @@ final class MobileContractTests: XCTestCase {
     private var now: Date { date("2026-11-09T12:00:00Z") }
     private func ids(_ tasks: [TaskItem]) -> [UUID] { tasks.map(\.id) }
 
+    func testEndReminderTracksTimedDurationAndKeepsExistingReminderPolicy() throws {
+        let start = now, due = start + 3_600
+        let task = TaskItem(title: "Workshop", dueDate: due, hasDueTime: true, reminderDate: due,
+                            reminderFollowsSchedule: false, scheduledDuration: .init(start: start, end: due))
+        let settings = AppSettings()
+        var draft = TaskScheduleEdit(task: task, settings: settings, calendar: calendar, now: now)
+        XCTAssertEqual(draft.timedDurationEnd, due)
+        draft.remindsAtEnd = true
+        let enabled = try draft.applying(to: task, settings: settings)
+        XCTAssertEqual(enabled.effectiveReminderDates, [due])
+        XCTAssertEqual(enabled.reminderDates, task.reminderDates)
+        XCTAssertTrue(enabled.endReminderEnabled)
+
+        draft = TaskScheduleEdit(task: enabled, settings: settings, calendar: calendar, now: now)
+        draft.setEnd(due + 900)
+        let edited = try draft.applying(to: enabled, settings: settings)
+        XCTAssertEqual(edited.effectiveReminderDates, [due, due + 900])
+        XCTAssertEqual(edited.endReminderDate, due + 900)
+        let movedStart = try XCTUnwrap(CalendarScheduling.prepared(.resizeStart(start + 900), to: edited,
+                                                                   displayCalendar: calendar, settings: settings, policyCalendar: calendar))
+        XCTAssertEqual(movedStart.effectiveReminderDates, edited.effectiveReminderDates)
+        let movedEnd = try XCTUnwrap(CalendarScheduling.prepared(.resizeEnd(due + 1_800), to: movedStart,
+                                                                 displayCalendar: calendar, settings: settings, policyCalendar: calendar))
+        XCTAssertEqual(movedEnd.reminderDates, [due + 900])
+        XCTAssertEqual(movedEnd.endReminderDate, due + 1_800)
+        XCTAssertEqual(CalendarScheduleSnapshot(edited).restoring(on: movedEnd).effectiveReminderDates, edited.effectiveReminderDates)
+
+        draft = TaskScheduleEdit(task: movedEnd, settings: settings, calendar: calendar, now: now)
+        draft.setDuration(false, defaultMinutes: 30)
+        let point = try draft.applying(to: movedEnd, settings: settings)
+        XCTAssertFalse(point.endReminderEnabled)
+        XCTAssertNil(point.endReminderDate)
+        XCTAssertEqual(point.reminderDates, movedEnd.reminderDates)
+    }
+
+    func testEndReminderSurvivesOccurrenceOverrideAndFollowsTheNextCycle() throws {
+        let due = now + 3_600
+        var task = TaskItem(title: "Daily workshop", dueDate: due, hasDueTime: true, recurrence: .daily,
+                            scheduledDuration: .init(start: now, end: due))
+        task.endReminderEnabled = true
+        let settings = AppSettings()
+        let shifted = try XCTUnwrap(CalendarScheduling.prepared(.move(start: now + 900, allDay: false), to: task,
+                                                                displayCalendar: calendar, settings: settings,
+                                                                policyCalendar: calendar, scope: .currentOccurrence, in: [task]))
+        XCTAssertEqual(shifted.endReminderDate, due + 900)
+        let encoded = try JSONEncoder().encode(WorkspaceData(tasks: [shifted]))
+        let reloaded = try XCTUnwrap(JSONDecoder().decode(WorkspaceData.self, from: encoded).tasks.first)
+        let restored = try XCTUnwrap(CalendarScheduling.prepared(.restoreOccurrence, to: reloaded,
+                                                                  displayCalendar: calendar, settings: settings,
+                                                                  policyCalendar: calendar, in: [reloaded]))
+        XCTAssertEqual(restored.endReminderDate, due)
+        let next = try XCTUnwrap(CalendarScheduling.prepared(.skipOccurrence, to: reloaded,
+                                                              displayCalendar: calendar, settings: settings,
+                                                              policyCalendar: calendar, in: [reloaded]))
+        XCTAssertEqual(next.endReminderDate, due + 86_400)
+        XCTAssertEqual(next.effectiveReminderDates, [due + 86_400])
+    }
+
+
     func testScopedBoardWeekDateMovePreservesInclusiveSpanAndTimedDueClock() throws {
         let days = CalendarDates.days(from: now, count: 7, calendar: calendar)
         let range = TaskItem(title: "Workshop", dueDate: days[2],
