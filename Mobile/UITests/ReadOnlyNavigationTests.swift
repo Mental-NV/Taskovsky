@@ -4156,6 +4156,50 @@ extension ReadOnlyNavigationTests {
         return choice
     }
 
+    @MainActor func testTaskCountdownSettingAndDateTapSurviveRelaunchAsDesigned() {
+        let app = launch()
+        let date = app.buttons["taskCountdown-00000000-0000-0000-0000-000000000002"]
+        let title = app.buttons["Prepare the weekly plan"]
+        XCTAssertFalse(date.exists)
+        app.buttons["Open navigation"].tap()
+        let settings = app.buttons["openLocalSettings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
+        settings.tap()
+        let toggle = app.switches["localTaskCountdown"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        app.buttons["localSettingsCancel"].tap()
+        app.alerts["Discard settings changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["localSettingsDone"])
+        let settingsReady = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: settings)
+        XCTAssertEqual(XCTWaiter.wait(for: [settingsReady], timeout: 5), .completed)
+        settings.tap()
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5))
+        XCTAssertEqual(toggle.value as? String, "0")
+        toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        app.buttons["localSettingsDone"].tap()
+        waitGone(app.buttons["localSettingsDone"])
+        app.buttons["smartDrawer-today"].tap()
+        XCTAssertTrue(date.waitForExistence(timeout: 5))
+        let dateLabel = date.label
+        date.tap()
+        XCTAssertEqual(date.label, "2h left")
+        attach(app, "Timed task countdown")
+        title.tap()
+        XCTAssertTrue(app.buttons["taskDetailDone"].waitForExistence(timeout: 5))
+        app.buttons["taskDetailDone"].tap()
+        XCTAssertEqual(date.label, "2h left")
+        date.tap()
+        XCTAssertEqual(date.label, dateLabel)
+        date.tap()
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(date.waitForExistence(timeout: 5))
+        XCTAssertEqual(date.label, dateLabel)
+    }
+
     @MainActor func testLocalSettingsCancelAndSaveAffectNewCaptureAfterRelaunch() {
         let app = launch()
         app.buttons["Open navigation"].tap()

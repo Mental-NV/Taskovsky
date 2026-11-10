@@ -43,6 +43,8 @@ The [Tasks root](https://help.ticktick.com/articles/7055782436621254656) was rea
 | [Kanban](https://help.ticktick.com/articles/7055782353376903168) | Section editing and task drops, including date and list columns in smart lists and Boards in folders and tags. Taskovsky adds [local grouped Boards](changes/scoped-boards-2026-11-09.md) to All, Today, Tomorrow, Next 7 Days, Inbox, folders, and tags on both platforms. Mac [Board Display Settings](changes/board-display-settings-2026-11-10.md) offers the three documented widths and optional idle task input. Exact grouping defaults, reference dimensions and settings scope remain open. The guide limits section colors by platform. Collaboration and external services are deferred. |
 | [Desktop shortcuts](https://help.ticktick.com/articles/7055780449171275776) | Shortcut customization and help. The documented command menu excludes Mac. Calendar numeric shortcuts were separately observed in the earlier native audit; The isolated line implements the observed Mac Calendar mode shortcuts. |
 
+The [Tasks FAQ](https://help.ticktick.com/articles/7055792921664028672) also describes Desktop More → Show Countdown and the mobile Countdown Mode setting followed by a date tap. The [local countdown contract](changes/task-countdown-labels-2026-11-10.md) follows those entry points and defines Taskovsky's own label formatting and persistence.
+
 ## Official Calendar guides reviewed
 
 The [Calendar root](https://help.ticktick.com/articles/7055782166172532736) and relevant local children were read. External subscription articles were not treated as implementation scope.

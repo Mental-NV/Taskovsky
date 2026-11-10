@@ -47,6 +47,7 @@ struct MobileRootView: View {
     @State private var collapsedFolders: Set<UUID> = []
     @State private var selectedTask: PhoneTaskRoute?
     @State private var revealedTaskSwipe: PhoneTaskSwipeSelection?
+    @State private var countdownRows: Set<UUID> = []
     @State private var taskRowEditor: PhoneTaskRowEditor?
     @State private var search = TaskFilter(name: "", status: .all)
     @State private var focus = MobilePreviewFixture.day
@@ -81,6 +82,9 @@ struct MobileRootView: View {
                 }
             } else { ProgressView("Opening workspace…") }
         }.task { await model.open() }
+            .onChange(of: model.taskCountdownEnabled) { _, enabled in
+                if !enabled { countdownRows.removeAll() }
+            }
             .onChange(of: model.document?.revision) { _, _ in
                 if !initialized, model.document != nil {
                     initialized = true
@@ -598,6 +602,8 @@ struct MobileRootView: View {
                 PhoneTaskSwipeRow(taskID: task.id, leading: actions.0, trailing: actions.1, selection: $revealedTaskSwipe) { gesture in
                     HStack(spacing: 0) {
                         PhoneCompletionButton(model: model, task: task, lists: lists)
+                        let switchesDate = searchQuery == nil && model.taskCountdownEnabled &&
+                            TaskDueCountdown.label(for: task, now: model.now, calendar: calendar) != nil
                         let titleButton = Button {
                             if let searchQuery { model.rememberSearch(searchQuery) }
                             revealedTaskSwipe = nil
@@ -610,9 +616,8 @@ struct MobileRootView: View {
                                     if let searchQuery {
                                         PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
                                     }
-                                    if let due = task.dueDate {
-                                        Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption)
-                                            .foregroundStyle(due < calendar.startOfDay(for: model.now) ? .red : .secondary)
+                                    if !switchesDate, let due = task.dueDate {
+                                        taskDateText(due)
                                     }
                                 }
                                 Spacer(minLength: 0)
@@ -620,7 +625,7 @@ struct MobileRootView: View {
                                     Image(systemName: "textformat").font(.caption).foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(minHeight: 48).padding(.trailing, 18).padding(.vertical, 3)
+                            .frame(minHeight: switchesDate ? 24 : 48).padding(.trailing, 18).padding(.vertical, 3)
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityLabel(task.title)
                             .background {
@@ -634,20 +639,51 @@ struct MobileRootView: View {
                                     }
                                 }
                             }
-                        if let list = sectionList, !list.isArchived, model.canBeginEditing, task.parentID == nil {
+                        let rowContent = VStack(alignment: .leading, spacing: 0) {
                             titleButton
+                            if switchesDate, let due = task.dueDate { taskCountdownButton(task, due: due) }
+                        }
+                        if let list = sectionList, !list.isArchived, model.canBeginEditing, task.parentID == nil {
+                            rowContent
                                 .contextMenu {
                                     TaskSectionMoveMenu(sections: list.sections, current: task.sectionID) {
                                         movePhoneSectionTask(task.id, to: $0, listID: list.id)
                                     }
                                 }
                             PhoneSectionTaskGrip(task: task, session: sectionListDragSession, listID: list.id)
-                        } else { titleButton }
+                        } else { rowContent }
                     }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
                 }
                 if task.id != ordered.last?.task.id { Divider().padding(.leading, 46) }
             }
         }.background(PhoneStyle.card, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 16)
+    }
+
+    private func taskDateText(_ due: Date) -> some View {
+        Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption)
+            .foregroundStyle(due < calendar.startOfDay(for: model.now) ? .red : .secondary)
+    }
+
+    private func taskCountdownButton(_ task: TaskItem, due: Date) -> some View {
+        Button {
+            if !countdownRows.insert(task.id).inserted { countdownRows.remove(task.id) }
+            revealedTaskSwipe = nil
+        } label: {
+            Group {
+                if countdownRows.contains(task.id) {
+                    TimelineView(.periodic(from: .now, by: 30)) { context in
+                        let now = model.isQA ? model.now : context.date
+                        if let label = TaskDueCountdown.label(for: task, now: now, calendar: calendar) {
+                            Text(label).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
+                        } else { taskDateText(due) }
+                    }
+                } else { taskDateText(due) }
+            }
+            .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityHint("Switches between the due date and countdown")
+            .accessibilityIdentifier("taskCountdown-" + task.id.uuidString)
     }
 
     private func taskSwipeActions(for task: TaskItem, lists: [TaskList]) -> ([PhoneTaskSwipeAction], [PhoneTaskSwipeAction]) {
@@ -716,7 +752,8 @@ struct MobileRootView: View {
                         Button {
                             guard let document = model.document else { return }
                             localSettingsRequest = PhoneLocalSettingsRequest(settings: document.snapshot.settings,
-                                                                             revision: document.revision)
+                                                                             revision: document.revision,
+                                                                             taskCountdownEnabled: model.taskCountdownEnabled)
                         } label: {
                             Image(systemName: "gearshape")
                         }.tint(.white).accessibilityLabel("Settings").accessibilityIdentifier("openLocalSettings")

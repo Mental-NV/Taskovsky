@@ -253,7 +253,15 @@ struct WorkspaceView: View {
     // relaunched onto the default Date sort. Legacy "Manual" reads as "None";
     // both mean stored-array order and enable drag reordering.
     @AppStorage("Taskovsky.taskSort", store: IsolatedDefaults.store) private var sort = "Date"
+    @AppStorage("Taskovsky.showTaskCountdown", store: IsolatedDefaults.store) private var showsTaskCountdown = false
     @AppStorage("Taskovsky.taskGroupByCreated", store: IsolatedDefaults.store) private var groupsByCreationDate = false
+    private var canShowTaskCountdown: Bool {
+        guard listViewBinding.wrappedValue == .list else { return false }
+        switch destination {
+        case .all, .today, .tomorrow, .week, .inbox, .reminders, .list, .folder, .tag, .filter: return true
+        case .notes, .completed, .wontDo, .summary, .search, .trash: return false
+        }
+    }
     private var canGroupByCreationDate: Bool { destination.supportsCreatedDateGrouping && listViewBinding.wrappedValue == .list }
     private var isGroupingByCreationDate: Bool { groupsByCreationDate && canGroupByCreationDate }
     private var reorderUnavailableMessage: String? {
@@ -1430,6 +1438,9 @@ struct WorkspaceView: View {
                         Divider()
                     }
                     Button(showDetailsPreview ? "Hide Details" : "Show Details") { showDetailsPreview.toggle() }
+                    if canShowTaskCountdown {
+                        Button(showsTaskCountdown ? "Hide Countdown" : "Show Countdown") { showsTaskCountdown.toggle() }
+                    }
                     Button(showChecklistItems ? "Hide Checklist Items" : "Show Checklist Items") { toggleChecklistItems(now: now) }
                     Divider()
                     if let list = activeList, !list.isArchived {
@@ -1861,6 +1872,7 @@ private extension WorkspaceView {
             else { selectTask(task.id) }
         } : nil, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
             .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: interactive, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
+            .environment(\.showsTaskCountdown, showsTaskCountdown && canShowTaskCountdown)
             .contextMenu { taskMenu(task) }
     }
     /// Validates and commits an in-group task reorder. Non-None sorts are

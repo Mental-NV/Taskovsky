@@ -6,6 +6,7 @@ struct PhoneLocalSettingsRequest: Identifiable {
     let id = UUID()
     let settings: AppSettings
     let revision: WorkspaceRevision
+    let taskCountdownEnabled: Bool
 }
 
 struct PhoneLocalSettings: View {
@@ -13,6 +14,7 @@ struct PhoneLocalSettings: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let request: PhoneLocalSettingsRequest
     @State private var draft: LocalWorkspacePreferences
+    @State private var taskCountdownEnabled: Bool
     @State private var confirmDiscard = false
     @State private var error: String?
 
@@ -20,9 +22,11 @@ struct PhoneLocalSettings: View {
         self.model = model
         self.request = request
         _draft = State(initialValue: LocalWorkspacePreferences(request.settings))
+        _taskCountdownEnabled = State(initialValue: request.taskCountdownEnabled)
     }
 
-    private var changed: Bool { draft != LocalWorkspacePreferences(request.settings) }
+    private var workspacePreferencesChanged: Bool { draft != LocalWorkspacePreferences(request.settings) }
+    private var changed: Bool { workspacePreferencesChanged || taskCountdownEnabled != request.taskCountdownEnabled }
     private var lists: [TaskList] { model.document?.snapshot.workspace.lists.filter { !$0.isArchived } ?? [] }
     private var tags: [TaskTag] { model.document?.snapshot.workspace.tags ?? [] }
 
@@ -38,6 +42,8 @@ struct PhoneLocalSettings: View {
                         }
                     }.pickerStyle(.navigationLink).accessibilityIdentifier("localWeekStart")
                     Toggle("Save time zone with new dates", isOn: $draft.enableTimeZone)
+                    Toggle("Countdown Mode", isOn: $taskCountdownEnabled)
+                        .accessibilityIdentifier("localTaskCountdown")
                 }
                 Section("New Tasks") {
                     Picker("Default date", selection: $draft.defaultDate) {
@@ -127,8 +133,12 @@ struct PhoneLocalSettings: View {
     private func save() {
         guard changed else { dismiss(); return }
         Task {
-            error = await model.saveLocalPreferences(draft, expected: request.revision)
-            if error == nil { dismiss() }
+            if workspacePreferencesChanged {
+                error = await model.saveLocalPreferences(draft, expected: request.revision)
+                guard error == nil else { return }
+            }
+            model.setTaskCountdownEnabled(taskCountdownEnabled)
+            dismiss()
         }
     }
 
