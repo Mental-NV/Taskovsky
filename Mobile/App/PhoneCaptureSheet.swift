@@ -204,14 +204,23 @@ private struct CaptureTemplates: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selected: TaskTemplate?
     @State private var confirm = false
+    @State private var query = ""
     private func apply(_ seed: TaskTemplate) {
         if let id = model.captureDraft?.id { model.changeCapture(id: id) { $0.applyTemplate(seed) } }; dismiss()
     }
     var body: some View {
-        List(model.document?.snapshot.workspace.templates ?? []) { seed in
-            Button(seed.name) {
-                if model.captureDraft?.hasChanges == true { selected = seed; confirm = true } else { apply(seed) }
-            }.frame(minHeight: 44)
+        let templates = model.document?.snapshot.workspace.templates ?? []
+        let matches = TaskTemplate.matching(query, in: templates)
+        List {
+            PhoneTemplateSearchField(query: $query)
+            if matches.isEmpty && !templates.isEmpty {
+                Text("No matching templates").foregroundStyle(.secondary)
+            }
+            ForEach(matches) { seed in
+                Button(seed.name) {
+                    if model.captureDraft?.hasChanges == true { selected = seed; confirm = true } else { apply(seed) }
+                }.frame(minHeight: 44)
+            }
         }.navigationTitle("Templates")
             .alert("Replace this capture?", isPresented: $confirm) {
                 Button("Use template") { if let selected { apply(selected) } }

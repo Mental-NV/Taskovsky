@@ -1544,3 +1544,20 @@ The tests exercise drag from Arrange in Day, Month and Multi-Week. Week and Mult
 | Guarded Mac smoke check | The release opened the Work fixture and exposed the manual reorder grip. Pointer drag attempts left order unchanged. The fixture workspace and settings were byte-identical, and the prior guarded app and its preferences were restored. Native Mac drop behavior remains unconfirmed in this run. |
 
 The simulator checks cover the named fixtures and touch workflows. The Move earlier and Move later accessibility actions still need a VoiceOver interaction check.
+
+<a id="template-search-order"></a>
+
+## Local template search and order — November 10, 2026
+
+[Change contract](../changes/template-search-order-2026-11-10.md). The feature was verified in isolation from `main` at `3c1204a14eccef61c2ff80c523a8fc53e1f4e558`.
+
+| Evidence | Result |
+| --- | --- |
+| macOS 27.0.1, Xcode 27.0 | **679 tests passed.** The workspace test covers accent-insensitive matching, stale and invalid reorders and exact preservation of template records. The release build and strict signature check passed. |
+| Guarded Mac UI | Search matched template descriptions in Settings and Apply Template and a checklist item in capture. Filtering hid the reorder grips. The card menu saved a new order and capture showed that order. Two pointer drag attempts left order unchanged, so Mac drag remains unconfirmed. |
+| iPhone 13 Pro simulator, iOS 26.5, Xcode 27.0 | **Four workflows passed across two runs.** Manager search filtered by description, then native row dragging saved an order visible after relaunch. Capture found a checklist match and applied its title to the draft. The styled capture, styled Apply Template and plain manager workflows also passed. The rerun scrolled back to the title after returning from the capture picker. |
+| Saved fixtures | The Mac order changed through the card menu and all template and other workspace records matched exactly. The iPhone order changed through native drag. Both phone sessions matched after comparing templates by name and excluding independently generated template and checklist IDs. Other workspace records matched and settings were byte-identical on both platforms. The previous guarded Mac app and preferences were restored. |
+
+Physical iPhone and VoiceOver interactions are outside this run.
+
+Final source-manifest SHA-256 `b1e0cc1f1133e75a96df5965e0cec6a0c031878fe68b199f49f7a49717f18e92`. Guarded Mac manifest SHA-256 `752d9ab6250dc5338023ff32902ceb647d84736163157d2c4ee490985e484f41`, captured before the later iPhone-only changes.

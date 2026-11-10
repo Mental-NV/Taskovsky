@@ -1,4 +1,6 @@
+import CoreTransferable
 import SwiftUI
+import UniformTypeIdentifiers
 import TaskovskyCore
 
 /// Settings-only flat switch: 26x16 track, 14pt white knob, flat accent when on
@@ -59,12 +61,27 @@ struct FlatCheckboxStyle: ToggleStyle {
     }
 }
 
+private struct MacTemplateDrag: Codable, Transferable {
+    let id: UUID
+    let scope: UUID
+    let order: [UUID]
+
+    static var transferRepresentation: some TransferRepresentation {
+        CodableRepresentation(contentType: UTType(exportedAs: "local.taskovsky.template-order"))
+            .visibility(.ownProcess)
+    }
+}
+
 struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: TaskStore
     let calendarShortcuts: CalendarShortcutBindings
     @State private var section: Section = .smartLists
     @State private var editingTemplate: TemplateDraft?
+    @State private var templateQuery = ""
+    @State private var templateDragScope = UUID()
+    @State private var templateDropTarget: UUID?
+    @State private var templateOrderError: String?
 
     private enum Section: String, CaseIterable {
         case smartLists = "Smart Lists", dateTime = "Date & Time", shortcuts = "Shortcuts", more = "More", about = "About"
@@ -219,39 +236,105 @@ struct SettingsView: View {
                     HStack { Button("Reset Default", action: resetDefaults).buttonStyle(.plain).foregroundStyle(accent); Spacer() }
                 }
             }
-            titled("Task Template") {
-                VStack(alignment: .leading, spacing: 10) {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 145), spacing: 10), count: 3), spacing: 10) {
-                        ForEach(store.data.templates) { template in
-                            ZStack(alignment: .topTrailing) {
-                                Button { editingTemplate = TemplateDraft(template) } label: {
-                                    VStack(alignment: .leading, spacing: 7) {
-                                        Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2).padding(.trailing, 20)
-                                        if !template.checklist.isEmpty {
-                                            ForEach(Array(template.checklist.prefix(5))) { item in
-                                                HStack(alignment: .top, spacing: 5) { Image(systemName: "square"); Text(item.title).lineLimit(1) }.font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme))
-                                            }
-                                        } else if !template.body.isEmpty {
-                                            Text(template.body).font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme)).lineLimit(4)
-                                        } else {
-                                            Text(template.title).font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme)).lineLimit(4)
-                                        }
-                                        Spacer(minLength: 0)
-                                    }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(14).contentShape(Rectangle())
-                                }.buttonStyle(.plain)
-                                Menu {
-                                    Button("Edit") { editingTemplate = TemplateDraft(template) }
-                                    Button("Delete", role: .destructive) { store.deleteTemplate(id: template.id) }
-                                } label: { Image(systemName: "ellipsis").frame(width: 25, height: 25).contentShape(Rectangle()) }
-                                    .menuStyle(.borderlessButton).fixedSize().padding(8).help("Template options")
-                            }.frame(height: 170).background(cardBackground, in: RoundedRectangle(cornerRadius: 8))
-                        }
-                    }
-                    Button { editingTemplate = TemplateDraft() } label: { Label("New Template", systemImage: "plus") }
+            titled("Task Template") { templateManager }
+        }
+    }
+
+    private var templateManager: some View {
+        let order = store.data.templates.map(\.id)
+        let matches = TaskTemplate.matching(templateQuery, in: store.data.templates)
+        return VStack(alignment: .leading, spacing: 10) {
+            TemplateSearchField(query: $templateQuery)
+                .onChange(of: templateQuery) { _, _ in
+                    templateDragScope = UUID()
+                    templateDropTarget = nil
                 }
+            if let templateOrderError {
+                Text(templateOrderError).font(.footnote).foregroundStyle(.red)
+            }
+            if matches.isEmpty && !store.data.templates.isEmpty {
+                Text("No matching templates").foregroundStyle(.secondary)
+            }
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(minimum: 145), spacing: 10), count: 3), spacing: 10) {
+                ForEach(matches) { template in templateCard(template, order: order) }
+            }
+            Button { editingTemplate = TemplateDraft() } label: { Label("New Template", systemImage: "plus") }
+        }
+    }
+
+    private var canReorderTemplates: Bool {
+        store.data.templates.count > 1 && templateQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func templateCard(_ template: TaskTemplate, order: [UUID]) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Button { editingTemplate = TemplateDraft(template) } label: {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2).padding(.trailing, 20)
+                    if !template.checklist.isEmpty {
+                        ForEach(Array(template.checklist.prefix(5))) { item in
+                            HStack(alignment: .top, spacing: 5) { Image(systemName: "square"); Text(item.title).lineLimit(1) }
+                                .font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme))
+                        }
+                    } else {
+                        Text(template.body.isEmpty ? template.title : template.body)
+                            .font(.system(size: 12)).foregroundStyle(Palette.explanatory(colorScheme)).lineLimit(4)
+                    }
+                    Spacer(minLength: 0)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .padding(14).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityIdentifier("templateCard-" + template.id.uuidString)
+            Menu {
+                Button("Edit") { editingTemplate = TemplateDraft(template) }
+                if canReorderTemplates, let index = order.firstIndex(of: template.id) {
+                    if index > 0 {
+                        Button("Move earlier") { _ = moveTemplate(template.id, to: order[index - 1], order: order) }
+                    }
+                    if index + 1 < order.count {
+                        Button("Move later") { _ = moveTemplate(template.id, to: order[index + 1], order: order) }
+                    }
+                }
+                Button("Delete", role: .destructive) { store.deleteTemplate(id: template.id) }
+            } label: { Image(systemName: "ellipsis").frame(width: 25, height: 25).contentShape(Rectangle()) }
+                .menuStyle(.borderlessButton).fixedSize().padding(8).help("Template options")
+        }
+        .frame(height: 170)
+        .background(cardBackground, in: RoundedRectangle(cornerRadius: 8))
+        .overlay(alignment: .bottomTrailing) {
+            if canReorderTemplates {
+                Image(systemName: "line.3.horizontal").foregroundStyle(.secondary)
+                    .frame(width: 25, height: 25).contentShape(Rectangle()).padding(8)
+                    .accessibilityLabel("Drag " + template.name).help("Drag to reorder template")
+                    .draggable(MacTemplateDrag(id: template.id, scope: templateDragScope, order: order))
+            }
+        }
+        .dropDestination(for: MacTemplateDrag.self) { payloads, _ in
+            guard canReorderTemplates, payloads.count == 1, let payload = payloads.first,
+                  payload.scope == templateDragScope else { return false }
+            return moveTemplate(payload.id, to: template.id, order: payload.order)
+        } isTargeted: { targeted in
+            if targeted && canReorderTemplates { templateDropTarget = template.id }
+            else if templateDropTarget == template.id { templateDropTarget = nil }
+        }
+        .overlay {
+            if templateDropTarget == template.id {
+                RoundedRectangle(cornerRadius: 8).strokeBorder(accent, lineWidth: 2)
+                    .allowsHitTesting(false).accessibilityHidden(true)
             }
         }
     }
+
+    private func moveTemplate(_ id: UUID, to target: UUID, order: [UUID]) -> Bool {
+        guard id != target, let from = order.firstIndex(of: id), let to = order.firstIndex(of: target) else { return false }
+        var reordered = order
+        reordered.remove(at: from)
+        reordered.insert(id, at: to)
+        let saved = store.reorderTemplates(reordered, expectedOrder: order)
+        templateOrderError = saved ? nil : "Could not save the template order. Try again."
+        return saved
+    }
+
     private var about: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Taskovsky Pre-Alpha").font(.system(size: 17, weight: .semibold))

@@ -515,6 +515,15 @@ public struct TaskTemplate: Codable, Identifiable, Equatable, Sendable {
     }
 }
 extension TaskTemplate {
+    public static func matching(_ query: String, in templates: [Self]) -> [Self] {
+        let term = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !term.isEmpty else { return templates }
+        return templates.filter { template in
+            [template.name, template.title, template.body].contains { $0.localizedStandardContains(term) } ||
+                template.checklist.contains { $0.title.localizedStandardContains(term) }
+        }
+    }
+
     public static var builtIns: [TaskTemplate] {
         [
             TaskTemplate(name: "To-dos before work", title: "To-dos before work", checklist: ["Reflection on yesterday", "Check emails", "Check tasks in Inbox", "Find the 3 most important tasks"].map { ChecklistItem(title: $0) }),

@@ -49,6 +49,7 @@ public enum TaskTemplateChange: Sendable {
     case create(id: UUID, fields: TaskTemplateFields)
     case update(id: UUID, fields: TaskTemplateFields)
     case delete(UUID)
+    case reorder(ids: [UUID], expectedOrder: [UUID])
     case saveFromTask(taskID: UUID, templateID: UUID, name: String)
     case applyToTask(templateID: UUID, taskID: UUID)
 
@@ -69,6 +70,14 @@ public enum TaskTemplateChange: Sendable {
         case .delete(let id):
             guard let index = uniqueIndex(id, in: data.templates) else { return nil }
             data.templates.remove(at: index)
+        case .reorder(let ids, let expectedOrder):
+            let current = data.templates.map(\.id)
+            let identities = Set(current)
+            guard expectedOrder == current, identities.count == current.count,
+                  ids.count == current.count, Set(ids) == identities else { return nil }
+            guard ids != current else { return false }
+            let byID = Dictionary(uniqueKeysWithValues: data.templates.map { ($0.id, $0) })
+            data.templates = ids.compactMap { byID[$0] }
         case .saveFromTask(let taskID, let templateID, let name):
             let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty, !data.templates.contains(where: { $0.id == templateID }),

@@ -345,6 +345,17 @@ public final class TaskStore: ObservableObject {
     }
     public func updateTemplate(_ template: TaskTemplate) { if let i = data.templates.firstIndex(where: { $0.id == template.id }) { data.templates[i] = template } else { data.templates.append(template) }; save() }
     public func deleteTemplate(id: UUID) { data.templates.removeAll { $0.id == id }; save() }
+    public func reorderTemplates(_ ids: [UUID], expectedOrder: [UUID]) -> Bool {
+        var staged = data
+        let change = TaskTemplateChange.reorder(ids: ids, expectedOrder: expectedOrder)
+        guard let changed = try? change.apply(to: &staged, settings: settings, now: Date(), calendar: settings.calendar)
+        else { return false }
+        guard changed else { return true }
+        guard writeWorkspace(staged) else { return false }
+        data = staged
+        return true
+    }
+
     @discardableResult public func createTaskFromTemplate(id: UUID, listID: UUID? = nil, dueDate: Date? = nil, useDefaultList: Bool = true, sectionID: UUID? = nil) -> UUID? {
         if let sectionID {
             guard data.lists.contains(where: { $0.id == listID && !$0.isArchived && $0.sections.contains(where: { $0.id == sectionID }) })

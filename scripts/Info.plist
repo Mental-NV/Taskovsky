@@ -41,6 +41,11 @@
         <key>UTTypeConformsTo</key><array><string>public.data</string></array>
     </dict>
     <dict>
+        <key>UTTypeIdentifier</key><string>local.taskovsky.template-order</string>
+        <key>UTTypeDescription</key><string>Taskovsky Template Order</string>
+        <key>UTTypeConformsTo</key><array><string>public.data</string></array>
+    </dict>
+    <dict>
         <key>UTTypeIdentifier</key><string>local.taskovsky.rich-description</string>
         <key>UTTypeDescription</key><string>Taskovsky Rich Description</string>
         <key>UTTypeConformsTo</key><array><string>public.data</string></array>

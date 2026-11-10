@@ -301,6 +301,8 @@ struct TaskDetail: View {
                     }
                     Button("Save as Template") { _ = store.saveTemplate(from: id) }
                     Menu("Apply Template") {
+                        Button("Browse Templates…") { showTemplates.wrappedValue = true }
+                        Divider()
                         ForEach(store.data.templates) { template in
                             Button(template.name) { applyTemplate(template) }
                         }
