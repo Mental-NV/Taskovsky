@@ -61,6 +61,8 @@ Older reference pages may contain dated measurements or historical implementatio
 
 [Task-row swipes on iPhone](changes/mobile-task-row-swipes-2026-11-10.md) expose the local Schedule, Priority, Move and lifecycle actions without committing a full swipe. Exact reference defaults and customization remain open. In Tasks, [Skip this occurrence](changes/mobile-task-schedule-skip-2026-11-10.md) is available from the Schedule action and task detail for eligible series. The [Mac Tasks command](changes/mac-task-skip-occurrence-2026-11-10.md) stages the same action from the row menu and task detail.
 
+The iPhone [Task Actions layout editor](changes/iphone-task-action-layout-2026-11-10.md) follows the documented More → Edit pin and reorder flow for supported local actions. Taskovsky keeps the current action order as its default and saves a device preference. Eligibility and destructive confirmations follow the existing commands.
+
 ## Scheduling and reminders
 
 | ID / capability | TickTick evidence | Taskovsky status and current evidence | Remaining difference / next comparison |

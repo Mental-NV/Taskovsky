@@ -1458,6 +1458,88 @@ final class ReadOnlyNavigationTests: XCTestCase {
         action.tap()
     }
 
+    @MainActor func testCustomizeTaskActionsAndKeepLayoutAcrossRelaunch() {
+        let app = launch()
+        let task = app.buttons["Review the project outline"]
+        let done = app.buttons["taskActionsDone"]
+        let more = app.buttons["taskActionsMore"]
+        let edit = app.buttons["editTaskActionLayout"]
+        let save = app.buttons["taskActionLayoutDone"]
+        let duplicate = app.buttons["Duplicate"]
+        let complete = app.buttons["Complete"]
+        let move = app.buttons["Move to List"]
+        func openActions() {
+            XCTAssertTrue(task.waitForExistence(timeout: 8))
+            task.tap()
+            app.buttons["taskActions"].tap()
+            XCTAssertTrue(done.waitForExistence(timeout: 5))
+        }
+        func openMore() {
+            reveal(more, in: app)
+            more.tap()
+            XCTAssertTrue(edit.waitForExistence(timeout: 5))
+        }
+        func openEditor() {
+            reveal(edit, in: app)
+            edit.tap()
+            XCTAssertTrue(save.waitForExistence(timeout: 5))
+        }
+        func returnToActions() {
+            app.navigationBars["More"].buttons.firstMatch.tap()
+            XCTAssertTrue(done.waitForExistence(timeout: 5))
+        }
+        func assertCustomized() {
+            XCTAssertTrue(move.waitForExistence(timeout: 5))
+            XCTAssertLessThan(move.frame.minY, complete.frame.minY)
+            XCTAssertFalse(duplicate.exists)
+        }
+        openActions()
+        XCTAssertTrue(duplicate.exists)
+        openMore()
+        openEditor()
+        app.buttons["Unpin Duplicate"].tap()
+        let target = app.staticTexts["taskActionLayoutRow-complete"]
+        reveal(target, in: app, towardTop: true)
+        let grip = app.descendants(matching: .any).matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND label CONTAINS %@", "Reorder", "Move to List")).firstMatch
+        guard grip.waitForExistence(timeout: 5) else {
+            attach(app, "Task action reorder controls")
+            return XCTFail("The native reorder grip is unavailable.")
+        }
+        grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.3,
+            thenDragTo: target.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.1)))
+        save.tap()
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5))
+        returnToActions()
+        assertCustomized()
+        attach(app, "Customized Task Actions")
+        app.terminate(); app.launch()
+        openActions()
+        assertCustomized()
+        openMore()
+        XCTAssertTrue(duplicate.exists)
+        openEditor()
+        let pinDuplicate = app.buttons["Pin Duplicate"]
+        reveal(pinDuplicate, in: app)
+        pinDuplicate.tap()
+        let unpinDuplicate = app.buttons["Unpin Duplicate"]
+        reveal(unpinDuplicate, in: app, towardTop: true)
+        XCTAssertTrue(unpinDuplicate.exists)
+        let defaults = app.buttons["Restore Defaults"]
+        reveal(defaults, in: app)
+        defaults.tap()
+        app.buttons["taskActionLayoutCancel"].tap()
+        XCTAssertTrue(duplicate.waitForExistence(timeout: 5))
+        openEditor()
+        reveal(defaults, in: app)
+        defaults.tap()
+        save.tap()
+        waitGone(save)
+        returnToActions()
+        XCTAssertTrue(duplicate.exists)
+        XCTAssertLessThan(complete.frame.minY, move.frame.minY)
+    }
+
     @MainActor private func expectLifecycleNotice(_ value: String, in app: XCUIApplication) {
         let notice = app.staticTexts["lifecycleFeedback"]
         let predicate = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND label == %@", value), object: notice)
@@ -1470,6 +1552,14 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(root.waitForExistence(timeout: 5))
         root.tap()
         app.buttons["taskActions"].tap()
+        let more = app.buttons["taskActionsMore"]
+        reveal(more, in: app)
+        more.tap()
+        app.buttons["editTaskActionLayout"].tap()
+        let unpin = app.buttons["Unpin Duplicate"]
+        reveal(unpin, in: app)
+        unpin.tap()
+        app.buttons["taskActionLayoutDone"].tap()
         let duplicate = app.buttons["Duplicate"]
         reveal(duplicate, in: app)
         duplicate.tap()

@@ -589,12 +589,57 @@ private struct PhoneTaskMoveChoices: View {
     }
 }
 
+private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
+    case complete, reopen, wontDo, pin, move, duplicate, convert, trash, saveTemplate, applyTemplate
+
+    var id: Self { self }
+    var title: String {
+        switch self {
+        case .complete: "Complete"
+        case .reopen: "Reopen"
+        case .wontDo: "Won't Do"
+        case .pin: "Pin or Unpin"
+        case .move: "Move to List"
+        case .duplicate: "Duplicate"
+        case .convert: "Convert to Task or Note"
+        case .trash: "Move to Trash"
+        case .saveTemplate: "Save as Template"
+        case .applyTemplate: "Apply Template"
+        }
+    }
+}
+
+private struct PhoneTaskActionLayout: Codable, Equatable {
+    var pinned = PhoneTaskAction.allCases
+    var more: [PhoneTaskAction] = []
+
+    static func decode(_ data: Data) -> Self? {
+        if data.isEmpty { return Self() }
+        guard var layout = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
+        var seen = Set<PhoneTaskAction>()
+        layout.pinned = layout.pinned.filter { seen.insert($0).inserted }
+        layout.more = (layout.more + PhoneTaskAction.allCases).filter { seen.insert($0).inserted }
+        return layout
+    }
+}
+
 private struct PhoneTaskActions: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let taskID: UUID
     let openDuplicate: (UUID) -> Void
+    @AppStorage private var layoutData: Data
     @Environment(\.dismiss) private var dismiss
     @State private var purge: PurgeRequest?
+
+    init(model: PhoneWorkspaceModel, taskID: UUID, openDuplicate: @escaping (UUID) -> Void) {
+        self.model = model
+        self.taskID = taskID
+        self.openDuplicate = openDuplicate
+        let key = model.isQA
+            ? "TaskovskyMobile.qaTaskActionLayout.v1." + (model.directory?.lastPathComponent ?? "invalid")
+            : "TaskovskyMobile.taskActionLayout.v1"
+        _layoutData = AppStorage(wrappedValue: Data(), key)
+    }
 
     private struct PurgeRequest: Identifiable {
         let id: UUID
@@ -607,42 +652,21 @@ private struct PhoneTaskActions: View {
             List {
                 if let document = model.document,
                    let task = document.snapshot.workspace.tasks.first(where: { $0.id == taskID }) {
-                    let lists = document.snapshot.workspace.lists
+                    let layout = PhoneTaskActionLayout.decode(layoutData) ?? .init()
                     Section(task.title) {
-                        action("Complete", .complete, task: task, document: document)
-                        action("Reopen", .reopen, task: task, document: document)
-                        action("Won't Do", .wontDo, task: task, document: document)
-                        action(task.isPinned ? "Unpin" : "Pin", .setPinned(!task.isPinned), task: task, document: document)
-                        if TaskLifecycle.refusal(for: .move(nil), task: task, lists: lists) == nil {
-                            NavigationLink("Move to List") {
-                                PhoneTaskMoveChoices(model: model, request: PhoneTaskMoveRequest(task: task, revision: document.revision)) {
-                                    dismiss()
-                                }
-                            }
-                        }
-                        action("Duplicate", .duplicate(copyID: UUID()), task: task, document: document)
-                        let kind: TaskKind = task.kind == .task ? .note : .task
-                        action(kind == .note ? "Convert to Note" : "Convert to Task", .setKind(kind),
-                               task: task, document: document)
-                        action("Move to Trash", .trash, role: .destructive, task: task, document: document)
+                        ForEach(layout.pinned) { row($0, task: task, document: document) }
                         action("Restore", .restore, task: task, document: document)
-                        if TaskLifecycle.refusal(for: .purge, task: task, lists: lists) == nil {
+                        if TaskLifecycle.refusal(for: .purge, task: task, lists: document.snapshot.workspace.lists) == nil {
                             Button("Delete Forever", role: .destructive) {
                                 purge = PurgeRequest(id: task.id, title: task.title, revision: document.revision)
                             }
                         }
                     }.disabled(!model.canBeginEditing)
                     if task.deletedAt == nil {
-                        Section("Templates") {
-                            NavigationLink("Save as Template") {
-                                PhoneSaveTaskAsTemplate(model: model, task: task, revision: document.revision) { dismiss() }
-                            }
-                            if !SmartListEligibility.isArchived(task, lists: lists), !document.snapshot.workspace.templates.isEmpty {
-                                NavigationLink("Apply Template") {
-                                    PhoneApplyTaskTemplate(model: model, taskID: task.id, revision: document.revision) { dismiss() }
-                                }
-                            }
-                        }.disabled(!model.canBeginEditing)
+                        Section {
+                            NavigationLink("More") { moreActions(task: task, document: document) }
+                                .accessibilityIdentifier("taskActionsMore")
+                        }
                     }
                 }
                 PhoneLifecycleFeedback(model: model)
@@ -666,6 +690,60 @@ private struct PhoneTaskActions: View {
         .interactiveDismissDisabled(model.isBusy)
     }
 
+    private func moreActions(task: TaskItem, document: WorkspaceDocument) -> some View {
+        let saved = PhoneTaskActionLayout.decode(layoutData)
+        return List {
+            if let saved, !saved.more.isEmpty {
+                Section {
+                    ForEach(saved.more) { row($0, task: task, document: document) }
+                }.disabled(!model.canBeginEditing)
+            }
+            Section {
+                if let saved {
+                    NavigationLink("Edit") { PhoneTaskActionLayoutEditor(layout: saved, data: $layoutData) }
+                        .accessibilityIdentifier("editTaskActionLayout")
+                } else {
+                    Text("This saved action layout is unavailable in this version.").foregroundStyle(.secondary)
+                }
+            } footer: { Text("Pin actions to keep them in Task Actions, or move them here.") }
+            PhoneLifecycleFeedback(model: model)
+        }.navigationTitle("More")
+    }
+
+    @ViewBuilder private func row(_ item: PhoneTaskAction, task: TaskItem, document: WorkspaceDocument) -> some View {
+        let lists = document.snapshot.workspace.lists
+        switch item {
+        case .complete: action(item.title, .complete, task: task, document: document)
+        case .reopen: action(item.title, .reopen, task: task, document: document)
+        case .wontDo: action(item.title, .wontDo, task: task, document: document)
+        case .pin: action(task.isPinned ? "Unpin" : "Pin", .setPinned(!task.isPinned), task: task, document: document)
+        case .move:
+            if TaskLifecycle.refusal(for: .move(nil), task: task, lists: lists) == nil {
+                NavigationLink(item.title) {
+                    PhoneTaskMoveChoices(model: model, request: PhoneTaskMoveRequest(task: task, revision: document.revision)) { dismiss() }
+                }
+            }
+        case .duplicate: action(item.title, .duplicate(copyID: UUID()), task: task, document: document)
+        case .convert:
+            let kind: TaskKind = task.kind == .task ? .note : .task
+            action(kind == .note ? "Convert to Note" : "Convert to Task", .setKind(kind), task: task, document: document)
+        case .trash: action(item.title, .trash, role: .destructive, task: task, document: document)
+        case .saveTemplate:
+            if task.deletedAt == nil {
+                NavigationLink(item.title) {
+                    PhoneSaveTaskAsTemplate(model: model, task: task, revision: document.revision) { dismiss() }
+                }
+            }
+        case .applyTemplate:
+            if task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: lists),
+               !document.snapshot.workspace.templates.isEmpty {
+                NavigationLink(item.title) {
+                    PhoneApplyTaskTemplate(model: model, taskID: task.id, revision: document.revision) { dismiss() }
+                }
+            }
+        }
+    }
+
     @ViewBuilder private func action(_ title: String, _ command: TaskLifecycleCommand,
                                      role: ButtonRole? = nil, task: TaskItem, document: WorkspaceDocument) -> some View {
         if TaskLifecycle.refusal(for: command, task: task, lists: document.snapshot.workspace.lists) == nil {
@@ -680,5 +758,93 @@ private struct PhoneTaskActions: View {
                 dismiss()
             }
         }
+    }
+}
+
+private struct PhoneTaskActionLayoutEditor: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var data: Data
+    @State private var draft: PhoneTaskActionLayout
+    @State private var originalData: Data
+    @State private var showSaveError = false
+
+    init(layout: PhoneTaskActionLayout, data: Binding<Data>) {
+        _data = data
+        _draft = State(initialValue: layout)
+        _originalData = State(initialValue: data.wrappedValue)
+    }
+
+    var body: some View {
+        List {
+            actions("Pinned", items: $draft.pinned, pinned: true)
+            actions("More", items: $draft.more, pinned: false)
+            Section {
+                Button("Restore Defaults") { draft = .init() }.disabled(draft == .init())
+            }
+        }.environment(\.editMode, .constant(.active))
+            .navigationTitle("Edit Task Actions").navigationBarTitleDisplayMode(.inline)
+            .navigationBarBackButtonHidden()
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }.accessibilityIdentifier("taskActionLayoutCancel")
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", action: save).accessibilityIdentifier("taskActionLayoutDone")
+                }
+            }
+            .alert("Could not save the action layout", isPresented: $showSaveError) {
+                Button("OK", role: .cancel) { }
+            } message: { Text("Close and reopen the editor to review the current layout.") }
+    }
+
+    private func actions(_ title: String, items: Binding<[PhoneTaskAction]>, pinned: Bool) -> some View {
+        let current = items.wrappedValue
+        return Section(title) {
+            if current.isEmpty { Text("No actions").foregroundStyle(.secondary) }
+            ForEach(Array(current.enumerated()), id: \.element) { index, item in
+                HStack {
+                    Button { move(item, fromPinned: pinned) } label: {
+                        Image(systemName: pinned ? "minus.circle.fill" : "plus.circle.fill")
+                            .foregroundStyle(pinned ? Color.red : Color.accentColor)
+                            .frame(minWidth: 44, minHeight: 44)
+                    }.buttonStyle(.borderless)
+                        .accessibilityLabel((pinned ? "Unpin " : "Pin ") + item.title)
+                    Text(item.title).accessibilityIdentifier("taskActionLayoutRow-" + item.rawValue)
+                        .accessibilityActions {
+                            if index > 0 {
+                                Button("Move earlier") { move(item, by: -1, in: items) }
+                            }
+                            if index + 1 < current.count {
+                                Button("Move later") { move(item, by: 1, in: items) }
+                            }
+                        }
+                }
+            }.onMove { items.wrappedValue.move(fromOffsets: $0, toOffset: $1) }
+        }
+    }
+
+    private func move(_ item: PhoneTaskAction, by offset: Int, in items: Binding<[PhoneTaskAction]>) {
+        guard let index = items.wrappedValue.firstIndex(of: item),
+              items.wrappedValue.indices.contains(index + offset) else { return }
+        items.wrappedValue.swapAt(index, index + offset)
+    }
+
+    private func move(_ item: PhoneTaskAction, fromPinned: Bool) {
+        if fromPinned {
+            draft.pinned.removeAll { $0 == item }
+            draft.more.append(item)
+        } else {
+            draft.more.removeAll { $0 == item }
+            draft.pinned.append(item)
+        }
+    }
+
+    private func save() {
+        guard data == originalData else { showSaveError = true; return }
+        if draft != PhoneTaskActionLayout.decode(originalData) {
+            guard let encoded = try? JSONEncoder().encode(draft) else { showSaveError = true; return }
+            data = draft == .init() ? Data() : encoded
+        }
+        dismiss()
     }
 }

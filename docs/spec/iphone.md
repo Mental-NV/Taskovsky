@@ -552,7 +552,7 @@ Match the grid/row hierarchy, dividers, corner treatment, leading symbols, typog
 | Search | Search within the supported scope; exact task-local versus global meaning is not established by the image |
 | Share, Copy Link, Print | Excluded: no implemented desktop task-sharing, task-deep-link or print action found |
 | Attachment, Comment, Task Activities, Live Activity, Location Reminder | Excluded: absent from inspected desktop model/UI/services; a created timestamp is not an activity stream |
-| Edit and customizable action order | Excluded as a screenshot-only customization control; no desktop action-menu customization counterpart was found |
+| Edit and customizable action order | More → Edit moves supported local actions between Pinned and More, and reorders each group. Done saves the iPhone presentation preference. Cancel discards the draft. Restore and Delete Forever retain their existing placement and confirmation. [Action layout contract](../changes/iphone-task-action-layout-2026-11-10.md) |
 
 R07 lists **Camera, Photo, Record, Files, Scan Documents, Scan Text** in that order. This is evidence only. Desktop has no attachment model or these capture/import flows, so the paperclip and entire menu are excluded from mobile scope, including permissions and acceptance targets. Do not render a dead paperclip for resemblance.
 

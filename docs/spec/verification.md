@@ -1581,3 +1581,17 @@ The signed Mac app from [PR #24 CI](https://github.com/Mental-NV/Taskovsky/actio
 | Saved files and restoration | Mac and iPhone workspace files were byte-identical to their controls. The Mac save retained the seed's existing settings values and encoded defaults omitted by the seed. The iPhone comparison found only color preference changes after treating Smart List visibility pairs as an unordered dictionary. The original guarded Mac app and preferences were restored and the disposable iPhone simulator was removed. |
 
 Physical iPhone, dark appearance, VoiceOver and other Calendar modes were outside the new native color checks.
+
+<a id="iphone-task-action-layout"></a>
+
+## iPhone Task Actions layout — November 10, 2026
+
+[Change contract](../changes/iphone-task-action-layout-2026-11-10.md). The isolated `codex/iphone-task-action-layout` branch starts from merged `main` at `aba0b9b78a2b6af3dede10542234ba3eed0bc805`. The final iPhone source manifest has SHA-256 `a0e806d0ab74755026d2875a5f84db852aadb0bb4e4a53347ec0977c0fcc37b0`.
+
+| Evidence | Result |
+| --- | --- |
+| TickTick guide | The [Task Details guide](https://help.ticktick.com/articles/7055782408586526720) documents the More → Edit interaction and the pin, unpin and drag controls. R04 shows the Edit entry. No new reference app interaction was needed. |
+| iPhone 13 Pro simulator, iOS 26.5, Xcode 27.0 | **Four workflows passed on the final build.** A native grip moved Move to List ahead of Complete. Duplicate moved to More and the layout survived relaunch. Plus put Duplicate back in the pinned draft. Cancel kept the saved layout and Restore Defaults with Done restored the original placement and order. Duplicate from More opened the independent styled copy and its copied child. The named Trash confirmation and existing styled template workflow passed. |
+| Saved fixture audit | The layout-only session's workspace and settings files were byte-identical to their seeds. Reset removed the active layout. A separate QA session stored Duplicate in More under its own preference key. The copy's rich body matched the original and its child had an independent ID. The disposable simulator was removed. |
+
+The drag check exercised Pinned. The native More-section reorder control, VoiceOver and physical-device touch are outside this verification pass.
