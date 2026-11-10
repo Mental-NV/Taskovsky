@@ -1,0 +1,15 @@
+# MOB-RICH-EDIT-001 Format task and note descriptions on iPhone
+
+**Format description** opens a separate UIKit editor for a known, writable task or note. Select text and open Inline to apply bold, italic, underline, strikethrough, highlight, code or a link. Paragraph offers headings, quotes, bullets, numbering, checklists, an empty-paragraph rule and Clear Paragraph Style. Rich checklist markers describe the body and have their own check and uncheck actions. An ordinary unformatted description still has the existing Edit description route. The detail preview remains selectable and read-only.
+
+Done writes the exact text and its rich companion as a pair, after checking the workspace revision and compatibility. Cancel can keep or discard a dirty draft. Undo and Redo affect the open draft. A recovery copy replays the edits for that task before offering to resume, and the workspace is written only after explicit Done. Untouched records and settings retain their values. If the workspace contains unknown fields or cannot be rewritten safely, the original data stays protected.
+
+## Edit transaction contract
+
+Each command addresses a UTF-16 range in the result of the preceding command. The adapter uses UIKit's reported range when the unchanged prefix and suffix confirm it and derives a scalar-aligned delta for other native text changes. Marked composition stays in UIKit until it settles. The stored text keeps its original code units.
+
+Typing inherits inline styles from the left, or from the first scalar at the start of the document. Typing inside a link extends it. Inserting at either link boundary stays outside it. Paste inserts plain text into the selected range, including when its text matches the previous selection. Inline toggles remove a style when the entire selection already carries it and add it otherwise. Links accept HTTP and HTTPS targets with a host. Clear Inline Styles affects only the selected range.
+
+Paragraph actions affect the selected paragraphs. A selection ending at the start of a paragraph leaves that paragraph alone. A horizontal rule requires an empty line carrying a paragraph terminator. A supported paragraph split keeps the heading and checked state on the part containing the original anchor, and carries quote and list context into new paragraphs. New checklist paragraphs start unchecked. Edits that would merge styled paragraphs or rewrite ambiguous legacy annotations are refused.
+
+Text and formatting persist in the existing Taskovsky body fields. Deliberate edits may normalize known runs and omit an empty companion. Preview, Cancel and unrelated field edits preserve the stored representation. See the [verification ledger](../spec/verification.md#mobile-rich-editor) for the tested native gestures, Unicode and file round trips. Hardware Undo/Redo, gesture undo, system IME candidate selection, VoiceOver, Dynamic Type and physical devices require separate verification.

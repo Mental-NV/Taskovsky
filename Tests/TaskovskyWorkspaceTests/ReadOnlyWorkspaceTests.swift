@@ -43,6 +43,111 @@ final class ReadOnlyWorkspaceTests: XCTestCase {
 private enum FixtureWriteError: Error { case denied }
 
 extension ReadOnlyWorkspaceTests {
+    func testCurrentOccurrenceFileProtectsItsBaselineFromOlderWritersAndUndoPreservesTitle() async throws {
+        struct LegacyTaskCollection: Decodable { let tasks: [TaskItem] }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let due = Date(timeIntervalSinceReferenceDate: 816_080_400)
+        let task = TaskItem(title: "Weekly", dueDate: due, hasDueTime: true, recurrence: .weekly)
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        let decoder = JSONDecoder()
+        XCTAssertEqual(try decoder.decode(LegacyTaskCollection.self, from: initial.snapshot.workspaceBytes).tasks, [task])
+
+        let newDate = due.addingTimeInterval(3600)
+        guard case .saved(let moved, let undo?) = await repo.apply(.setPoint(date: newDate, allDay: false), to: task.id,
+            expected: initial.revision, calendar: calendar, scope: .currentOccurrence) else { return XCTFail("Expected an occurrence exception") }
+        XCTAssertThrowsError(try decoder.decode(LegacyTaskCollection.self, from: moved.snapshot.workspaceBytes))
+        XCTAssertEqual(moved.snapshot.workspace.tasks[0].dueDate, newDate)
+        XCTAssertEqual(moved.snapshot.workspace.tasks[0].originalOccurrenceSchedule?.due, due)
+        let reloaded = try await repository(files).load()
+        XCTAssertTrue(reloaded.allowsKnownFieldWrites)
+        XCTAssertEqual(reloaded.snapshot.workspace, moved.snapshot.workspace)
+        XCTAssertEqual(reloaded.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+
+        guard case .saved = await repo.apply(.title("Renamed"), to: task.id, expected: moved.revision)
+        else { return XCTFail("Expected an unrelated title edit") }
+        guard case .saved(let restored, _) = await repo.undo(undo) else { return XCTFail("Expected scoped Undo") }
+        let legacy = try decoder.decode(LegacyTaskCollection.self, from: restored.snapshot.workspaceBytes).tasks
+        XCTAssertEqual(legacy.first?.title, "Renamed")
+        XCTAssertEqual(legacy.first?.dueDate, due)
+        XCTAssertNil(legacy.first?.originalOccurrenceSchedule)
+        XCTAssertEqual(restored.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+
+        guard case .saved(let again, _) = await repo.apply(.setPoint(date: newDate, allDay: false), to: task.id,
+            expected: restored.revision, calendar: calendar, scope: .currentOccurrence),
+            case .saved(let explicit, _) = await repo.apply(.restoreOccurrence, to: task.id, expected: again.revision,
+                                                            calendar: calendar)
+        else { return XCTFail("Expected explicit restoration after reopening the protected file") }
+        let restoredLegacy = try decoder.decode(LegacyTaskCollection.self, from: explicit.snapshot.workspaceBytes).tasks
+        XCTAssertEqual(restoredLegacy.first?.dueDate, due)
+        XCTAssertEqual(restoredLegacy.first?.title, "Renamed")
+        XCTAssertNil(restoredLegacy.first?.originalOccurrenceSchedule)
+    }
+
+    func testRichBodyTransactionCommitsThePairAndRefusesAPartialEdit() async throws {
+        var task = TaskItem(title: "Keep title", body: "Keep e\u{301} 🧩")
+        task.richBody = RichBody(text: task.body, runs: [.init(location: 0, length: 4, bold: true)])
+        let other = TaskItem(title: "Unrelated")
+        let files = try fixture(WorkspaceData(tasks: [task, other]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let initial = try await repo.load()
+        let valid = RichBodyEdit.replace(NSRange(location: 5, length: 2), with: "a", style: .plain)
+        let invalid = RichBodyEdit.toggle(.bold, NSRange(location: Int.max, length: 1))
+        assertRefused(await repo.apply(.richBody([valid, invalid]), to: task.id, expected: initial.revision),
+                      .richBody(.invalidRange))
+        XCTAssertEqual(try Data(contentsOf: files.workspace), initial.snapshot.workspaceBytes)
+        let stamp = Date(timeIntervalSinceReferenceDate: 815_907_600)
+        guard case .saved(let saved) = await repo.apply(.richBody([valid]), to: task.id, expected: initial.revision, now: stamp)
+        else { return XCTFail("Expected a saved paired body edit") }
+        task.body = "Keep a 🧩"
+        task.richBody = RichBody(text: task.body, runs: [.init(location: 0, length: 4, bold: true)])
+        task.updatedAt = stamp
+        XCTAssertEqual(saved.snapshot.workspace.tasks, [task, other])
+        XCTAssertEqual(saved.snapshot.settingsBytes, initial.snapshot.settingsBytes)
+        assertRefused(await repo.apply(.richBody([valid]), to: task.id, expected: initial.revision), .stale)
+        guard case .unchanged = await repo.apply(.richBody([]), to: task.id, expected: saved.revision)
+        else { return XCTFail("An empty transaction must preserve the original record bytes") }
+    }
+
+    func testRichDraftRecoveryRetainsFormattingAndRejectsOldCallbacksAfterUndo() async throws {
+        let text = "e\u{301} 🧩"
+        let rich = RichBody(text: text, runs: [.init(location: 0, length: 2, italic: true)])
+        let task = TaskItem(title: "Task", body: text, richBody: rich)
+        let files = try fixture(WorkspaceData(tasks: [task]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files)
+        let workspace = try await repo.load()
+        var draft = TaskFieldDraft(taskID: task.id, field: .richBody, baseRevision: workspace.revision,
+                                   text: text, richBody: rich)
+        let url = files.directory.appendingPathComponent("field-draft.json")
+        let store = FieldDraftStore(fileURL: url)
+        let began = await store.begin(draft)
+        XCTAssertEqual(began, .saved)
+        try draft.applyRichEdit(.toggle(.bold, NSRange(location: 0, length: 2)))
+        let staged = await store.save(draft)
+        XCTAssertEqual(staged, .saved)
+        let reopened = FieldDraftStore(fileURL: url)
+        guard case .available(var recovered) = await reopened.load() else { return XCTFail("Expected a rich recovery draft") }
+        XCTAssertTrue(recovered.isRecoverable)
+        XCTAssertTrue(recovered.hasChanges)
+        XCTAssertTrue(RichBody.sameCodeUnits(recovered.text, text))
+        XCTAssertEqual(recovered.richState?.content.runs, [.init(location: 0, length: 2, bold: true, italic: true)])
+        XCTAssertEqual(try Data(contentsOf: files.workspace), workspace.snapshot.workspaceBytes)
+        try recovered.replaceRichEdits([])
+        XCTAssertFalse(recovered.hasChanges)
+        let undone = await reopened.save(recovered)
+        let delayed = await reopened.save(draft)
+        XCTAssertEqual(undone, .saved)
+        XCTAssertEqual(delayed, .refused)
+        let closed = await reopened.close(id: recovered.id)
+        XCTAssertEqual(closed, .saved)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), workspace.snapshot.workspaceBytes)
+    }
+
     func testTemplateReducedEditPreservesRichContentAndUnownedFields() async throws {
         let body = "e\u{301} 🧩"
         let rich = RichBody(text: body, runs: [.init(location: 0, length: 2, bold: true)])
@@ -486,6 +591,34 @@ extension ReadOnlyWorkspaceTests {
         XCTAssertTrue(String(decoding: saved.snapshot.settingsBytes, as: UTF8.self).hasPrefix(#"{ "unrelated" : [1, 2, 3] ,"smartListVisibility":"#))
         XCTAssertNil(saved.snapshot.settings.smartListOrder)
         XCTAssertEqual(try Data(contentsOf: files.workspace), start.snapshot.workspaceBytes)
+    }
+
+    func testTaskSectionSavesRejectStaleAssignmentsAndKeepTaskData() async throws {
+        let list = TaskList(name: "Work", color: "#123456")
+        let task = TaskItem(title: "Keep task", body: "Keep this body", listID: list.id)
+        let files = try fixture(WorkspaceData(tasks: [task], lists: [list]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let repo = repository(files), start = try await repo.load()
+        let section = TaskSection(name: "Planning")
+        let create = TaskSectionChange(listID: list.id, operation: .create(section))
+        let assign = TaskSectionChange(listID: list.id, operation: .assign(taskID: task.id, sectionID: section.id))
+        let remove = TaskSectionChange(listID: list.id, operation: .remove(section.id))
+        guard case .saved(let created) = await repo.apply(create, expected: start.revision)
+        else { return XCTFail("Expected a protected section save") }
+        let reopened = try await repo.load()
+        XCTAssertTrue(reopened.allowsKnownFieldWrites)
+        XCTAssertEqual(reopened.revision, created.revision)
+        assertRefused(await repo.apply(assign, expected: start.revision), .stale)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), created.snapshot.workspaceBytes)
+        guard case .saved(let assigned) = await repo.apply(assign, expected: reopened.revision),
+              case .saved(let removed) = await repo.apply(remove, expected: assigned.revision)
+        else { return XCTFail("Expected assignment and removal") }
+        XCTAssertEqual(assigned.snapshot.workspace.tasks.first?.sectionID, section.id)
+        var expected = task
+        expected.updatedAt = try XCTUnwrap(removed.snapshot.workspace.tasks.first?.updatedAt)
+        XCTAssertEqual(removed.snapshot.workspace.tasks, [expected])
+        XCTAssertTrue(removed.snapshot.workspace.lists[0].sections.isEmpty)
+        XCTAssertEqual(try Data(contentsOf: files.settings), start.snapshot.settingsBytes)
     }
 
     func testListOrganizationMovesAndUngroupsWhilePreservingRecordsAndLegacyView() async throws {
@@ -1010,6 +1143,50 @@ final class CaptureCommandTests: XCTestCase {
         _ = await repository.create(recovered); let closed = await second.close(id: recovered.id); XCTAssertEqual(closed, .saved)
         let late = await second.save(recovered); XCTAssertEqual(late, .refused); XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
     }
+    func testCalendarRangeCaptureRecoversAndCreatesOneInclusiveAllDayTask() async throws {
+        let (root, repository) = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let document = try await repository.load(), snapshot = document.snapshot
+        let start = calendar.startOfDay(for: now)
+        let end = try XCTUnwrap(calendar.date(byAdding: .day, value: 3, to: start))
+        var input = TaskCaptureInput.start(destination: .inbox, calendarDate: end, workspace: snapshot.workspace,
+                                           settings: snapshot.settings, now: now, calendar: calendar)
+        input.chooseCalendarRange(start...end, calendar: calendar)
+        input.title = "Retreat tomorrow"
+        let draft = TaskCaptureDraft(baseRevision: document.revision, input: input, now: now, calendar: calendar)
+        let file = root.appendingPathComponent("capture-draft.json")
+        let saved = await CaptureDraftStore(fileURL: file).begin(draft)
+        XCTAssertEqual(saved, .saved)
+        let restarted = CaptureDraftStore(fileURL: file)
+        guard case .available(var recovered) = await restarted.load() else { return XCTFail("Expected range draft") }
+        XCTAssertEqual(recovered, draft)
+        let before = try await repository.load()
+        XCTAssertEqual(before.revision, document.revision)
+        try recovered.prepare(workspace: snapshot.workspace, settings: snapshot.settings)
+        let task = try XCTUnwrap(recovered.preparedTask)
+        XCTAssertEqual(task.title, input.title)
+        XCTAssertEqual(task.scheduledDuration, TaskDurationRange(start: start, end: end, isAllDay: true))
+        XCTAssertEqual(task.dueDate, end)
+        XCTAssertFalse(task.hasDueTime)
+        guard case .created = await repository.create(recovered) else { return XCTFail("Expected one task") }
+        guard case .alreadyCreated = await repository.create(recovered) else { return XCTFail("Expected the same task") }
+        let after = try await repository.load()
+        XCTAssertEqual(after.snapshot.workspace.tasks.filter { $0.id == task.id }, [task])
+
+        var templated = input
+        templated.applyTemplate(TaskTemplate(name: "Other schedule", title: "Template",
+                                             scheduledDuration: .init(start: now, end: now.addingTimeInterval(3600))))
+        func preview(_ input: TaskCaptureInput) throws -> TaskItem {
+            try input.task(id: UUID(), now: now, workspace: snapshot.workspace, settings: snapshot.settings, calendar: calendar)
+        }
+        XCTAssertEqual(try preview(templated).scheduledDuration, task.scheduledDuration)
+        templated.useCalendarRangeEndOnly()
+        XCTAssertNil(try preview(templated).scheduledDuration)
+        XCTAssertEqual(try preview(templated).dueDate, end)
+        input.dueDate = start
+        XCTAssertThrowsError(try preview(input)) { XCTAssertEqual($0 as? TaskCaptureValidation, .schedule) }
+    }
+
     func testStyledTemplatePreservesRichChecklistRecurrenceAndWindow() throws {
         let text = "e\u{301} 🧩", window = TaskDurationRange(start: now, end: now.addingTimeInterval(3600))
         let seed = TaskTemplate(name: "Styled", title: "Template task", body: text, checklist: [.init(title: "Step", isCompleted: true)], priority: .high,
@@ -1116,6 +1293,84 @@ final class LifecycleRepositoryTests: XCTestCase {
         expected[0].parentID = nil
         XCTAssertEqual(detached.snapshot.workspace.tasks, expected)
         XCTAssertEqual(try Data(contentsOf: workspace), detached.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
+    }
+
+    func testLifecycleDuplicateSavesAnIndependentTreeOnce() async throws {
+        let parent = TaskItem(title: "Parent")
+        var source = TaskItem(title: "Source", body: "Styled", dueDate: now,
+                              checklist: [ChecklistItem(title: "Checked", isCompleted: true)],
+                              completedAt: now, parentID: parent.id,
+                              richBody: RichBody(text: "Styled", runs: [.init(location: 0, length: 6, bold: true)]))
+        source.recurrence = .daily
+        source.reminderDate = now.addingTimeInterval(-900)
+        let finished = TaskItem(title: "Finished", completedAt: now, parentID: source.id)
+        let deleted = TaskItem(title: "Deleted", deletedAt: now, parentID: source.id)
+        let (directory, workspace, settings) = try files(WorkspaceData(tasks: [parent, source, finished, deleted]))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let initial = try await repository.load()
+        let copyID = UUID()
+        let command = TaskLifecycleCommand.duplicate(copyID: copyID)
+        guard case .saved(let saved, nil) = await repository.apply(command, to: source.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected a durable copy") }
+        let records = saved.snapshot.workspace.tasks
+        XCTAssertEqual(Array(records.prefix(4)), initial.snapshot.workspace.tasks)
+        XCTAssertEqual(records.count, 6)
+        let copy = try XCTUnwrap(records.first { $0.id == copyID })
+        XCTAssertEqual(copy.parentID, parent.id)
+        XCTAssertNil(copy.completedAt)
+        XCTAssertEqual(copy.occurrenceIndex, 1)
+        XCTAssertEqual(copy.recurrence, source.recurrence)
+        XCTAssertEqual(copy.reminderDates, source.reminderDates)
+        XCTAssertEqual(copy.richBody, source.richBody)
+        XCTAssertEqual(copy.checklist.first?.title, "Checked")
+        XCTAssertEqual(copy.checklist.first?.isCompleted, true)
+        XCTAssertNotEqual(copy.checklist.first?.id, source.checklist.first?.id)
+        let child = try XCTUnwrap(records.first { $0.parentID == copyID })
+        XCTAssertNotEqual(child.id, finished.id)
+        XCTAssertEqual(child.completedAt, finished.completedAt)
+        XCTAssertEqual(child.title, finished.title)
+        guard case .refused(.stale) = await repository.apply(command, to: source.id, expected: initial.revision),
+              case .refused(.task(.invalidCopy)) = await repository.apply(command, to: source.id, expected: saved.revision)
+        else { return XCTFail("Repeated commands must not add copies") }
+        XCTAssertEqual(try Data(contentsOf: workspace), saved.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
+    }
+
+    func testLifecycleConvertsKindWithoutReplacingTheRecordOrItsChildren() async throws {
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let task = TaskItem(title: "Styled task", body: "Styled", dueDate: now, hasDueTime: true,
+                            reminderDate: now.addingTimeInterval(-900), recurrence: .daily,
+                            checklist: [ChecklistItem(title: "Done", isCompleted: true)], completedAt: now,
+                            richBody: RichBody(text: "Styled", runs: [.init(location: 0, length: 6, bold: true)]))
+        let child = TaskItem(title: "Child", parentID: task.id)
+        let archived = TaskItem(title: "Archived task", listID: archive.id)
+        let (directory, workspace, settings) = try files(WorkspaceData(tasks: [task, child, archived], lists: [archive]))
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let initial = try await repository.load()
+        guard case .refused(.task(.archived)) = await repository.apply(.setKind(.note), to: archived.id, expected: initial.revision),
+              case .saved(let note, nil) = await repository.apply(.setKind(.note), to: task.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected an open note and an archived refusal") }
+        var expected = task
+        expected.kind = .note
+        expected.completedAt = nil
+        expected.updatedAt = now
+        XCTAssertEqual(note.snapshot.workspace.tasks, [expected, child, archived])
+        guard case .refused(.stale) = await repository.apply(.setKind(.task), to: task.id, expected: initial.revision),
+              case .unchanged = await repository.apply(.setKind(.note), to: task.id, expected: note.revision)
+        else { return XCTFail("Expected a stale refusal and an unchanged repeat") }
+        XCTAssertEqual(try Data(contentsOf: workspace), note.snapshot.workspaceBytes)
+        let reopened = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let revision = try await reopened.load().revision
+        let conversionTime = now.addingTimeInterval(60)
+        guard case .saved(let back, nil) = await reopened.apply(.setKind(.task), to: task.id, expected: revision, now: conversionTime)
+        else { return XCTFail("Expected an open task after reopening the file") }
+        expected.kind = .task
+        expected.updatedAt = conversionTime
+        XCTAssertEqual(back.snapshot.workspace.tasks, [expected, child, archived])
         XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
     }
 
@@ -1461,6 +1716,68 @@ extension ReadOnlyWorkspaceTests {
             return XCTFail("Expected stale preference refusal")
         }
         XCTAssertEqual(try Data(contentsOf: files.settings), persisted)
+    }
+
+    func testCalendarFoldCutoffsPersistResetAndRefuseUnknownPayload() async throws {
+        let files = try fixture(WorkspaceData(tasks: [TaskItem(title: "Keep the workspace exact")]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let legacy = Data(#"{"calendarOptions":{},"other":{"keep":1}}"#.utf8)
+        try legacy.write(to: files.settings)
+        let repo = repository(files), before = try await repo.load()
+        var draft = before.snapshot.settings.calendarOptions
+        XCTAssertEqual(draft.foldedHours, .init())
+        draft.foldedHours = .init(earlyEnd: 6, lateStart: 22)
+        guard case .saved(let saved) = await repo.saveCalendarOptions(draft, expected: before.revision)
+        else { return XCTFail("Expected custom cutoffs to save") }
+        let reopened = try await repository(files).load()
+        XCTAssertEqual(reopened.snapshot.settings.calendarOptions.foldedHours, draft.foldedHours)
+        XCTAssertTrue(String(decoding: reopened.snapshot.settingsBytes, as: UTF8.self).hasSuffix(#","other":{"keep":1}}"#))
+        draft.foldedHours = .init()
+        guard case .saved(let reset) = await repo.saveCalendarOptions(draft, expected: saved.revision)
+        else { return XCTFail("Expected reset to save") }
+        XCTAssertFalse(String(decoding: reset.snapshot.settingsBytes, as: UTF8.self).contains("foldedHours"))
+        let unknown = Data(#"{"calendarOptions":{"foldedHours":{"earlyEnd":6,"lateStart":22,"future":true}}}"#.utf8)
+        try unknown.write(to: files.settings)
+        let unrecognized = try await repo.load()
+        draft.foldedHours = .init(earlyEnd: 8, lateStart: 20)
+        guard case .incompatible = await repo.saveCalendarOptions(draft, expected: unrecognized.revision)
+        else { return XCTFail("Expected the unknown nested preference to remain intact") }
+        XCTAssertEqual(try Data(contentsOf: files.settings), unknown)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), before.snapshot.workspaceBytes)
+    }
+
+    func testCalendarPreferencesPersistIndependentIconsAndKeepLegacyMaster() async throws {
+        let files = try fixture(WorkspaceData(tasks: [TaskItem(title: "Unchanged")]))
+        defer { try? FileManager.default.removeItem(at: files.directory) }
+        let original = Data(#"{"calendarOptions":{"showItemIcons":false},"futurePreference":{"value":1}}"#.utf8)
+        try original.write(to: files.settings)
+        let repo = repository(files), before = try await repo.load()
+        var draft = before.snapshot.settings.calendarOptions
+        XCTAssertFalse(draft.showItemIcons)
+        XCTAssertTrue(draft.showTaskIcons)
+        XCTAssertTrue(draft.showNoteIcons)
+        guard case .unchanged = await repo.saveCalendarOptions(draft, expected: before.revision)
+        else { return XCTFail("Legacy settings must not be written on unchanged Done") }
+        XCTAssertEqual(try Data(contentsOf: files.settings), original)
+        draft.showTaskIcons = false
+        draft.showItemIcons = true
+        guard case .saved(let saved) = await repo.saveCalendarOptions(draft, expected: before.revision)
+        else { return XCTFail("Expected independent settings to save") }
+        let persisted = try Data(contentsOf: files.settings)
+        XCTAssertTrue(String(decoding: persisted, as: UTF8.self).hasSuffix(#","futurePreference":{"value":1}}"#))
+        let settings = try XCTUnwrap(JSONSerialization.jsonObject(with: persisted) as? [String: Any])
+        let calendar = try XCTUnwrap(settings["calendarOptions"] as? [String: Any])
+        XCTAssertEqual(calendar["showItemIcons"] as? Bool, true)
+        XCTAssertEqual(calendar["showTaskIcons"] as? Bool, false)
+        XCTAssertNil(calendar["showNoteIcons"])
+        let reopened = try await repository(files).load()
+        XCTAssertEqual(reopened.snapshot.settings.calendarOptions, draft)
+        draft.showItemIcons = false
+        guard case .saved(let hidden) = await repo.saveCalendarOptions(draft, expected: saved.revision)
+        else { return XCTFail("Expected the master switch to save without resetting the split choice") }
+        XCTAssertFalse(hidden.snapshot.settings.calendarOptions.showTaskIcons)
+        XCTAssertTrue(hidden.snapshot.settings.calendarOptions.showNoteIcons)
+        XCTAssertEqual(try Data(contentsOf: files.workspace), before.snapshot.workspaceBytes)
     }
 
     func testCalendarPreferencesPreserveUnknownAndDuplicateCalendarFields() async throws {

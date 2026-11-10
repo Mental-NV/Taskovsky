@@ -148,12 +148,23 @@ struct TaskDetail: View {
         }
     }
 
+    @State private var showDescriptionReader = false
+
     @ViewBuilder
     private var richBodySection: some View {
         // Native rich-text body: toolbar plus an auto-growing AppKit
         // editor. The outer detail ScrollView scrolls; the editor
         // reports its content height so docked, drawer, and pop-up
         // layouts all size it without an inner scroller.
+        let preview = task.richBody.flatMap { rich in
+            rich.blocks.contains { $0.validHeading != nil } ? RichDescriptionPreview(body: task.body, rich: rich) : nil
+        }
+        if let preview, !preview.foldableHeadings.isEmpty {
+            Button("Read Description", systemImage: "doc.text.magnifyingglass") { showDescriptionReader = true }
+                .sheet(isPresented: $showDescriptionReader) {
+                    RichBodyReader(documentID: task.id, preview: preview)
+                }
+        }
         if !locked {
             RichBodyToolbar(controller: richController, disabled: false)
         }
@@ -283,7 +294,10 @@ struct TaskDetail: View {
                         }
                     }
                     Button("Duplicate") { _ = store.duplicateTask(id: id) }
-                    Button(task.kind == .task ? "Convert to Note" : "Convert to Task") { var updated = task; updated.kind = task.kind == .task ? .note : .task; updated.completedAt = nil; updated.wontDoAt = nil; store.updateTask(updated) }
+                    let kind: TaskKind = task.kind == .task ? .note : .task
+                    Button(kind == .note ? "Convert to Note" : "Convert to Task") {
+                        if let updated = task.converted(to: kind) { store.updateTask(updated) }
+                    }
                     Divider()
                     Button("Move to Trash", role: .destructive, action: onTrash)
                 } else if archivedView {

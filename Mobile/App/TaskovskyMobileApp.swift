@@ -10,6 +10,10 @@ struct TaskovskyMobileApp: App {
 private enum PhoneSection: String, CaseIterable { case tasks = "Tasks", calendar = "Calendar", search = "Search"
     var symbol: String { switch self { case .tasks: "checkmark.square.fill"; case .calendar: "calendar"; case .search: "magnifyingglass" } }
 }
+private struct PhoneOccurrenceChange {
+    let drag: PhoneCalendarDrag
+    let operation: CalendarScheduleOperation
+}
 enum PhoneStyle {
     static let accent = Color(red: 70/255, green: 112/255, blue: 250/255)
     static let page = Color(uiColor: .systemGroupedBackground)
@@ -40,9 +44,11 @@ struct MobileRootView: View {
     @State private var calendarPreferenceRoute: PhoneCalendarPreferenceRoute?
     @State private var preferenceNotice: String?
     @State private var viewPicker = false
+    @State private var showTaskSort = false
     @State private var showArrange = false
     @State private var showCalendarActions = false
     @State private var calendarEdit: PhoneCalendarEditRequest?
+    @State private var occurrenceChange: PhoneOccurrenceChange?
     @State private var calendarDragSession = UUID()
     private var calendar: Calendar { model.calendar }
     private var options: TaskCalendarOptions {
@@ -85,9 +91,18 @@ struct MobileRootView: View {
         if model.captureDraft == nil { model.resumeCaptureRecovery() }
         capturePresented = model.captureDraft != nil
     }
+    @State private var sectionListDragSession = UUID()
+    @State private var sectionMoveNotice: String?
+
     private func addCapture() {
         Task {
             await model.beginCapture(destination: section == .tasks ? destination : .all, calendarDate: section == .calendar ? focus : nil)
+            capturePresented = model.captureDraft != nil
+        }
+    }
+    private func addSectionTask(listID: UUID, sectionID: UUID) {
+        Task {
+            await model.beginCapture(destination: .list(listID), calendarDate: nil, sectionID: sectionID)
             capturePresented = model.captureDraft != nil
         }
     }
@@ -132,7 +147,10 @@ struct MobileRootView: View {
                                     }
                                 }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
                             }
-                    } else { Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary) }
+                    } else {
+                        Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary)
+                        if section == .tasks && showsTaskSort(in: snapshot.workspace) { taskSortMenu }
+                    }
                 }.padding(.horizontal, 16)
                 Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
                 if model.recoveredDraft != nil || model.activeDraft != nil {
@@ -229,18 +247,108 @@ struct MobileRootView: View {
         default: "Tasks"
         }
     }
+    private func showsTaskSort(in data: WorkspaceData) -> Bool {
+        if case .list(let id) = destination { return data.lists.first { $0.id == id }?.viewMode != .board }
+        return destination != .summary
+    }
+
+    private var taskSortMenu: some View {
+        Button { showTaskSort = true } label: {
+            Image(systemName: "arrow.up.arrow.down").frame(width: 44, height: 44)
+        }.accessibilityLabel("Sort tasks")
+            .accessibilityValue(model.taskTimestampSort?.title ?? "Default Order")
+            .accessibilityIdentifier("taskSortMenu")
+            .popover(isPresented: $showTaskSort, arrowEdge: .top) {
+                VStack(spacing: 0) {
+                    taskSortChoice(nil)
+                    ForEach(TaskTimestampSort.allCases, id: \.self) { taskSortChoice($0) }
+                }.padding(8).frame(width: 245).presentationCompactAdaptation(.popover)
+            }
+    }
+
+    private func taskSortChoice(_ choice: TaskTimestampSort?) -> some View {
+        let selected = model.taskTimestampSort == choice
+        return Button {
+            showTaskSort = false
+            model.setTaskTimestampSort(choice)
+        } label: {
+            HStack {
+                Text(choice?.title ?? "Default Order")
+                Spacer()
+                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func taskDestinationRows(_ data: WorkspaceData) -> some View {
+        let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        return taskList(ordered, data: data)
+    }
+
     @ViewBuilder private func taskDestination(_ data: WorkspaceData) -> some View {
         if destination == .summary {
             PhoneSummaryView(model: model)
         } else if case .list(let id) = destination, let list = data.lists.first(where: { $0.id == id }) {
             PhoneListModeControl(model: model, list: list).id("list-mode-" + id.uuidString)
-            if list.viewMode == .board {
+            if !list.sections.isEmpty {
+                if list.viewMode == .board {
+                    PhoneSectionBoard(model: model, list: list, data: data,
+                                      openTask: { selectedTask = PhoneTaskRoute(id: $0) },
+                                      addTask: { addSectionTask(listID: id, sectionID: $0) }).id(id)
+                } else {
+                    sectionedPhoneRows(list, data: data).id(id)
+                }
+            } else if list.viewMode == .board {
                 PhoneTaskBoard(model: model, list: list, data: data) { selectedTask = PhoneTaskRoute(id: $0) }.id(id)
             } else {
-                taskList(destination.matchingTasks(in: data, now: model.now, calendar: calendar), data: data)
+                taskDestinationRows(data)
             }
         } else {
-            taskList(destination.matchingTasks(in: data, now: model.now, calendar: calendar), data: data)
+            taskDestinationRows(data)
+        }
+    }
+
+    private func sectionedPhoneRows(_ list: TaskList, data: WorkspaceData) -> some View {
+        let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        let rows = PinnedGrouping.partition(ordered)
+        let editable = !list.isArchived && model.canBeginEditing
+        return ScrollView {
+            if let sectionMoveNotice {
+                Text(sectionMoveNotice).font(.footnote).foregroundStyle(.secondary)
+            }
+            if !rows.pinned.isEmpty {
+                Text(PinnedGrouping.pinnedGroupTitle).font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
+                taskRows(rows.pinned, lists: data.lists, searchQuery: nil, sectionList: list)
+            }
+            ForEach(TaskSectionGroup.project(rows.rest, for: list, in: data)) { group in
+                HStack {
+                    Text(group.title).font(.headline).accessibilityAddTraits(.isHeader)
+                    Spacer()
+                    if let section = group.section, editable && model.canBeginCapture {
+                        Button { addSectionTask(listID: list.id, sectionID: section.id) } label: {
+                            Image(systemName: "plus").frame(width: 44, height: 44)
+                        }.buttonStyle(.plain).accessibilityLabel("Add task to " + section.name)
+                    }
+                }.frame(minHeight: 44).padding(.horizontal, 16)
+                    .contentShape(Rectangle())
+                    .dropDestination(for: PhoneBoardDrag.self) { payloads, _ in
+                        guard editable, payloads.count == 1, let drag = payloads.first,
+                              drag.session == sectionListDragSession, drag.listID == list.id else { return false }
+                        movePhoneSectionTask(drag.taskID, to: group.id, listID: list.id)
+                        return true
+                    }
+                taskRows(group.tasks, lists: data.lists, searchQuery: nil, sectionList: list)
+            }
+            Color.clear.frame(height: 90)
+        }
+    }
+
+    private func movePhoneSectionTask(_ id: UUID, to sectionID: UUID?, listID: UUID) {
+        Task {
+            sectionMoveNotice = await model.saveSection(.init(listID: listID, operation: .assign(taskID: id, sectionID: sectionID)))
         }
     }
 
@@ -268,13 +376,13 @@ struct MobileRootView: View {
             taskRows(tasks, lists: lists, searchQuery: searchQuery)
         }
     }
-    private func taskRows(_ tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
+    private func taskRows(_ tasks: [TaskItem], lists: [TaskList], searchQuery: String?, sectionList: TaskList? = nil) -> some View {
         let ordered = TaskHierarchy.displayOrder(tasks)
         return LazyVStack(spacing: 0) {
             ForEach(ordered, id: \.task.id) { task, depth in
                 HStack(spacing: 0) {
                     PhoneCompletionButton(model: model, task: task, lists: lists)
-                    Button {
+                    let titleButton = Button {
                         if let searchQuery { model.rememberSearch(searchQuery) }
                         selectedTask = PhoneTaskRoute(id: task.id)
                     } label: {
@@ -298,6 +406,15 @@ struct MobileRootView: View {
                         .frame(minHeight: 48).padding(.trailing, 18).padding(.vertical, 3)
                         .contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityLabel(task.title)
+                    if let list = sectionList, !list.isArchived, model.canBeginEditing, task.parentID == nil {
+                        titleButton
+                            .contextMenu {
+                                TaskSectionMoveMenu(sections: list.sections, current: task.sectionID) {
+                                    movePhoneSectionTask(task.id, to: $0, listID: list.id)
+                                }
+                            }
+                        PhoneSectionTaskGrip(task: task, session: sectionListDragSession, listID: list.id)
+                    } else { titleButton }
                 }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
                 if task.id != ordered.last?.task.id { Divider().padding(.leading, 46) }
             }
@@ -467,6 +584,7 @@ struct MobileRootView: View {
             .accessibilityIdentifier(identifier)
     }
     private func calendarBody(data: WorkspaceData) -> some View {
+        let revision = model.document?.revision
         let controls = PhoneCalendarControls(
             drag: { entry in
                 guard entry.canSchedule, model.canBeginEditing, let revision = model.document?.revision else { return nil }
@@ -480,26 +598,64 @@ struct MobileRootView: View {
             },
             drop: acceptCalendarDrop,
             resize: { payload, date in
-                Task { await model.dropCalendarTask(.resizeEnd(date), taskID: payload.taskID, expected: payload.revision) }
-            }
+                _ = stageCalendarGesture(.resizeEnd(date), payload: payload)
+            },
+            saveFoldedHours: { cutoffs in saveCalendarFoldedHours(cutoffs, expected: revision) },
+            createRange: model.canBeginCapture ? { dates in
+                Task {
+                    await model.beginCapture(destination: .all, calendarDate: dates.upperBound, calendarRange: dates)
+                    capturePresented = model.captureDraft != nil
+                }
+            } : nil
         )
         return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
                                      options: options, controls: controls,
                                      select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }
+            .confirmationDialog("Apply schedule change to", isPresented: Binding(get: { occurrenceChange != nil },
+                set: { if !$0 { occurrenceChange = nil } }), titleVisibility: .visible, presenting: occurrenceChange) { change in
+                Button("This occurrence") { saveCalendarGesture(change, scope: .currentOccurrence) }
+                Button("Series") { saveCalendarGesture(change, scope: .series) }
+                Button("Cancel") { occurrenceChange = nil }
+            }
     }
 
     private func acceptCalendarDrop(_ payload: PhoneCalendarDrag, _ target: PhoneCalendarDropTarget) -> Bool {
-        guard payload.session == calendarDragSession, model.canBeginEditing, let document = model.document,
-              document.revision == payload.revision,
-              let task = document.snapshot.workspace.tasks.first(where: { $0.id == payload.taskID }),
-              task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: document.snapshot.workspace.lists) else { return false }
+        guard let task = model.document?.snapshot.workspace.tasks.first(where: { $0.id == payload.taskID }) else { return false }
         let operation: CalendarScheduleOperation = switch target {
         case .allDay(let day): .move(start: day, allDay: true)
         case .hour(let date): .move(start: date, allDay: false)
         case .day(let day): CalendarScheduling.moveOnDay(task, day: day, forceAllDay: false, calendar: calendar)
         }
-        Task { await model.dropCalendarTask(operation, taskID: payload.taskID, expected: payload.revision) }
+        return stageCalendarGesture(operation, payload: payload)
+    }
+
+    private func stageCalendarGesture(_ operation: CalendarScheduleOperation, payload: PhoneCalendarDrag) -> Bool {
+        guard occurrenceChange == nil, payload.session == calendarDragSession, model.canBeginEditing,
+              let document = model.document, document.revision == payload.revision,
+              let task = document.snapshot.workspace.tasks.first(where: { $0.id == payload.taskID }),
+              task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: document.snapshot.workspace.lists) else { return false }
+        let change = PhoneOccurrenceChange(drag: payload, operation: operation)
+        if CalendarScheduling.canRescheduleCurrentOccurrence(task, in: document.snapshot.workspace.tasks) { occurrenceChange = change }
+        else { saveCalendarGesture(change, scope: .series) }
         return true
+    }
+
+    private func saveCalendarGesture(_ change: PhoneOccurrenceChange, scope: CalendarScheduleScope) {
+        Task {
+            await model.dropCalendarTask(change.operation, taskID: change.drag.taskID, expected: change.drag.revision, scope: scope)
+        }
+    }
+
+    private func saveCalendarFoldedHours(_ cutoffs: CalendarFoldedHours, expected: WorkspaceRevision?) {
+        guard let expected, let document = model.document else { return }
+        guard document.revision == expected else {
+            preferenceNotice = "Saved Calendar preferences changed. Try the adjustment again."
+            return
+        }
+        var draft = document.snapshot.settings.calendarOptions
+        guard draft.foldedHours != cutoffs else { return }
+        draft.foldedHours = cutoffs
+        Task { preferenceNotice = await model.saveCalendarOptions(draft, expected: expected) }
     }
 
     private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date) {

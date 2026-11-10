@@ -37,11 +37,14 @@
         "A5F903CA0110000000000019",
         "A5F903CA011000000000001B",
         "A5F903CA011000000000001D",
+        "A5F903CA011000000000001F",
         "A5F903CA0110000000000015",
+        "D6E7BA091100000000000001",
         "A5F903CA0110000000000013",
         "958468F042788401D618E34F",
         "B8FD48B691B49BCDE6CC3EAB",
         "A00000000000000000000001",
+        "A00000000000000000000003",
       );
     };
     "000000000000000000000003" = {
@@ -140,7 +143,9 @@
         "A5F903CA011000000000001A",
         "A5F903CA011000000000001C",
         "A5F903CA011000000000001E",
+        "A5F903CA0110000000000020",
         "A5F903CA0110000000000016",
+        "D6E7BA091100000000000002",
         "A5F903CA0110000000000014",
         "A00000000000000000000002",
       );
@@ -159,6 +164,7 @@
       "isa" = "XCBuildConfiguration";
       "name" = "Debug";
       "buildSettings" = {
+        "ENABLE_TESTABILITY" = "YES";
         "ONLY_ACTIVE_ARCH" = "YES";
         "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
         "DEBUG_INFORMATION_FORMAT" = "dwarf";
@@ -335,8 +341,19 @@
       "files" = (
         "000000000000000000000021",
         "000000000000000000000022",
+        "A00000000000000000000004",
       );
       "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "A00000000000000000000003" = {
+      "path" = "ContractTests/RichEditorNativeInputTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "A00000000000000000000004" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "A00000000000000000000003";
     };
     "000000000000000000000030" = {
       "isa" = "PBXBuildFile";
@@ -563,6 +580,16 @@
       "isa" = "PBXBuildFile";
       "fileRef" = "A5F903CA011000000000001D";
     };
+    "A5F903CA011000000000001F" = {
+      "path" = "App/PhoneRichFieldEditor.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "A5F903CA0110000000000020" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "A5F903CA011000000000001F";
+    };
     "A5F903CA0110000000000017" = {
       "path" = "App/PhoneSummaryView.swift";
       "isa" = "PBXFileReference";
@@ -578,6 +605,16 @@
       "isa" = "PBXFileReference";
       "lastKnownFileType" = "sourcecode.swift";
       "sourceTree" = "<group>";
+    };
+    "D6E7BA091100000000000001" = {
+      "path" = "../Sources/Taskovsky/TaskSectionControls.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "D6E7BA091100000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "D6E7BA091100000000000001";
     };
     "A5F903CA0110000000000016" = {
       "isa" = "PBXBuildFile";

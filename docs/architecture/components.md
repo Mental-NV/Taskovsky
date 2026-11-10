@@ -6,7 +6,7 @@ The strongest first component boundary is the rich body editor: its document rep
 
 See [shared-engine architecture](shared-engine.md), [business rules](../spec/business.md), [macOS UI](../spec/ui-ux.md), and the [iPhone proposal](../spec/iphone.md).
 
-**November 9 partial implementation:** [MOB-FOUNDATION-001](../changes/mobile-foundation-2026-11-09.md) assigns the unchanged Foundation rich values to TaskovskyDomain while retaining AppKit rendering/controller code in the macOS layers. [MOB-PREVIEW-001](../changes/mobile-preview-2026-11-09.md) displays authoritative plain text read-only, with a formatting notice and original bytes retained. [MOB-EDIT-001](../changes/mobile-local-editing-2026-11-09.md) now connects native plain field editing to a conservative whole-document compatibility gate. Known styled tasks permit title edits while styled bodies stay read-only; unknown workspace data blocks task writes. The plain UITextView adapter carries editor identity, rejects late callbacks, guards marked composition and retains native selection/undo. Separate sequenced recovery never auto-submits. This is not a completed rich-editor adapter/harness or full S3 write matrix; the standalone Mac host extraction remains pending. [Current evidence](../spec/verification.md#mobile-local-editing) includes native UI and Mac-written→phone-edited→Mac-reloaded neutral fixtures, with physical IME/accessibility/undo edge cases unverified.
+**November 9 partial implementation:** [MOB-FOUNDATION-001](../changes/mobile-foundation-2026-11-09.md) assigns the unchanged Foundation rich values to TaskovskyDomain while retaining AppKit rendering/controller code in the macOS layers. [MOB-PREVIEW-001](../changes/mobile-preview-2026-11-09.md) displays authoritative plain text read-only, with a formatting notice and original bytes retained. [MOB-EDIT-001](../changes/mobile-local-editing-2026-11-09.md) now connects native plain field editing to a conservative whole-document compatibility gate. Known styled tasks permit title edits while styled bodies stay read-only; unknown workspace data blocks task writes. The plain UITextView adapter carries editor identity, rejects late callbacks, guards marked composition and retains native selection/undo. Separate sequenced recovery never auto-submits. This was the initial plain-editor milestone. The [later styled editor](../changes/mobile-rich-editor-2026-11-09.md) adds the paired transaction contract. The standalone Mac host extraction and full S3 write matrix remain pending. [Current evidence](../spec/verification.md#mobile-local-editing) includes native UI and Mac-written→phone-edited→Mac-reloaded neutral fixtures, with physical IME/accessibility/undo edge cases unverified.
 
 The [mobile rich preview](../changes/mobile-rich-description-preview-2026-11-09.md) adds a portable projection from the saved prefix-free model to validated inline and paragraph ranges. A UIKit adapter lays out selectable original text and draws decorations separately. The preview owns no mutation, extraction or save callback. [Verification](../spec/verification.md#mobile-rich-description-preview).
 
@@ -73,38 +73,31 @@ The future revision check extends that behavior to late callbacks and multiple e
 <a id="rich-003"></a>
 ### RICH-003 Platform capability matrix
 
-Desktop owns the AppKit editor and renderer. iPhone owns the UIKit preview and plain editor. They share the Foundation body model, exact UTF-16 validation, and storage contracts. The phone's preview projection describes semantic runs and decorations without sharing text views, attributed-string rendering, editor controllers or interaction state.
+Desktop owns the AppKit editor and renderer. iPhone owns the UIKit preview, plain editor and formatted description editor. They share the Foundation body model, exact UTF-16 validation and storage contracts. The phone's preview projection describes semantic runs and decorations without sharing text views, attributed-string rendering, editor controllers or interaction state.
 
 | Capability | Desktop | iPhone |
 | --- | --- | --- |
 | Plain body | AppKit editor with paired text and formatting commits | Selectable preview and native plain authoring when the saved companion is absent |
-| Bold, italic, underline, strike, highlight and inline code | Rendered and authored through toolbar and selection commands | Rendered in the selectable preview. Styled authoring remains a separate capability. |
-| Links | Inline link rendering and selection-based editing | Read-only link presentation. HTTP and HTTPS links use the platform link attribute. Link activation has a separate verification gate. |
-| Headings 1–6 and quotes | Block editing and native rendering | Read-only heading styles and quote gutters |
-| Bullets, numbering and rich checklist marks | Block editing, list continuation and toolbar checked-state commands. Direct marker toggling remains open. | Read-only decorations on the saved text. Embedded task checklist editing uses its own record. |
-| Horizontal rules | Empty-paragraph rule command and native drawing | Read-only drawing without replacement text |
-| Clear formatting and undo | Clear formatting command and per-document undo | Native undo in the plain editor. The styled preview exposes selection only. |
-| Rich paste and unsupported formats | Paste and extraction map to known formats. Graphics import and opaque-format authoring remain open. | The plain editor accepts plain text. Invalid or mismatched ranges display the authoritative text when readable. Unknown or lossy workspace payloads block file rewrites. |
+| Bold, italic, underline, strike, highlight and inline code | Rendered and authored through toolbar and selection commands | Rendered in the preview and authored with the Inline menu on a selection. |
+| Links | Inline link rendering and selection-based editing | Selection-based creation and removal of HTTP and HTTPS links. Link activation in the preview has a separate verification gate. |
+| Headings 1–6 and quotes | Block editing and native rendering | Paragraph menu commands and UIKit headings and quote gutters |
+| Bullets, numbering and rich checklist marks | Block editing, list continuation and toolbar checked-state commands. Direct marker toggling remains open. | Paragraph menu commands and decorations on the saved text. Embedded task checklist editing uses its own record. |
+| Horizontal rules | Empty-paragraph rule command and native drawing | Empty-paragraph rule command and drawing without replacement text |
+| Clear formatting and undo | Clear formatting command and per-document undo | Native undo in the plain editor. The formatted editor has scoped Undo and Redo controls and separate inline and paragraph clearing actions. |
+| Rich paste and unsupported formats | Paste and extraction map to known formats. Graphics import and opaque-format authoring remain open. | Both editors accept plain paste. Invalid or mismatched ranges display the authoritative text when readable. Unknown or lossy workspace payloads block file rewrites. |
 | Unrelated field changes | Existing desktop store and editor rules | Exact content preservation for known compatible documents. Incompatible data keeps its original bytes and remains protected from task writes. |
-| Native acceptance | Desktop layout, editor gestures and accessibility are checked separately | UIKit layout and touch behavior are checked independently. VoiceOver, physical-device input, link activation and rich authoring remain open. |
+| Native acceptance | Desktop layout, editor gestures and accessibility are checked separately | UIKit layout and touch behavior are checked independently. VoiceOver, physical-device input and link activation remain open. |
 
 The [iPhone rendering evidence](../spec/verification.md#mobile-rich-description-preview) covers light and dark previews and lossless reopen on Mac. The simulator showed a missing puzzle glyph in both its plain and styled previews. The file checks retained the exact UTF-16 value. The [metadata evidence](../spec/verification.md#mobile-task-metadata) covers priority, tags and embedded checklist changes with preserved rich content. The unknown-data fixture verifies byte retention when rewriting is refused. These checks have distinct scopes from Desktop editor verification.
 
 The [code-review report](../code-review-findings-2026-11-08.md) preserves the paragraph-boundary and empty-Quote findings and their merged corrections. Preserve [BlockRangeTests](../../Tests/TaskovskyCoreTests/BlockRangeTests.swift) and [QuoteToggleTests](../../Tests/TaskovskyCoreTests/QuoteToggleTests.swift) during extraction; native app Undo/Redo and live selection checks remain bounded as recorded in the verification ledger.
 
 <a id="rich-004"></a>
-### RICH-004 Proposed limited iPhone edit semantics
+### RICH-004 Limited iPhone edit semantics
 
-The first implementation should be deliberately conservative:
+Classify the workspace and the mirrored body before exposing Format description. Native preview has no save callback. Other field writes retain the exact text and companion, and a lossy workspace decode blocks writes.
 
-1. **Classify before making the body editable.** An ordinary plain document has no rich companion. A known-empty-rich document may also qualify only after successful decoding, exact mirrored-text identity, no meaningful formatting, and no unrecognized fields/features. Do not use `isEmpty` after a lossy decode as proof that a payload is plain.
-2. **Edit eligible plain text only.** Typing, deletion and plain paste may update the body. Commit with no rich companion, or a documented equivalent empty companion; use one canonical choice consistently. An existing companion is not silently discarded just because a renderer ignores it.
-3. **Styled bodies remain body-read-only initially.** Render known features if convenient, otherwise show authoritative plain text and a notice that formatting is preserved. Do not pass a read-only preview back through an extractor on Save, Back, focus loss or backgrounding.
-4. **Allow unrelated changes only without touching body data.** Title, scheduling, priority and other permitted metadata may use field-scoped commands that retain the original body/rich payload. Re-encoding an entire reduced `TaskItem` is not a preservation strategy. If storage cannot preserve unsupported fields/payloads, block the write rather than claim safe metadata editing.
-5. **No destructive round trip.** Opening a macOS-styled record on iPhone, changing a title, and reopening on macOS must retain text code units and all original styles. A plain preview must never be used as the saved representation of a styled body.
-6. **Do not disguise an unsupported action.** Disable body editing with an explanation, or offer a separate plain-text copy only in a separately scoped feature. The initial proposal does not automatically flatten, migrate or delete rich content.
-
-A later selective rich editor may support text edits or selected formats without exposing every toolbar command, but only after an edit-transaction contract is agreed. Such a contract must specify UTF-16 replacements, insertion affinity at style boundaries, style inheritance, split/merge behavior, paragraph changes, and handling of unknown annotations. Every unaffected known and unknown field must survive. If the adapter cannot transform affected unsupported ranges safely, refuse that edit. Retaining old offsets after changing the text is not preservation; neither is clearing all styles to satisfy the identity check.
+The [paired edit transaction](../changes/mobile-rich-editor-2026-11-09.md#edit-transaction-contract) defines UTF-16 replacements, style affinity, paragraph boundaries and recovery replay. Done writes the supported text and companion together, scoped to the task identity and workspace revision. Unknown and malformed bodies and incompatible workspace data remain protected. The existing plain editor requires an absent companion.
 
 <a id="rich-005"></a>
 ### RICH-005 Proposed unknown-format and version handling
@@ -116,7 +109,7 @@ Before a limited-capability client can write shared-format documents, introduce 
 | Incoming state | Proposed read behavior | Proposed write behavior |
 | --- | --- | --- |
 | Recognized legacy unversioned plain payload | Read as existing format | Permit eligible plain edits; no forced migration merely from opening |
-| Recognized legacy rich payload or explicitly supported future version | Validate mirrored text and ranges; render only understood features | Permit only capabilities proven safe for the entire affected payload; minimum iPhone release keeps styled body read-only |
+| Recognized legacy rich payload or explicitly supported future version | Validate mirrored text and ranges; render only understood features | Permit only capabilities proven safe for the entire affected payload |
 | Unknown newer version, unknown format kind or unrecognized fields | Preserve raw payload; show safe plain-body preview when its field is readable, plus an unsupported-format notice | No body rewrite or automatic downgrade. Field-scoped metadata writes only if the complete unsupported payload can be retained losslessly; otherwise the document/workspace is read-only |
 | Malformed payload or plain/rich text mismatch | Do not apply questionable offsets; show authoritative plain text when available and an explanatory state | Preserve original for recovery. Do not silently sanitize-and-save, replace with an empty body or treat it as eligible plain content |
 | Malformed enclosing workspace | Existing fail-closed behavior remains the baseline | Preserve original file and block overwrites; explicit recovery remains a separate action |

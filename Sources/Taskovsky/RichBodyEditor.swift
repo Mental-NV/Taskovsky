@@ -42,6 +42,8 @@ struct RichBodyEditor: NSViewRepresentable {
     var onChange: (String, RichBody?) -> Void
     var onHeightChange: (CGFloat) -> Void
     var onFocusChange: (Bool) -> Void = { _ in }
+    var readerHeadings: [RichDescriptionPreview.Heading] = []
+    var onHeadingPositions: ([Int: CGFloat]) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -267,6 +269,25 @@ struct RichBodyEditor: NSViewRepresentable {
         /// frame. Width changes (task switch reuse, pane resize, drawer vs
         /// main) re-measure even when the text is unchanged.
         var lastWidth: CGFloat = .nan
+        private var headingPositions: [Int: CGFloat] = [:]
+
+        private func reportHeadingPositions(in view: NSTextView) {
+            guard !host.readerHeadings.isEmpty, let layout = view.layoutManager, let container = view.textContainer else { return }
+            layout.ensureLayout(for: container)
+            var positions: [Int: CGFloat] = [:]
+            let length = view.textStorage?.length ?? 0
+            for heading in host.readerHeadings where heading.range.location < length {
+                let glyph = layout.glyphIndexForCharacter(at: heading.range.location)
+                let line = layout.lineFragmentRect(forGlyphAt: glyph, effectiveRange: nil)
+                positions[heading.id] = line.minY + view.textContainerOrigin.y
+            }
+            guard headingPositions != positions else { return }
+            headingPositions = positions
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.headingPositions == positions else { return }
+                self.host.onHeadingPositions(positions)
+            }
+        }
 
         func reportHeight(_ view: NSTextView) {
             // Explicit-width measurement on a throwaway layout: at initial
@@ -279,6 +300,7 @@ struct RichBodyEditor: NSViewRepresentable {
                 width = containerWidth
             }
             guard width > 0, let storage = view.textStorage else { return }
+            reportHeadingPositions(in: view)
             let height = RichEditorSizing.measuredHeight(
                 for: storage, width: width,
                 insetHeight: view.textContainerInset.height)
@@ -889,6 +911,53 @@ final class RichBodyController: ObservableObject {
     }
 
 }
+/// The reader owns an independent, selectable projection of the saved body.
+struct RichBodyReader: View {
+    let documentID: UUID
+    let preview: RichDescriptionPreview
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var controller = RichBodyController()
+    @State private var collapsed: Set<Int> = []
+    @State private var positions: [Int: CGFloat] = [:]
+    @State private var height: CGFloat = 60
+
+    var body: some View {
+        let reading = preview.readingView(collapsed: collapsed)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Read Description").font(.headline)
+                Spacer()
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            ScrollView {
+                ZStack(alignment: .topLeading) {
+                    RichBodyEditor(controller: controller, documentID: documentID, text: reading.preview.text,
+                                   rich: reading.preview.displayRichBody, disabled: true, onChange: { _, _ in },
+                                   onHeightChange: { height = $0 }, readerHeadings: reading.headings,
+                                   onHeadingPositions: { positions = $0 })
+                        .frame(height: max(60, height)).padding(.leading, 26)
+                        .accessibilityLabel("Read-only description")
+                    ForEach(reading.headings) { heading in
+                        if let y = positions[heading.id] {
+                            let folded = collapsed.contains(heading.id)
+                            Button {
+                                if folded { collapsed.remove(heading.id) } else { collapsed.insert(heading.id) }
+                            } label: {
+                                Image(systemName: folded ? "chevron.right" : "chevron.down")
+                                    .font(.caption.weight(.semibold)).frame(width: 24, height: 22)
+                                    .contentShape(Rectangle())
+                            }.buttonStyle(.plain)
+                                .accessibilityLabel((folded ? "Expand " : "Collapse ") + heading.title)
+                                .accessibilityIdentifier("richFoldHeading-" + String(heading.id))
+                                .offset(y: y)
+                        }
+                    }
+                }
+            }
+        }.padding(18).frame(width: 530, height: 430)
+    }
+}
+
 /// Inline formatting toolbar for the body editor. Every control operates on
 /// the live selection (or typing attributes when collapsed); bold, italic,
 /// and underline also answer to ⌘B/⌘I/⌘U with native undo behind each edit.

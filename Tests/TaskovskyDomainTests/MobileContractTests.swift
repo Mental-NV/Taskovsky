@@ -11,6 +11,640 @@ final class MobileContractTests: XCTestCase {
     private var now: Date { date("2026-11-09T12:00:00Z") }
     private func ids(_ tasks: [TaskItem]) -> [UUID] { tasks.map(\.id) }
 
+    func testTaskSectionsRetainOrderedGroupsAndKeepTasksWhenRemoved() throws {
+        let list = TaskList(name: "Reading", color: "#334455")
+        let parent = TaskItem(title: "Novel", listID: list.id)
+        let child = TaskItem(title: "Chapter", body: "Keep this draft", listID: list.id, parentID: parent.id)
+        let first = TaskSection(name: "  Novels  ")
+        let second = TaskSection(name: "History")
+        var data = WorkspaceData(tasks: [parent, child], lists: [list])
+        func apply(_ operation: TaskSectionChange.Operation) -> Bool? {
+            TaskSectionChange(listID: list.id, operation: operation).apply(to: &data, now: now)
+        }
+        XCTAssertEqual(apply(.create(first)), true)
+        XCTAssertEqual(apply(.create(second)), true)
+        XCTAssertEqual(data.lists[0].sections.map(\.name), ["Novels", "History"])
+        XCTAssertEqual(apply(.rename(second.id, name: "Modern history")), true)
+        XCTAssertEqual(apply(.reorder(second.id, relativeTo: first.id, after: false)), true)
+        XCTAssertEqual(apply(.reorder(second.id, relativeTo: first.id, after: false)), false)
+        XCTAssertEqual(apply(.assign(taskID: parent.id, sectionID: first.id)), true)
+        XCTAssertNil(apply(.assign(taskID: child.id, sectionID: second.id)))
+        let groups = TaskSectionGroup.project([child], for: data.lists[0], in: data)
+        XCTAssertEqual(groups.map(\.id), [nil, second.id, first.id])
+        XCTAssertEqual(groups.last?.tasks.map(\.id), [child.id])
+
+        XCTAssertEqual(apply(.remove(first.id)), true)
+        XCTAssertEqual(data.tasks.map(\.id), [parent.id, child.id])
+        XCTAssertNil(data.tasks[0].sectionID)
+        XCTAssertEqual(data.tasks[1], child)
+        XCTAssertEqual(data.tasks[0].updatedAt, now)
+        data.lists[0].isArchived = true
+        XCTAssertNil(apply(.remove(second.id)))
+    }
+
+    func testSectionCaptureAndBatchMoveValidateTargetsBeforeSaving() throws {
+        let list = TaskList(name: "Work", color: "#445566")
+        let other = TaskList(name: "Personal", color: "#556677")
+        let section = TaskSection(name: "Planning")
+        let first = TaskItem(title: "First", listID: list.id)
+        let second = TaskItem(title: "Second", listID: list.id)
+        var data = WorkspaceData(tasks: [first, second], lists: [list, other])
+        XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .create(section)).apply(to: &data, now: now), true)
+
+        let invalid = TaskSectionChange(listID: list.id, operation: .assignTasks([first.id, UUID()], sectionID: section.id))
+        XCTAssertNil(invalid.apply(to: &data, now: now))
+        XCTAssertEqual(data.tasks, [first, second])
+        let valid = TaskSectionChange(listID: list.id, operation: .assignTasks([first.id, second.id], sectionID: section.id))
+        XCTAssertEqual(valid.apply(to: &data, now: now), true)
+        XCTAssertEqual(data.tasks.map(\.sectionID), [section.id, section.id])
+
+        let settings = AppSettings()
+        var input = TaskCaptureInput.start(destination: .list(list.id), workspace: data,
+                                           settings: settings, now: now, calendar: calendar)
+        input.title = "New in Planning"
+        input.sectionID = section.id
+        let created = try input.task(id: UUID(), now: now, workspace: data, settings: settings, calendar: calendar)
+        XCTAssertEqual(created.sectionID, section.id)
+        input.listID = other.id
+        XCTAssertNil(input.sectionID)
+        input.sectionID = section.id
+        XCTAssertThrowsError(try input.task(id: UUID(), now: now, workspace: data, settings: settings, calendar: calendar))
+    }
+
+    func testTaskSectionListCopyRemapsMembershipAndCrossListMovesClearIt() throws {
+        let list = TaskList(name: "Work", color: "#445566")
+        let other = TaskList(name: "Personal", color: "#556677")
+        let section = TaskSection(name: "Drafts")
+        let root = TaskItem(title: "Outline", listID: list.id)
+        let child = TaskItem(title: "Gather references", listID: list.id, parentID: root.id)
+        var data = WorkspaceData(tasks: [root, child], lists: [list, other])
+        XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .create(section)).apply(to: &data, now: now), true)
+        XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .assign(taskID: root.id, sectionID: section.id)).apply(to: &data, now: now), true)
+        let copyID = UUID()
+        XCTAssertTrue(ListOrganization.duplicateList(list.id, copyID: copyID, in: &data, now: now))
+        let copy = try XCTUnwrap(data.lists.first { $0.id == copyID })
+        let copiedSection = try XCTUnwrap(copy.sections.first)
+        XCTAssertNotEqual(copiedSection.id, section.id)
+        XCTAssertEqual(copiedSection.name, section.name)
+        let copied = data.tasks.filter { $0.listID == copyID }
+        XCTAssertEqual(copied.first?.sectionID, copiedSection.id)
+        XCTAssertEqual(copied.last?.parentID, copied.first?.id)
+
+        data.tasks[0].listID = other.id
+        XCTAssertNil(data.tasks[0].sectionID)
+        ListOrganization.deleteList(copyID, in: &data, now: now)
+        XCTAssertTrue(data.tasks.filter { copied.map(\.id).contains($0.id) }.allSatisfy { $0.listID == nil && $0.sectionID == nil })
+    }
+
+    func testListSectionsUseAProtectedCollectionAndLegacyFilesStayReadable() throws {
+        let list = TaskList(name: "Work", color: "#445566")
+        var data = WorkspaceData(lists: [list])
+        let encoder = JSONEncoder(), decoder = JSONDecoder()
+        func encoded() throws -> [String: Any] {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: encoder.encode(data)) as? [String: Any])
+        }
+        let legacy = try encoder.encode(data)
+        XCTAssertTrue(try encoded()["tasks"] is [Any])
+        XCTAssertEqual(try decoder.decode(WorkspaceData.self, from: legacy), data)
+        let section = TaskSection(name: "Planning")
+        XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .create(section)).apply(to: &data, now: now), true)
+        var protected = try encoded()
+        let envelope = try XCTUnwrap(protected["tasks"] as? [String: Any])
+        XCTAssertEqual(envelope["format"] as? String, "listSectionsV1")
+        XCTAssertEqual(try decoder.decode(WorkspaceData.self, from: encoder.encode(data)), data)
+        protected["tasks"] = envelope["records"]
+        let unprotected = try JSONSerialization.data(withJSONObject: protected)
+        XCTAssertThrowsError(try decoder.decode(WorkspaceData.self, from: unprotected))
+        XCTAssertEqual(TaskSectionChange(listID: list.id, operation: .remove(section.id)).apply(to: &data, now: now), true)
+        XCTAssertTrue(try encoded()["tasks"] is [Any])
+    }
+
+    func testAllDayResizeUsesInclusiveDisplayDateAndPreservesCivilStart() throws {
+        var taskCalendar = calendar
+        taskCalendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        var display = calendar
+        display.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        let start = taskCalendar.startOfDay(for: date("2026-03-07T18:00:00Z"))
+        let end = try XCTUnwrap(taskCalendar.date(byAdding: .day, value: 2, to: start))
+        let task = TaskItem(title: "DST retreat", dueDate: end, timeZoneID: taskCalendar.timeZone.identifier,
+                            scheduledDuration: .init(start: start, end: end, isAllDay: true))
+        let first = CalendarDates.civilDay(start, from: taskCalendar, to: display)
+        let days = CalendarDates.days(from: first, count: 6, calendar: display)
+        let range = try XCTUnwrap(CalendarDates.interval(for: days, calendar: display))
+        let result = TaskCalendarProjection.project(data: WorkspaceData(tasks: [task]), range: range,
+                                                     options: .init(), calendar: display)
+        var entry = try XCTUnwrap(result.entries.first)
+        XCTAssertTrue(entry.canResizeAllDayRange)
+        XCTAssertNil(entry.allDayResizeTarget(on: days[2], calendar: display))
+        let before = try XCTUnwrap(display.date(byAdding: .day, value: -1, to: first))
+        XCTAssertEqual(entry.allDayResizeTarget(on: before, calendar: display), first)
+        let next = try XCTUnwrap(entry.allDayResizeTarget(on: days[3], calendar: display))
+        let resized = try XCTUnwrap(CalendarScheduling.prepared(.resizeEnd(next), to: task, displayCalendar: display,
+                                                                 settings: .init(), policyCalendar: taskCalendar))
+        XCTAssertEqual(resized.scheduledDuration?.start, start)
+        XCTAssertEqual(resized.scheduledDuration?.end, taskCalendar.date(byAdding: .day, value: 3, to: start))
+        XCTAssertEqual(resized.dueDate, resized.scheduledDuration?.end)
+        XCTAssertFalse(resized.hasDueTime)
+        entry.isProjected = true
+        XCTAssertNil(entry.allDayResizeTarget(on: days[4], calendar: display))
+    }
+
+    func testMonthWeekSpansContinueAndOverflowByDate() throws {
+        let first = date("2026-11-09T00:00:00Z")
+        let dates = CalendarDates.days(from: first, count: 14, calendar: calendar)
+        func range(_ title: String, from start: Int, through end: Int) -> TaskItem {
+            TaskItem(title: title, dueDate: dates[end],
+                     scheduledDuration: .init(start: dates[start], end: dates[end], isAllDay: true))
+        }
+        let retreat = range("Retreat", from: 4, through: 8)
+        let review = range("Review", from: 5, through: 7)
+        let point = TaskItem(title: "Call", dueDate: dates[5])
+        let data = WorkspaceData(tasks: [retreat, review, point])
+        let interval = try XCTUnwrap(CalendarDates.interval(for: dates, calendar: calendar))
+        let entries = TaskCalendarProjection.project(data: data, range: interval, options: .init(), calendar: calendar).entries
+        let firstWeek = CalendarMonthWeekLayout(entries: entries, dates: Array(dates.prefix(7)), capacity: 1, calendar: calendar)
+        XCTAssertEqual(firstWeek.spans.map(\.entry.taskID), [retreat.id])
+        XCTAssertEqual(firstWeek.spans.map(\.firstDay), [4])
+        XCTAssertEqual(firstWeek.spans.map(\.dayCount), [3])
+        XCTAssertEqual(firstWeek.spans.map(\.continuesAfter), [true])
+        XCTAssertEqual(firstWeek.days.map(\.hiddenCount), [0, 0, 0, 0, 0, 2, 1])
+        XCTAssertEqual(firstWeek.days[5].entries.count, 3)
+        XCTAssertEqual(firstWeek.days[5].slots, [nil])
+
+        let secondWeek = CalendarMonthWeekLayout(entries: entries, dates: Array(dates.suffix(7)), capacity: 2, calendar: calendar)
+        XCTAssertEqual(secondWeek.spans.map(\.entry.taskID), [retreat.id, review.id])
+        XCTAssertEqual(secondWeek.spans.map(\.firstDay), [0, 0])
+        XCTAssertEqual(secondWeek.spans.map(\.dayCount), [2, 1])
+        XCTAssertEqual(secondWeek.spans.map(\.continuesBefore), [true, true])
+        XCTAssertTrue(secondWeek.days.allSatisfy { $0.hiddenCount == 0 })
+        let roomy = CalendarMonthWeekLayout(entries: entries, dates: Array(dates.prefix(7)), capacity: 3, calendar: calendar)
+        XCTAssertEqual(roomy.days[5].slots.map { $0?.taskID }, [nil, nil, point.id])
+    }
+
+    func testAllDaySpansReuseLanesAndClipAtCivilDayBoundaries() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let first = local.startOfDay(for: date("2026-03-07T17:00:00Z"))
+        let days = CalendarDates.days(from: first, count: 4, calendar: local)
+        let before = try XCTUnwrap(local.date(byAdding: .day, value: -2, to: first))
+        func range(_ title: String, from start: Date, through end: Date) -> TaskItem {
+            TaskItem(title: title, dueDate: end, timeZoneID: local.timeZone.identifier,
+                     scheduledDuration: .init(start: start, end: end, isAllDay: true))
+        }
+        let clipped = range("Clipped", from: before, through: days[1])
+        let crossing = range("Crossing", from: days[1], through: days[2])
+        let adjacent = range("Adjacent", from: days[2], through: days[2])
+        let timed = TaskItem(title: "Timed", dueDate: days[1].addingTimeInterval(3_600), hasDueTime: true)
+        let data = WorkspaceData(tasks: [adjacent, crossing, timed, clipped])
+        let interval = try XCTUnwrap(CalendarDates.interval(for: days, calendar: local))
+        XCTAssertEqual(interval.duration, 4 * 86_400 - 3_600)
+        let entries = TaskCalendarProjection.project(data: data, range: interval, options: .init(), calendar: local).entries
+        let placements = CalendarAllDayLayout.placements(entries: entries, days: days, calendar: local)
+        XCTAssertEqual(placements.map { $0.entry.taskID }, [clipped.id, crossing.id, adjacent.id])
+        XCTAssertEqual(placements.map(\.firstDay), [0, 1, 2])
+        XCTAssertEqual(placements.map(\.dayCount), [2, 2, 1])
+        XCTAssertEqual(placements.map(\.lane), [0, 1, 0])
+        XCTAssertEqual(placements.map(\.continuesBefore), [true, false, false])
+        XCTAssertFalse(placements.contains(where: \.continuesAfter))
+        let partial = CalendarAllDayLayout.placements(entries: entries, days: Array(days.prefix(2)), calendar: local)
+        XCTAssertEqual(partial.map(\.dayCount), [2, 1])
+        XCTAssertEqual(partial.map(\.continuesAfter), [false, true])
+    }
+
+    func testTimelineZoomKeepsWallTimeAndBoundsTheScale() {
+        let standard = CalendarTimelineScale.standard
+        let expanded = standard.stepped(zoomingIn: true)
+        XCTAssertEqual(standard.percentage, 100)
+        XCTAssertEqual(expanded.pointsPerHour, 60)
+        XCTAssertEqual(expanded.stepped(zoomingIn: false), standard)
+        XCTAssertEqual(standard.scaled(by: .nan), standard)
+        XCTAssertEqual(standard.scaled(by: 0), standard)
+        let minimum = standard.scaled(by: 0.01)
+        let maximum = standard.scaled(by: 100)
+        XCTAssertEqual(minimum.pointsPerHour, 32)
+        XCTAssertEqual(maximum.pointsPerHour, 104)
+        XCTAssertFalse(minimum.canZoomOut)
+        XCTAssertFalse(maximum.canZoomIn)
+
+        let window = CalendarHourlyWindow()
+        let hour = standard.hour(at: 6.25 * standard.pointsPerHour)
+        for scale in [minimum, standard, expanded, maximum] {
+            let displayedOffset = scale.offset(at: hour)
+            XCTAssertEqual(window.minute(atOffset: scale.hour(at: displayedOffset) * 60), 13 * 60 + 15)
+        }
+    }
+
+    func testAllDayRowsAreOptionalAndBounded() throws {
+        let decoder = JSONDecoder()
+        let encoder = JSONEncoder()
+        var options = try decoder.decode(TaskCalendarOptions.self, from: Data("{}".utf8))
+        XCTAssertNil(options.allDayRows)
+        let original = try JSONSerialization.jsonObject(with: encoder.encode(options)) as? [String: Any]
+        XCTAssertNil(original?["allDayRows"])
+
+        options.allDayRows = 4
+        XCTAssertEqual(try decoder.decode(TaskCalendarOptions.self, from: encoder.encode(options)), options)
+        options.allDayRows = -1
+        XCTAssertEqual(options.allDayRows, 1)
+        options.allDayRows = Int.max
+        XCTAssertEqual(options.allDayRows, 12)
+        options.allDayRows = nil
+        XCTAssertEqual(options, try decoder.decode(TaskCalendarOptions.self, from: Data("{}".utf8)))
+    }
+
+    func testMonthZoomUsesCivilWeeksAndPaginatesWithoutGaps() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let focus = date("2026-03-06T17:00:00Z")
+        let options = TaskCalendarOptions()
+        let zoom = CalendarMonthZoom.full.adjusted(magnification: 1.6).adjusted(zoomingIn: true)
+        XCTAssertEqual(zoom, .twoWeeks)
+        XCTAssertEqual(zoom.itemLimit, 6)
+        XCTAssertEqual(zoom.adjusted(magnification: 1.05), zoom)
+        XCTAssertEqual(zoom.adjusted(magnification: 0.6), .threeWeeks)
+        XCTAssertEqual(CalendarMonthZoom.oneWeek.adjusted(zoomingIn: true), .oneWeek)
+        let visible = CalendarDates.visibleDays(focus: focus, mode: .month, options: options, calendar: local, monthZoom: zoom)
+        XCTAssertEqual(visible.count, 14)
+        XCTAssertEqual(visible.first, date("2026-03-02T05:00:00Z"))
+        let interval = try XCTUnwrap(CalendarDates.interval(for: visible, calendar: local))
+        XCTAssertEqual(interval.duration, 14 * 86_400 - 3600)
+        let next = CalendarDates.navigate(focus, direction: 1, mode: .month, options: options, calendar: local, monthZoom: zoom)
+        XCTAssertEqual(next, interval.end)
+        XCTAssertEqual(CalendarDates.navigate(next, direction: -1, mode: .month, options: options, calendar: local, monthZoom: zoom), visible.first)
+        let normal = CalendarDates.visibleDays(focus: focus, mode: .month, options: options, calendar: local)
+        XCTAssertGreaterThan(normal.count, visible.count)
+        let week = CalendarDates.visibleDays(focus: focus, mode: .week, options: options, calendar: local, monthZoom: zoom)
+        XCTAssertEqual(week.count, 7)
+    }
+
+    func testDescriptionHeadingFoldsKeepNestedStateAndExactVisibleFormatting() throws {
+        let text = "Parent\nCafé\nChild\ne\u{301} 🧩 hidden\nPeer\nVisible 🧩\nLast"
+        let string = text as NSString
+        func heading(_ name: String, _ level: Int) -> RichBlockRun {
+            let range = string.paragraphRange(for: string.range(of: name))
+            return RichBlockRun(location: range.location, length: range.length, heading: level)
+        }
+        let peer = string.range(of: "Visible 🧩")
+        let hidden = string.range(of: "hidden")
+        let rich = RichBody(text: text, runs: [
+            .init(location: 0, length: string.length, bold: true),
+            .init(location: hidden.location, length: hidden.length, link: "https://example.invalid/hidden"),
+            .init(location: peer.location, length: peer.length, italic: true),
+        ], blocks: [heading("Parent", 1), heading("Child", 2), heading("Peer", 1), heading("Last", 1)])
+        let preview = try XCTUnwrap(RichDescriptionPreview(body: text, rich: rich))
+        let headings = preview.foldableHeadings
+        XCTAssertEqual(headings.map(\.title), ["Parent", "Child", "Peer"])
+        let parent = headings[0].id, child = headings[1].id
+        let folded = preview.readingView(collapsed: [parent, child])
+        XCTAssertEqual(folded.headings.map(\.title), ["Parent", "Peer"])
+        XCTAssertTrue(RichBody.sameCodeUnits(folded.preview.text, "Parent\nPeer\nVisible 🧩\nLast"))
+        XCTAssertFalse(folded.preview.inline.contains { $0.link != nil })
+        let visible = try XCTUnwrap(folded.preview.inline.first { $0.italic })
+        XCTAssertEqual((folded.preview.text as NSString).substring(with: NSRange(location: visible.location, length: visible.length)), "Visible 🧩")
+        XCTAssertTrue(try XCTUnwrap(RichDescriptionPreview(body: folded.preview.text, rich: folded.preview.displayRichBody)).matches(folded.preview))
+        let reopened = preview.readingView(collapsed: [child])
+        XCTAssertEqual(reopened.headings.map(\.id), headings.map(\.id))
+        XCTAssertTrue(RichBody.sameCodeUnits(reopened.preview.text, "Parent\nCafé\nChild\nPeer\nVisible 🧩\nLast"))
+        XCTAssertTrue(RichBody.sameCodeUnits(preview.readingView(collapsed: []).preview.text, text))
+    }
+
+    func testTimestampSortDistinguishesCreatedModifiedAndRetainsEqualOrder() {
+        let first = TaskItem(title: "First", createdAt: now.addingTimeInterval(-100), updatedAt: now.addingTimeInterval(200))
+        let second = TaskItem(title: "Second", createdAt: now, updatedAt: now)
+        let tied = TaskItem(title: "Tied", createdAt: first.createdAt, updatedAt: first.updatedAt)
+        let tasks = [first, second, tied]
+        XCTAssertEqual(TaskTimestampSort(rawValue: "Created"), .createdNewest)
+        XCTAssertEqual(tasks.sorted(by: TaskTimestampSort.createdNewest.precedes).map(\.id), [second.id, first.id, tied.id])
+        XCTAssertEqual(tasks.sorted(by: TaskTimestampSort.createdOldest.precedes).map(\.id), [first.id, tied.id, second.id])
+        XCTAssertEqual(tasks.sorted(by: TaskTimestampSort.modifiedNewest.precedes).map(\.id), [first.id, tied.id, second.id])
+        XCTAssertEqual(tasks.sorted(by: TaskTimestampSort.modifiedOldest.precedes).map(\.id), [second.id, first.id, tied.id])
+        XCTAssertFalse(TaskSortPolicy.canReorder(TaskTimestampSort.modifiedNewest.rawValue))
+    }
+
+    func testCalendarIconChoicesSeparateTasksAndNotesWithoutChangingEntries() throws {
+        let task = TaskItem(title: "Task", dueDate: now, hasDueTime: true)
+        let note = TaskItem(title: "Note", kind: .note, dueDate: now, hasDueTime: true)
+        let data = WorkspaceData(tasks: [task, note])
+        let range = DateInterval(start: now.addingTimeInterval(-3600), duration: 7200)
+        var options = TaskCalendarOptions()
+        let entries = TaskCalendarProjection.project(data: data, range: range, options: options, calendar: calendar).entries
+        let taskEntry = try XCTUnwrap(entries.first { $0.taskID == task.id })
+        let noteEntry = try XCTUnwrap(entries.first { $0.taskID == note.id })
+        XCTAssertTrue(options.showsIcon(for: taskEntry))
+        XCTAssertTrue(options.showsIcon(for: noteEntry))
+        options.showTaskIcons = false
+        XCTAssertFalse(options.showsIcon(for: taskEntry))
+        XCTAssertTrue(options.showsIcon(for: noteEntry))
+        options.showItemIcons = false
+        XCTAssertFalse(options.showsIcon(for: taskEntry))
+        XCTAssertFalse(options.showsIcon(for: noteEntry))
+        options.showItemIcons = true
+        options.showTaskIcons = true
+        options.showNoteIcons = false
+        XCTAssertTrue(options.showsIcon(for: taskEntry))
+        XCTAssertFalse(options.showsIcon(for: noteEntry))
+        XCTAssertEqual(TaskCalendarProjection.project(data: data, range: range, options: options, calendar: calendar).entries, entries)
+    }
+
+    func testAdjustedFoldCutoffsKeepWallTimeAndCannotCross() throws {
+        let original = CalendarFoldedHours()
+        XCTAssertEqual(original.moving(.early, by: -0.4), original)
+        XCTAssertEqual(original.moving(.early, by: -1), .init(earlyEnd: 6, lateStart: 21))
+        XCTAssertEqual(original.moving(.early, to: 24).earlyEnd, 20)
+        XCTAssertEqual(original.moving(.late, to: 0).lateStart, 8)
+        XCTAssertEqual(original.moving(.late, by: .infinity), original)
+        let cutoffs = CalendarFoldedHours(earlyEnd: 6, lateStart: 22)
+        var window = CalendarHourlyWindow(foldedHours: cutoffs)
+        XCTAssertEqual(window.hours, 6..<22)
+        XCTAssertEqual(window.minute(atOffset: 30), 390)
+        let day = date("2026-11-09T00:00:00Z")
+        let task = TaskItem(title: "Early", dueDate: date("2026-11-09T06:30:00Z"), hasDueTime: true)
+        let range = DateInterval(start: day, duration: 86400)
+        let entries = TaskCalendarProjection.project(data: WorkspaceData(tasks: [task]), range: range,
+            options: .init(), calendar: calendar).entries
+        XCTAssertEqual(window.itemCount(in: .early, entries: entries, days: [day], calendar: calendar), 0)
+        XCTAssertEqual(CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar, window: window).count, 1)
+        XCTAssertFalse(window.canAdjustFolds)
+        window.toggle(.early)
+        XCTAssertFalse(window.canAdjustFolds)
+        window.toggle(.late)
+        XCTAssertTrue(window.canAdjustFolds)
+        let updated = window.using(.init(earlyEnd: 8, lateStart: 20))
+        XCTAssertEqual(updated.hours, 0..<24)
+        XCTAssertEqual(updated.itemCount(in: .early, entries: entries, days: [day], calendar: calendar), 1)
+    }
+
+    func testFoldedHoursKeepWallTimeAndClipOnlyTheDisplayedSegments() throws {
+        let day = date("2026-11-09T00:00:00Z")
+        let early = TaskItem(title: "Early", dueDate: date("2026-11-09T06:45:00Z"), hasDueTime: true)
+        let start = date("2026-11-09T20:30:00Z"), end = date("2026-11-09T21:30:00Z")
+        let crossing = TaskItem(title: "Crossing", dueDate: end, hasDueTime: true,
+                                scheduledDuration: .init(start: start, end: end))
+        let interval = DateInterval(start: day, end: date("2026-11-10T00:00:00Z"))
+        let entries = TaskCalendarProjection.project(data: WorkspaceData(tasks: [early, crossing]), range: interval,
+            options: TaskCalendarOptions(), calendar: calendar).entries
+        var window = CalendarHourlyWindow()
+        XCTAssertEqual(window.hours, 7..<21)
+        XCTAssertEqual(window.minute(atOffset: 20), 435)
+        XCTAssertEqual(window.minute(atOffset: 900), 1260)
+        XCTAssertEqual(window.itemCount(in: .early, entries: entries, days: [day], calendar: calendar), 1)
+        XCTAssertEqual(window.itemCount(in: .late, entries: entries, days: [day], calendar: calendar), 1)
+        let folded = CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar, window: window)
+        XCTAssertEqual(folded.map(\.entry.taskID), [crossing.id])
+        let part = try XCTUnwrap(folded.first)
+        XCTAssertEqual(part.startMinute, 1230)
+        XCTAssertEqual(part.endMinute, 1260)
+        XCTAssertEqual(part.resizeMinute, 1290)
+        XCTAssertFalse(part.endIsVisible)
+        XCTAssertEqual(part.entry.end, end)
+
+        window.toggle(.late)
+        let late = try XCTUnwrap(CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar, window: window).first)
+        XCTAssertTrue(late.endIsVisible)
+        XCTAssertEqual(late.endMinute, 1290)
+        window.toggle(.early)
+        XCTAssertEqual(window.hours, 0..<24)
+        XCTAssertEqual(window.minute(atOffset: 20), 15)
+        XCTAssertEqual(CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar, window: window).count, 2)
+    }
+
+    func testAgendaExtensionUsesLocalMonthBoundariesAndKeepsExistingDays() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let focus = date("2026-03-06T18:00:00Z")
+        let options = TaskCalendarOptions()
+        var window = CalendarAgendaWindow()
+        let initial = CalendarDates.visibleDays(focus: focus, mode: .agenda, options: options, calendar: local)
+        XCTAssertEqual(initial.count, 30)
+        XCTAssertEqual(CalendarDates.interval(for: initial, calendar: local)?.end, date("2026-04-05T04:00:00Z"))
+        window.extend()
+        let extended = CalendarDates.visibleDays(focus: focus, mode: .agenda, options: options, calendar: local, agendaWindow: window)
+        XCTAssertEqual(Array(extended.prefix(initial.count)), initial)
+        XCTAssertEqual(CalendarDates.interval(for: extended, calendar: local)?.end, date("2026-10-05T04:00:00Z"))
+        for _ in 0..<8 { window.extend() }
+        XCTAssertFalse(window.canExtend)
+        let bounded = CalendarDates.visibleDays(focus: focus, mode: .agenda, options: options, calendar: local, agendaWindow: window)
+        XCTAssertEqual(CalendarDates.interval(for: bounded, calendar: local)?.end, date("2028-04-05T04:00:00Z"))
+        XCTAssertEqual(CalendarDates.visibleDays(focus: focus, mode: .week, options: options, calendar: local, agendaWindow: window).count, 7)
+    }
+
+    func testCurrentOccurrenceMoveKeepsEarlierForecastsAndDistinctOverlappingCards() throws {
+        let due = date("2026-11-09T09:00:00Z")
+        let next = date("2026-11-16T09:00:00Z")
+        let task = TaskItem(title: "Weekly", dueDate: due, hasDueTime: true, recurrence: .weekly)
+        var options = TaskCalendarOptions()
+        options.showRepeatCycles = true
+        let range = DateInterval(start: date("2026-11-16T00:00:00Z"), end: date("2026-11-17T00:00:00Z"))
+        let moved = try XCTUnwrap(CalendarScheduling.prepared(.setPoint(date: date("2026-11-30T09:00:00Z"), allDay: false),
+            to: task, displayCalendar: calendar, settings: AppSettings(), policyCalendar: calendar, scope: .currentOccurrence))
+        XCTAssertEqual(moved.originalOccurrenceSchedule?.due, due)
+        let future = TaskCalendarProjection.project(data: WorkspaceData(tasks: [moved]), range: range, options: options, calendar: calendar)
+        XCTAssertEqual(future.entries.map(\.due), [next])
+        XCTAssertEqual(future.entries.map(\.isProjected), [true])
+
+        let overlapping = try XCTUnwrap(CalendarScheduling.prepared(.setPoint(date: next, allDay: false), to: moved,
+            displayCalendar: calendar, settings: AppSettings(), policyCalendar: calendar, scope: .currentOccurrence))
+        XCTAssertEqual(overlapping.originalOccurrenceSchedule?.due, due)
+        let cards = TaskCalendarProjection.project(data: WorkspaceData(tasks: [overlapping]), range: range, options: options, calendar: calendar)
+        XCTAssertEqual(Set(cards.entries.map(\.isProjected)), [true, false])
+        XCTAssertEqual(Set(cards.entries.map(\.id)).count, 2)
+    }
+
+    func testCurrentOccurrenceResizeDoesNotChangeSuccessorOrItsSubtreeOffsets() throws {
+        let due = date("2026-06-01T09:00:00Z"), next = date("2026-07-31T09:00:00Z")
+        let range = TaskDurationRange(start: due.addingTimeInterval(-1800), end: due)
+        var root = TaskItem(title: "Recurring range", dueDate: due, hasDueTime: true, reminderDate: due.addingTimeInterval(-900),
+                            reminderFollowsSchedule: false,
+                            customRecurrence: .init(anchor: .dueDate, interval: 2, unit: .months,
+                                                    includesLastDayOfMonth: true, skipWeekends: true),
+                            occurrenceIndex: 2, scheduledDuration: range,
+                            recurrenceNominalDate: date("2026-05-31T09:00:00Z"))
+        let child = TaskItem(title: "Child", dueDate: due.addingTimeInterval(1800), hasDueTime: true, parentID: root.id)
+        let changed = date("2026-06-01T11:00:00Z")
+        root = try XCTUnwrap(CalendarScheduling.prepared(.resizeEnd(changed), to: root, displayCalendar: calendar,
+            settings: AppSettings(), policyCalendar: calendar, scope: .currentOccurrence))
+        XCTAssertEqual(root.dueDate, changed)
+        XCTAssertEqual(root.reminderDates, [changed.addingTimeInterval(-900)])
+        var lifecycle = TaskLifecycle(data: WorkspaceData(tasks: [root, child]))
+        XCTAssertTrue(try lifecycle.apply(.complete, to: root.id, now: changed, calendar: calendar))
+        let successor = try XCTUnwrap(lifecycle.data.tasks.first { $0.recurrenceSourceID == root.id })
+        let successorChild = try XCTUnwrap(lifecycle.data.tasks.first { $0.recurrenceSourceID == child.id })
+        XCTAssertEqual(successor.dueDate, next)
+        XCTAssertEqual(successor.occurrenceIndex, 3)
+        XCTAssertEqual(successor.scheduledDuration, .init(start: next.addingTimeInterval(-1800), end: next))
+        XCTAssertEqual(successor.reminderDates, [next.addingTimeInterval(-900)])
+        XCTAssertNil(successor.originalOccurrenceSchedule)
+        XCTAssertEqual(successorChild.parentID, successor.id)
+        XCTAssertEqual(successorChild.dueDate, next.addingTimeInterval(1800))
+        XCTAssertEqual(lifecycle.data.tasks.first { $0.id == root.id }?.dueDate, changed)
+    }
+
+    func testReopenedPredecessorWithStoredSuccessorCannotAddAnotherOccurrenceForecast() throws {
+        let due = date("2026-11-09T09:00:00Z")
+        let next = date("2026-11-16T09:00:00Z")
+        let moved = date("2026-11-10T09:00:00Z")
+        let task = TaskItem(title: "Weekly", dueDate: due, hasDueTime: true, recurrence: .weekly)
+        let exception = try XCTUnwrap(CalendarScheduling.prepared(.setPoint(date: moved, allDay: false), to: task,
+            displayCalendar: calendar, settings: AppSettings(), policyCalendar: calendar, scope: .currentOccurrence))
+        var first = TaskLifecycle(data: WorkspaceData(tasks: [exception]))
+        XCTAssertTrue(try first.apply(.complete, to: task.id, now: moved, calendar: calendar))
+        var afterReload = TaskLifecycle(data: first.data)
+        XCTAssertTrue(try afterReload.apply(.reopen, to: task.id, now: moved, calendar: calendar))
+        let reopened = try XCTUnwrap(afterReload.data.tasks.first { $0.id == task.id })
+        let successor = try XCTUnwrap(afterReload.data.tasks.first { $0.recurrenceSourceID == task.id })
+        XCTAssertEqual(reopened.dueDate, moved)
+        XCTAssertFalse(CalendarScheduling.canRescheduleCurrentOccurrence(reopened, in: afterReload.data.tasks))
+        XCTAssertNil(CalendarScheduling.prepared(.restoreOccurrence, to: reopened, displayCalendar: calendar,
+            settings: AppSettings(), policyCalendar: calendar, in: afterReload.data.tasks))
+        XCTAssertTrue(CalendarScheduling.canRescheduleCurrentOccurrence(successor, in: afterReload.data.tasks))
+
+        var options = TaskCalendarOptions()
+        options.showRepeatCycles = true
+        let range = DateInterval(start: next, end: date("2026-11-24T00:00:00Z"))
+        let projection = TaskCalendarProjection.project(data: afterReload.data, range: range, options: options, calendar: calendar)
+        XCTAssertEqual(projection.entries.map(\.due), [next, date("2026-11-23T09:00:00Z")])
+        XCTAssertEqual(projection.entries.map(\.taskID), [successor.id, successor.id])
+    }
+
+    func testRichEditPreservesCodeUnitsAndMovesUntouchedParagraphStyles() throws {
+        let source = "e\u{301} 🧩\nSecond"
+        let original = RichBody(text: source, runs: [.init(location: 0, length: 5, bold: true)],
+                                blocks: [.init(location: 0, length: 6, list: .checklist, checked: true),
+                                         .init(location: 6, length: 6, heading: 2)])
+        let edited = try RichBodyEdit.applying([.replace(NSRange(location: 3, length: 2), with: "🚀🚀", style: .inherit)],
+                                               to: source, rich: original)
+        XCTAssertTrue(RichBody.sameCodeUnits(edited.text, "e\u{301} 🚀🚀\nSecond"))
+        XCTAssertEqual(edited.runs, [.init(location: 0, length: 7, bold: true)])
+        XCTAssertEqual(edited.blocks, [.init(location: 0, length: 8, list: .checklist, checked: true),
+                                       .init(location: 8, length: 6, heading: 2)])
+        XCTAssertNotNil(RichDescriptionPreview(body: edited.text, rich: edited))
+    }
+
+    func testRichEditRetainsAdjacentStylesWithoutExtendingALinkAtItsBoundary() throws {
+        let source = "Link right"
+        let link = "https://example.test/link"
+        let original = RichBody(text: source, runs: [
+            .init(location: 0, length: 4, bold: true, link: link),
+            .init(location: 5, length: 5, underline: true),
+        ])
+        let edited = try RichBodyEdit.applying([
+            .replace(NSRange(location: 4, length: 0), with: "!", style: .inherit),
+            .toggle(.italic, NSRange(location: 0, length: 2)),
+        ], to: source, rich: original)
+        XCTAssertEqual(edited.text, "Link! right")
+        XCTAssertEqual(edited.runs, [
+            .init(location: 0, length: 2, bold: true, italic: true, link: link),
+            .init(location: 2, length: 2, bold: true, link: link),
+            .init(location: 4, length: 1, bold: true),
+            .init(location: 6, length: 5, underline: true),
+        ])
+        XCTAssertThrowsError(try RichBodyEdit.applying([.setLink("file:///tmp/x", NSRange(location: 0, length: 1))],
+                                                     to: edited.text, rich: edited)) { error in
+            XCTAssertEqual(error as? RichBodyEditError, .invalidLink)
+        }
+    }
+
+    func testRichParagraphSelectionExcludesTheFollowingParagraphAndPreservesItsStyle() throws {
+        let source = "First\nSecond\n\n"
+        let original = RichBody(text: source, blocks: [.init(location: 6, length: 7, heading: 3)])
+        let edited = try RichBodyEdit.applying([
+            .paragraph(.list(.checklist), NSRange(location: 0, length: 6)),
+            .paragraph(.checklistChecked(true), NSRange(location: 0, length: 0)),
+            .paragraph(.horizontalRule(true), NSRange(location: 13, length: 1)),
+        ], to: source, rich: original)
+        XCTAssertTrue(RichBody.sameCodeUnits(edited.text, source))
+        XCTAssertEqual(edited.blocks, [
+            .init(location: 0, length: 6, list: .checklist, checked: true),
+            .init(location: 6, length: 7, heading: 3),
+            .init(location: 13, length: 1, rule: true),
+        ])
+    }
+
+    func testRichEditSplitsChecklistParagraphWithoutCopyingCheckedState() throws {
+        let source = "ABCD\nNext"
+        let original = RichBody(text: source, blocks: [
+            .init(location: 0, length: 5, heading: 2, quote: true, list: .checklist, checked: true),
+            .init(location: 5, length: 4, list: .bullet),
+        ])
+        let split = try RichBodyEdit.applying([.replace(NSRange(location: 2, length: 0), with: "\n", style: .inherit)],
+                                              to: source, rich: original)
+        XCTAssertEqual(split.text, "AB\nCD\nNext")
+        XCTAssertEqual(split.blocks, [
+            .init(location: 0, length: 3, heading: 2, quote: true, list: .checklist, checked: true),
+            .init(location: 3, length: 3, quote: true, list: .checklist),
+            .init(location: 6, length: 4, list: .bullet),
+        ])
+        let atStart = try RichBodyEdit.applying([.replace(NSRange(location: 0, length: 0), with: "\n", style: .inherit)],
+                                                to: source, rich: original)
+        XCTAssertEqual(atStart.blocks, [
+            .init(location: 0, length: 1, quote: true, list: .checklist),
+            .init(location: 1, length: 5, heading: 2, quote: true, list: .checklist, checked: true),
+            .init(location: 6, length: 4, list: .bullet),
+        ])
+    }
+
+    func testRichEditPlainPasteShiftsUnrelatedLinkAndDoesNotInheritStyle() throws {
+        let source = "A 🧩 B"
+        let target = "https://example.test/task"
+        let original = RichBody(text: source, runs: [
+            .init(location: 0, length: 4, bold: true),
+            .init(location: 5, length: 1, link: target),
+        ])
+        let edited = try RichBodyEdit.applying([.replace(NSRange(location: 2, length: 2), with: "e\u{301}\n", style: .plain)],
+                                               to: source, rich: original)
+        XCTAssertTrue(RichBody.sameCodeUnits(edited.text, "A e\u{301}\n B"))
+        XCTAssertEqual(edited.runs, [
+            .init(location: 0, length: 2, bold: true),
+            .init(location: 6, length: 1, link: target),
+        ])
+    }
+
+    func testRichEditNativeDeltaPreservesExactScalarBoundaries() throws {
+        let original = "e\u{301} 🧩 text"
+        let replacement = "é 🚀 text"
+        let operation = try XCTUnwrap(RichBodyEdit.replacement(from: original, to: replacement, style: .inherit))
+        let result = try RichBodyEdit.applying([operation], to: original, rich: nil)
+        XCTAssertTrue(RichBody.sameCodeUnits(result.text, replacement))
+        let emojiOnly = try XCTUnwrap(RichBodyEdit.replacement(from: "🚀", to: "🚁", style: .inherit))
+        let emojiResult = try RichBodyEdit.applying([emojiOnly], to: "🚀", rich: nil)
+        XCTAssertEqual(emojiResult.text, "🚁")
+        XCTAssertNil(RichBodyEdit.replacement(from: replacement, to: replacement, style: .inherit))
+    }
+
+    func testRichEditNativeRangeKeepsIdenticalTextOnTheCorrectSideOfFormatting() throws {
+        let source = "aaa"
+        let original = RichBody(text: source, runs: [.init(location: 1, length: 2, bold: true)])
+        let inserted = try XCTUnwrap(RichBodyEdit.replacement(from: source, to: "aaaa", style: .inherit,
+                                                              replacing: NSRange(location: 1, length: 0)))
+        let insertion = try RichBodyEdit.applying([inserted], to: source, rich: original)
+        XCTAssertEqual(insertion.runs, [.init(location: 2, length: 2, bold: true)])
+
+        let deleted = try XCTUnwrap(RichBodyEdit.replacement(from: source, to: "aa", style: .inherit,
+                                                             replacing: NSRange(location: 0, length: 1)))
+        let deletion = try RichBodyEdit.applying([deleted], to: source, rich: original)
+        XCTAssertEqual(deletion.runs, [.init(location: 0, length: 2, bold: true)])
+    }
+
+    func testRichEditRefusesAmbiguousOrMalformedRangesBeforeChangingText() throws {
+        let source = "🧩\nNext"
+        let valid = RichBody(text: source, blocks: [.init(location: 0, length: 3, quote: true)])
+        let attempts: [(RichBodyEdit, RichBodyEditError)] = [
+            (.toggle(.bold, NSRange(location: 1, length: 1)), .invalidRange),
+            (.replace(NSRange(location: 2, length: 1), with: "", style: .inherit), .styledParagraphBoundary),
+            (.paragraph(.horizontalRule(true), NSRange(location: 0, length: 0)), .invalidParagraph),
+        ]
+        for (edit, expected) in attempts {
+            XCTAssertThrowsError(try RichBodyEdit.applying([edit], to: source, rich: valid)) {
+                XCTAssertEqual($0 as? RichBodyEditError, expected)
+            }
+        }
+        let invalid = RichBody(text: source, runs: [.init(location: 1, length: 1, bold: true)])
+        XCTAssertThrowsError(try RichBodyEdit.applying([.clearInline(NSRange(location: 0, length: 2))],
+                                                     to: source, rich: invalid)) {
+            XCTAssertEqual($0 as? RichBodyEditError, .invalidSource)
+        }
+    }
+
     func testSummaryUsesPeriodHistoryAndExplicitArchiveSelection() {
         let archived = TaskList(name: "Archive", color: "#123456", isArchived: true)
         let excluded = TaskList(name: "Excluded", color: "#123456", showsInSmartLists: false)

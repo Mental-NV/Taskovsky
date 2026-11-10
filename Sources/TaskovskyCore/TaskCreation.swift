@@ -169,14 +169,17 @@ public enum TaskSchedulePolicy {
 
 }
 
-public enum TaskCaptureValidation: Error, Equatable, Sendable { case emptyTitle, target, tag, template }
+public enum TaskCaptureValidation: Error, Equatable, Sendable { case emptyTitle, target, tag, template, schedule }
 
 /// Editable creation input only; no workspace copy or persistent side effects.
 public struct TaskCaptureInput: Codable, Equatable, Sendable {
     public var title = ""
     public var body = ""
     public var kind: TaskKind = .task
-    public var listID: UUID?
+    public var listID: UUID? {
+        didSet { if listID != oldValue { sectionID = nil } }
+    }
+    public var sectionID: UUID?
     public var dueDate: Date?
     public var hasDueTime = false
     public var priority: TaskPriority = .none
@@ -188,6 +191,7 @@ public struct TaskCaptureInput: Codable, Equatable, Sendable {
     public private(set) var contextDate: Date?
     public private(set) var dateWasChosen = false
     public private(set) var preserveTemplateDuration = true
+    public private(set) var calendarRange: TaskDurationRange?
 
     public static func summaryNote(title: String, body: String) -> Self {
         var value = Self()
@@ -218,8 +222,22 @@ public struct TaskCaptureInput: Codable, Equatable, Sendable {
     }
     public mutating func chooseDate(_ date: Date?, hasTime: Bool = false) {
         dueDate = date; hasDueTime = date != nil && hasTime; dateWasChosen = true; recognizeDates = false
+        calendarRange = nil
         if date == nil { preserveTemplateDuration = false }
     }
+    public mutating func chooseCalendarRange(_ dates: ClosedRange<Date>, calendar: Calendar) {
+        let start = calendar.startOfDay(for: dates.lowerBound)
+        let end = calendar.startOfDay(for: dates.upperBound)
+        chooseDate(end)
+        calendarRange = TaskDurationRange(start: start, end: end, isAllDay: true)
+    }
+
+    public mutating func useCalendarRangeEndOnly() {
+        guard let calendarRange else { return }
+        chooseDate(calendarRange.end)
+        preserveTemplateDuration = false
+    }
+
     public mutating func applyTemplate(_ seed: TaskTemplate) {
         var copy = seed; copy.checklist = seed.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
         template = copy; title = seed.title; body = seed.body; kind = seed.kind; priority = seed.priority; tagIDs = seed.tagIDs
@@ -228,8 +246,14 @@ public struct TaskCaptureInput: Codable, Equatable, Sendable {
     }
     public var protectsBody: Bool { template?.richBody != nil }
     public func task(id: UUID, now: Date, workspace: WorkspaceData, settings: AppSettings, calendar: Calendar, requireTitle: Bool = true) throws -> TaskItem {
-        if let listID, !workspace.lists.contains(where: { $0.id == listID && !$0.isArchived }) { throw TaskCaptureValidation.target }
+        let list = listID.flatMap { id in workspace.lists.first { $0.id == id && !$0.isArchived } }
+        if listID != nil && list == nil { throw TaskCaptureValidation.target }
+        if let sectionID, list?.sections.contains(where: { $0.id == sectionID }) != true { throw TaskCaptureValidation.target }
         guard Set(tagIDs).count == tagIDs.count, tagIDs.allSatisfy({ id in workspace.tags.contains { $0.id == id } }) else { throw TaskCaptureValidation.tag }
+        if let calendarRange {
+            guard calendarRange.isAllDay, calendarRange.validated(in: calendar) == calendarRange,
+                  dueDate == calendarRange.end, !hasDueTime else { throw TaskCaptureValidation.schedule }
+        }
         var result: TaskItem
         if let seed = template {
             guard seed.richBody == nil || (seed.richBody?.valid(for: seed.body) != nil && body.utf16.elementsEqual(seed.body.utf16)),
@@ -242,17 +266,25 @@ public struct TaskCaptureInput: Codable, Equatable, Sendable {
                                                dueDate: dueDate, useDefaultList: false, now: now, taskID: id, calendar: calendar)!
             result.checklist = seed.checklist
             result.title = title.trimmingCharacters(in: .whitespacesAndNewlines); result.body = body
-            if dateWasChosen && !preserveTemplateDuration { result.scheduledDuration = nil; result.dueDate = dueDate; result.hasDueTime = hasDueTime }
+            if let calendarRange {
+                result.scheduledDuration = calendarRange
+                result.dueDate = calendarRange.end
+                result.hasDueTime = false
+            } else if dateWasChosen && !preserveTemplateDuration {
+                result.scheduledDuration = nil; result.dueDate = dueDate; result.hasDueTime = hasDueTime
+            }
             else if result.scheduledDuration == nil { result.hasDueTime = hasDueTime }
         } else {
             var config = settings; config.defaultTagID = nil
             let made = TaskCreation.make(workspace: workspace, settings: config, title: title, listID: listID, kind: kind,
                                          dueDate: dueDate, useDefaultList: false, preferRecognizedDate: true,
-                                         recognizeDates: recognizeDates, body: body, now: now, id: id, calendar: calendar,
+                                         recognizeDates: calendarRange == nil && recognizeDates, body: body, duration: calendarRange,
+                                         now: now, id: id, calendar: calendar,
                                          recognizeTags: recognizeTags, createMissingTags: false, hasDueTime: hasDueTime, useDefaultDate: false, ignoredRecognizedTags: Set(ignoredRecognizedTagIDs))
             result = made.task
         }
         result.kind = kind; result.priority = priority
+        result.sectionID = sectionID
         for tag in tagIDs where !result.tagIDs.contains(tag) { result.tagIDs.append(tag) }
         if template != nil { result.tagIDs = tagIDs }
         guard !requireTitle || !result.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw TaskCaptureValidation.emptyTitle }

@@ -17,6 +17,23 @@ struct PhoneCaptureSheet: View {
             if model.captureDraft?.id == id { model.captureIsComposing = $0 }
         })
     }
+    private func calendarRangeFields(_ range: TaskDurationRange, draft: TaskCaptureDraft) -> some View {
+        func choose(_ start: Date, _ end: Date) {
+            let first = draft.calendar.startOfDay(for: start)
+            let last = draft.calendar.startOfDay(for: end)
+            guard first <= last else { return }
+            model.changeCapture(id: draft.id) { $0.chooseCalendarRange(first...last, calendar: draft.calendar) }
+        }
+        return Group {
+            DatePicker("Start", selection: Binding(get: { range.start }, set: { choose($0, range.end) }),
+                       in: ...range.end, displayedComponents: .date)
+                .accessibilityIdentifier("captureCalendarRangeStart")
+            DatePicker("End", selection: Binding(get: { range.end }, set: { choose(range.start, $0) }),
+                       in: range.start..., displayedComponents: .date)
+                .accessibilityIdentifier("captureCalendarRangeEnd")
+            Button("Use end date only") { model.changeCapture(id: draft.id) { $0.useCalendarRangeEndOnly() } }
+        }
+    }
     private func chooseDate(_ date: Date?, timed: Bool) {
         if let draft = model.captureDraft { model.changeCapture(id: draft.id) { $0.chooseDate(date.map { timed ? $0 : draft.calendar.startOfDay(for: $0) }, hasTime: timed) } }
     }
@@ -73,6 +90,13 @@ struct PhoneCaptureSheet: View {
                             Text("Inbox").tag(UUID?.none)
                             ForEach(document.snapshot.workspace.lists.filter { !$0.isArchived }) { list in Text(list.name).tag(Optional(list.id)) }
                         }.pickerStyle(.navigationLink).accessibilityIdentifier("captureListPicker")
+                        if let list = document.snapshot.workspace.lists.first(where: { $0.id == draft.input.listID }),
+                           !list.sections.isEmpty {
+                            Picker("Section", selection: input(\.sectionID, fallback: nil)) {
+                                Text("No Section").tag(UUID?.none)
+                                ForEach(list.sections) { section in Text(section.name).tag(Optional(section.id)) }
+                            }.pickerStyle(.navigationLink).accessibilityIdentifier("captureSectionPicker")
+                        }
                         Picker("Priority", selection: input(\.priority, fallback: .none)) {
                             ForEach(TaskPriority.allCases, id: \.self) { value in Text(value.rawValue.capitalized).tag(value) }
                         }.pickerStyle(.navigationLink).accessibilityIdentifier("capturePriorityPicker")
@@ -86,7 +110,9 @@ struct PhoneCaptureSheet: View {
                         Toggle("Set a date", isOn: Binding(get: { preview?.dueDate != nil }, set: { enabled in
                             chooseDate(enabled ? model.calendar.startOfDay(for: model.now) : nil, timed: false)
                         })).accessibilityIdentifier("captureDateToggle")
-                        if let date = preview?.dueDate {
+                        if let range = draft.input.calendarRange {
+                            calendarRangeFields(range, draft: draft)
+                        } else if let date = preview?.dueDate {
                             DatePicker("Date", selection: Binding(get: { model.capturePreview?.dueDate ?? date }, set: { chooseDate($0, timed: model.capturePreview?.hasDueTime == true) }), displayedComponents: .date)
                             let hasTemplateWindow = draft.input.template?.scheduledDuration != nil && draft.input.preserveTemplateDuration
                             Toggle("Time", isOn: Binding(get: { model.capturePreview?.hasDueTime ?? false }, set: { chooseDate(date, timed: $0) }))
@@ -107,7 +133,7 @@ struct PhoneCaptureSheet: View {
                         }.disabled(frozen || model.isBusy)
                     }
                     if preview == nil && !draft.input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Check the destination, tags and template. Unsupported content is preserved, so this capture cannot be submitted yet.").font(.footnote).foregroundStyle(.secondary)
+                        Text("Check the destination, tags, schedule and template. Unsupported content is preserved, so this capture cannot be submitted yet.").font(.footnote).foregroundStyle(.secondary)
                     }
                 }.environment(\.calendar, draft.calendar).environment(\.timeZone, draft.calendar.timeZone)
                     .scrollDismissesKeyboard(.immediately).navigationTitle("New \(draft.input.kind.rawValue)").navigationBarTitleDisplayMode(.inline)
@@ -128,14 +154,16 @@ struct PhoneCaptureSheet: View {
     private func recognition(_ draft: TaskCaptureDraft, document: WorkspaceDocument, preview: TaskItem?) -> some View {
         let rawTitle = draft.input.title
         let datePhrase: String? = {
-            guard draft.input.recognizeDates, document.snapshot.settings.dateRecognition,
+            guard draft.input.calendarRange == nil, draft.input.recognizeDates, document.snapshot.settings.dateRecognition,
                   let matched = TaskCreation.recognizeDate(in: rawTitle, calendar: draft.calendar, now: draft.createdAt) else { return nil }
             return String(rawTitle[matched.range])
         }()
         let tags: [TaskTag] = draft.input.recognizeTags ? TaskCreation.existingTagCandidates(in: rawTitle, tags: document.snapshot.workspace.tags)
             .filter { !draft.input.ignoredRecognizedTagIDs.contains($0.id) } : []
         return Section("Recognition") {
-            Toggle("Recognize date text", isOn: input(\.recognizeDates, fallback: true))
+            if draft.input.calendarRange == nil {
+                Toggle("Recognize date text", isOn: input(\.recognizeDates, fallback: true))
+            }
             Toggle("Recognize existing tags", isOn: input(\.recognizeTags, fallback: true))
             if let datePhrase {
                 Button("Ignore date suggestion: \(datePhrase)") { model.changeCapture(id: draft.id) { $0.recognizeDates = false } }

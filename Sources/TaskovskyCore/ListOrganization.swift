@@ -35,11 +35,13 @@ public enum ListOrganizationCommand: Sendable {
             if creating {
                 guard index == nil else { return nil }
                 list.viewMode = .list
+                list.sections = []
                 data.lists.append(list)
             } else {
                 guard let index else { return nil }
                 let original = data.lists[index]
                 list.viewMode = original.viewMode
+                list.sections = original.sections
                 guard list != original || !RichBody.sameCodeUnits(list.name, original.name) else { return false }
                 let placement = ListPlacement(list)
                 if placement == ListPlacement(original) { data.lists[index] = list }
@@ -101,7 +103,10 @@ public enum ListOrganization {
               !data.lists.contains(where: { $0.id == copyID }) else { return false }
         let members = data.tasks.filter { $0.listID == id && $0.deletedAt == nil }
         guard Set(members.map(\.id)).count == members.count else { return false }
+        guard Set(copy.sections.map(\.id)).count == copy.sections.count else { return false }
         let idMap = Dictionary(uniqueKeysWithValues: members.map { ($0.id, UUID()) })
+        let sectionMap = Dictionary(uniqueKeysWithValues: copy.sections.map { ($0.id, UUID()) })
+        copy.sections = copy.sections.map { TaskSection(id: sectionMap[$0.id]!, name: $0.name) }
         copy.id = copyID
         copy.name += " copy"
         copy.isArchived = false
@@ -109,9 +114,11 @@ public enum ListOrganization {
         data.lists.append(copy)
         for task in members {
             var duplicate = task
+            duplicate.discardOccurrenceBaselineForCopy()
             duplicate.id = idMap[task.id]!
             duplicate.listID = copyID
             duplicate.parentID = task.parentID.flatMap { idMap[$0] }
+            duplicate.sectionID = duplicate.parentID == nil ? task.sectionID.flatMap { sectionMap[$0] } : nil
             duplicate.checklist = task.checklist.map { ChecklistItem(title: $0.title, isCompleted: $0.isCompleted) }
             duplicate.recurrenceSourceID = nil
             duplicate.createdAt = now

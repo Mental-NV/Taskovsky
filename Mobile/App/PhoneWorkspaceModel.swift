@@ -2,13 +2,14 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private enum PhoneQACase: String { case known, lifecycle, arrange, organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, taskSort = "task-sort", lifecycle, arrange, occurrence, agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, summary, summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", richPreview = "rich-preview", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var document: WorkspaceDocument?
     @Published private(set) var failure: String?
     @Published private(set) var recentSearches: [String] = []
+    @Published private(set) var taskTimestampSort: TaskTimestampSort?
     @Published private(set) var activeDraft: TaskFieldDraft?
     @Published private(set) var recoveredDraft: TaskFieldDraft?
     @Published private(set) var protectedDraft = false
@@ -90,6 +91,17 @@ final class PhoneWorkspaceModel: ObservableObject {
         return isQA ? "TaskovskyMobile.qaSearches." + directory.lastPathComponent : "TaskovskyMobile.recentSearches"
     }
 
+    private var taskTimestampSortKey: String? {
+        guard let directory else { return nil }
+        return isQA ? "TaskovskyMobile.qaTaskSort." + directory.lastPathComponent : "TaskovskyMobile.taskSort"
+    }
+
+    func setTaskTimestampSort(_ value: TaskTimestampSort?) {
+        guard let key = taskTimestampSortKey, value != taskTimestampSort else { return }
+        taskTimestampSort = value
+        UserDefaults.standard.set(value?.rawValue, forKey: key)
+    }
+
     func rememberSearch(_ query: String) {
         guard let key = searchHistoryKey, !query.isEmpty else { return }
         recentSearches.removeAll { $0.localizedCaseInsensitiveCompare(query) == .orderedSame }
@@ -108,9 +120,26 @@ final class PhoneWorkspaceModel: ObservableObject {
         guard !opened else { return }; opened = true
         guard let directory else { failure = "The requested test workspace is invalid. No local files were opened."; return }
         if let key = searchHistoryKey { recentSearches = UserDefaults.standard.stringArray(forKey: key) ?? [] }
+        if let key = taskTimestampSortKey, let raw = UserDefaults.standard.string(forKey: key) {
+            taskTimestampSort = TaskTimestampSort(rawValue: raw)
+        }
         readTicket = UUID(); isBusy = true
         do {
             var initial = try MobilePreviewFixture.session(samples: isQA && qaCase != .captureEmpty, unknownData: qaCase == .unknownWorkspace)
+            if isQA && qaCase == .taskSort {
+                var data = initial.workspace
+                guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
+                let stamp = MobilePreviewFixture.now.addingTimeInterval(-86_400)
+                data.tasks[0].listID = work.id
+                data.tasks[0].createdAt = stamp.addingTimeInterval(-7200)
+                data.tasks[0].updatedAt = stamp.addingTimeInterval(7200)
+                data.tasks[1].createdAt = stamp.addingTimeInterval(1800)
+                data.tasks[1].updatedAt = stamp.addingTimeInterval(1800)
+                data.tasks[7].createdAt = stamp.addingTimeInterval(-3600)
+                data.tasks[7].updatedAt = stamp.addingTimeInterval(3600)
+                data.tasks[5].isPinned = true
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .captureTemplate {
                 var data = initial.workspace; let source = data.tasks[0]
                 data.templates = [TaskTemplate(name: "Styled project", title: "Template project", body: source.body,
@@ -140,6 +169,55 @@ final class PhoneWorkspaceModel: ObservableObject {
                 guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
                 data.tasks[2].priority = .high
                 data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .occurrence {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[0].recurrence = .weekly
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .agenda {
+                var data = initial.workspace
+                guard data.tasks.count > 2 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[2].dueDate = MobilePreviewFixture.now.addingTimeInterval(60 * 86_400)
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .allDaySpans {
+                var data = initial.workspace
+                var calendar = initial.settings.calendar
+                calendar.timeZone = self.calendar.timeZone
+                let firstDay = CalendarDates.weekStart(MobilePreviewFixture.now, calendar: calendar)
+                let days = CalendarDates.days(from: firstDay, count: 3, calendar: calendar)
+                guard days.count == 3, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
+                let ranges = [("Three-day workshop", days[0]), ("Two-day review", days[1])]
+                data.tasks = ranges.map { title, start in
+                    TaskItem(title: title, listID: work.id, dueDate: days[2],
+                             scheduledDuration: TaskDurationRange(start: start, end: days[2], isAllDay: true))
+                }
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .monthSpans {
+                var data = initial.workspace
+                var calendar = initial.settings.calendar
+                calendar.timeZone = self.calendar.timeZone
+                let firstDay = CalendarDates.weekStart(MobilePreviewFixture.now, calendar: calendar)
+                let days = CalendarDates.days(from: firstDay, count: 9, calendar: calendar)
+                guard days.count == 9, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks = [TaskItem(title: "Weekend retreat", listID: work.id, dueDate: days[8],
+                                      scheduledDuration: .init(start: days[4], end: days[8], isAllDay: true)),
+                              TaskItem(title: "Weekend review", listID: work.id, dueDate: days[7],
+                                      scheduledDuration: .init(start: days[5], end: days[7], isAllDay: true)),
+                              TaskItem(title: "Weekend call", listID: work.id, dueDate: days[5])]
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .foldedHours {
+                var data = initial.workspace
+                guard data.tasks.count > 3 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[2].dueDate = MobilePreviewFixture.now.addingTimeInterval(-19_800)
+                data.tasks[2].hasDueTime = true
+                data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(36_000)
+                data.tasks[3].hasDueTime = true
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && (qaCase == .summary || qaCase == .summarySaveFailure) {
@@ -385,7 +463,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             return "This checklist contains ambiguous item identities."
         case .refused(.metadata(.missingChecklistItem)), .refused(.missing), .refused(.readOnlyRecord):
             return "This task or checklist item is no longer editable."
-        case .refused(.emptyTitle), .refused(.styledBody):
+        case .refused(.emptyTitle), .refused(.styledBody), .refused(.richBody):
             return "The task edit could not be applied."
         case .persistenceFailed:
             return "Could not save the task change. You can retry."
@@ -410,6 +488,28 @@ final class PhoneWorkspaceModel: ObservableObject {
             return "The list or folder is unavailable, or the proposed change is invalid."
         case .persistenceFailed:
             return "Could not save the change. You can retry."
+        }
+    }
+
+    func saveSection(_ change: TaskSectionChange) async -> String? {
+        guard canBeginEditing, let repository, let revision = document?.revision
+        else { return "Editing is currently unavailable." }
+        readTicket = UUID()
+        isBusy = true
+        defer { isBusy = false }
+        switch await repository.apply(change, expected: revision, now: now) {
+        case .saved(let saved), .unchanged(let saved):
+            document = saved
+            return nil
+        case .refused(.stale):
+            if let latest = try? await repository.load() { document = latest }
+            return "The workspace changed. Review the current sections and try again."
+        case .refused(.compatibility):
+            return "This workspace contains data this build cannot safely rewrite."
+        case .refused:
+            return "This section or task is no longer editable."
+        case .persistenceFailed:
+            return "Could not save the section change. You can retry."
         }
     }
 
@@ -472,9 +572,10 @@ final class PhoneWorkspaceModel: ObservableObject {
     }
 
     func saveCalendarSchedule(_ operation: CalendarScheduleOperation, taskID: UUID,
-                              expected: WorkspaceRevision) async -> String? {
-        await commitSchedule(calendarMessage: "Schedule updated") {
-            await $0.apply(operation, to: taskID, expected: expected, calendar: calendar, now: now)
+                              expected: WorkspaceRevision, scope: CalendarScheduleScope = .series) async -> String? {
+        let message = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated"
+        return await commitSchedule(calendarMessage: message) {
+            await $0.apply(operation, to: taskID, expected: expected, calendar: calendar, scope: scope, now: now)
         }
     }
 
@@ -491,8 +592,8 @@ final class PhoneWorkspaceModel: ObservableObject {
     }
 
     func dropCalendarTask(_ operation: CalendarScheduleOperation, taskID: UUID,
-                          expected: WorkspaceRevision) async {
-        if let error = await saveCalendarSchedule(operation, taskID: taskID, expected: expected) {
+                          expected: WorkspaceRevision, scope: CalendarScheduleScope = .series) async {
+        if let error = await saveCalendarSchedule(operation, taskID: taskID, expected: expected, scope: scope) {
             calendarNotice = error
         }
     }
@@ -561,6 +662,8 @@ final class PhoneWorkspaceModel: ObservableObject {
         case .move: "Moved to list"
         case .setParent(let parentID): parentID == nil ? "Moved to top level" : "Parent task changed"
         case .addSubtask: "Subtask added"
+        case .duplicate: "Duplicated"
+        case .setKind(let kind): kind == .note ? "Converted to note" : "Converted to task"
         }
         return await finishLifecycle(outcome, message: message)
     }
@@ -609,10 +712,11 @@ final class PhoneWorkspaceModel: ObservableObject {
         guard canBeginEditing, let document, let drafts,
               let task = document.snapshot.workspace.tasks.first(where: { $0.id == taskID }),
               task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: document.snapshot.workspace.lists),
-              field != .plainBody || task.richBody == nil else { return }
+              field != .plainBody || task.richBody == nil,
+              field != .richBody || (try? RichBodyEdit.applying([], to: task.body, rich: task.richBody)) != nil else { return }
         readTicket = UUID(); isBusy = true; editorError = nil; isComposing = false
         let draft = TaskFieldDraft(taskID: taskID, field: field, baseRevision: document.revision,
-                                   text: field == .title ? task.title : task.body)
+                                   text: field == .title ? task.title : task.body, richBody: task.richBody)
         let result = await drafts.begin(draft)
         if result == .refused {
             await readRecovery(); editorError = "An existing saved edit must be handled before starting another."
@@ -623,9 +727,39 @@ final class PhoneWorkspaceModel: ObservableObject {
         isBusy = false
     }
     func changeText(_ text: String, editorID: UUID) {
-        guard !isBusy, var draft = activeDraft, draft.id == editorID else { return }
+        guard !isBusy, var draft = activeDraft, draft.id == editorID, draft.field != .richBody else { return }
         guard !text.utf16.elementsEqual(draft.text.utf16) else { return }
-        draft.replaceText(text); activeDraft = draft; recoveryStatus = "Saving recovery copy…"
+        draft.replaceText(text)
+        stageFieldEdit(draft)
+    }
+
+    @discardableResult
+    func changeRich(_ edit: RichBodyEdit, editorID: UUID) -> Bool {
+        updateRich(editorID: editorID) { try $0.applyRichEdit(edit) }
+    }
+
+    @discardableResult
+    func restoreRichEdits(_ edits: [RichBodyEdit], editorID: UUID) -> Bool {
+        updateRich(editorID: editorID) { try $0.replaceRichEdits(edits) }
+    }
+
+    private func updateRich(editorID: UUID, change: (inout TaskFieldDraft) throws -> Void) -> Bool {
+        guard !isBusy, !isComposing, var draft = activeDraft, draft.id == editorID, draft.field == .richBody else { return false }
+        let originalSequence = draft.sequence
+        do {
+            try change(&draft)
+            editorError = nil
+            if draft.sequence != originalSequence { stageFieldEdit(draft) }
+            return true
+        } catch {
+            editorError = "This edit crosses a protected formatting boundary or uses an invalid link."
+            return false
+        }
+    }
+
+    private func stageFieldEdit(_ draft: TaskFieldDraft) {
+        activeDraft = draft
+        recoveryStatus = "Saving recovery copy…"
         pendingScratch?.cancel()
         pendingScratch = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(250)) } catch { return }
@@ -641,7 +775,7 @@ final class PhoneWorkspaceModel: ObservableObject {
     }
     func requestCloseEditor() {
         guard let draft = activeDraft, !isBusy else { return }
-        if draft.hasChanges { confirmDiscard = true }
+        if draft.hasChanges || isComposing { confirmDiscard = true }
         else { Task { await discardActive() } }
     }
     func discardActive() async {
@@ -657,7 +791,18 @@ final class PhoneWorkspaceModel: ObservableObject {
         guard canSave, let draft = activeDraft, let repository, let drafts else { return }
         readTicket = UUID(); isBusy = true; pendingScratch?.cancel(); editorError = nil
         _ = await drafts.save(draft)
-        let patch: WorkspaceFieldPatch = draft.field == .title ? .title(draft.text) : .plainBody(draft.text)
+        let patch: WorkspaceFieldPatch
+        switch draft.field {
+        case .title: patch = .title(draft.text)
+        case .plainBody: patch = .plainBody(draft.text)
+        case .richBody:
+            guard let state = draft.richState else {
+                editorError = "The rich description draft could not be verified."
+                isBusy = false
+                return
+            }
+            patch = .richBody(state.edits)
+        }
         if isQA && qaCase == .staleSave && !injectedStale, let directory {
             injectedStale = true
             let independent = WorkspaceFileRepository(workspaceURL: directory.appendingPathComponent("workspace.json"), settingsURL: directory.appendingPathComponent("settings.json"))
@@ -677,7 +822,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         case .refused(.styledBody): editorError = "Formatting is protected. The description cannot be replaced with plain text."
         case .refused(.readOnlyRecord), .refused(.missing): editorError = "This task is no longer editable. Your text is kept."
         case .refused(.emptyTitle): editorError = "Enter a title before saving."
-        case .refused(.metadata): editorError = "This task edit could not be applied."
+        case .refused(.metadata), .refused(.richBody): editorError = "This task edit could not be applied."
         case .persistenceFailed: editorError = "Could not save. Your edit is still here. Retry when storage is available."
         }
         isBusy = false
@@ -699,8 +844,9 @@ final class PhoneWorkspaceModel: ObservableObject {
         guard let drafts else { return }
         switch await drafts.load() {
         case .none: recoveredDraft = nil; protectedDraft = false
-        case .available(let value): recoveredDraft = activeDraft?.id == value.id ? nil : value; protectedDraft = false
-        case .unavailable: recoveredDraft = nil; protectedDraft = true
+        case .available(let value) where value.isRecoverable:
+            recoveredDraft = activeDraft?.id == value.id ? nil : value; protectedDraft = false
+        case .available, .unavailable: recoveredDraft = nil; protectedDraft = true
         }
     }
     var canBeginCapture: Bool { canBeginEditing }
@@ -713,10 +859,18 @@ final class PhoneWorkspaceModel: ObservableObject {
         captureDraft != nil && document?.allowsKnownFieldWrites == true && !isBusy && !captureIsComposing &&
             (captureDraft?.preparedTask != nil || (!staleCapture && capturePreview?.title.isEmpty == false))
     }
-    func beginCapture(destination: TaskDestination, calendarDate: Date?) async {
+    func beginCapture(destination: TaskDestination, calendarDate: Date?, sectionID: UUID? = nil,
+                      calendarRange: ClosedRange<Date>? = nil) async {
         guard canBeginCapture, let document else { return }
-        let input = TaskCaptureInput.start(destination: destination, calendarDate: calendarDate, workspace: document.snapshot.workspace,
+        var input = TaskCaptureInput.start(destination: destination, calendarDate: calendarDate, workspace: document.snapshot.workspace,
                                            settings: document.snapshot.settings, now: now, calendar: calendar)
+        if let sectionID {
+            guard document.snapshot.workspace.lists.contains(where: {
+                $0.id == input.listID && !$0.isArchived && $0.sections.contains(where: { $0.id == sectionID })
+            }) else { captureError = "The selected section is no longer available."; return }
+            input.sectionID = sectionID
+        }
+        if let calendarRange { input.chooseCalendarRange(calendarRange, calendar: calendar) }
         await stageCapture(input, in: document)
     }
 
@@ -807,7 +961,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             case .stale: captureError = "The workspace changed. Your draft is kept. Discard to reload; it has not been applied to the changed workspace."
             case .compatibility: captureError = "This workspace contains data this build cannot safely rewrite. Your draft is kept."
             case .commandConflict: captureError = "This capture ID already belongs to a changed task. Your draft is kept; no duplicate was created."
-            case .invalidCapture, .validation: captureError = "The destination, tags or template are no longer safe to use. Your draft is kept."
+            case .invalidCapture, .validation: captureError = "The destination, tags, schedule or template are no longer safe to use. Your draft is kept."
             }
             if let latest = try? await repository.load() { self.document = latest }
         }
