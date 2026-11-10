@@ -40,7 +40,9 @@ struct TaskCalendarWorkspace: View {
         let settings: AppSettings
     }
 
-    private static let shortcutModes: [TaskCalendarMode] = [.day, .week, .month, .year, .agenda]
+    private static let modeShortcuts: [(mode: TaskCalendarMode, letter: String)] = [
+        (.day, "d"), (.week, "w"), (.month, "m"), (.year, "y"), (.agenda, "a")
+    ]
     @ObservedObject var store: TaskStore
     var onOpenTask: (UUID) -> Void
     var onComplete: (UUID) -> Void
@@ -130,9 +132,11 @@ struct TaskCalendarWorkspace: View {
             WindowKeyboardInput(optionChanged: { optionHeld = $0 }, handleKeyDown: { event in
                 guard !embeddedInTasks, editor == nil, yearDayPreview == nil, occurrenceChange == nil, postponeRequest == nil, !jumpDate, !viewOptions,
                       event.modifierFlags.intersection([.command, .control, .option, .shift, .function]).isEmpty,
-                      let characters = event.characters, let digit = Int(characters),
-                      (1...Self.shortcutModes.count).contains(digit) else { return false }
-                let next = Self.shortcutModes[digit - 1]
+                      let characters = event.characters,
+                      let shortcut = Self.modeShortcuts.enumerated().first(where: {
+                          characters == $0.element.letter || characters == String($0.offset + 1)
+                      }) else { return false }
+                let next = shortcut.element.mode
                 if mode != next { options.wrappedValue.mode = next }
                 return true
             })
@@ -232,13 +236,7 @@ struct TaskCalendarWorkspace: View {
             Menu {
                 ForEach(TaskCalendarMode.allCases, id: \.self) { value in
                     Button { options.wrappedValue.mode = value } label: {
-                        HStack {
-                            Label(value.title, systemImage: mode == value ? "checkmark" : "calendar")
-                            if let index = Self.shortcutModes.firstIndex(of: value) {
-                                Spacer()
-                                Text(String(index + 1)).foregroundStyle(.secondary)
-                            }
-                        }
+                        Label(modeMenuTitle(value), systemImage: mode == value ? "checkmark" : "calendar")
                     }
                 }
             } label: {
@@ -273,6 +271,13 @@ struct TaskCalendarWorkspace: View {
                 }
         }.font(.system(size: 13)).foregroundStyle(.primary)
     }
+    private func modeMenuTitle(_ value: TaskCalendarMode) -> String {
+        guard !embeddedInTasks, let index = Self.modeShortcuts.firstIndex(where: { $0.mode == value }) else {
+            return value.title
+        }
+        return "\(value.title)  \(Self.modeShortcuts[index].letter.uppercased())/\(index + 1)"
+    }
+
     private var modeLabel: String {
         switch mode {
         case .multiDay: return "\(options.wrappedValue.multiDayCount) Days"

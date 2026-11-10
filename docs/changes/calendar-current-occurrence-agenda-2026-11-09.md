@@ -20,6 +20,6 @@ The [installed Mac audit](../calendar-visual-parity-audit-2026-11-08.md) observe
 
 ## Mac Calendar mode shortcuts
 
-In the active Mac Calendar window, 1 opens Day, 2 Week, 3 Month, 4 Year and 5 Agenda. The selector displays these keys, and the selected mode uses its ordinary saved preference. Typing in a task title, date editor or other view follows the usual text and control handling. Modifiers and held repeats are outside the shortcut mapping.
+In the active Mac Calendar window, 1 opens Day, 2 Week, 3 Month, 4 Year and 5 Agenda. The selector displays these keys, and the selected mode uses its ordinary saved preference. Typing in a task title, date editor or other view follows the usual text and control handling. Modifiers and held repeats are outside the shortcut mapping. The [letter shortcut follow-up](calendar-letter-shortcuts-2026-11-10.md) adds D, W, M, Y and A to the same mode commands.
 
 [Verification record](../spec/verification.md#calendar-current-occurrence-agenda).
