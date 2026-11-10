@@ -429,7 +429,7 @@ struct PhoneSectionBoard: View {
                         move(task.id, to: target)
                     }
                 }
-                PhoneSectionTaskGrip(task: task, session: dragSession, listID: list.id)
+                PhoneTaskRowGrip(task: task, payload: PhoneBoardDrag(session: dragSession, listID: list.id, taskID: task.id))
             }
         } else { title }
     }
@@ -442,16 +442,39 @@ struct PhoneSectionBoard: View {
     }
 }
 
-struct PhoneSectionTaskGrip: View {
+struct PhoneTaskRowGrip: View {
     let task: TaskItem
-    let session: UUID
-    let listID: UUID
+    let payload: PhoneBoardDrag
 
     var body: some View {
         Image(systemName: "line.3.horizontal")
             .foregroundStyle(.secondary).frame(width: 44, height: 44)
             .contentShape(Rectangle()).accessibilityLabel("Drag " + task.title)
-            .draggable(PhoneBoardDrag(session: session, listID: listID, taskID: task.id))
+            .draggable(payload)
+    }
+}
+
+struct PhoneTaskRowOrderDrop: ViewModifier {
+    let accept: ((PhoneBoardDrag, Bool) -> Bool)?
+    @State private var height: CGFloat = 0
+    @State private var targeted = false
+
+    func body(content: Content) -> some View {
+        if let accept {
+            content
+                .onGeometryChange(for: CGFloat.self, of: { $0.size.height }) { height = $0 }
+                .contentShape(Rectangle())
+                .dropDestination(for: PhoneBoardDrag.self) { payloads, point in
+                    guard payloads.count == 1, let drag = payloads.first, height > 0 else { return false }
+                    return accept(drag, point.y >= height / 2)
+                } isTargeted: { targeted = $0 }
+                .overlay {
+                    if targeted {
+                        RoundedRectangle(cornerRadius: 8).strokeBorder(PhoneStyle.accent, lineWidth: 2)
+                            .allowsHitTesting(false).accessibilityHidden(true)
+                    }
+                }
+        } else { content }
     }
 }
 

@@ -127,8 +127,9 @@ struct MobileRootView: View {
         if model.captureDraft == nil { model.resumeCaptureRecovery() }
         capturePresented = model.captureDraft != nil
     }
-    @State private var sectionListDragSession = UUID()
+    @State private var taskListDragSession = UUID()
     @State private var sectionMoveNotice: String?
+    @State private var taskOrderNotice: String?
 
     private var showsCaptureButton: Bool {
         guard section == .tasks else { return true }
@@ -239,6 +240,10 @@ struct MobileRootView: View {
                         Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("batchNotice")
                     }
+                    if let taskOrderNotice {
+                        Text(taskOrderNotice).font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("taskOrderNotice")
+                    }
                     taskDestination(snapshot.workspace)
                 case .calendar:
                     if let batchNotice {
@@ -315,7 +320,12 @@ struct MobileRootView: View {
             }
         }
         .sheet(item: $batchRequest) { request in taskBatchSheet(request).presentationDetents([.large]) }
-        .onChange(of: destination) { _, _ in batchNotice = nil; revealedTaskSwipe = nil }
+        .onChange(of: destination) { _, _ in
+            batchNotice = nil
+            revealedTaskSwipe = nil
+            taskOrderNotice = nil
+            taskListDragSession = UUID()
+        }
         .onChange(of: section) { _, _ in batchNotice = nil; revealedTaskSwipe = nil }
         .sheet(item: $calendarPreferenceRoute) { route in
             PhoneCalendarPreferences(model: model, route: route)
@@ -382,6 +392,8 @@ struct MobileRootView: View {
         let selected = model.taskTimestampSort == choice
         return Button {
             showTaskSort = false
+            taskOrderNotice = nil
+            taskListDragSession = UUID()
             model.setTaskTimestampSort(choice)
         } label: {
             HStack {
@@ -426,6 +438,8 @@ struct MobileRootView: View {
     private var createdGroupingChoice: some View {
         Button {
             showTaskSort = false
+            taskOrderNotice = nil
+            taskListDragSession = UUID()
             model.setTaskCreatedGrouping(!model.groupsByCreationDate)
         } label: {
             HStack {
@@ -567,7 +581,8 @@ struct MobileRootView: View {
                     .contentShape(Rectangle())
                     .dropDestination(for: PhoneBoardDrag.self) { payloads, _ in
                         guard editable, payloads.count == 1, let drag = payloads.first,
-                              drag.session == sectionListDragSession, drag.listID == list.id else { return false }
+                              drag.session == taskListDragSession, drag.listID == list.id,
+                              drag.revision == model.document?.revision else { return false }
                         movePhoneSectionTask(drag.taskID, to: group.id, listID: list.id)
                         return true
                     }
@@ -615,9 +630,21 @@ struct MobileRootView: View {
     }
     private func taskRows(_ tasks: [TaskItem], lists: [TaskList], searchQuery: String?, sectionList: TaskList? = nil) -> some View {
         let ordered = TaskHierarchy.displayOrder(tasks)
+        let revision = model.canBeginEditing ? model.document?.revision : nil
+        let manual = searchQuery == nil && model.taskTimestampSort == nil &&
+            !(destination.supportsCreatedDateGrouping && model.groupsByCreationDate)
+        let peers = manual && revision != nil
+            ? Dictionary(grouping: tasks.filter {
+                $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt == nil &&
+                    !SmartListEligibility.isArchived($0, lists: lists)
+            }, by: \.parentID).mapValues { $0.map(\.id) }
+            : [:]
         return LazyVStack(spacing: 0) {
             ForEach(ordered, id: \.task.id) { task, depth in
                 let actions = searchQuery == nil ? taskSwipeActions(for: task, lists: lists) : ([], [])
+                let siblings = peers[task.parentID] ?? []
+                let canReorder = siblings.count > 1 && siblings.contains(task.id)
+                let sectionDrag = sectionList.map { !$0.isArchived && task.parentID == nil } ?? false
                 PhoneTaskSwipeRow(taskID: task.id, leading: actions.0, trailing: actions.1, selection: $revealedTaskSwipe) { gesture in
                     HStack(spacing: 0) {
                         PhoneCompletionButton(model: model, task: task, lists: lists)
@@ -657,25 +684,53 @@ struct MobileRootView: View {
                                         action.run()
                                     }
                                 }
+                                if canReorder, let revision, let index = siblings.firstIndex(of: task.id) {
+                                    if index > 0 {
+                                        Button("Move earlier") {
+                                            reorderPhoneTask(task.id, relativeTo: siblings[index - 1], after: false, expected: revision)
+                                        }
+                                    }
+                                    if index + 1 < siblings.count {
+                                        Button("Move later") {
+                                            reorderPhoneTask(task.id, relativeTo: siblings[index + 1], after: true, expected: revision)
+                                        }
+                                    }
+                                }
                             }
                         let rowContent = VStack(alignment: .leading, spacing: 0) {
                             titleButton
                             if switchesDate, let due = task.dueDate { taskCountdownButton(task, due: due) }
                         }
-                        if let list = sectionList, !list.isArchived, model.canBeginEditing, task.parentID == nil {
+                        if let list = sectionList, sectionDrag, revision != nil {
                             rowContent
                                 .contextMenu {
                                     TaskSectionMoveMenu(sections: list.sections, current: task.sectionID) {
                                         movePhoneSectionTask(task.id, to: $0, listID: list.id)
                                     }
                                 }
-                            PhoneSectionTaskGrip(task: task, session: sectionListDragSession, listID: list.id)
                         } else { rowContent }
+                        if let revision, canReorder || sectionDrag {
+                            PhoneTaskRowGrip(task: task, payload: PhoneBoardDrag(session: taskListDragSession,
+                                listID: task.listID, taskID: task.id, revision: revision))
+                        }
                     }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
                 }
+                .modifier(PhoneTaskRowOrderDrop(accept: canReorder ? { drag, after in
+                    guard drag.session == taskListDragSession, let revision, drag.revision == revision,
+                          drag.taskID != task.id, siblings.contains(drag.taskID) else { return false }
+                    reorderPhoneTask(drag.taskID, relativeTo: task.id, after: after, expected: revision)
+                    return true
+                } : nil))
                 if task.id != ordered.last?.task.id { Divider().padding(.leading, 46) }
             }
         }.background(PhoneStyle.card, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 16)
+    }
+
+    private func reorderPhoneTask(_ id: UUID, relativeTo target: UUID, after: Bool, expected: WorkspaceRevision) {
+        revealedTaskSwipe = nil
+        Task {
+            taskOrderNotice = await model.saveTaskOrder(id, relativeTo: target, after: after, expected: expected)
+        }
     }
 
     private func taskDateText(_ due: Date) -> some View {

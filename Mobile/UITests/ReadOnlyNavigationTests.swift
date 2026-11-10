@@ -1288,6 +1288,83 @@ final class ReadOnlyNavigationTests: XCTestCase {
         waitGone(destination)
     }
 
+    @MainActor func testManualTaskDragSavesOrderAndRespectsPinAndSortBoundaries() {
+        let app = launch(qaCase: "task-sort")
+        goTo("Work", in: app)
+        let pinned = app.buttons["Write meeting notes"]
+        let first = app.buttons["Review the project outline"]
+        let moving = app.buttons["Review the draft"]
+        let grip = app.images["Drag Review the draft"]
+        guard grip.waitForExistence(timeout: 5) else { return XCTFail("Manual Order should show a drag grip.") }
+        func drag(to target: XCUIElement, at height: CGFloat) {
+            grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.6, thenDragTo: target.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: height)),
+                       withVelocity: .slow, thenHoldForDuration: 0.25)
+        }
+        XCTAssertLessThan(first.frame.minY, moving.frame.minY)
+        drag(to: pinned, at: 0.2)
+        XCTAssertLessThan(first.frame.minY, moving.frame.minY)
+        drag(to: first, at: 0.2)
+        XCTAssertLessThan(pinned.frame.minY, moving.frame.minY)
+        XCTAssertLessThan(moving.frame.minY, first.frame.minY)
+        attach(app, "Manual task order in Work")
+
+        let menu = app.buttons["taskSortMenu"]
+        menu.tap()
+        app.buttons["Created · Newest First"].tap()
+        waitGone(app.buttons["Created · Newest First"])
+        XCTAssertFalse(grip.exists)
+        menu.tap()
+        app.buttons["Default Order"].tap()
+        waitGone(app.buttons["Default Order"])
+        XCTAssertLessThan(moving.frame.minY, first.frame.minY)
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertLessThan(pinned.frame.minY, moving.frame.minY)
+        XCTAssertLessThan(moving.frame.minY, first.frame.minY)
+    }
+
+    @MainActor func testManualTaskDragStaysInItsSectionAndStopsDuringGrouping() {
+        let app = launch(qaCase: "created-grouping")
+        goTo("Work", in: app)
+        let moving = app.buttons["Prepare the weekly plan"]
+        let target = app.buttons["Review the draft"]
+        let otherSection = app.buttons["Review the project outline"]
+        let sectionHeader = app.staticTexts["Review section"]
+        let grip = app.images["Drag Prepare the weekly plan"]
+        guard grip.waitForExistence(timeout: 5) else { return XCTFail("The ordinary section should offer a drag grip.") }
+
+        func drop(on row: XCUIElement, at height: CGFloat) {
+            grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.6, thenDragTo: row.coordinate(withNormalizedOffset: CGVector(dx: 0.45, dy: height)),
+                       withVelocity: .slow, thenHoldForDuration: 0.25)
+        }
+        XCTAssertLessThan(moving.frame.minY, target.frame.minY)
+        drop(on: otherSection, at: 0.25)
+        XCTAssertLessThan(moving.frame.minY, target.frame.minY)
+        XCTAssertTrue(app.staticTexts["No Section"].exists)
+        XCTAssertLessThan(moving.frame.minY, sectionHeader.frame.minY)
+        XCTAssertLessThan(sectionHeader.frame.minY, otherSection.frame.minY)
+
+        drop(on: target, at: 0.8)
+        let ordered = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in target.frame.minY < moving.frame.minY }, object: nil)
+        XCTAssertEqual(XCTWaiter.wait(for: [ordered], timeout: 5), .completed)
+        XCTAssertLessThan(moving.frame.minY, sectionHeader.frame.minY)
+        XCTAssertLessThan(sectionHeader.frame.minY, otherSection.frame.minY)
+
+        let menu = app.buttons["taskSortMenu"]
+        let group = app.buttons["Group by Created Date"]
+        menu.tap(); group.tap()
+        waitGone(group)
+        XCTAssertFalse(grip.exists)
+        menu.tap(); group.tap()
+        waitGone(group)
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        XCTAssertLessThan(target.frame.minY, moving.frame.minY)
+    }
+
     @MainActor func testTaskTimestampSortOrdersWorkRowsAndSurvivesRelaunch() {
         let app = launch(qaCase: "task-sort")
         goTo("Work", in: app)

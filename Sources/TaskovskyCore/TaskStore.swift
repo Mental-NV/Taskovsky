@@ -545,19 +545,7 @@ public final class TaskStore: ObservableObject {
     /// IDs, and self-drops (target inside `moving`) abort with no mutation.
     /// Nothing but array order changes; no other field is touched.
     @discardableResult public func reorderTasks(moving: [UUID], before target: UUID, afterTarget: Bool = false) -> Bool {
-        guard !moving.isEmpty, !moving.contains(target) else { return false }
-        var seen = Set<UUID>()
-        var movers: [TaskItem] = []
-        for id in moving {
-            guard seen.insert(id).inserted,
-                  let task = data.tasks.first(where: { $0.id == id }),
-                  task.deletedAt == nil else { return false }
-            movers.append(task)
-        }
-        guard data.tasks.contains(where: { $0.id == target && $0.deletedAt == nil }) else { return false }
-        data.tasks.removeAll { moving.contains($0.id) }
-        guard let targetIndex = data.tasks.firstIndex(where: { $0.id == target }) else { return false }
-        data.tasks.insert(contentsOf: movers, at: afterTarget ? targetIndex + 1 : targetIndex)
+        guard data.reorderTasks(moving: moving, before: target, afterTarget: afterTarget) else { return false }
         save()
         return true
     }
