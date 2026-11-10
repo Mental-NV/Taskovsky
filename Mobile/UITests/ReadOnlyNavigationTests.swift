@@ -1998,6 +1998,126 @@ extension ReadOnlyNavigationTests {
         XCTAssertFalse(chapter.exists)
     }
 
+    @MainActor func testCalendarArrangeDragSchedulesAndUndoes() {
+        let app = launch(qaCase: "arrange")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        app.buttons["Next Calendar period"].tap()
+        let day = app.buttons["calendarDay-2026-11-10"]
+        guard day.waitForExistence(timeout: 5) else { return XCTFail("The target day is unavailable.") }
+        let origin = app.coordinate(withNormalizedOffset: .zero)
+        let header = day.frame
+        let allDay = origin.withOffset(CGVector(dx: header.midX, dy: header.maxY + 12))
+        let timed = origin.withOffset(CGVector(dx: header.midX, dy: header.maxY + 65))
+        let actions = app.buttons["Calendar actions"].frame
+        let outside = origin.withOffset(CGVector(dx: actions.midX, dy: actions.midY))
+        openArrange(app)
+
+        let grip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000003"].firstMatch
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        func drag(to target: XCUICoordinate) {
+            XCTAssertTrue(grip.isHittable)
+            grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.6, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.25)
+        }
+        drag(to: outside)
+        XCTAssertTrue(grip.exists)
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+
+        drag(to: allDay)
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertFalse(grip.exists)
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule restored")
+
+        drag(to: timed)
+        expectation(for: NSPredicate(format: "label == %@", "Schedule updated"), evaluatedWith: notice)
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(grip.exists)
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
+        XCTAssertTrue(app.buttons["Read a chapter"].exists)
+        attach(app, "Arranged task in the timed grid")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        app.buttons["Next Calendar period"].tap()
+        XCTAssertTrue(app.buttons["Read a chapter"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testCalendarArrangeDropsInBothDateGrids() {
+        let app = launch(qaCase: "arrange")
+        app.buttons["Calendar"].tap()
+        let grip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000003"].firstMatch
+        for (mode, number) in [("Month", 3), ("Multi-Week", 10)] {
+            app.buttons["Calendar view"].tap()
+            app.buttons[mode].tap()
+            openArrange(app)
+            let day = app.staticTexts["calendarMonthDay-2026-11-\(number)"]
+            guard day.waitForExistence(timeout: 5) else { return XCTFail("The target date is unavailable in \(mode).") }
+            let targetFrame = day.frame
+            let sheetGrabber = app.buttons["Sheet Grabber"]
+            XCTAssertLessThan(targetFrame.midY, sheetGrabber.frame.minY)
+            let target = app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: targetFrame.midX, dy: targetFrame.midY))
+            guard grip.waitForExistence(timeout: 5), grip.isHittable else { return XCTFail("The Arrange grip is unavailable.") }
+            grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.6, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.25)
+            let notice = app.staticTexts["calendarScheduleNotice"]
+            let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Schedule updated"), object: notice)
+            guard XCTWaiter.wait(for: [saved], timeout: 5) == .completed else {
+                return XCTFail("The drop did not schedule a task in \(mode).")
+            }
+            XCTAssertFalse(grip.exists)
+            app.buttons["undoCalendarSchedule"].tap()
+            XCTAssertTrue(grip.waitForExistence(timeout: 5))
+            XCTAssertEqual(notice.label, "Schedule restored")
+            app.buttons["arrangeDone"].tap()
+            waitGone(app.buttons["arrangeDone"])
+        }
+    }
+
+    @MainActor func testCalendarArrangeRecurringDropStagesScope() {
+        let app = launch(qaCase: "arrange")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        app.buttons["Next Calendar period"].tap()
+        let day = app.buttons["calendarDay-2026-11-10"]
+        guard day.waitForExistence(timeout: 5) else { return XCTFail("The target day is unavailable.") }
+        let target = app.coordinate(withNormalizedOffset: .zero)
+            .withOffset(CGVector(dx: day.frame.midX, dy: day.frame.maxY + 12))
+        openArrange(app)
+        app.switches["arrangeOverdue"].coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        let grip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000004"].firstMatch
+        guard grip.waitForExistence(timeout: 5) else { return XCTFail("The overdue recurring task is unavailable.") }
+        func drag() {
+            grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+                .press(forDuration: 0.6, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.25)
+        }
+
+        drag()
+        let occurrence = app.buttons["This occurrence"]
+        guard occurrence.waitForExistence(timeout: 5) else { return XCTFail("The drop did not offer a recurrence scope.") }
+        app.buttons["Cancel"].tap()
+        waitGone(occurrence)
+        XCTAssertTrue(app.buttons["arrangeDone"].exists)
+        XCTAssertEqual(app.switches["arrangeOverdue"].value as? String, "1")
+        guard grip.waitForExistence(timeout: 5) else { return XCTFail("Cancelling should keep the recurring task in Arrange.") }
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+        drag()
+        XCTAssertTrue(occurrence.waitForExistence(timeout: 5))
+        occurrence.tap()
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "This occurrence updated")
+        XCTAssertFalse(grip.exists)
+    }
+
     @MainActor func testCalendarCardStagedRemovalAndScopedUndo() {
         let app = launch(), title = "Review the project outline"
         app.buttons["Calendar"].tap()

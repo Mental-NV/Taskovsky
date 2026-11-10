@@ -210,6 +210,7 @@ final class PhoneWorkspaceModel: ObservableObject {
                 guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
                 data.tasks[2].priority = .high
                 data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
+                data.tasks[3].recurrence = .weekly
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && (qaCase == .occurrence || qaCase == .skipOccurrence || qaCase == .skipOccurrenceSaveFailure) {

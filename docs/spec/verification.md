@@ -1515,3 +1515,17 @@ The native checks cover the default Year layout and the recorded fixtures. Compa
 | Saved fixture and restoration | W saved Week after returning to full Calendar. The workspace file was byte-identical. Calendar mode was the only changed value relative to the previously normalized settings for this fixture. The previous guarded app and its preferences were restored. |
 
 The change touches only the Mac Calendar view. This pass covers the recorded keyboard interactions and saved settings file. It does not cover other keyboard layouts, a process relaunch after the shortcut, or iPhone execution.
+
+<a id="mobile-calendar-arrange-drag"></a>
+
+## iPhone Calendar Arrange drag — November 10, 2026
+
+[Change contract](../changes/mobile-calendar-arrange-drag-2026-11-10.md). The isolated branch `codex/iphone-calendar-arrange-drag` starts at `3c1204a14eccef61c2ff80c523a8fc53e1f4e558`. The final 162-file build-input manifest has SHA-256 `5bce1225f572057e57dd6d32650b536c21ca32b1adbb4de40b6686d55c541d4e`.
+
+| Evidence | Result |
+| --- | --- |
+| iPhone 13 Pro simulator, iOS 26.5, Xcode 27.0 | **Six workflows passed across two runs.** Day accepted an all-day drop and Undo, ignored an outside release, then saved a timed drop that appeared after relaunch and navigation back to the target day. Month and Multi-Week accepted visible date drops and Undo. Existing Arrange scoping and precise editing, Month card dragging and recurring Calendar card dragging passed. |
+| Recurrence and cancellation | The Arrange scope chooser showed This occurrence, Series and Cancel. Cancel kept the panel, overdue filter and original task available. The second drop saved This occurrence. Five tests passed in the first run of this app build. The sixth passed after changing its assertion from the generic notice to the existing “This occurrence updated” message. The app build inputs were identical across those two runs. |
+| Saved fixture audit | The timed task saved November 10 at 07:30–08:00 Europe/Moscow with its existing list and priority. The recurring record saved November 10 and retained its November 8 baseline. Day settings stayed byte-identical. Both date-grid Undo operations restored the undated task with only its modification timestamp advanced. The only date-grid settings change was the selected mode. Unrelated workspace records matched in all three audits. The disposable simulators were removed. |
+
+The tests exercise drag from Arrange in Day, Month and Multi-Week. Week and Multi-Day reuse the hourly drop path. Physical-device and VoiceOver gestures remain outside this run.
