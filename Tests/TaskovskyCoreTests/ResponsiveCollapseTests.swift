@@ -10,6 +10,15 @@ import Testing
 /// minimum content plus the docked panels, not measured TickTick values, and
 /// stay documented as such.
 @Suite struct ResponsiveCollapseTests {
+    @Test func tasksCalendarSplitRequiresRoomForBothPanesAndDivider() {
+        #expect(!ResponsiveLayout.canShowTasksWithCalendar(availableWidth: 911))
+        #expect(ResponsiveLayout.canShowTasksWithCalendar(availableWidth: 912))
+        let withSidebar = ResponsiveLayout.availableWidth(totalWidth: 1280, sidebarWidth: 215, collapsed: false)
+        #expect(ResponsiveLayout.canShowTasksWithCalendar(availableWidth: withSidebar))
+        let narrowWithSidebar = ResponsiveLayout.availableWidth(totalWidth: 961, sidebarWidth: 215, collapsed: false)
+        #expect(!ResponsiveLayout.canShowTasksWithCalendar(availableWidth: narrowWithSidebar))
+    }
+
     @Test func minimumWidthMatchesMeasuredCompactReference() {
         #expect(ResponsiveLayout.railWidth == 62)
         #expect(ResponsiveLayout.compactCenterWidth == 320)

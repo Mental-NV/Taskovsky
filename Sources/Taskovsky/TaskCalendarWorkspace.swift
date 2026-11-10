@@ -34,6 +34,7 @@ struct TaskCalendarWorkspace: View {
     @ObservedObject var store: TaskStore
     var onOpenTask: (UUID) -> Void
     var onComplete: (UUID) -> Void
+    var embeddedInTasks = false
     @State private var focus = Date()
     @State private var showArrange = false
     @State private var sidebarOverlay = false
@@ -45,11 +46,16 @@ struct TaskCalendarWorkspace: View {
     @State private var notice = ""
     @State private var compactLayout = false
     @State private var agendaWindow = CalendarAgendaWindow()
+    @State private var optionHeld = false
     private var calendar: Calendar { store.settings.calendar }
     private var options: Binding<TaskCalendarOptions> {
         Binding(get: { store.settings.calendarOptions }, set: { store.settings.calendarOptions = $0 })
     }
     private var mode: TaskCalendarMode { store.settings.calendarOptions.mode }
+    private var dateJumpAction: (() -> Void)? {
+        guard editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions else { return nil }
+        return { jumpDate = true }
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -68,6 +74,7 @@ struct TaskCalendarWorkspace: View {
                     header(compact: compact).overlay(alignment: .bottom) { Divider() }
                     HStack(spacing: 0) {
                         content(days: days, entries: projection.entries)
+                            .environment(\.calendarTemporarilyShowsIcons, optionHeld)
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         if showArrange && !compact {
                             Divider()
@@ -106,9 +113,10 @@ struct TaskCalendarWorkspace: View {
             .onChange(of: geometry.size.width) { _, width in compactLayout = width < 760; if width >= 760 { sidebarOverlay = false } }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .focusedSceneValue(\.calendarDateJump, dateJumpAction)
         .background {
-            CalendarModeKeys { next in
-                guard editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions else { return false }
+            CalendarKeyboardInput(optionChanged: { optionHeld = $0 }) { next in
+                guard !embeddedInTasks, editor == nil, occurrenceChange == nil, !jumpDate, !viewOptions else { return false }
                 if mode != next { options.wrappedValue.mode = next }
                 return true
             }
@@ -147,8 +155,11 @@ struct TaskCalendarWorkspace: View {
                     .shadow(radius: 6).padding(.bottom, 58).padding(.horizontal)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in create(on: focus) }
+        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in
+            if !embeddedInTasks { create(on: focus) }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in
+            guard !embeddedInTasks else { return }
             if compactLayout { sidebarOverlay.toggle() } else { options.wrappedValue.showSidebar.toggle() }
         }
     }
@@ -162,8 +173,13 @@ struct TaskCalendarWorkspace: View {
                     .accessibilityLabel("Toggle Calendar sidebar")
                 Button(CalendarText.date(focus, mode == .year ? "yyyy" : "MMMM y", calendar: calendar)) { jumpDate.toggle() }
                     .font(.system(size: compact ? 16 : 20, weight: .semibold)).lineLimit(1)
+                    .help("Jump to Date")
                     .popover(isPresented: $jumpDate) {
-                        CalendarGrid(date: $focus, calendar: calendar, showWeekNumbers: store.settings.showWeekNumbers, onSelect: { jumpDate = false })
+                        CalendarDateJumpPicker(date: focus, calendar: calendar, showWeekNumbers: store.settings.showWeekNumbers,
+                            cancel: { jumpDate = false }, go: { date in
+                                focus = calendar.startOfDay(for: date)
+                                jumpDate = false
+                            })
                     }
                 Spacer(minLength: 4)
                 if !compact { headerControls }
@@ -182,7 +198,7 @@ struct TaskCalendarWorkspace: View {
                     Button { options.wrappedValue.mode = value } label: {
                         HStack {
                             Label(value.title, systemImage: mode == value ? "checkmark" : "calendar")
-                            if let index = CalendarModeKeys.modes.firstIndex(of: value) {
+                            if let index = CalendarKeyboardInput.modes.firstIndex(of: value) {
                                 Spacer()
                                 Text(String(index + 1)).foregroundStyle(.secondary)
                             }
@@ -318,33 +334,72 @@ struct TaskCalendarWorkspace: View {
     }
 }
 
-private struct CalendarModeKeys: NSViewRepresentable {
+private struct CalendarDateJumpPicker: View {
+    @State var date: Date
+    let calendar: Calendar
+    let showWeekNumbers: Bool
+    let cancel: () -> Void
+    let go: (Date) -> Void
+
+    var body: some View {
+        VStack(spacing: 8) {
+            CalendarGrid(date: $date, calendar: calendar, showWeekNumbers: showWeekNumbers, onSelect: { go(date) })
+            DatePicker("Date", selection: $date, displayedComponents: .date)
+                .datePickerStyle(.field)
+                .padding(.horizontal, 12)
+            HStack {
+                Spacer()
+                Button("Cancel", action: cancel).keyboardShortcut(.cancelAction)
+                Button("Go") { go(date) }.keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent)
+            }.padding(12)
+        }
+        .environment(\.calendar, calendar)
+        .environment(\.timeZone, calendar.timeZone)
+    }
+}
+
+private struct CalendarKeyboardInput: NSViewRepresentable {
     static let modes: [TaskCalendarMode] = [.day, .week, .month, .year, .agenda]
+    let optionChanged: (Bool) -> Void
     let select: (TaskCalendarMode) -> Bool
 
     func makeNSView(context: Context) -> KeyView { KeyView(frame: .zero) }
 
-    func updateNSView(_ view: KeyView, context: Context) { view.select = select }
+    func updateNSView(_ view: KeyView, context: Context) {
+        view.optionChanged = optionChanged
+        view.select = select
+    }
 
     static func dismantleNSView(_ view: KeyView, coordinator: ()) { view.stopMonitoring() }
 
     final class KeyView: NSView {
+        var optionChanged: ((Bool) -> Void)?
         var select: ((TaskCalendarMode) -> Bool)?
         private var monitor: Any?
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             stopMonitoring()
-            guard window != nil else { return }
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-                guard let self, let window, event.window === window, window.isKeyWindow,
+            guard let window else { return }
+            let center = NotificationCenter.default
+            center.addObserver(self, selector: #selector(resumeOptionMonitoring(_:)), name: NSWindow.didBecomeKeyNotification, object: window)
+            center.addObserver(self, selector: #selector(clearOption(_:)), name: NSWindow.didResignKeyNotification, object: window)
+            center.addObserver(self, selector: #selector(clearOption(_:)), name: NSWindow.willBeginSheetNotification, object: window)
+            center.addObserver(self, selector: #selector(resumeOptionMonitoring(_:)), name: NSWindow.didEndSheetNotification, object: window)
+            DispatchQueue.main.async { [weak self] in self?.syncOption(NSEvent.modifierFlags) }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.flagsChanged, .keyDown]) { [weak self] event in
+                if event.type == .flagsChanged {
+                    self?.syncOption(event.modifierFlags)
+                    return event
+                }
+                guard let self, let window = self.window, event.window === window, window.isKeyWindow,
                       window.attachedSheet == nil, NSApp.modalWindow == nil,
                       !(window.firstResponder is NSTextView), !(window.firstResponder is NSTextField),
                       !(window.firstResponder is NSDatePicker), !event.isARepeat,
                       event.modifierFlags.intersection([.command, .control, .option, .shift, .function]).isEmpty,
                       let characters = event.characters, let digit = Int(characters),
-                      (1...CalendarModeKeys.modes.count).contains(digit),
-                      select?(CalendarModeKeys.modes[digit - 1]) == true else { return event }
+                      (1...CalendarKeyboardInput.modes.count).contains(digit),
+                      select?(CalendarKeyboardInput.modes[digit - 1]) == true else { return event }
                 return nil
             }
         }
@@ -352,7 +407,17 @@ private struct CalendarModeKeys: NSViewRepresentable {
         func stopMonitoring() {
             if let monitor { NSEvent.removeMonitor(monitor) }
             monitor = nil
+            NotificationCenter.default.removeObserver(self)
         }
+
+        @objc private func resumeOptionMonitoring(_ notification: Notification) { syncOption(NSEvent.modifierFlags) }
+
+        private func syncOption(_ flags: NSEvent.ModifierFlags) {
+            let isAvailable = window?.isKeyWindow == true && window?.attachedSheet == nil && NSApp.modalWindow == nil
+            optionChanged?(isAvailable && flags.contains(.option))
+        }
+
+        @objc private func clearOption(_ notification: Notification) { optionChanged?(false) }
     }
 }
 

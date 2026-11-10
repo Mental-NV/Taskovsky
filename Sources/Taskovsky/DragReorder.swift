@@ -8,18 +8,14 @@ extension UTType {
     /// can never be read as each other. Registered `.ownProcess`: other apps
     /// neither offer nor accept these types. Unknown external content never
     /// matches any of them.
-    static let taskovskyTask = UTType(exportedAs: "com.taskovsky.task")
+    static let taskovskyTask = TaskDragPayload.contentType
     static let taskovskyList = UTType(exportedAs: "com.taskovsky.list")
     static let taskovskyFolder = UTType(exportedAs: "com.taskovsky.folder")
     static let taskovskySmart = UTType(exportedAs: "com.taskovsky.smart")
     static let taskovskyTag = UTType(exportedAs: "com.taskovsky.tag")
 }
 
-/// Native in-app provider for the task UTType, the only native drag source
-/// left (task-row grips dropping onto Inbox/list rows). List, folder, smart,
-/// and tag moves run through the in-app engine instead, so their providers
-/// were removed with their dead native sources. Both ends are ours (payload
-/// structs live in TaskovskyCore), so encoding and decoding always agree.
+/// Native task drags share a private type across list and Calendar drops.
 enum DragProviders {
     static func task(_ payload: TaskDragPayload) -> NSItemProvider {
         let provider = NSItemProvider()

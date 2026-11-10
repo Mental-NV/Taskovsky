@@ -79,19 +79,38 @@ struct CalendarHourlyView: View {
                     allDayStrip(columnWidth: columnWidth, height: height, placements: allDay, laneCount: laneCount)
                     allDayResizeGrip(rows: currentRows, displayed: displayedRows, limit: rowLimit)
                     timelineControls(viewportWidth: geometry.size.width)
-                    ScrollView(.vertical) {
-                        HStack(alignment: .top, spacing: 0) {
-                            hourRuler
-                            ForEach(days, id: \.self) { day in
-                                CalendarHourColumn(day: day, entries: entries, calendar: calendar, options: options,
-                                    window: window, hourHeight: hourHeight, open: open, complete: complete, create: create,
-                                    schedule: schedule, edit: edit)
-                                    .frame(width: columnWidth, height: CGFloat(window.hours.count) * hourHeight)
-                            }
-                        }
-                        .background(CalendarTimelineZoomInput(scale: timelineScale) { timelineScale = $0 })
-                    }
+                    hourlyTimeline(columnWidth: columnWidth, horizontalViewport: geometry.frame(in: .global))
                 }.frame(width: gutter + columnWidth * CGFloat(days.count))
+            }
+        }
+    }
+    private func hourlyTimeline(columnWidth: CGFloat, horizontalViewport: CGRect) -> some View {
+        let contentHeight = CGFloat(window.hours.count) * hourHeight
+        return GeometryReader { viewport in
+            let visible = viewport.frame(in: .global).intersection(horizontalViewport)
+            ScrollView(.vertical) {
+                GeometryReader { content in
+                    HStack(alignment: .top, spacing: 0) {
+                        hourRuler
+                        ForEach(days, id: \.self) { day in
+                            CalendarHourColumn(day: day, entries: entries, calendar: calendar, options: options,
+                                window: window, hourHeight: hourHeight, open: open, complete: complete, create: create,
+                                schedule: schedule, edit: edit, moveTarget: { point in
+                                    let frame = content.frame(in: .global)
+                                    let x = point.x - frame.minX - gutter
+                                    let y = point.y - frame.minY
+                                    guard visible.contains(point), x >= 0, x < columnWidth * CGFloat(days.count),
+                                          y >= 0, y < contentHeight else { return nil }
+                                    let day = days[Int(x / columnWidth)]
+                                    let minute = window.minute(atOffset: Double(y / hourHeight * 60))
+                                    return CalendarDates.instant(on: day, minute: min(window.endMinute - 15, minute), calendar: calendar)
+                                })
+                                .frame(width: columnWidth, height: contentHeight)
+                        }
+                    }
+                    .background(CalendarTimelineZoomInput(scale: timelineScale) { timelineScale = $0 })
+                }
+                .frame(height: contentHeight)
             }
         }
     }
@@ -228,9 +247,9 @@ struct CalendarHourlyView: View {
             }
             .frame(width: width, height: contentHeight)
             .contentShape(Rectangle())
-            .dropDestination(for: String.self) { values, point in
+            .dropDestination(for: TaskDragPayload.self) { values, point in
                 guard point.x >= 0, point.x < width,
-                      let id = values.compactMap(CalendarDrag.id).first else { return false }
+                      let id = CalendarDrag.id(values) else { return false }
                 schedule(id, .move(start: days[Int(point.x / columnWidth)], allDay: true))
                 return true
             }
@@ -310,19 +329,22 @@ private struct CalendarAllDayCell: View {
             VStack(spacing: 2) {
                 ForEach(entries) { entry in
                     HStack(spacing: 0) {
+                        if let resize, entry.canResizeAllDayRange {
+                            CalendarAllDayResizeHandle(entry: entry, edge: .start, calendar: calendar, context: resize, edit: edit)
+                        }
                         CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar,
                             showItemIcons: options.showsIcon(for: entry), compact: true, open: open, complete: complete, edit: edit)
                             .frame(height: 16).calendarDraggable(entry)
                         if let resize, entry.canResizeAllDayRange {
-                            CalendarAllDayResizeHandle(entry: entry, calendar: calendar, context: resize, edit: edit)
+                            CalendarAllDayResizeHandle(entry: entry, edge: .end, calendar: calendar, context: resize, edit: edit)
                         }
                     }
                 }
             }.padding(.horizontal, 3).padding(.top, 6).padding(.bottom, 4)
         }.frame(width: width, height: height)
             .modifier(CalendarAllDayActions(day: day, calendar: calendar, create: create))
-            .dropDestination(for: String.self) { values, _ in
-                guard let id = values.compactMap(CalendarDrag.id).first else { return false }
+            .dropDestination(for: TaskDragPayload.self) { values, _ in
+                guard let id = CalendarDrag.id(values) else { return false }
                 schedule(id, .move(start: day, allDay: true)); return true
             }
     }
@@ -347,6 +369,9 @@ private struct CalendarSpanningEntry: View {
     var body: some View {
         let entry = placement.entry
         HStack(spacing: 0) {
+            if let resize, entry.canResizeAllDayRange, !placement.continuesBefore {
+                CalendarAllDayResizeHandle(entry: entry, edge: .start, calendar: calendar, context: resize, edit: edit)
+            }
             CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar,
                               showItemIcons: options.showsIcon(for: entry), compact: true,
                               open: open, complete: complete, edit: edit)
@@ -361,7 +386,7 @@ private struct CalendarSpanningEntry: View {
                     .calendarDraggable(entry)
             }
             if let resize, entry.canResizeAllDayRange, !placement.continuesAfter {
-                CalendarAllDayResizeHandle(entry: entry, calendar: calendar, context: resize, edit: edit)
+                CalendarAllDayResizeHandle(entry: entry, edge: .end, calendar: calendar, context: resize, edit: edit)
             }
         }
     }
@@ -375,10 +400,12 @@ private struct CalendarAllDayResizeContext {
 
 private struct CalendarAllDayResizeHandle: View {
     let entry: CalendarEntry
+    let edge: CalendarRangeEdge
     let calendar: Calendar
     let context: CalendarAllDayResizeContext
     let edit: (CalendarEntry) -> Void
     @GestureState private var preview: Date?
+    private var endpoint: String { edge == .start ? "start" : "end" }
 
     var body: some View {
         Button { edit(entry) } label: {
@@ -389,18 +416,20 @@ private struct CalendarAllDayResizeHandle: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Resize end of " + entry.title)
-        .help("Drag to change the end date, or click to open Schedule.")
+        .accessibilityLabel("Resize " + endpoint + " of " + entry.title)
+        .help("Drag to change the \(endpoint) date, or click to open Schedule.")
         .highPriorityGesture(DragGesture(minimumDistance: 4, coordinateSpace: .named(context.space))
-            .updating($preview) { value, state, _ in state = context.dateAt(value.location) }
+            .updating($preview) { value, state, _ in
+                state = context.dateAt(value.location).flatMap { entry.allDayResizeTarget(on: $0, edge: edge, calendar: calendar) }
+            }
             .onEnded { value in
                 guard let day = context.dateAt(value.location),
-                      let end = entry.allDayResizeTarget(on: day, calendar: calendar) else { return }
-                context.schedule(entry.taskID, .resizeEnd(end))
+                      let target = entry.allDayResizeTarget(on: day, edge: edge, calendar: calendar) else { return }
+                context.schedule(entry.taskID, edge == .start ? .resizeStart(target) : .resizeEnd(target))
             })
         .overlay(alignment: .topTrailing) {
             if let preview {
-                Text(CalendarText.date(max(entry.start, preview), "MMM d", calendar: calendar))
+                Text(CalendarText.date(preview, "MMM d", calendar: calendar))
                     .font(.caption2).fixedSize().padding(3).background(.regularMaterial, in: Capsule())
                     .offset(y: -17).allowsHitTesting(false).accessibilityHidden(true)
             }
@@ -441,6 +470,7 @@ private struct CalendarHourColumn: View {
     var create: (Date, Date, Bool) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
+    var moveTarget: (CGPoint) -> Date?
     @GestureState private var selection: (Int, Int)?
     private var scale: CGFloat { hourHeight / 60 }
     private func minute(_ y: CGFloat) -> Int { window.minute(atOffset: Double(y / scale)) }
@@ -475,9 +505,10 @@ private struct CalendarHourColumn: View {
                 }
                 ForEach(CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar, window: window)) { placement in
                     let width = (geometry.size.width - 5) / CGFloat(placement.columnCount)
+                    let cardWidth = max(18, width - 2)
                     CalendarTimedBlock(placement: placement, day: day, calendar: calendar, options: options, window: window, scale: scale,
-                        open: open, complete: complete, schedule: schedule, edit: edit)
-                        .frame(width: max(18, width - 2))
+                        width: cardWidth, open: open, complete: complete, schedule: schedule, edit: edit, moveTarget: moveTarget)
+                        .frame(width: cardWidth)
                         .offset(x: 3 + CGFloat(placement.column) * width, y: offset(placement.startMinute))
                 }
                 if calendar.isDateInToday(day) {
@@ -487,8 +518,8 @@ private struct CalendarHourColumn: View {
                         Rectangle().fill(Color.red).frame(height: 1).offset(y: offset(Double(now))).allowsHitTesting(false)
                     }
                 }
-            }.dropDestination(for: String.self) { values, point in
-                guard let id = values.compactMap(CalendarDrag.id).first else { return false }
+            }.dropDestination(for: TaskDragPayload.self) { values, point in
+                guard let id = CalendarDrag.id(values) else { return false }
                 schedule(id, .move(start: instant(min(window.endMinute - 15, minute(point.y))), allDay: false)); return true
             }
         }
@@ -502,23 +533,32 @@ private struct CalendarTimedBlock: View {
     var options: TaskCalendarOptions
     var window: CalendarHourlyWindow
     var scale: CGFloat
+    var width: CGFloat
     var open: (UUID) -> Void
     var complete: (UUID) -> Void
     var schedule: (UUID, CalendarScheduleOperation) -> Void
     var edit: (CalendarEntry) -> Void
+    var moveTarget: (CGPoint) -> Date?
     @GestureState private var resizeDelta: CGFloat = 0
+    @GestureState private var startPreview: Date?
+    @GestureState private var movePreview: Date?
     private var entry: CalendarEntry { placement.entry }
+    private var canResizeStart: Bool { entry.canSchedule && entry.hasDuration && placement.startIsVisible }
     var body: some View {
         let available = CGFloat(Double(window.endMinute) - placement.startMinute) * scale
         let height = min(available, max(15, CGFloat(placement.endMinute - placement.startMinute) * scale + resizeDelta))
+        let gripWidth = entry.canSchedule ? min(18, width / 3) : 0
+        let resizeWidth = min(22, width - gripWidth)
+        let resizeHeight = min(9, canResizeStart && placement.endIsVisible ? height / 2 : height)
         CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showsIcon(for: entry), compact: height < 40,
-            open: open, complete: complete, edit: edit)
+            trailingInset: gripWidth, open: open, complete: complete, edit: edit)
             .frame(height: height, alignment: .top).clipped()
             .calendarDraggable(entry)
             .overlay(alignment: .bottom) {
                 if entry.canSchedule && placement.endIsVisible {
-                    Capsule().fill(Color(hex: entry.color).opacity(0.7)).frame(width: 22, height: 3)
-                        .frame(height: 9).contentShape(Rectangle())
+                    Capsule().fill(Color(hex: entry.color).opacity(0.7))
+                        .frame(width: resizeWidth, height: canResizeStart && height < 24 ? 2 : 3)
+                        .frame(height: resizeHeight, alignment: canResizeStart ? .bottom : .center).contentShape(Rectangle())
                         .accessibilityLabel("Resize " + entry.title).help("Drag to resize in 15-minute steps, or use Schedule…")
                         .highPriorityGesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
                             .updating($resizeDelta) { value, state, _ in state = value.translation.height }
@@ -526,8 +566,66 @@ private struct CalendarTimedBlock: View {
                                 let minute = window.snappedMinute(placement.resizeMinute + Double(value.translation.height / scale))
                                 schedule(entry.taskID, .resizeEnd(CalendarDates.instant(on: day, minute: minute, calendar: calendar)))
                             })
+                        .padding(.trailing, gripWidth)
                 }
             }
+            .overlay(alignment: .top) {
+                if canResizeStart {
+                    startGrip(width: resizeWidth, height: resizeHeight).padding(.trailing, gripWidth)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                if entry.canSchedule {
+                    Button { edit(entry) } label: {
+                        Image(systemName: "line.3.horizontal").font(.system(size: 8, weight: .semibold))
+                            .frame(width: gripWidth, height: min(height, 15))
+                            .clipped().contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+                    .accessibilityLabel("Move " + entry.title)
+                    .help("Drag to another time, or click to open Schedule.")
+                    .highPriorityGesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                        .updating($movePreview) { value, preview, _ in preview = moveTarget(value.location) }
+                        .onEnded { value in
+                            guard let date = moveTarget(value.location) else { return }
+                            schedule(entry.taskID, .move(start: date, allDay: false))
+                        })
+                    .overlay(alignment: .topTrailing) {
+                        if let movePreview {
+                            Text(CalendarText.date(movePreview, "EEE HH:mm", calendar: calendar))
+                                .font(.caption2).fixedSize().padding(3).background(.regularMaterial, in: Capsule())
+                                .offset(y: -17).allowsHitTesting(false).accessibilityHidden(true)
+                        }
+                    }
+                }
+            }
+    }
+
+    private func startGrip(width: CGFloat, height: CGFloat) -> some View {
+        func target(_ delta: CGFloat) -> Date {
+            placement.startResizeTarget(deltaMinutes: Double(delta / scale), day: day, calendar: calendar, window: window)
+        }
+        return Button { edit(entry) } label: {
+            Capsule().fill(Color(hex: entry.color).opacity(0.7)).frame(width: width, height: min(2, height))
+                .frame(height: height, alignment: .top).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Resize start of " + entry.title)
+        .help("Drag to adjust the start, or click to open Schedule.")
+        .highPriorityGesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
+            .updating($startPreview) { value, preview, _ in preview = target(value.translation.height) }
+            .onEnded { value in
+                let date = target(value.translation.height)
+                guard date != entry.start else { return }
+                schedule(entry.taskID, .resizeStart(date))
+            })
+        .overlay(alignment: .top) {
+            if let startPreview {
+                Text(CalendarText.time(startPreview, calendar: calendar)).font(.caption2).fixedSize()
+                    .padding(3).background(.regularMaterial, in: Capsule())
+                    .offset(y: -17).allowsHitTesting(false).accessibilityHidden(true)
+            }
+        }
     }
 }
 
@@ -593,9 +691,9 @@ struct CalendarMonthView: View {
             }
         }
         .contentShape(Rectangle())
-        .dropDestination(for: String.self) { values, point in
+        .dropDestination(for: TaskDragPayload.self) { values, point in
             guard point.x >= 0, point.x < width * CGFloat(dates.count),
-                  let id = values.compactMap(CalendarDrag.id).first else { return false }
+                  let id = CalendarDrag.id(values) else { return false }
             move(id, dates[Int(point.x / width)], false)
             return true
         }
@@ -680,9 +778,12 @@ private struct CalendarMonthCell: View {
             ForEach(layout.slots.indices, id: \.self) { index in
                 if let entry = layout.slots[index] {
                     HStack(spacing: 0) {
+                        if entry.canResizeAllDayRange {
+                            CalendarAllDayResizeHandle(entry: entry, edge: .start, calendar: calendar, context: resize, edit: edit)
+                        }
                         card(entry)
                         if entry.canResizeAllDayRange {
-                            CalendarAllDayResizeHandle(entry: entry, calendar: calendar, context: resize, edit: edit)
+                            CalendarAllDayResizeHandle(entry: entry, edge: .end, calendar: calendar, context: resize, edit: edit)
                         }
                     }.frame(height: Self.cardHeight)
                 } else {

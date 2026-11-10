@@ -62,13 +62,14 @@ struct FlatCheckboxStyle: ToggleStyle {
 struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: TaskStore
+    let calendarShortcuts: CalendarShortcutBindings
     @State private var section: Section = .smartLists
     @State private var editingTemplate: TemplateDraft?
 
     private enum Section: String, CaseIterable {
-        case smartLists = "Smart Lists", dateTime = "Date & Time", more = "More", about = "About"
+        case smartLists = "Smart Lists", dateTime = "Date & Time", shortcuts = "Shortcuts", more = "More", about = "About"
         var symbol: String {
-            switch self { case .smartLists: "line.3.horizontal.decrease"; case .dateTime: "clock"; case .more: "switch.2"; case .about: "info.circle" }
+            switch self { case .smartLists: "line.3.horizontal.decrease"; case .dateTime: "clock"; case .shortcuts: "keyboard"; case .more: "switch.2"; case .about: "info.circle" }
         }
     }
 
@@ -100,6 +101,7 @@ struct SettingsView: View {
                     switch section {
                     case .smartLists: smartLists
                     case .dateTime: dateTime
+                    case .shortcuts: CalendarShortcutSettings(shortcuts: calendarShortcuts)
                     case .more: more
                     case .about: about
                     }

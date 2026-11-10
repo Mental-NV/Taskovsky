@@ -45,6 +45,7 @@ struct MobileRootView: View {
     @State private var calendarPreferenceRoute: PhoneCalendarPreferenceRoute?
     @State private var preferenceNotice: String?
     @State private var viewPicker = false
+    @State private var jumpDatePresented = false
     @State private var showTaskSort = false
     @State private var showArrange = false
     @State private var showCalendarActions = false
@@ -127,7 +128,20 @@ struct MobileRootView: View {
                     circle("Open navigation", symbol: "line.3.horizontal") { drawer = true }
                     Spacer()
                     if section == .calendar {
-                        Text(focus.formatted(.dateTime.month(.wide))).font(.headline)
+                        Button {
+                            jumpDatePresented = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(focus.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.wide)))
+                                    .font(.headline).lineLimit(1)
+                                Image(systemName: "chevron.down").font(.caption2).foregroundStyle(.secondary)
+                            }.frame(minHeight: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Jump to Date")
+                        .accessibilityValue(focus.formatted(Date.FormatStyle(date: .complete, time: .omitted,
+                                                                            calendar: calendar, timeZone: calendar.timeZone)))
+                        .accessibilityIdentifier("calendarJumpToDate")
                         Spacer()
                         Button { viewPicker = true } label: {
                             Image(systemName: "calendar").frame(width: 44, height: 44)
@@ -234,6 +248,9 @@ struct MobileRootView: View {
         .sheet(item: $selectedTask) { route in PhoneTaskSheet(model: model, route: route, close: { selectedTask = nil }) }
         .sheet(item: $calendarPreferenceRoute) { route in
             PhoneCalendarPreferences(model: model, route: route)
+        }
+        .sheet(isPresented: $jumpDatePresented) {
+            PhoneCalendarDateJump(date: focus, calendar: calendar) { date in focus = date }
         }
         .sheet(isPresented: $showArrange) { PhoneCalendarArrangeSheet(model: model, focus: focus, options: options) }
         .confirmationDialog("Apply schedule change to", isPresented: Binding(get: { occurrenceChange != nil },
@@ -703,8 +720,8 @@ struct MobileRootView: View {
                                                         hourly: options.mode.isHourly, calendar: calendar, mode: mode)
             },
             drop: acceptCalendarDrop,
-            resize: { payload, date in
-                _ = stageCalendarGesture(.resizeEnd(date), payload: payload)
+            resize: { payload, operation in
+                _ = stageCalendarGesture(operation, payload: payload)
             },
             saveFoldedHours: { cutoffs in saveCalendarFoldedHours(cutoffs, expected: revision) },
             createRange: model.canBeginCapture ? { dates in

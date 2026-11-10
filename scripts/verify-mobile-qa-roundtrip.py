@@ -673,7 +673,7 @@ def check_rich_body_edit(name, before, after):
         rich["runs"] = [dict(original, length=7, italic=True, link="https://example.test/project"),
                         dict(original, location=7, length=9)]
     elif name == RICH_PLAIN_PASTE:
-        rich["runs"] = [dict(rich["runs"][0], location=7, length=9)]
+        task.pop("richBody")
     else:
         task["body"] += " Rich update"
         rich["text"] = task["body"]
@@ -908,6 +908,12 @@ def main():
                 require(task["richBody"]["text"] == task["body"] and len(task["richBody"]["runs"]) == 4 and
                         len(task["richBody"]["blocks"]) == 7, name + ": malformed compound seed")
             require(json.loads(before) == expected_fixture, name + ": unrelated seed fields changed")
+        elif name == RICH_PLAIN_PASTE:
+            expected_fixture = copy.deepcopy(baseline)
+            task = expected_fixture["tasks"][0]
+            word = task["body"].split(" ", 1)[0]
+            task["richBody"]["runs"][0]["length"] = len(word.encode("utf-16-le")) // 2
+            require(json.loads(before) == expected_fixture, name + ": unexpected plain-paste fixture")
         elif name in PREFERENCES_FIXTURE:
             expected_fixture = copy.deepcopy(baseline)
             expected_fixture["tasks"][0]["recurrence"] = "daily"

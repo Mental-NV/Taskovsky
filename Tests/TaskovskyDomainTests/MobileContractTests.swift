@@ -385,6 +385,55 @@ final class MobileContractTests: XCTestCase {
         XCTAssertTrue(months.marks.allSatisfy { local.component(.day, from: $0) == 1 })
     }
 
+    func testTimedStartResizeKeepsDueAndReminderProvenance() throws {
+        let start = date("2026-11-09T10:00:00Z")
+        let due = start.addingTimeInterval(300)
+        let reminder = due.addingTimeInterval(-900)
+        let original = TaskItem(title: "Short range", dueDate: due, hasDueTime: true, reminderDate: reminder,
+                                timeZoneID: "UTC", scheduledDuration: .init(start: start, end: due))
+        func prepare(_ target: Date, for task: TaskItem) -> TaskItem? {
+            CalendarScheduling.prepared(.resizeStart(target), to: task, displayCalendar: calendar,
+                                        settings: .init(), policyCalendar: calendar)
+        }
+        XCTAssertEqual(prepare(start, for: original), original)
+        var zero = original
+        zero.scheduledDuration?.start = due
+        XCTAssertEqual(prepare(due, for: zero), zero)
+        let changed = try XCTUnwrap(prepare(due, for: original))
+        var expected = original
+        expected.scheduledDuration?.start = due.addingTimeInterval(-900)
+        XCTAssertEqual(changed, expected)
+        XCTAssertNil(prepare(.distantPast, for: TaskItem(title: "Point", dueDate: due, hasDueTime: true)))
+        XCTAssertNil(prepare(Date(timeIntervalSinceReferenceDate: .infinity), for: original))
+    }
+
+    func testTimedStartResizeUsesTrueVisibleEdgeAndOccurrenceBaseline() throws {
+        let day = date("2026-11-09T00:00:00Z")
+        let start = day.addingTimeInterval(6 * 3600 + 30 * 60)
+        let due = day.addingTimeInterval(9 * 3600)
+        let task = TaskItem(title: "Early range", dueDate: due, hasDueTime: true, recurrence: .daily,
+                            scheduledDuration: .init(start: start, end: due))
+        let range = try XCTUnwrap(CalendarDates.interval(for: [day], calendar: calendar))
+        let projection = TaskCalendarProjection.project(data: WorkspaceData(tasks: [task]), range: range,
+                                                         options: .init(), calendar: calendar)
+        let visible = try XCTUnwrap(CalendarTimedLayout.placements(entries: projection.entries, day: day,
+                                                                   calendar: calendar, window: .init()).first)
+        XCTAssertFalse(visible.startIsVisible)
+        XCTAssertTrue(visible.endIsVisible)
+        let expanded = try XCTUnwrap(CalendarTimedLayout.placements(entries: projection.entries, day: day,
+                                                                    calendar: calendar, window: .full).first)
+        XCTAssertTrue(expanded.startIsVisible)
+        let target = expanded.startResizeTarget(deltaMinutes: 31, day: day, calendar: calendar, window: .full)
+        XCTAssertEqual(target, day.addingTimeInterval(7 * 3600))
+        let changed = try XCTUnwrap(CalendarScheduling.prepared(.resizeStart(target), to: task,
+            displayCalendar: calendar, settings: .init(), policyCalendar: calendar, scope: .currentOccurrence))
+        XCTAssertEqual(changed.scheduledDuration?.start, target)
+        XCTAssertEqual(changed.dueDate, due)
+        let restored = try XCTUnwrap(CalendarScheduling.prepared(.restoreOccurrence, to: changed,
+            displayCalendar: calendar, settings: .init(), policyCalendar: calendar))
+        XCTAssertEqual(CalendarScheduleSnapshot(restored), CalendarScheduleSnapshot(task))
+    }
+
     func testAllDayResizeUsesInclusiveDisplayDateAndPreservesCivilStart() throws {
         var taskCalendar = calendar
         taskCalendar.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
@@ -413,6 +462,44 @@ final class MobileContractTests: XCTestCase {
         XCTAssertFalse(resized.hasDueTime)
         entry.isProjected = true
         XCTAssertNil(entry.allDayResizeTarget(on: days[4], calendar: display))
+    }
+
+    func testAllDayStartResizeKeepsDueDayAndReminderProvenanceAcrossDST() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        var display = calendar
+        display.timeZone = try XCTUnwrap(TimeZone(identifier: "Asia/Tokyo"))
+        let start = local.startOfDay(for: date("2026-03-07T18:00:00Z"))
+        let end = try XCTUnwrap(local.date(byAdding: .day, value: 2, to: start))
+        var task = TaskItem(title: "DST retreat", dueDate: end, timeZoneID: local.timeZone.identifier,
+                            scheduledDuration: .init(start: start, end: end, isAllDay: true))
+        task.reminderDates = [end.addingTimeInterval(-3600), end.addingTimeInterval(-1800)]
+        task.reminderFollowsSchedule = true
+        let first = CalendarDates.civilDay(start, from: local, to: display)
+        let days = CalendarDates.days(from: first, count: 4, calendar: display)
+        let range = try XCTUnwrap(CalendarDates.interval(for: days, calendar: display))
+        var entry = try XCTUnwrap(TaskCalendarProjection.project(data: WorkspaceData(tasks: [task]), range: range,
+                                                                  options: .init(), calendar: display).entries.first)
+        XCTAssertNil(entry.allDayResizeTarget(on: first, edge: .start, calendar: display))
+        XCTAssertEqual(entry.allDayResizeTarget(on: days[3], edge: .start, calendar: display), days[2])
+        func resize(_ day: Date, task: TaskItem) -> TaskItem? {
+            CalendarScheduling.prepared(.resizeStart(day), to: task, displayCalendar: display,
+                                        settings: .init(), policyCalendar: local)
+        }
+        let changed = try XCTUnwrap(resize(days[1], task: task))
+        let expected = try XCTUnwrap(local.date(byAdding: .day, value: 1, to: start))
+        XCTAssertEqual(changed.scheduledDuration, .init(start: expected, end: end, isAllDay: true))
+        XCTAssertEqual(end.timeIntervalSince(expected), 23 * 3600)
+        XCTAssertEqual(changed.dueDate, task.dueDate)
+        XCTAssertEqual(changed.timeZoneID, task.timeZoneID)
+        XCTAssertFalse(changed.hasDueTime)
+        XCTAssertEqual(changed.reminderDates, task.reminderDates)
+        XCTAssertEqual(changed.reminderFollowsSchedule, task.reminderFollowsSchedule)
+        XCTAssertEqual(resize(days[3], task: task)?.scheduledDuration, .init(start: end, end: end, isAllDay: true))
+        XCTAssertEqual(resize(first, task: task).map(CalendarScheduleSnapshot.init), CalendarScheduleSnapshot(task))
+        XCTAssertNil(resize(days[1], task: TaskItem(title: "Point", dueDate: end)))
+        entry.isProjected = true
+        XCTAssertNil(entry.allDayResizeTarget(on: days[1], edge: .start, calendar: display))
     }
 
     func testMonthWeekSpansContinueAndOverflowByDate() throws {
@@ -863,6 +950,169 @@ final class MobileContractTests: XCTestCase {
             .init(location: 0, length: 2, bold: true),
             .init(location: 6, length: 1, link: target),
         ])
+    }
+
+    func testRichClipboardClipsSelectionAndChecksExactPlainPayload() throws {
+        let source = "Title\ne\u{301} 🧩\nNext"
+        let string = source as NSString
+        let first = string.paragraphRange(for: NSRange(location: 0, length: 1))
+        let emoji = string.range(of: "🧩")
+        let next = string.paragraphRange(for: string.range(of: "Next"))
+        let body = RichBody(text: source,
+                            runs: [.init(location: emoji.location, length: emoji.length,
+                                         bold: true, link: "file:///private/unsupported")],
+                            blocks: [.init(location: first.location, length: first.length, heading: 2),
+                                     .init(location: next.location, length: next.length, quote: true)])
+        let selection = NSRange(location: 0, length: next.location + 2)
+        let fragment = try XCTUnwrap(RichBodyClipboard.fragment(from: body, selection: selection))
+        XCTAssertTrue(RichBody.sameCodeUnits(fragment.text, "Title\ne\u{301} 🧩\nNe"))
+        XCTAssertEqual(fragment.blocks, [body.blocks[0]])
+        XCTAssertEqual(fragment.runs, [.init(location: emoji.location, length: 2, bold: true)])
+        let bytes = try XCTUnwrap(RichBodyClipboard.encode(fragment))
+        XCTAssertEqual(RichBodyClipboard.decode(bytes, matching: fragment.text), fragment)
+        XCTAssertNil(RichBodyClipboard.decode(bytes, matching: "Title\né 🧩\nNe"))
+        XCTAssertNil(RichBodyClipboard.decode(Data(#"{"version":99,"fragment":{"text":"x"}}"#.utf8), matching: "x"))
+        XCTAssertNil(RichBodyClipboard.fragment(from: body, selection: NSRange(location: emoji.location + 1, length: 1)))
+    }
+
+    func testTypedMarkdownInlineKeepsUnicodeAndExistingStyles() throws {
+        let text = "**e\u{301} 🧩**"
+        let interior = "e\u{301} 🧩"
+        let body = RichBody(text: text, runs: [.init(location: 2, length: 2, underline: true)],
+                            blocks: [.init(location: 0, length: text.utf16.count, heading: 2)])
+        let range = NSRange(location: text.utf16.count, length: 0)
+        let change = try XCTUnwrap(RichMarkdownTyping.change(for: " ", at: range, in: body))
+        let actual = try RichBodyEdit.applying([change.edit], to: body.text, rich: body)
+        XCTAssertTrue(RichBody.sameCodeUnits(actual.text, interior + " "))
+        XCTAssertEqual(change.caret, NSRange(location: interior.utf16.count + 1, length: 0))
+        XCTAssertEqual(actual.runs, [.init(location: 0, length: 2, bold: true, underline: true),
+                                     .init(location: 2, length: interior.utf16.count - 2, bold: true)])
+        XCTAssertEqual(actual.blocks, [.init(location: 0, length: actual.text.utf16.count, heading: 2)])
+        for (source, format) in [("*italic*", RichInlineFormat.italic), ("==marked==", .highlight), ("~~cut~~", .strikethrough)] {
+            let original = RichBody(text: source)
+            let caret = NSRange(location: source.utf16.count, length: 0)
+            let typed = try XCTUnwrap(RichMarkdownTyping.change(for: " ", at: caret, in: original))
+            let formatted = try RichBodyEdit.applying([typed.edit], to: source, rich: original)
+            let run = try XCTUnwrap(formatted.runs.first)
+            XCTAssertEqual(run.italic, format == .italic)
+            XCTAssertEqual(run.highlight, format == .highlight)
+            XCTAssertEqual(run.strikethrough, format == .strikethrough)
+        }
+        for literal in ["x*word*", "\\**escaped**", "***nested***", "`**code**`", "```text\n**code**"] {
+            let caret = NSRange(location: literal.utf16.count, length: 0)
+            XCTAssertNil(RichMarkdownTyping.change(for: " ", at: caret, in: RichBody(text: literal)))
+        }
+        XCTAssertNil(RichMarkdownTyping.change(for: " ", at: NSRange(location: range.location - 1, length: 1), in: body))
+    }
+
+    func testTypedMarkdownArmsParagraphUpgradesBulletAndPreservesCRLF() throws {
+        var body = RichBody(text: "Lead\r\n-\r\nTail", blocks: [.init(location: 9, length: 4, quote: true)])
+        func apply(_ change: RichMarkdownTyping.Change) throws {
+            body = try RichBodyEdit.applying([change.edit], to: body.text, rich: body)
+        }
+        let bullet = try XCTUnwrap(RichMarkdownTyping.change(for: " ", at: NSRange(location: 7, length: 0), in: body))
+        try apply(bullet)
+        XCTAssertEqual(body.text, "Lead\r\n\r\nTail")
+        let bulletArm = try XCTUnwrap(bullet.armedParagraph)
+        let checkbox = try XCTUnwrap(bulletArm.inserting("[ ]", at: bullet.caret, in: body))
+        try apply(checkbox)
+        XCTAssertEqual(body.blocks.first?.list, .bullet)
+        let checklist = try XCTUnwrap(RichMarkdownTyping.change(for: " ", at: checkbox.caret, in: body))
+        try apply(checklist)
+        let checklistArm = try XCTUnwrap(checklist.armedParagraph)
+        XCTAssertNil(checklistArm.inserting("wrong", at: NSRange(location: 0, length: 0), in: body))
+        try apply(XCTUnwrap(checklistArm.inserting("Work", at: checklist.caret, in: body)))
+        XCTAssertEqual(body.text, "Lead\r\nWork\r\nTail")
+        XCTAssertEqual(body.blocks, [.init(location: 6, length: 6, list: .checklist), .init(location: 12, length: 4, quote: true)])
+
+        body = RichBody(text: "Above\r\n--\r\nBelow")
+        let rule = try XCTUnwrap(RichMarkdownTyping.change(for: "-", at: NSRange(location: 9, length: 0), in: body))
+        try apply(rule)
+        XCTAssertEqual(body.text, "Above\r\n\r\nBelow")
+        XCTAssertEqual(body.blocks, [.init(location: 7, length: 2, rule: true)])
+        XCTAssertEqual(rule.caret.location, 9)
+        for (marker, block) in [("######", RichBlockRun(location: 0, length: 1, heading: 6)),
+                                ("1.", .init(location: 0, length: 1, list: .numbered)),
+                                (">", .init(location: 0, length: 1, quote: true))] {
+            body = RichBody(text: marker)
+            let prefix = try XCTUnwrap(RichMarkdownTyping.change(for: " ", at: NSRange(location: marker.utf16.count, length: 0), in: body))
+            try apply(prefix)
+            XCTAssertEqual(body.text, "")
+            let arm = try XCTUnwrap(prefix.armedParagraph)
+            try apply(XCTUnwrap(arm.inserting("X", at: prefix.caret, in: body)))
+            XCTAssertEqual(body.blocks, [block])
+        }
+    }
+
+    func testPlainClipboardRecognizesSupportedMarkdownAndKeepsExactUnicode() throws {
+        let text = "## Plan **e\u{301} 🧩**\r\n- First\n1. Open\n2. Review\n> Reference\nVisit https://example.test/task. *literal*"
+        let expected = "Plan e\u{301} 🧩\r\nFirst\nOpen\nReview\nReference\nVisit https://example.test/task. *literal*"
+        let fragment = try XCTUnwrap(RichBodyClipboard.formattedPlainText(text, replacing: NSRange(), in: ""))
+        XCTAssertTrue(RichBody.sameCodeUnits(fragment.text, expected))
+        let preview = try XCTUnwrap(RichDescriptionPreview(body: expected, rich: fragment))
+        XCTAssertEqual(preview.paragraphs.first?.heading, 2)
+        XCTAssertEqual(preview.paragraphs.compactMap(\.marker), [.bullet, .number(1), .number(2)])
+        XCTAssertTrue(preview.paragraphs[4].quote)
+        XCTAssertEqual(preview.inline.map { (expected as NSString).substring(with: NSRange(location: $0.location, length: $0.length)) },
+                       ["e\u{301} 🧩", "https://example.test/task"])
+        XCTAssertTrue(preview.inline[0].bold)
+        XCTAssertEqual(preview.inline[1].link, "https://example.test/task")
+        XCTAssertEqual(try RichBodyEdit.applying([.paste(NSRange(), fragment: fragment)], to: "", rich: nil), fragment)
+    }
+
+    func testPlainClipboardPreservesFencesAndLiteralSameEditorText() throws {
+        let literal = "```text\n# **code**\nhttps://example.test\n```\n    - **code**\n- [ ] Unchecked\n- [x] Checked\n*italic* \\**escaped** `**code**`"
+        XCTAssertNil(RichBodyClipboard.formattedPlainText(literal, replacing: NSRange(), in: ""))
+        let styled = try XCTUnwrap(RichBodyClipboard.formattedPlainText(literal + "\n# Heading", replacing: NSRange(), in: ""))
+        XCTAssertEqual(styled.text, literal + "\nHeading")
+        XCTAssertEqual(styled.blocks.count, 1)
+        XCTAssertTrue(styled.runs.isEmpty)
+        let plain = RichBody(text: "# Intentionally literal **text**")
+        let encoded = try XCTUnwrap(RichBodyClipboard.encode(plain))
+        XCTAssertEqual(RichBodyClipboard.decode(encoded, matching: plain.text), plain)
+    }
+
+    func testPlainClipboardOnlyConvertsCompleteDestinationParagraphs() throws {
+        let range = NSRange(location: 7, length: 0)
+        let destination = "Before after"
+        let fragment = try XCTUnwrap(RichBodyClipboard.formattedPlainText("# Joined\n> Independent\n- Joined", replacing: range,
+                                                                         in: destination))
+        XCTAssertEqual(fragment.text, "# Joined\nIndependent\n- Joined")
+        let pasted = try RichBodyEdit.applying([.paste(range, fragment: fragment)], to: destination, rich: nil)
+        XCTAssertEqual(pasted.text, "Before # Joined\nIndependent\n- Joinedafter")
+        XCTAssertEqual(pasted.blocks.count, 1)
+        XCTAssertTrue(pasted.blocks[0].quote)
+    }
+
+    func testRichPasteReplacesWholeStyledParagraphAndKeepsFollowingBlock() throws {
+        let body = RichBody(text: "Old\nNeighbor",
+                            runs: [.init(location: 4, length: 8, italic: true)],
+                            blocks: [.init(location: 0, length: 4, heading: 1),
+                                     .init(location: 4, length: 8, quote: true)])
+        let fragment = RichBody(text: "Plan\nTask\n",
+                                runs: [.init(location: 0, length: 4, bold: true)],
+                                blocks: [.init(location: 0, length: 5, heading: 3),
+                                         .init(location: 5, length: 5, list: .checklist, checked: true)])
+        let edit = RichBodyEdit.paste(NSRange(location: 0, length: 4), fragment: fragment)
+        let replay = try JSONDecoder().decode(RichBodyEdit.self, from: JSONEncoder().encode(edit))
+        let result = try RichBodyEdit.applying([replay], to: body.text, rich: body)
+        XCTAssertEqual(result.text, "Plan\nTask\nNeighbor")
+        XCTAssertEqual(result.blocks, fragment.blocks + [.init(location: 10, length: 8, quote: true)])
+        XCTAssertEqual(result.runs, fragment.runs + [.init(location: 10, length: 8, italic: true)])
+    }
+
+    func testRichPasteKeepsDestinationParagraphWhenItJoinsExistingText() throws {
+        let body = RichBody(text: "Note", blocks: [.init(location: 0, length: 4, heading: 2)])
+        let fragment = RichBody(text: "X", runs: [.init(location: 0, length: 1, italic: true)],
+                                blocks: [.init(location: 0, length: 1, list: .bullet)])
+        let result = try RichBodyEdit.applying([.paste(NSRange(location: 2, length: 0), fragment: fragment)],
+                                                to: body.text, rich: body)
+        XCTAssertEqual(result.text, "NoXte")
+        XCTAssertEqual(result.blocks, [.init(location: 0, length: 5, heading: 2)])
+        XCTAssertEqual(result.runs, [.init(location: 2, length: 1, italic: true)])
+        let invalid = RichBody(text: "X", runs: [.init(location: 0, length: 1, link: "javascript:bad")])
+        XCTAssertThrowsError(try RichBodyEdit.applying([.paste(NSRange(location: 0, length: 0), fragment: invalid)],
+                                                        to: body.text, rich: body))
     }
 
     func testRichEditNativeDeltaPreservesExactScalarBoundaries() throws {

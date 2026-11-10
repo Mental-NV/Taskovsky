@@ -6,6 +6,7 @@ enum PhoneCalendarEditMode: String {
     case schedule = "Calendar Schedule"
     case move = "Move Schedule"
     case resize = "Resize Schedule"
+    case resizeStart = "Resize Start"
 }
 
 struct PhoneCalendarEditRequest: Identifiable {
@@ -204,6 +205,11 @@ struct PhoneCalendarEditSheet: View {
             Section {
                 DatePicker("New end", selection: $draft.end, displayedComponents: components)
             } footer: { Text(draft.allDay ? "The start day stays fixed." : "The start stays fixed. A changed timed range lasts at least 15 minutes.") }
+        case .resizeStart:
+            Section {
+                DatePicker("New start", selection: $draft.start, displayedComponents: components)
+            } footer: { Text(draft.allDay ? "The end day and reminders stay fixed." :
+                "The end and reminders stay fixed. A changed range lasts at least 15 minutes.") }
         }
     }
 
@@ -236,6 +242,7 @@ struct PhoneCalendarEditSheet: View {
         case .schedule: remove || draft.isValid
         case .move: draft.start.timeIntervalSinceReferenceDate.isFinite
         case .resize: draft.end >= draft.start
+        case .resizeStart: draft.start.timeIntervalSinceReferenceDate.isFinite
         }
     }
 
@@ -245,6 +252,7 @@ struct PhoneCalendarEditSheet: View {
         case .schedule: remove ? .unschedule : draft.operation
         case .move: draft.start == original.start ? nil : .move(start: draft.start, allDay: draft.allDay)
         case .resize: draft.end == original.end ? nil : .resizeEnd(draft.end)
+        case .resizeStart: draft.start == original.start ? nil : .resizeStart(draft.start)
         }
     }
 

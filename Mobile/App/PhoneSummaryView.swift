@@ -57,7 +57,16 @@ struct PhoneSummaryView: View {
 
     @ViewBuilder private var reportActions: some View {
         Button("Copy") {
-            UIPasteboard.general.string = text
+            let pasteboard: UIPasteboard
+            if model.isQA {
+                guard let session = model.directory?.lastPathComponent,
+                      let privateBoard = UIPasteboard(name: .init(rawValue: "local.taskovsky.qa.summary." + session),
+                                                     create: true) else { return }
+                pasteboard = privateBoard
+            } else {
+                pasteboard = .general
+            }
+            pasteboard.string = text
             feedback = "Copied"
         }.accessibilityIdentifier("summaryCopy").disabled(noteTitle.isEmpty)
         Button("Save as Note") {
