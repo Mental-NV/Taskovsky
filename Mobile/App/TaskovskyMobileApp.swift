@@ -14,6 +14,23 @@ private struct PhoneOccurrenceChange {
     let drag: PhoneCalendarDrag
     let operation: CalendarScheduleOperation
 }
+
+private struct PhoneOccurrenceScopeDialog: ViewModifier {
+    @Binding var change: PhoneOccurrenceChange?
+    var enabled = true
+    let save: (PhoneOccurrenceChange, CalendarScheduleScope) -> Void
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Apply schedule change to", isPresented: Binding(
+            get: { enabled && change != nil },
+            set: { if enabled && !$0 { change = nil } }
+        ), titleVisibility: .visible, presenting: enabled ? change : nil) { change in
+            Button("This occurrence") { save(change, .currentOccurrence) }
+            Button("Series") { save(change, .series) }
+            Button("Cancel") { self.change = nil }
+        }
+    }
+}
 private struct PhoneBatchRequest: Identifiable {
     let id = UUID()
     let scope: String
@@ -236,7 +253,9 @@ struct MobileRootView: View {
                         Text(calendarChecklistError).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("calendarChecklistError").padding(.horizontal, 16)
                     }
-                    PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
+                    if !showArrange {
+                        PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
+                    }
                     calendarBody(data: snapshot.workspace)
                 case .search:
                     PhoneSearchView(model: model, criteria: $search, data: snapshot.workspace,
@@ -304,13 +323,13 @@ struct MobileRootView: View {
         .sheet(isPresented: $jumpDatePresented) {
             PhoneCalendarDateJump(date: focus, calendar: calendar) { date in focus = date }
         }
-        .sheet(isPresented: $showArrange) { PhoneCalendarArrangeSheet(model: model, focus: focus, options: options) }
-        .confirmationDialog("Apply schedule change to", isPresented: Binding(get: { occurrenceChange != nil },
-            set: { if !$0 { occurrenceChange = nil } }), titleVisibility: .visible, presenting: occurrenceChange) { change in
-            Button("This occurrence") { saveCalendarGesture(change, scope: .currentOccurrence) }
-            Button("Series") { saveCalendarGesture(change, scope: .series) }
-            Button("Cancel") { occurrenceChange = nil }
+        .sheet(isPresented: $showArrange) {
+            let allowsDrag = options.mode.isHourly || options.mode == .month || options.mode == .multiWeek
+            PhoneCalendarArrangeSheet(model: model, focus: focus, options: options,
+                                      drag: allowsDrag ? calendarDrag : nil)
+                .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, save: saveCalendarGesture))
         }
+        .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, enabled: !showArrange, save: saveCalendarGesture))
         .sheet(item: $calendarEdit) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(isPresented: $capturePresented, onDismiss: {
             if model.captureDraft != nil { model.requestCloseCapture() }
@@ -893,8 +912,8 @@ struct MobileRootView: View {
         let revision = model.document?.revision
         let controls = PhoneCalendarControls(
             drag: { entry in
-                guard entry.canSchedule, model.canBeginEditing, let revision = model.document?.revision else { return nil }
-                return PhoneCalendarDrag(taskID: entry.taskID, session: calendarDragSession, revision: revision)
+                guard entry.canSchedule, let revision else { return nil }
+                return calendarDrag(for: entry.taskID, revision: revision)
             },
             edit: { entry, mode in
                 guard entry.canSchedule, model.canBeginEditing, let document = model.document,
@@ -937,6 +956,11 @@ struct MobileRootView: View {
                                              taskID: entry.taskID, expected: expected)
             }
         }
+    }
+
+    private func calendarDrag(for taskID: UUID, revision: WorkspaceRevision) -> PhoneCalendarDrag? {
+        guard model.canBeginEditing, model.document?.revision == revision else { return nil }
+        return PhoneCalendarDrag(taskID: taskID, session: calendarDragSession, revision: revision)
     }
 
     private func acceptCalendarDrop(_ payload: PhoneCalendarDrag, _ target: PhoneCalendarDropTarget) -> Bool {

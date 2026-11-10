@@ -24,6 +24,7 @@ struct PhoneCalendarArrangeSheet: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let focus: Date
     let options: TaskCalendarOptions
+    let drag: ((UUID, WorkspaceRevision) -> PhoneCalendarDrag?)?
     @State private var grouping = CalendarColorMode.list
     @State private var selection = CalendarArrangeSelection.calendar
     @State private var overdue = false
@@ -37,6 +38,9 @@ struct PhoneCalendarArrangeSheet: View {
         .sheet(item: $request) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(item: $taskRoute) { PhoneTaskSheet(model: model, route: $0, close: { taskRoute = nil }) }
         .interactiveDismissDisabled(model.isBusy)
+        .presentationDetents(drag == nil ? [.large] : [.medium, .large])
+        .presentationContentInteraction(drag == nil ? .automatic : .scrolls)
+        .presentationBackgroundInteraction(drag == nil ? .disabled : .enabled(upThrough: .medium))
     }
 
     private func content(_ document: WorkspaceDocument) -> some View {
@@ -60,6 +64,7 @@ struct PhoneCalendarArrangeSheet: View {
                 Toggle("Include overdue", isOn: $overdue).accessibilityIdentifier("arrangeOverdue")
             } footer: {
                 Text("Schedule tasks for \(focus.formatted(date)).")
+                if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
             }
             if model.scheduleNotice(in: .calendar) != nil { Section { PhoneScheduleFeedback(model: model, surface: .calendar) } }
             if groups.isEmpty {
@@ -69,6 +74,16 @@ struct PhoneCalendarArrangeSheet: View {
                 Section("\(group.name) · \(group.tasks.count)") {
                     ForEach(group.tasks) { task in
                         HStack(spacing: 0) {
+                            if let payload = drag?(task.id, document.revision) {
+                                Image(systemName: "line.3.horizontal")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 44, height: 44)
+                                    .contentShape(Rectangle())
+                                    .draggable(payload) { Label(task.title, systemImage: "calendar").padding(8) }
+                                    .accessibilityElement(children: .ignore)
+                                    .accessibilityLabel("Drag " + task.title)
+                                    .accessibilityIdentifier("calendarArrangeDrag-" + task.id.uuidString)
+                            }
                             Button {
                                 taskRoute = PhoneTaskRoute(id: task.id)
                             } label: {
