@@ -1,0 +1,78 @@
+{
+  "allDayReminder" : "none",
+  "calendarOptions" : {
+    "additionalTimeZones" : [
+      {
+        "identifier" : "America\/New_York",
+        "label" : ""
+      },
+      {
+        "identifier" : "Asia\/Tokyo",
+        "label" : ""
+      },
+      {
+        "identifier" : "Europe\/London",
+        "label" : ""
+      },
+      {
+        "identifier" : "Europe\/Paris",
+        "label" : ""
+      }
+    ],
+    "colorBy" : "list",
+    "includeInbox" : true,
+    "itemStyle" : "filled",
+    "mode" : "week",
+    "multiDayCount" : 5,
+    "multiWeekCount" : 2,
+    "showAdditionalTimeZones" : false,
+    "showChecklistItems" : false,
+    "showCompleted" : true,
+    "showItemIcons" : true,
+    "showRepeatCycles" : true,
+    "showSidebar" : true,
+    "tagIDs" : [
+
+    ],
+    "yearStyle" : "heatmap"
+  },
+  "completionSound" : true,
+  "dateRecognition" : true,
+  "defaultAddTo" : "top",
+  "defaultDate" : "none",
+  "defaultDurationMinutes" : 0,
+  "defaultPriority" : "none",
+  "defaultReminder" : "onTime",
+  "enableTimeZone" : false,
+  "hasInstalledBuiltInTemplates" : false,
+  "overduePosition" : "top",
+  "removeDateText" : false,
+  "removeTagText" : true,
+  "showWeekNumbers" : false,
+  "smartListVisibility" : [
+    "trash",
+    "show",
+    "wontDo",
+    "showIfNotEmpty",
+    "week",
+    "show",
+    "all",
+    "hidden",
+    "tomorrow",
+    "hidden",
+    "today",
+    "show",
+    "inbox",
+    "show",
+    "summary",
+    "hidden",
+    "tags",
+    "show",
+    "filters",
+    "show",
+    "completed",
+    "show"
+  ],
+  "startWeekOn" : 2,
+  "urlParsing" : true
+}

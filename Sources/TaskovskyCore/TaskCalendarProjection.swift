@@ -62,7 +62,7 @@ public enum TaskCalendarProjection {
                     }
                     cursor.occurrenceIndex += 1
                 } else {
-                    guard let candidate = TaskStore.nextDate(after: due, rule: cursor.recurrence,
+                    guard let candidate = LegacyRecurrence.nextDate(after: due, rule: cursor.recurrence,
                         anchorDay: cursor.recurrenceAnchorDay ?? local.component(.day, from: initialDue),
                         anchorMonth: cursor.recurrenceAnchorMonth ?? local.component(.month, from: initialDue), calendar: local) else { break }
                     next = candidate

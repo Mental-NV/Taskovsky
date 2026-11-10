@@ -1,0 +1,597 @@
+// !$*UTF8*$!
+{
+  "classes" = {
+  };
+  "objectVersion" = "56";
+  "archiveVersion" = "1";
+  "objects" = {
+    "000000000000000000000002" = {
+      "isa" = "XCSwiftPackageProductDependency";
+      "package" = "000000000000000000000001";
+      "productName" = "TaskovskyDomain";
+    };
+    "00000000000000000000000A" = {
+      "isa" = "PBXGroup";
+      "sourceTree" = "<group>";
+      "children" = (
+        "000000000000000000000004",
+        "000000000000000000000005",
+        "000000000000000000000006",
+        "000000000000000000000007",
+        "000000000000000000000008",
+        "000000000000000000000009",
+        "00000000000000000000000B",
+        "523731CC9D64AED66D3506E7",
+        "5711796BB5A2129652F7C8B2",
+        "E78FECE85B787E02E2062107",
+        "A5F903CA0110000000000001",
+        "958468F042788401D618E34F",
+        "B8FD48B691B49BCDE6CC3EAB",
+        "A00000000000000000000001",
+      );
+    };
+    "000000000000000000000003" = {
+      "isa" = "XCSwiftPackageProductDependency";
+      "package" = "000000000000000000000001";
+      "productName" = "TaskovskyWorkspace";
+    };
+    "000000000000000000000010" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "000000000000000000000004";
+    };
+    "5711796BB5A2129652F7C8B2" = {
+      "path" = "App/PhoneFieldEditor.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "00000000000000000000000B" = {
+      "isa" = "PBXGroup";
+      "name" = "Products";
+      "children" = (
+        "00000000000000000000000C",
+        "00000000000000000000001D",
+        "00000000000000000000002A",
+      );
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000004" = {
+      "path" = "App/TaskovskyMobileApp.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000011" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "000000000000000000000005";
+    };
+    "00000000000000000000000C" = {
+      "path" = "TaskovskyMobile.app";
+      "isa" = "PBXFileReference";
+      "explicitFileType" = "wrapper.application";
+      "sourceTree" = "BUILT_PRODUCTS_DIR";
+    };
+    "000000000000000000000005" = {
+      "path" = "App/MobilePreviewFixture.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000012" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "000000000000000000000006";
+    };
+    "4148169BE4688AB5CA4D4D0A" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "B8FD48B691B49BCDE6CC3EAB";
+    };
+    "B8FD48B691B49BCDE6CC3EAB" = {
+      "path" = "Fixtures/MobileQASettings.json";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "text.json";
+      "sourceTree" = "<group>";
+    };
+    "523731CC9D64AED66D3506E7" = {
+      "path" = "App/PhoneWorkspaceModel.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000006" = {
+      "path" = "App/MobileCalendarPreview.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000013" = {
+      "isa" = "PBXSourcesBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "000000000000000000000010",
+        "000000000000000000000011",
+        "000000000000000000000012",
+        "7F906C445C5BB89CBEBA347B",
+        "781593C20AB1671F12FC6972",
+        "D400DE38ADA1860EED617EBA",
+        "A5F903CA0110000000000002",
+        "A00000000000000000000002",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "000000000000000000000020" = {
+      "isa" = "XCConfigurationList";
+      "defaultConfigurationIsVisible" = "0";
+      "defaultConfigurationName" = "Release";
+      "buildConfigurations" = (
+        "00000000000000000000001E",
+        "00000000000000000000001F",
+      );
+    };
+    "00000000000000000000000D" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Debug";
+      "buildSettings" = {
+        "ONLY_ACTIVE_ARCH" = "YES";
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+        "DEBUG_INFORMATION_FORMAT" = "dwarf";
+        "MARKETING_VERSION" = "0.1.0";
+        "CLANG_ENABLE_MODULES" = "YES";
+        "INFOPLIST_KEY_UISupportedInterfaceOrientations" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+        "TARGETED_DEVICE_FAMILY" = "1";
+        "GENERATE_INFOPLIST_FILE" = "YES";
+        "INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
+        "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+        "INFOPLIST_KEY_CFBundleDisplayName" = "Taskovsky Preview";
+        "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+        "CODE_SIGN_STYLE" = "Automatic";
+        "SDKROOT" = "iphoneos";
+        "SWIFT_VERSION" = "5.0";
+        "PRODUCT_NAME" = "$(TARGET_NAME)";
+        "IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+        "PRODUCT_BUNDLE_IDENTIFIER" = "local.taskovsky.mobile-preview";
+        "CURRENT_PROJECT_VERSION" = "1";
+      };
+    };
+    "00000000000000000000001A" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Release";
+      "buildSettings" = {
+        "SWIFT_OPTIMIZATION_LEVEL" = "-O";
+        "SWIFT_VERSION" = "5.0";
+      };
+    };
+    "958468F042788401D618E34F" = {
+      "path" = "Fixtures/MobileQAWorkspace.json";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "text.json";
+      "sourceTree" = "<group>";
+    };
+    "8E465EF69D50F1742FE0ADC9" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "958468F042788401D618E34F";
+    };
+    "00000000000000000000000E" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Release";
+      "buildSettings" = {
+        "MARKETING_VERSION" = "0.1.0";
+        "CLANG_ENABLE_MODULES" = "YES";
+        "INFOPLIST_KEY_UISupportedInterfaceOrientations" = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+        "TARGETED_DEVICE_FAMILY" = "1";
+        "GENERATE_INFOPLIST_FILE" = "YES";
+        "INFOPLIST_KEY_UILaunchScreen_Generation" = "YES";
+        "SWIFT_OPTIMIZATION_LEVEL" = "-O";
+        "INFOPLIST_KEY_CFBundleDisplayName" = "Taskovsky Preview";
+        "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+        "CODE_SIGN_STYLE" = "Automatic";
+        "SDKROOT" = "iphoneos";
+        "SWIFT_VERSION" = "5.0";
+        "PRODUCT_NAME" = "$(TARGET_NAME)";
+        "IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+        "PRODUCT_BUNDLE_IDENTIFIER" = "local.taskovsky.mobile-preview";
+        "CURRENT_PROJECT_VERSION" = "1";
+      };
+    };
+    "781593C20AB1671F12FC6972" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "5711796BB5A2129652F7C8B2";
+    };
+    "00000000000000000000001B" = {
+      "isa" = "XCConfigurationList";
+      "defaultConfigurationIsVisible" = "0";
+      "defaultConfigurationName" = "Release";
+      "buildConfigurations" = (
+        "000000000000000000000019",
+        "00000000000000000000001A",
+      );
+    };
+    "000000000000000000000007" = {
+      "path" = "../Tests/TaskovskyDomainTests/MobileContractTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000014" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "000000000000000000000002";
+    };
+    "000000000000000000000021" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "000000000000000000000007";
+    };
+    "00000000000000000000000F" = {
+      "isa" = "XCConfigurationList";
+      "defaultConfigurationIsVisible" = "0";
+      "defaultConfigurationName" = "Release";
+      "buildConfigurations" = (
+        "00000000000000000000000D",
+        "00000000000000000000000E",
+      );
+    };
+    "00000000000000000000001C" = {
+      "buildConfigurationList" = "00000000000000000000001B";
+      "packageReferences" = (
+        "000000000000000000000001",
+      );
+      "targets" = (
+        "000000000000000000000018",
+        "000000000000000000000029",
+        "000000000000000000000035",
+      );
+      "developmentRegion" = "en";
+      "knownRegions" = (
+        "en",
+        "Base",
+      );
+      "isa" = "PBXProject";
+      "compatibilityVersion" = "Xcode 14.0";
+      "productRefGroup" = "00000000000000000000000B";
+      "projectDirPath" = "";
+      "attributes" = {
+        "LastUpgradeCheck" = "2700";
+      };
+      "hasScannedForEncodings" = "0";
+      "projectRoot" = "";
+      "mainGroup" = "00000000000000000000000A";
+    };
+    "000000000000000000000008" = {
+      "path" = "../Tests/TaskovskyWorkspaceTests/ReadOnlyWorkspaceTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "7F906C445C5BB89CBEBA347B" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "523731CC9D64AED66D3506E7";
+    };
+    "000000000000000000000015" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "000000000000000000000003";
+    };
+    "000000000000000000000022" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "000000000000000000000008";
+    };
+    "00000000000000000000001D" = {
+      "path" = "MobileContracts.xctest";
+      "isa" = "PBXFileReference";
+      "explicitFileType" = "wrapper.cfbundle";
+      "sourceTree" = "BUILT_PRODUCTS_DIR";
+    };
+    "00000000000000000000002A" = {
+      "path" = "MobileNavigation.xctest";
+      "isa" = "PBXFileReference";
+      "explicitFileType" = "wrapper.cfbundle";
+      "sourceTree" = "BUILT_PRODUCTS_DIR";
+    };
+    "000000000000000000000009" = {
+      "path" = "UITests/ReadOnlyNavigationTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "000000000000000000000016" = {
+      "isa" = "PBXFrameworksBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "000000000000000000000014",
+        "000000000000000000000015",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "000000000000000000000023" = {
+      "isa" = "PBXSourcesBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "000000000000000000000021",
+        "000000000000000000000022",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "000000000000000000000030" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "000000000000000000000002";
+    };
+    "00000000000000000000001E" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Debug";
+      "buildSettings" = {
+        "ONLY_ACTIVE_ARCH" = "YES";
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+        "DEBUG_INFORMATION_FORMAT" = "dwarf";
+        "BUNDLE_LOADER" = "$(TEST_HOST)";
+        "MARKETING_VERSION" = "0.1.0";
+        "CLANG_ENABLE_MODULES" = "YES";
+        "TARGETED_DEVICE_FAMILY" = "1";
+        "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/TaskovskyMobile.app/TaskovskyMobile";
+        "GENERATE_INFOPLIST_FILE" = "YES";
+        "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+        "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+        "CODE_SIGN_STYLE" = "Automatic";
+        "SDKROOT" = "iphoneos";
+        "SWIFT_VERSION" = "5.0";
+        "PRODUCT_NAME" = "$(TARGET_NAME)";
+        "IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+        "PRODUCT_BUNDLE_IDENTIFIER" = "local.taskovsky.MobileContracts";
+        "CURRENT_PROJECT_VERSION" = "1";
+      };
+    };
+    "00000000000000000000002B" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Debug";
+      "buildSettings" = {
+        "ONLY_ACTIVE_ARCH" = "YES";
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+        "DEBUG_INFORMATION_FORMAT" = "dwarf";
+        "MARKETING_VERSION" = "0.1.0";
+        "CLANG_ENABLE_MODULES" = "YES";
+        "TEST_TARGET_NAME" = "TaskovskyMobile";
+        "TARGETED_DEVICE_FAMILY" = "1";
+        "GENERATE_INFOPLIST_FILE" = "YES";
+        "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+        "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+        "CODE_SIGN_STYLE" = "Automatic";
+        "SDKROOT" = "iphoneos";
+        "SWIFT_VERSION" = "5.0";
+        "PRODUCT_NAME" = "$(TARGET_NAME)";
+        "IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+        "PRODUCT_BUNDLE_IDENTIFIER" = "local.taskovsky.MobileNavigation";
+        "CURRENT_PROJECT_VERSION" = "1";
+      };
+    };
+    "000000000000000000000017" = {
+      "isa" = "PBXResourcesBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "8E465EF69D50F1742FE0ADC9",
+        "4148169BE4688AB5CA4D4D0A",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "000000000000000000000024" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "000000000000000000000002";
+    };
+    "000000000000000000000031" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "000000000000000000000003";
+    };
+    "00000000000000000000001F" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Release";
+      "buildSettings" = {
+        "BUNDLE_LOADER" = "$(TEST_HOST)";
+        "MARKETING_VERSION" = "0.1.0";
+        "CLANG_ENABLE_MODULES" = "YES";
+        "TARGETED_DEVICE_FAMILY" = "1";
+        "TEST_HOST" = "$(BUILT_PRODUCTS_DIR)/TaskovskyMobile.app/TaskovskyMobile";
+        "GENERATE_INFOPLIST_FILE" = "YES";
+        "SWIFT_OPTIMIZATION_LEVEL" = "-O";
+        "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+        "CODE_SIGN_STYLE" = "Automatic";
+        "SDKROOT" = "iphoneos";
+        "SWIFT_VERSION" = "5.0";
+        "PRODUCT_NAME" = "$(TARGET_NAME)";
+        "IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+        "PRODUCT_BUNDLE_IDENTIFIER" = "local.taskovsky.MobileContracts";
+        "CURRENT_PROJECT_VERSION" = "1";
+      };
+    };
+    "000000000000000000000018" = {
+      "productType" = "com.apple.product-type.application";
+      "productReference" = "00000000000000000000000C";
+      "buildConfigurationList" = "00000000000000000000000F";
+      "packageProductDependencies" = (
+        "000000000000000000000002",
+        "000000000000000000000003",
+      );
+      "productName" = "TaskovskyMobile";
+      "isa" = "PBXNativeTarget";
+      "buildPhases" = (
+        "000000000000000000000013",
+        "000000000000000000000016",
+        "000000000000000000000017",
+      );
+      "dependencies" = (
+      );
+      "name" = "TaskovskyMobile";
+      "buildRules" = (
+      );
+    };
+    "000000000000000000000025" = {
+      "isa" = "PBXBuildFile";
+      "productRef" = "000000000000000000000003";
+    };
+    "000000000000000000000032" = {
+      "isa" = "PBXFrameworksBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "000000000000000000000030",
+        "000000000000000000000031",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "00000000000000000000002C" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Release";
+      "buildSettings" = {
+        "MARKETING_VERSION" = "0.1.0";
+        "CLANG_ENABLE_MODULES" = "YES";
+        "TEST_TARGET_NAME" = "TaskovskyMobile";
+        "TARGETED_DEVICE_FAMILY" = "1";
+        "GENERATE_INFOPLIST_FILE" = "YES";
+        "SWIFT_OPTIMIZATION_LEVEL" = "-O";
+        "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
+        "CODE_SIGN_STYLE" = "Automatic";
+        "SDKROOT" = "iphoneos";
+        "SWIFT_VERSION" = "5.0";
+        "PRODUCT_NAME" = "$(TARGET_NAME)";
+        "IPHONEOS_DEPLOYMENT_TARGET" = "17.0";
+        "PRODUCT_BUNDLE_IDENTIFIER" = "local.taskovsky.MobileNavigation";
+        "CURRENT_PROJECT_VERSION" = "1";
+      };
+    };
+    "00000000000000000000002D" = {
+      "isa" = "XCConfigurationList";
+      "defaultConfigurationIsVisible" = "0";
+      "defaultConfigurationName" = "Release";
+      "buildConfigurations" = (
+        "00000000000000000000002B",
+        "00000000000000000000002C",
+      );
+    };
+    "000000000000000000000019" = {
+      "isa" = "XCBuildConfiguration";
+      "name" = "Debug";
+      "buildSettings" = {
+        "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
+        "SWIFT_ACTIVE_COMPILATION_CONDITIONS" = "DEBUG";
+        "SWIFT_VERSION" = "5.0";
+        "ONLY_ACTIVE_ARCH" = "YES";
+        "DEBUG_INFORMATION_FORMAT" = "dwarf";
+      };
+    };
+    "000000000000000000000026" = {
+      "isa" = "PBXFrameworksBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "000000000000000000000024",
+        "000000000000000000000025",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "000000000000000000000033" = {
+      "isa" = "PBXContainerItemProxy";
+      "containerPortal" = "00000000000000000000001C";
+      "remoteGlobalIDString" = "000000000000000000000018";
+      "remoteInfo" = "TaskovskyMobile";
+      "proxyType" = "1";
+    };
+    "00000000000000000000002E" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "000000000000000000000009";
+    };
+    "000000000000000000000034" = {
+      "isa" = "PBXTargetDependency";
+      "target" = "000000000000000000000018";
+      "targetProxy" = "000000000000000000000033";
+    };
+    "000000000000000000000027" = {
+      "isa" = "PBXContainerItemProxy";
+      "containerPortal" = "00000000000000000000001C";
+      "remoteGlobalIDString" = "000000000000000000000018";
+      "remoteInfo" = "TaskovskyMobile";
+      "proxyType" = "1";
+    };
+    "A5F903CA0110000000000001" = {
+      "path" = "App/PhoneScheduleSheet.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "A5F903CA0110000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "A5F903CA0110000000000001";
+    };
+    "E78FECE85B787E02E2062107" = {
+      "path" = "App/PhoneTaskSheet.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "D400DE38ADA1860EED617EBA" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "E78FECE85B787E02E2062107";
+    };
+    "00000000000000000000002F" = {
+      "isa" = "PBXSourcesBuildPhase";
+      "buildActionMask" = "2147483647";
+      "files" = (
+        "00000000000000000000002E",
+      );
+      "runOnlyForDeploymentPostprocessing" = "0";
+    };
+    "000000000000000000000028" = {
+      "isa" = "PBXTargetDependency";
+      "target" = "000000000000000000000018";
+      "targetProxy" = "000000000000000000000027";
+    };
+    "000000000000000000000035" = {
+      "productType" = "com.apple.product-type.bundle.ui-testing";
+      "productReference" = "00000000000000000000002A";
+      "buildConfigurationList" = "00000000000000000000002D";
+      "packageProductDependencies" = (
+        "000000000000000000000002",
+        "000000000000000000000003",
+      );
+      "productName" = "MobileNavigation";
+      "isa" = "PBXNativeTarget";
+      "buildPhases" = (
+        "00000000000000000000002F",
+        "000000000000000000000032",
+      );
+      "dependencies" = (
+        "000000000000000000000034",
+      );
+      "name" = "MobileNavigation";
+      "buildRules" = (
+      );
+    };
+    "000000000000000000000029" = {
+      "productType" = "com.apple.product-type.bundle.unit-test";
+      "productReference" = "00000000000000000000001D";
+      "buildConfigurationList" = "000000000000000000000020";
+      "packageProductDependencies" = (
+        "000000000000000000000002",
+        "000000000000000000000003",
+      );
+      "productName" = "MobileContracts";
+      "isa" = "PBXNativeTarget";
+      "buildPhases" = (
+        "000000000000000000000023",
+        "000000000000000000000026",
+      );
+      "dependencies" = (
+        "000000000000000000000028",
+      );
+      "name" = "MobileContracts";
+      "buildRules" = (
+      );
+    };
+    "000000000000000000000001" = {
+      "isa" = "XCLocalSwiftPackageReference";
+      "relativePath" = "..";
+    };
+    "A00000000000000000000001" = {
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "path" = "App/PhoneCaptureSheet.swift";
+      "sourceTree" = "<group>";
+    };
+    "A00000000000000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "A00000000000000000000001";
+    };
+  };
+  "rootObject" = "00000000000000000000001C";
+}
