@@ -246,6 +246,8 @@ Draft-persistence failure must be distinguishable from workspace-save failure. F
 
 ### Checklist and child tasks
 
+Task List rows with children in their current group have a separate trailing 44 × 44 disclosure target, secondary semibold caption chevrons and named Show/Hide accessibility actions. Opening or folding preserves nested state during the phone session and does not change task selection or data. Search and batch selection ignore folds; children independently matching another group remain visible. Existing row swipe, countdown, section and manual-order controls remain separate. Relaunch expands all branches. [Disclosure contract](../changes/task-subtree-disclosure-2026-11-10.md).
+
 Embedded checklist item edits operate on embedded item IDs. Linked subtasks are separate TaskItems with their own detail and schedule. Rich-body checklist paragraphs are formatting and remain read-only when the body is styled. Each UI uses the correct representation. R06 shows a rounded-square placeholder and a keyboard instruction to use Next for another checklist item. Proposed Taskovsky Next adds a nonempty item to the draft and advances focus; it does not create an empty durable item or submit the entire edit. Creating a linked child uses the shared child-creation defaults, not the full top-level quick-entry pipeline.
 
 R05 shows tag entry in a rounded accessory pill above the keyboard, with a leading tag icon, separate keyboard-dismiss control and a four-row suggestion popover. Match that presentation for existing-tag selection. Resolve IDs through shared policy; typing a tag or accepting an existing suggestion must not silently create a new tag. Whether inline creation is offered remains D08.

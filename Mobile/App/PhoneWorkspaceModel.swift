@@ -3,7 +3,7 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneTaskSort: Hashable {
     case priority, timestamp(TaskTimestampSort)
@@ -236,6 +236,25 @@ final class PhoneWorkspaceModel: ObservableObject {
                     data.tasks[3].listID = work.id
                     data.tasks[3].timeZoneID = "Pacific/Kiritimati"
                     data.tasks[3].dueDate = now + 3_600
+                }
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .subtaskDisclosure {
+                var data = initial.workspace
+                guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
+                let now = MobilePreviewFixture.now
+                for index in [0, 3, 6, 7] {
+                    data.tasks[index].listID = work.id
+                    data.tasks[index].dueDate = index == 6 ? now : nil
+                }
+                data.tasks[3].parentID = data.tasks[0].id
+                data.tasks[6].parentID = data.tasks[3].id
+                data.tasks[7].parentID = data.tasks[0].id
+                let section = TaskSection(name: "Review section")
+                let create = TaskSectionChange(listID: work.id, operation: .create(section))
+                let assign = TaskSectionChange(listID: work.id, operation: .assign(taskID: data.tasks[0].id, sectionID: section.id))
+                guard create.apply(to: &data, now: now) == true, assign.apply(to: &data, now: now) == true else {
+                    throw CocoaError(.fileReadCorruptFile)
                 }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }

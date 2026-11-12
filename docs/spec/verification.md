@@ -1642,3 +1642,16 @@ The native Mac run covered the standard light appearance and a Month fixture. Da
 | Fixture audit | Workspace and settings were byte-identical after the Mac test and after both read-only iPhone grouping workflows. The original guarded Mac app and QA preferences were restored. The disposable iPhone simulator was removed. |
 
 The current native checks did not cover dark appearance, reduced motion, VoiceOver, physical iPhone, or a Mac pointer drag. TickTick was not reopened for this recovery.
+
+
+<a id="task-subtree-disclosure"></a>
+
+### TASK-HIERARCHY-002 — Recovered linked-subtask disclosure
+
+The [change contract](../changes/task-subtree-disclosure-2026-11-10.md) is recovered from the preserved November 10 draft and ported onto due-date-grouping PR #30 head `e594db764abfe569e2a77c2cb411c2c70ef9b3ba`. This separate slice retains the newer iPhone manual-order/drop controls and date captions. The original desktop and mobile worktrees are not modified.
+
+Historical draft QA is not evidence for this port. Fresh validation of implementation commit `40d426e30a1b77c344b05e395cd7469e8114a506` passed on macOS 27.0.1 arm64: 90 Workspace XCTest cases, 91 Domain XCTest cases, 472 Core XCTest cases and 37 Swift Testing cases; the release build and strict signature verification passed. Five iPhone 13 Pro simulator tests on iOS 26.5 passed with no failures, skips or runtime warnings: linked-subtask disclosure, child creation/completion, both manual-task-drag regressions, and due-date grouping. Independent static review found no actionable defects. [Hosted macOS CI](https://github.com/Mental-NV/Taskovsky/actions/runs/43170927304) passed for that implementation commit.
+
+Native Mac Computer Use verified parent/nested folds, retained selected-grandchild detail, independently visible Today results, expanded/collapsed accessibility labels, and restored visible branch order. An unsaved child rename blocked ancestor folding, retained focus and text, then Escape restored the title and allowed folding. Full relaunch started both parent and nested child expanded. The same existing Taskovsky QA app identity was reused. Multiple-sibling order was covered by the domain and iPhone checks, not a fresh Mac pointer exercise.
+
+Workspace and settings bytes remained identical through the Mac display-only trial and through the iPhone disclosure and due-date-grouping workflows. The prior guarded Mac QA bundle/preferences were restored; the disposable simulator was shut down and retained with its receipts. Both original worktrees retained their HEADs, status and all 229 changed-file hashes. The native source-manifest SHA-256 is `3fabd15fc6de607b99c86dd31829d3ecc33c503acc229a6e6a51e97a3baa1873`. Taskovsky Codex was used only for bounded Computer Use and stopped afterward; dot performed integration, tests, publication and review coordination. No full TickTick parity, physical-device, VoiceOver, dark/reduced-motion or narrow-window verification is claimed.

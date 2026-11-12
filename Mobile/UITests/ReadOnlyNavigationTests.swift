@@ -4046,6 +4046,64 @@ extension ReadOnlyNavigationTests {
         XCTAssertFalse(app.buttons["Check Unsaved entry"].exists)
     }
 
+    @MainActor func testLinkedSubtaskDisclosurePreservesNestedStateAndOtherScopes() {
+        let app = launch(qaCase: "subtask-disclosure")
+        goTo("Work", in: app)
+        let parent = app.buttons["taskSubtreeDisclosure-00000000-0000-0000-0000-000000000001"]
+        let nested = app.buttons["taskSubtreeDisclosure-00000000-0000-0000-0000-000000000004"]
+        let child = app.buttons["Arrange the studio"]
+        let grandchild = app.buttons["Book time for a walk"]
+        let sibling = app.buttons["Review the draft"]
+        reveal(nested, in: app)
+        XCTAssertEqual(parent.value as? String, "Expanded")
+        XCTAssertTrue(grandchild.exists)
+        nested.tap()
+        waitGone(grandchild)
+        XCTAssertEqual(nested.value as? String, "Collapsed")
+        XCTAssertTrue(sibling.exists)
+        reveal(parent, in: app)
+        parent.tap()
+        waitGone(child)
+        XCTAssertFalse(sibling.exists)
+        XCTAssertEqual(parent.value as? String, "Collapsed")
+
+        app.buttons["taskListActions"].tap()
+        app.buttons["batchOpen"].tap()
+        let hiddenSelection = app.buttons["batchTask-00000000-0000-0000-0000-000000000007"]
+        reveal(hiddenSelection, in: app)
+        XCTAssertTrue(hiddenSelection.exists)
+        app.buttons["batchBack"].tap()
+        waitGone(hiddenSelection)
+
+        goTo("Today", in: app)
+        XCTAssertTrue(grandchild.waitForExistence(timeout: 5))
+        XCTAssertFalse(parent.exists)
+        goTo("Work", in: app)
+        reveal(parent, in: app)
+        XCTAssertEqual(parent.value as? String, "Collapsed")
+        parent.tap()
+        XCTAssertTrue(child.waitForExistence(timeout: 5))
+        XCTAssertTrue(sibling.exists)
+        XCTAssertFalse(grandchild.exists)
+        XCTAssertEqual(nested.value as? String, "Collapsed")
+        attach(app, "Reopened parent retains its nested fold")
+        reveal(nested, in: app)
+        nested.tap()
+        XCTAssertTrue(grandchild.waitForExistence(timeout: 5))
+        reveal(parent, in: app)
+        parent.tap()
+        waitGone(child)
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        reveal(parent, in: app)
+        XCTAssertEqual(parent.value as? String, "Expanded")
+        XCTAssertTrue(child.exists)
+        XCTAssertTrue(grandchild.exists)
+    }
+
     @MainActor func testLinkedSubtaskCreationAndIndependentCompletionPersist() {
         let app = launch(qaCase: "task-metadata"), root = "Review the project outline"
         let child = "Gather a folder"
