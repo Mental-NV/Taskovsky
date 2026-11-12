@@ -295,6 +295,18 @@ public final class TaskStore: ObservableObject {
         return persistCreatedTask(result)
     }
 
+    /// Initial Mac QuickEntry capture acknowledges persistence before publishing.
+    public func createQuickEntryTask(title: String, listID: UUID? = nil, kind: TaskKind = .task,
+                                     dueDate: Date? = nil, useDefaultList: Bool = true,
+                                     preferRecognizedDate: Bool = false, recognizeDates: Bool = true,
+                                     body: String = "") -> UUID? {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let result = TaskCreation.make(workspace: data, settings: settings, title: title, listID: listID,
+                                       kind: kind, dueDate: dueDate, useDefaultList: useDefaultList,
+                                       preferRecognizedDate: preferRecognizedDate, recognizeDates: recognizeDates, body: body)
+        return persistCreatedTaskAtomically(result.task, tags: result.addedTags, resolveTitle: true)
+    }
+
     public func createTask(title: String, inSection sectionID: UUID, listID: UUID, kind: TaskKind,
                            recognizeDates: Bool, body: String) -> UUID? {
         guard let list = data.lists.first(where: { $0.id == listID && !$0.isArchived }),

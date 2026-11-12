@@ -159,3 +159,7 @@ Mac Calendar new-task creation now retains the draft on failed storage writes an
 ### Mac section QuickEntry draft retention — November 12, 2026
 
 Rejected section submission retains description, expansion and ignored-date choice alongside its title and section target. Accepted capture still clears the composer. This is a source-backed interrupted-flow correction, not a wider ordinary quick-add transaction guarantee or new mobile/TickTick parity claim. [Contract](changes/quick-entry-failed-draft-2026-11-12.md).
+
+### Ordinary Mac QuickEntry initial capture — November 12, 2026
+
+Ordinary initial capture now stages task and parsed tags/default reminders before publishing. Failed initial writes return rejection and retain the full draft; explicit retry creates one durable task. The earlier section-only acknowledgement limit is superseded for this initial path, not for later destination-tag/reminder updates or Summary/mobile. [Contract](changes/quick-capture-atomic-2026-11-12.md).
