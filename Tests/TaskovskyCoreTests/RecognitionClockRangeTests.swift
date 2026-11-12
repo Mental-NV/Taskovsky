@@ -28,17 +28,43 @@ final class RecognitionClockRangeTests: XCTestCase {
                                               now: now, calendar: calendar).task.title, title)
         }
     }
+    func testMalformedPrecedingClockDoesNotScheduleFromInnerNumericFragment() throws {
+        var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 12, hour: 10))!
+        var settings = AppSettings(); settings.removeDateText = true
+        for clock in ["25:10:15", "9:10:15", "123:45", "99:12pm"] {
+            let text = "Review at " + clock + " tomorrow"
+            let found = try XCTUnwrap(TaskCreation.recognizeDate(in: text, calendar: calendar, now: now))
+            XCTAssertFalse(found.hasTime, clock)
+            XCTAssertEqual(String(text[found.range]), "tomorrow", clock)
+            let result = TaskCreation.make(workspace: WorkspaceData(), settings: settings, title: text, now: now, calendar: calendar)
+            XCTAssertEqual(result.task.title, "Review at " + clock, clock)
+            XCTAssertFalse(result.task.hasDueTime, clock)
+            var input = TaskCaptureInput.start(destination: .inbox, workspace: WorkspaceData(), settings: settings, now: now, calendar: calendar)
+            input.title = text
+            let mobile = try input.task(id: UUID(), now: now, workspace: WorkspaceData(), settings: settings, calendar: calendar)
+            XCTAssertEqual(mobile.title, result.task.title)
+            XCTAssertEqual(mobile.dueDate, result.task.dueDate)
+            XCTAssertFalse(mobile.hasDueTime)
+            var keep = settings; keep.removeDateText = false
+            XCTAssertEqual(TaskCreation.make(workspace: WorkspaceData(), settings: keep, title: text, now: now, calendar: calendar).task.title, text)
+        }
+    }
     func testValidClockRangesAndPrecedingClockRemainPrecise() throws {
         var calendar = Calendar(identifier: .gregorian); calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 12, hour: 10))!
         for (text, hour, minute) in [("tomorrow at 00:00", 0, 0), ("tomorrow at 23:59", 23, 59),
                                     ("tomorrow at 12am", 0, 0), ("tomorrow at 12pm", 12, 0),
-                                    ("tomorrow at 4pm", 16, 0), ("at 9:30 tomorrow", 9, 30)] {
+                                    ("tomorrow at 4pm", 16, 0), ("at 9:30 tomorrow", 9, 30), ("9:12pm tomorrow", 21, 12), ("12am tomorrow", 0, 0), ("23:59 tomorrow", 23, 59)] {
             let found = try XCTUnwrap(TaskCreation.recognizeDate(in: text, calendar: calendar, now: now))
             XCTAssertTrue(found.hasTime); XCTAssertEqual(String(text[found.range]), text)
             XCTAssertEqual(calendar.component(.hour, from: found.date), hour)
             XCTAssertEqual(calendar.component(.minute, from: found.date), minute)
             XCTAssertEqual(calendar.component(.day, from: found.date), 13)
+        }
+        for text in ["Review (9:30 tomorrow)", "Review — 9:30 tomorrow", "Review:9:30 tomorrow"] {
+            let found = try XCTUnwrap(TaskCreation.recognizeDate(in: text, calendar: calendar, now: now))
+            XCTAssertTrue(found.hasTime); XCTAssertEqual(String(text[found.range]), "9:30 tomorrow")
         }
         let mixed = "Review at 9 tomorrow at 25:00"
         let found = try XCTUnwrap(TaskCreation.recognizeDate(in: mixed, calendar: calendar, now: now))

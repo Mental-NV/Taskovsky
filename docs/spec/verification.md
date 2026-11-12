@@ -1809,3 +1809,10 @@ Final source manifest SHA256 `771b9f37839d9c097174190db1743d5380d821a8181395d165
 Native owned Mac QA entered `QA clock tomorrow at 25:00`: only tomorrow was highlighted; the saved title retained `QA clock  at 25:00` (existing double-space behavior), with November 13 and Time: None. A valid `tomorrow at 23:30` control highlighted/removed the whole phrase and saved at 23:30. Each was submitted once. Independent file audit verified both exact titles/date shapes/instants, unchanged other workspace fields and byte-identical settings. No TickTick parser-parity claim; the reference recognition setting was off in the separate probe.
 
 Source manifest SHA256 `8f05eb5e68e19df5b8bf1545a3fc6206963583d1429af1fc2e51e4cd123ec408`. Owned fixture bytes, prior guarded QA bundle and preferences were restored, and Codex quit QA and returned idle. Exact-head macOS CI remains a pre-merge gate.
+
+<a id="recognition-prefix-clock-boundary"></a>
+### Preceding numeric-clock boundaries — November 12, 2026
+
+[Contract](../changes/recognition-prefix-clock-boundary-2026-11-12.md). Inputs `at 25:10:15 tomorrow` and `at 9:10:15 tomorrow` reproduced eight pre-fix assertions: the inner `10:15 tomorrow` was recognized, assigned as a time and removed from the saved title. The preceding matcher now rejects starts immediately after a digit or digit-plus-colon; ordinary punctuation adjacency such as `Review:9:30 tomorrow` stays supported. This is not full malformed-clock grammar validation.
+
+Shared regressions verify exact range/title, date-only result, removal disabled, valid preceding 12/24-hour controls and iPhone TaskCaptureInput agreement. Final local tests passed 91 Workspace + 98 Domain + 492 Core XCTest cases plus 37 Swift tests. Mac release and iPhone Simulator target builds and independent static review passed. This slice is model/build-verified; no additional native UI, TickTick parser, VoiceOver or simulator interaction claim. The preceding slice's native QA is not reclassified as testing these new inputs. Original worktrees remain untouched and Codex was not resumed. Exact-head hosted CI remains the pre-merge gate.
