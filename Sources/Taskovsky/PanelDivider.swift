@@ -39,23 +39,25 @@ struct PanelDivider: View {
         guard let task = store.data.tasks.first(where: { $0.id == id }) else { return }
         if task.wontDoAt != nil { store.reopenTask(id: id); return }
         let wasComplete = task.completedAt != nil
-        store.toggleComplete(id: id)
+        guard store.toggleComplete(id: id) else { return }
         if !wasComplete {
             if store.settings.completionSound { CompletionSound.play() }
             show(taskID: id, kind: .complete, message: "Task completed")
         }
     }
     func abandon(store: TaskStore, id: UUID) { store.markWontDo(id: id) }
-    func trash(store: TaskStore, id: UUID) {
-        guard store.data.tasks.first(where: { $0.id == id }) != nil else { return }
-        store.trashTask(id: id)
+    @discardableResult func trash(store: TaskStore, id: UUID) -> Bool {
+        guard store.data.tasks.first(where: { $0.id == id }) != nil,
+              store.trashTask(id: id) else { return false }
         show(taskID: id, kind: .trash, message: "Task deleted")
+        return true
     }
-    func restore(store: TaskStore, id: UUID) {
-        guard let task = store.data.tasks.first(where: { $0.id == id }) else { return }
-        store.restoreTask(id: id)
+    @discardableResult func restore(store: TaskStore, id: UUID) -> Bool {
+        guard let task = store.data.tasks.first(where: { $0.id == id }),
+              store.restoreTask(id: id) else { return false }
         let name = task.listID.flatMap { listID in store.data.lists.first { $0.id == listID }?.name } ?? "Inbox"
         show(taskID: id, kind: .restored, message: "Restored to \"\(name)\"")
+        return true
     }
     func notice(_ message: String) { show(taskID: UUID(), kind: .info, message: message) }
     func skipOccurrence(store: TaskStore, request: TaskOccurrenceSkipRequest) {
@@ -81,16 +83,21 @@ struct PanelDivider: View {
             }
             return
         }
-        guard let value = feedback, let token = activeToken, let claim = coordinator.consume(token: token), claim.taskID == value.taskID else { return }
+        guard let value = feedback, let token = activeToken,
+              let claim = coordinator.claim(token: token), claim.taskID == value.taskID else { return }
+        let accepted: Bool
+        switch claim.kind {
+        case .complete: accepted = store.undoCompletion(id: claim.taskID)
+        case .wontDo: accepted = store.reopenTask(id: claim.taskID)
+        case .trash: accepted = store.restoreTask(id: claim.taskID)
+        case .restore: accepted = true
+        }
+        guard accepted else { return }
+        _ = coordinator.consume(token: token)
         activeToken = nil
         feedback = nil
-        switch claim.kind {
-        case .complete: store.undoCompletion(id: claim.taskID)
-        case .wontDo: store.reopenTask(id: claim.taskID)
-        case .trash: store.restoreTask(id: claim.taskID)
-        case .restore: break
-        }
     }
+
     private func show(taskID: UUID, kind: TaskFeedback.Kind, message: String, scheduleUndo: CalendarScheduleUndo? = nil) {
         self.scheduleUndo = scheduleUndo
         let undoKind: UndoKind? = switch kind {

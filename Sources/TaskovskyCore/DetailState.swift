@@ -99,6 +99,12 @@ public final class UndoCoordinator {
         return claim
     }
 
+    /// Inspect without consuming; failed persistence must not lose an Undo claim.
+    public func claim(token: UUID) -> Claim? {
+        guard let active, active.token == token else { return nil }
+        return active
+    }
+
     /// Returns the claim only if its token is still active, clearing it.
     public func consume(token: UUID) -> Claim? {
         guard let active, active.token == token else { return nil }
