@@ -1879,3 +1879,12 @@ The disposable opt-in file was observed false, preserved as evidence, and its in
 Read-only signature inspection found a QA launch difference: the guarded bundle declares a shell launcher as its main executable, while the actual Mach-O payload has a generated signing identifier; normal packaging declares a Mach-O executable. Both are ad hoc signed. This is a diagnostic candidate, **not a proven cause** of the authorization error. Existing logs did not retain its NSError domain/code. No signing/identity change, permission reset, System Settings modification or authorization retry followed.
 
 The follow-up diagnostic change preserves only allowlisted NSError domain and numeric code (or “Other error” plus code), never userInfo, localized description, paths or arbitrary domain text. Fake error propagation/privacy tests pass; this does not recover the prior OS error or prove the cause. Live authorization/delivery remains blocked and this feature stays unverified pending a reviewed revised test plan.
+
+<a id="iphone-reminder-contract"></a>
+### iPhone reminder adapter contract probes — November 12, 2026
+
+[Proposed phone adapter](../changes/iphone-local-notifications-2026-11-12.md). This checkpoint adds documentation and four tests only, on merged shared planner/read-only repository APIs. It does not depend on the unmerged Mac OS transport and does not add a shipped iPhone adapter, preference identity or UI.
+
+Owned Mac-hosted repository/fake-center probes passed: unsaved reminder draft does not affect saved plan; acknowledged completion removes its reminder; injected failed completion write retains original bytes/reminder; unreadable/unknown/journal input cannot become an empty cancellation plan or recover the journal; independent container repositories read their own task IDs. The harness is test-only, not product scheduling code. Repository separation is not proof of future OS namespace isolation.
+
+Full local suite passed 95 Workspace + 104 Domain + 507 Core XCTest cases (706), plus 38 Swift tests. Independent design and test review passed. No app launch, notification framework access, permissions, registration or real settings changes occurred. iPhone runtime/file-protection, UUID identity persistence/relocation, opt-in behavior, native UI and physical-device delivery remain proposed/unverified. D04's separately approved physical-device feasibility gate remains required. Exact-head hosted checks remain the publication gate.
