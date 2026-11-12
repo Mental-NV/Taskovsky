@@ -1718,3 +1718,11 @@ A separate unshown AppKit `NSDatePicker` probe set the same instant (`2026-11-13
 The visible Taskovsky fields matched their captions. The attempted minute entry/increment did not reliably activate; the draft was canceled, not saved. The original host-zone choice was confirmed on reopening. Real minute editing and VoiceOver speech remain unverified. No timezone conversion, accessibility override or picker reconstruction is justified by this observation alone.
 
 Both owned fixture files were byte-identical after the canceled probe. The prior guarded Taskovsky QA bundle, initial fixture bytes and QA preferences were restored; the app quit and Codex returned idle. Original development worktrees were not modified. This documentation-only correction uses source review, native observations and the standalone AppKit probe; it does not rerun application builds/tests or claim broader timezone parity.
+
+
+<a id="template-creation-atomic"></a>
+### Mac template creation failure and retry — November 12, 2026
+
+Source review found that unsectioned `createTaskFromTemplate` mutated live data and returned an ID despite a failed save, unlike its existing staged sectioned path. A disposable workspace-path obstruction reproduced six failing assertions across top/bottom insertion: non-nil success, changed published data and an extra unsaved task surviving into retry. The fix routes through the same existing atomic creation helper, with no URL enrichment or insertion-policy change.
+
+`TemplateAtomicCreationTests` covers failed write, unchanged published workspace, exact one-task retry, top/bottom ordering, content preservation and reload; sectioned creation failure/success and invalid section; and rejection/preservation of unknown fields in an already protected workspace. It does not establish general preservation of unknown fields in legacy unprotected documents, nor make every store mutation transactional. Full local tests passed: 91 Workspace + 98 Domain + 481 Core XCTest cases and 37 Swift tests. No new native UI or iPhone behavior is claimed. Signed Mac release build and independent source review passed. Retry here means invoking template creation again; the generic storage Retry action does not replay the rejected operation. Exact-head hosted CI remains a pre-merge gate.
