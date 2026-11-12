@@ -117,6 +117,7 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
     private var reserved: Record?
     private var latestOffered: Record?
     private var closing: Record?
+    private var retiredIDs = Set<UUID>()
 
     public init(fileURL: URL,
                 write: @escaping @Sendable (Data, URL) throws -> Void = { try $0.write(to: $1, options: localFileWriteOptions) },
@@ -130,7 +131,7 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
         return value
     }
     public func begin(_ draft: Record) -> FieldDraftWrite {
-        guard closing == nil, draft.version == 1, draft.sequence >= 0, draft.sequence < Int.max else { return .refused }
+        guard closing == nil, !retiredIDs.contains(draft.id), draft.version == 1, draft.sequence >= 0, draft.sequence < Int.max else { return .refused }
         if reserved == nil {
             switch read() {
             case .none: reserved = draft; latestOffered = draft
@@ -141,7 +142,7 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
         return save(draft)
     }
     public func save(_ draft: Record) -> FieldDraftWrite {
-        guard let reserved, let latestOffered,
+        guard !retiredIDs.contains(draft.id), let reserved, let latestOffered,
               draft.continues(reserved),
               draft.version == 1, draft.sequence >= latestOffered.sequence, draft.sequence < Int.max,
               draft.sequence != latestOffered.sequence || draft == latestOffered else { return .refused }
@@ -157,11 +158,19 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
             return .saved
         } catch { return .failed }
     }
+    /// Compare-and-close within the journal actor, without a load/close await gap.
+    public func close(expected: Record) -> FieldDraftWrite {
+        if reserved == nil, closing == nil { _ = load() }
+        guard latestOffered == expected || closing == expected,
+              case .available(let current) = read(), current == expected else { return .refused }
+        return close(id: expected.id)
+    }
     public func close(id: UUID) -> FieldDraftWrite {
         guard let expected = reserved ?? closing, expected.id == id else { return .refused }
         // Invalidate before cleanup; delayed saves from this ID are refused.
         // Retain only the exact cleanup candidate so a failed remove is retryable
         // without reopening the identity for writes, even after load().
+        retiredIDs.insert(expected.id)
         reserved = nil; latestOffered = nil; closing = expected
         switch read() {
         case .none: closing = nil; return .saved
