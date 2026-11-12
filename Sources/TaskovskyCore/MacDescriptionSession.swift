@@ -94,12 +94,14 @@ import TaskovskyWorkspace
                     recoveryErrors[taskID] = "Description is missing or unsupported. Editing is paused; no data was replaced."
                     return
                 }
-                node = Node(snapshot)
+                node = nodes[taskID] ?? Node(snapshot)
+                node.saved = snapshot; node.displayed = snapshot
             case .unavailable:
                 recoveryErrors[taskID] = "Recovery data could not be read safely. It has not been replaced."
                 return
             case .available(let record):
-                node = Node(snapshot ?? record.baseline)
+                node = nodes[taskID] ?? Node(snapshot ?? record.baseline)
+                node.saved = snapshot ?? record.baseline; node.displayed = node.saved
                 node.recovered = record
                 node.message = "A saved description draft needs your review."
             }
@@ -153,14 +155,14 @@ import TaskovskyWorkspace
         start(taskID, node: node)
     }
     public func resume(taskID: UUID) {
-        guard let node = nodes[taskID], let record = node.recovered, let location,
+        guard let node = nodes[taskID], !node.loading, !node.running, let record = node.recovered, let location,
               record.recovery(in: store.data, workspaceID: location.workspaceID) == .retryEligible else { return }
         node.recovered = nil; node.draft = record; node.durable = record
         node.saved = record.baseline; node.displayed = record.content; node.revision += 1
         node.message = "Recovered draft; saving…"; publish(); start(taskID, node: node)
     }
     public func keepSaved(taskID: UUID) async {
-        guard let node = nodes[taskID], !node.running, let record = node.recovered, let journal = node.journal else { return }
+        guard let node = nodes[taskID], !node.running, !node.loading, let record = node.recovered, let journal = node.journal else { return }
         node.loading = true; publish()
         let result = await journal.close(record)
         if result == .saved { node.recovered = nil; node.message = nil; node.loading = false; receive(store.data) }
@@ -195,8 +197,8 @@ import TaskovskyWorkspace
     }
     public func conflict(taskID: UUID, editorID: UUID) -> DescriptionSnapshot? { nodes[taskID]?.conflicts[editorID] }
     /// Explicit caller action only; copying alone does not discard the retained candidate.
-    public func discardConflict(taskID: UUID, editorID: UUID) {
-        guard let node = nodes[taskID] else { return }
+    public func discardConflict(taskID: UUID, editorID: UUID, expected: DescriptionSnapshot) {
+        guard let node = nodes[taskID], node.conflicts[editorID] == expected else { return }
         node.conflicts.removeValue(forKey: editorID)
         if node.conflicts.isEmpty, node.draft == nil, node.recovered == nil { node.message = nil }
         publish()

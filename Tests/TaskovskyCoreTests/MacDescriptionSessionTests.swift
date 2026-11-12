@@ -44,7 +44,7 @@ final class MacDescriptionSessionTests: XCTestCase {
         XCTAssertEqual(store.data.tasks[0].body,"first")
         XCTAssertEqual(session.conflict(taskID:task.id,editorID:sibling),candidate)
         XCTAssertTrue(session.hasUnsafeMemory)
-        session.discardConflict(taskID:task.id,editorID:sibling)
+        session.discardConflict(taskID:task.id,editorID:sibling,expected:candidate)
         XCTAssertFalse(session.hasUnsafeMemory)
     }
     @MainActor func testKeepSavedRefreshesCurrentBaselineAfterRecoveryReview() async throws {
@@ -74,15 +74,23 @@ private actor ControlledDescriptionJournal: MacDescriptionJournalAccess {
     var record: MacDescriptionDraft?
     var saved: [MacDescriptionDraft] = []
     var closes: [MacDescriptionDraft] = []
+    var holdLoad: Bool
+    var loadWaiter: CheckedContinuation<Void, Never>?
     var holdSave: Bool
     var holdClose: Bool
     var failClose: Bool
     var saveWaiter: CheckedContinuation<Void, Never>?
     var closeWaiter: CheckedContinuation<Void, Never>?
-    init(holdSave: Bool = false, holdClose: Bool = false, failClose: Bool = false) {
+    init(record: MacDescriptionDraft? = nil, holdLoad: Bool = false, holdSave: Bool = false, holdClose: Bool = false, failClose: Bool = false) {
+        self.record = record; self.holdLoad = holdLoad
         self.holdSave = holdSave; self.holdClose = holdClose; self.failClose = failClose
     }
-    func load() -> LocalDraftLoad<MacDescriptionDraft> { record.map { .available($0) } ?? .none }
+    func load() async -> LocalDraftLoad<MacDescriptionDraft> {
+        if holdLoad { holdLoad = false; await withCheckedContinuation { loadWaiter = $0 } }
+        return record.map { .available($0) } ?? .none
+    }
+    func blockedLoad() -> Bool { loadWaiter != nil }
+    func releaseLoad() { loadWaiter?.resume(); loadWaiter = nil }
     func save(_ value: MacDescriptionDraft) async -> FieldDraftWrite {
         saved.append(value)
         if holdSave { holdSave = false; await withCheckedContinuation { saveWaiter = $0 } }
@@ -253,5 +261,60 @@ extension MacDescriptionSessionTests {
         session.trackComposition(taskID: task, editorID: editor, content: b)
         try await Task.sleep(nanoseconds: 10_000_000)
         XCTAssertEqual(count, 1)
+    }
+}
+
+
+extension MacDescriptionSessionTests {
+    @MainActor func testResumeCannotRaceRecoveryDiscardAndCreateFalseDurability() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("workspace.json"), task = TaskItem(title: "Owned", body: "saved")
+        try JSONEncoder().encode(WorkspaceData(tasks: [task])).write(to: file)
+        let location = try MacDescriptionRecoveryDirectory(workspaceURL: file)
+        var record = MacDescriptionDraft(workspaceID: location.workspaceID, taskID: task.id, baseline: DescriptionSnapshot(body: "saved", rich: nil)!)
+        record.replace(with: DescriptionSnapshot(body: "recovery", rich: nil)!)
+        let journal = ControlledDescriptionJournal(record: record, holdClose: true)
+        let store = TaskStore(fileURL: file, seed: false), session = MacDescriptionSession(store: store, makeJournal: { _, _ in journal })
+        await session.prepare(taskID: task.id)
+        let discard = Task { await session.keepSaved(taskID: task.id) }
+        try await waitFor { await journal.blockedClose() }
+        session.resume(taskID: task.id)
+        await session.keepSaved(taskID: task.id)
+        let closes = await journal.closes; XCTAssertEqual(closes.count, 1)
+        XCTAssertEqual(session.recoveryContent(taskID: task.id)?.body, "recovery")
+        XCTAssertEqual(session.presentation(for: task)?.editable, false)
+        await journal.releaseClose(); await discard.value; await session.finishPending()
+        let writes = await journal.saved; XCTAssertTrue(writes.isEmpty)
+        XCTAssertNil(session.recoveryContent(taskID: task.id))
+        XCTAssertEqual(session.presentation(for: task)?.content.body, "saved")
+        XCTAssertFalse(session.hasAttention); XCTAssertFalse(session.hasUnsafeMemory)
+    }
+}
+
+
+extension MacDescriptionSessionTests {
+    @MainActor func testRetainedEarlyCallbackSurvivesPendingRecoveryLoad() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("workspace.json"), task = TaskItem(title: "Owned", body: "saved")
+        try JSONEncoder().encode(WorkspaceData(tasks: [task])).write(to: file)
+        let journal = ControlledDescriptionJournal(holdLoad: true)
+        let session = MacDescriptionSession(store: TaskStore(fileURL: file, seed: false), makeJournal: { _, _ in journal })
+        let loading = Task { await session.prepare(taskID: task.id) }
+        try await waitFor { await journal.blockedLoad() }
+        let editor = UUID(), early = DescriptionSnapshot(body: "early native text", rich: nil)!
+        session.retainUncommitted(taskID: task.id, editorID: editor, content: early)
+        await journal.releaseLoad(); await loading.value
+        XCTAssertEqual(session.conflict(taskID: task.id, editorID: editor), early)
+        let newer = DescriptionSnapshot(body: "newer native text", rich: nil)!
+        session.retainUncommitted(taskID: task.id, editorID: editor, content: newer)
+        session.discardConflict(taskID: task.id, editorID: editor, expected: early)
+        XCTAssertEqual(session.conflict(taskID: task.id, editorID: editor), newer)
+        XCTAssertTrue(session.hasUnsafeMemory)
+        XCTAssertEqual(session.presentation(for: task)?.content.body, "saved")
+        await session.finishPending()
     }
 }

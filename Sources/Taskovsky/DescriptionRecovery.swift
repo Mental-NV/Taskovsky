@@ -92,7 +92,7 @@ struct DescriptionRecoveryView: View {
                             ForEach(view.conflicts.keys.sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { editor in
                                 if let content = view.conflicts[editor] {
                                     snapshot(content)
-                                    Button("Discard This Local Conflict") { session.discardConflict(taskID: id, editorID: editor) }
+                                    Button("Discard This Local Conflict") { session.discardConflict(taskID: id, editorID: editor, expected: content) }
                                 }
                             }
                         }.padding().background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
