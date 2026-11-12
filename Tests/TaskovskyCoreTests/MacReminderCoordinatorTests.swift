@@ -1,29 +1,36 @@
 import XCTest
 @testable import TaskovskyCore
 
-@MainActor private final class FakeReminderCenter: MacReminderCenter {
+@MainActor final class FakeReminderCenter: MacReminderCenter {
     var status = MacReminderAuthorization.notDetermined
     var grant = true
     var requests: [MacReminderNotification] = []
     var prompts = 0
+    var accesses = 0
+    var presentation = false
+    var pendingHook: (() -> Void)?
+    func setPresentationEnabled(_ enabled: Bool) { presentation = enabled }
     var additions = 0
     var removals = 0
     var failPending = false
     var failAuthorization = false
     var failRequest = false
+    var requestError: Error?
     var failRemoval = false
     var failAdd = false
     var failAtAddition: Int?
     var suspendedAdd: CheckedContinuation<Void, Never>?
     var suspendAdd = false
     func authorization() async throws -> MacReminderAuthorization {
+        accesses += 1
         if failAuthorization { throw CocoaError(.fileReadUnknown) }; return status
     }
     func requestAuthorization() async throws -> Bool {
-        prompts += 1; if failRequest { throw CocoaError(.fileReadUnknown) }
+        prompts += 1; if let requestError { throw requestError }; if failRequest { throw CocoaError(.fileReadUnknown) }
         status = grant ? .authorized : .denied; return grant
     }
     func pending() async throws -> [MacReminderNotification] {
+        accesses += 1; pendingHook?()
         if failPending { throw CocoaError(.fileReadUnknown) }; return requests
     }
     func remove(identifiers: [String]) async throws {

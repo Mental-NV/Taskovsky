@@ -6,6 +6,8 @@ import Combine
 public final class TaskStore: ObservableObject {
     @Published public private(set) var data: WorkspaceData
     @Published public private(set) var storageError: String?
+    /// Changes only after a successful durable workspace/settings write.
+    @Published public private(set) var persistedChangeRevision: UInt64 = 0
     @Published public var settings: AppSettings {
         didSet { if !publishingSavedSettings { saveSettings() } }
     }
@@ -102,6 +104,7 @@ public final class TaskStore: ObservableObject {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try encode().write(to: fileURL, options: .atomic)
             if !settingsLoadFailed { storageError = settingsSaveError }
+            persistedChangeRevision &+= 1
             return true
         } catch {
             storageError = "Could not save workspace: \(error.localizedDescription)"
@@ -119,6 +122,7 @@ public final class TaskStore: ObservableObject {
             try encoder.encode(replacement).write(to: settingsURL, options: .atomic)
             if settingsSaveError != nil, storageError == settingsSaveError { storageError = nil }
             settingsSaveError = nil
+            persistedChangeRevision &+= 1
             return true
         } catch {
             settingsSaveError = "Could not save settings: \(error.localizedDescription)"

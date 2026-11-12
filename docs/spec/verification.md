@@ -1859,6 +1859,27 @@ Full local suite passed 91 Workspace + 104 Domain + 507 Core XCTest cases (702),
 
 Real authorization, OS notification registration/delivery, workspace-switch integration, persisted opt-in, app UI and physical iPhone behavior remain NOT RUN / unimplemented. Exact-head hosted CI remains required before merge.
 
+<a id="mac-local-notifications"></a>
+### Mac local notification integration — November 12, 2026
+
+[Change contract](../changes/mac-local-notifications-2026-11-12.md). Added lazy concrete UserNotifications transport, pure Gregorian UTC/ceil-second request construction, device/workspace/app-bound persisted opt-in, default-off Date & Time settings action/status and refresh on startup/activation/minute/successful durable-write revision. No OS center is accessed by default-off construction or missing-preference refresh; only explicit Enable can request authorization. Restore uses a no-prompt path. Corrupt/unknown/duplicate-key preferences fail closed without replacement. Failed opt-out save pauses the session and attempts owned cleanup while reporting the retained disk preference.
+
+Fifteen focused coordinator/service/pure-trigger tests passed, including eight new integration cases: missing preference/no OS access; explicit enable and no-prompt restart; failed/corrupt/duplicate preference preservation; failed opt-out session latch and cleanup; disabled cleanup retry; fresh clocks and disk snapshot after waits; scoped foreground ownership; exact DST/subsecond UTC trigger metadata, upward rounding, expired/nonfinite/out-of-range rejection; successful-write-only revision signals. Fake centers and owned temporary files only. UNNotificationRequest/trigger objects were constructed in pure tests; UNUserNotificationCenter was never instantiated/accessed during verification.
+
+Full local suite passed 91 Workspace + 104 Domain + 515 Core XCTest cases (710), plus 38 Swift tests. Signed Mac release packaging and iPhone Simulator compilation passed. Independent design/final code review passed after correcting duplicate-key opt-in parsing and avoiding pre-installation StateObject access. Original desktop/mobile dirty HEADs and 21+208 file hashes were unchanged; Codex and guarded QA app remained untouched.
+
+**Initial automated checkpoint, before the approved attempt below — NOT RUN:** native Settings layout/keyboard/accessibility, macOS permission prompt, signed-app authorization identity, actual banner/sound/Focus delivery, real OS cancellation and physical iPhone. This is implemented default-off code with automated evidence, not verified notification delivery or TickTick parity. Native test must be separately approved before enabling/scheduling on a device. Exact-head hosted CI remains required before merge.
+
+#### Approved isolated live attempt: authorization error, delivery not verified
+
+The owner approved one generic local-reminder trial using the stable Taskovsky QA identity. On source `627d046`, native Computer Use verified the initial Off card and explicit Enable action. Enable returned “Reminder update failed (authorization). 0 additions and 0 removals submitted.” No macOS permission prompt appeared. Scoped system logs confirmed notification settings were read, authorization returned `didGrant: 0` / `hasError: 1`, and the subsequent Disable query returned **zero pending requests**. Disable returned the card to Off; the app fully quit before the reminder due time. No banner/sound delivery is claimed.
+
+The disposable opt-in file was observed false, preserved as evidence, and its initial absence restored. Workspace/settings bytes and prior guarded app/preferences were restored and independently audited. The new SwiftUI main-window frame preference was identified as test-owned and restored with the other QA preferences. Codex stopped after this scoped Computer Use work. Source manifest SHA256 `60e3fc7e9e4212d3ac8caf56400c304129302be0423d93c84107a66c71b3ffb0` identifies the tested build.
+
+Read-only signature inspection found a QA launch difference: the guarded bundle declares a shell launcher as its main executable, while the actual Mach-O payload has a generated signing identifier; normal packaging declares a Mach-O executable. Both are ad hoc signed. This is a diagnostic candidate, **not a proven cause** of the authorization error. Existing logs did not retain its NSError domain/code. No signing/identity change, permission reset, System Settings modification or authorization retry followed.
+
+The follow-up diagnostic change preserves only allowlisted NSError domain and numeric code (or “Other error” plus code), never userInfo, localized description, paths or arbitrary domain text. Fake error propagation/privacy tests pass; this does not recover the prior OS error or prove the cause. Live authorization/delivery remains blocked and this feature stays unverified pending a reviewed revised test plan.
+
 <a id="iphone-reminder-contract"></a>
 ### iPhone reminder adapter contract probes — November 12, 2026
 
@@ -1867,3 +1888,11 @@ Real authorization, OS notification registration/delivery, workspace-switch inte
 Owned Mac-hosted repository/fake-center probes passed: unsaved reminder draft does not affect saved plan; acknowledged completion removes its reminder; injected failed completion write retains original bytes/reminder; unreadable/unknown/journal input cannot become an empty cancellation plan or recover the journal; independent container repositories read their own task IDs. The harness is test-only, not product scheduling code. Repository separation is not proof of future OS namespace isolation.
 
 Full local suite passed 95 Workspace + 104 Domain + 507 Core XCTest cases (706), plus 38 Swift tests. Independent design and test review passed. No app launch, notification framework access, permissions, registration or real settings changes occurred. iPhone runtime/file-protection, UUID identity persistence/relocation, opt-in behavior, native UI and physical-device delivery remain proposed/unverified. D04's separately approved physical-device feasibility gate remains required. Exact-head hosted checks remain the publication gate.
+
+
+Follow-up integrated validation after private-safe diagnostics and the independent phone contract checkpoint: 95 Workspace + 104 Domain + 516 Core XCTest cases (715), plus 38 Swift tests passed. Mac signed packaging and iPhone Simulator compilation passed. Independent diagnostic/privacy and conflict-resolution review passed. No second live permission attempt occurred; authorization/delivery remains blocked pending a separately reviewed test plan. Hosted exact-head CI is still required for this updated draft.
+
+
+### Mac notification native blocker deferred
+
+PR53 source `6b341449`: 715 XCTest and 38 Swift tests, signed Mac build and iPhone Simulator build passed. Exact-head CI [43230337211](https://github.com/Mental-NV/Taskovsky/actions/runs/43230337211) passed against main `5c997f57` (checkout `680967e`). The approved diagnostic retry reported `UNErrorDomain (1)` at authorization without a prompt, zero additions, and zero pending after Disable. The disposable test and guarded QA baseline were restored. Native delivery remains blocked/unverified; the user deferred further native investigation. See the [blocker and revisit criteria](../changes/mac-local-notifications-2026-11-12.md#deferred-native-blocker--november-12). No further OS attempt or launcher/signing change is part of this documentation update.

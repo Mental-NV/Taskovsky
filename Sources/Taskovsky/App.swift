@@ -48,10 +48,12 @@ enum LaunchIsolation {
 struct TaskovskyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store: TaskStore
+    @StateObject private var localNotifications: MacLocalNotifications
     @StateObject private var drafts = DetailDrafts()
     @StateObject private var actions = TaskActionCenter()
     @StateObject private var calendarShortcuts = CalendarShortcutBindings()
     init() {
+        let activeStore: TaskStore
         if LaunchIsolation.isIsolated {
             // Explicit file, no migration side effects on real storage. A
             // missing/invalid flag value still isolates (fresh temp
@@ -62,11 +64,19 @@ struct TaskovskyApp: App {
                 try? FileManager.default.createDirectory(at: workspace.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try? Data("{\"tasks\":[],\"lists\":[],\"tags\":[],\"filters\":[]}".utf8).write(to: workspace)
             }
-            _store = StateObject(wrappedValue: TaskStore(fileURL: workspace, settingsURL: LaunchIsolation.settingsOverride, seed: false))
+            activeStore = TaskStore(fileURL: workspace, settingsURL: LaunchIsolation.settingsOverride, seed: false)
         } else {
             AppMigration.migratePreferences()
-            _store = StateObject(wrappedValue: TaskStore())
+            activeStore = TaskStore()
         }
+        _store = StateObject(wrappedValue: activeStore)
+        let root = LaunchIsolation.isIsolated
+            ? activeStore.fileURL.deletingLastPathComponent().appendingPathComponent(".local-notifications", isDirectory: true)
+            : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("Taskovsky/LocalNotifications", isDirectory: true)
+        _localNotifications = StateObject(wrappedValue: MacLocalNotifications(
+            workspaceURL: activeStore.fileURL, settingsURL: activeStore.settingsURL,
+            appScope: Bundle.main.bundleIdentifier ?? "local.taskovsky", preferenceRoot: root))
     }
     var body: some Scene {
         // Content floor for the measured compact reference (rail 62 + center
@@ -74,7 +84,18 @@ struct TaskovskyApp: App {
         // ~28pt hidden-titlebar chrome. A 580 content value here landed a 608
         // frame. The exact 580 total-window floor is enforced from measured
         // chrome by WindowFloorBridge in the workspace root.
-        WindowGroup("Taskovsky") { WorkspaceView(store: store, drafts: drafts, actions: actions).frame(minWidth: CGFloat(ResponsiveLayout.minWindowWidth), minHeight: 552).ignoresSafeArea(.container, edges: .top) }
+        WindowGroup("Taskovsky") {
+            WorkspaceView(store: store, drafts: drafts, actions: actions)
+                .frame(minWidth: CGFloat(ResponsiveLayout.minWindowWidth), minHeight: 552).ignoresSafeArea(.container, edges: .top)
+                .task { await localNotifications.start() }
+                .onReceive(store.$persistedChangeRevision.dropFirst()) { _ in Task { await localNotifications.refresh() } }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    Task { await localNotifications.refresh() }
+                }
+                .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+                    Task { await localNotifications.refresh() }
+                }
+        }
             .defaultSize(width: 1280, height: 740)
             .windowStyle(.hiddenTitleBar)
             .commands {
@@ -96,7 +117,7 @@ struct TaskovskyApp: App {
                     #endif
                 }
             }
-        Settings { SettingsView(store: store, calendarShortcuts: calendarShortcuts) }
+        Settings { SettingsView(store: store, calendarShortcuts: calendarShortcuts, localNotifications: localNotifications) }
             .defaultSize(width: 800, height: 680).windowStyle(.hiddenTitleBar)
         WindowGroup("Task Details", for: UUID.self) { $id in
             if let id { TaskDetailWindow(store: store, drafts: drafts, actions: actions, id: id) }
