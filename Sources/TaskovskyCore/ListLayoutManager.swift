@@ -31,7 +31,7 @@ public struct DrawnQuote: Equatable, Sendable {
 /// geometry the draw pass paints.
 open class ListLayoutManager: NSLayoutManager {
     /// Number label font: one step below the 14pt body.
-    private static let numberFont = NSFont.systemFont(ofSize: 13)
+    private static let numberFont = ListDecoration.numberFont
 
     /// Markers and quote bars the manager would paint for the visible
     /// glyphs: same computation as the draw pass, exposed for geometry
@@ -55,7 +55,6 @@ open class ListLayoutManager: NSLayoutManager {
             }
         let kinds = ListDecoration.markers(for: entries)
         let left = container.lineFragmentPadding
-        let gutterEnd = left + ListDecoration.gutterWidth
         var markers: [DrawnMarker] = []
         var quotes: [DrawnQuote] = []
         for (index, entry) in entries.enumerated() {
@@ -77,6 +76,8 @@ open class ListLayoutManager: NSLayoutManager {
                 let rect = NSRect(x: origin.x + left + 9, y: midY - 3, width: 6, height: 6)
                 markers.append(DrawnMarker(paragraph: entry.range, kind: kind, rect: rect, textRect: frag))
             case .number(let n):
+                let style = storage.attribute(.paragraphStyle, at: entry.range.location, effectiveRange: nil) as? NSParagraphStyle
+                let gutterEnd = left + max(ListDecoration.gutterWidth, style?.firstLineHeadIndent ?? 0)
                 let label = "\(n)." as NSString
                 let size = label.size(withAttributes: [.font: Self.numberFont])
                 let rect = NSRect(x: origin.x + gutterEnd - 4 - size.width, y: midY - size.height / 2, width: size.width, height: size.height)

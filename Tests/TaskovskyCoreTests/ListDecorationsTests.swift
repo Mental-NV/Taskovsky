@@ -5,6 +5,70 @@ import XCTest
 /// literal markers, so the layout manager must paint them. These tests assert
 /// actual marker geometry/output — never storage metadata alone.
 final class ListDecorationsTests: XCTestCase {
+    func testLongNumberedRunsFitTheirAdaptiveGutterAndPreserveModel() throws {
+        for count in [100, 1000] {
+            let text = Array(repeating: "Long numbered item with wrapped content", count: count).joined(separator: "\n")
+            let rich = RichBody(text: text, blocks: (text as NSString).paragraphRanges(intersecting: NSRange(location: 0, length: (text as NSString).length)).map { RichBlockRun(location: $0.location, length: $0.length, list: .numbered) })
+            let output = RichRender.attributedString(text: text, rich: rich)
+            let (storage, layout, _) = laidOut(output, width: 160)
+            let baseline = RichRender.extract(text: text, storage: storage)
+            XCTAssertEqual(baseline.text, text)
+            XCTAssertEqual(baseline.rich?.blocks, rich.blocks)
+            let style = try XCTUnwrap(storage.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+            XCTAssertGreaterThan(style.headIndent, ListDecoration.gutterWidth)
+            XCTAssertEqual(style.firstLineHeadIndent, style.headIndent)
+            let origin = NSPoint(x: 17, y: 11)
+            let all = layout.decorationsToDraw(forGlyphRange: NSRange(location: 0, length: layout.numberOfGlyphs), at: origin).markers
+            XCTAssertEqual(all.count, count)
+            for marker in all {
+                XCTAssertGreaterThanOrEqual(marker.rect.minX, origin.x + 5)
+                XCTAssertLessThanOrEqual(marker.rect.maxX, origin.x + 5 + style.headIndent - 4 + 0.01)
+            }
+            let last = try XCTUnwrap(all.last)
+            let subset = layout.glyphRange(forCharacterRange: last.paragraph, actualCharacterRange: nil)
+            XCTAssertEqual(layout.decorationsToDraw(forGlyphRange: subset, at: origin).markers.last, last)
+            layout.enumerateLineFragments(forGlyphRange: subset) { _, _, _, range, _ in
+                XCTAssertEqual(layout.location(forGlyphAt: range.location).x, 5 + style.headIndent, accuracy: 1.5)
+            }
+            XCTAssertFalse(ListDecoration.normalizeNumberedGutters(in: storage), "Repeated normalization is a no-op")
+            XCTAssertEqual(RichRender.extract(text: text, storage: storage).rich, baseline.rich)
+        }
+    }
+
+    func testNumberedGutterExpandsAndShrinksAfterEditsAndRunReset() throws {
+        let text = Array(repeating: "item", count: 99).joined(separator: "\n")
+        let rich = RichBody(text: text, blocks: (text as NSString).paragraphRanges(intersecting: NSRange(location: 0, length: (text as NSString).length)).map { RichBlockRun(location: $0.location, length: $0.length, list: .numbered) })
+        let storage = NSTextStorage(attributedString: RichRender.attributedString(text: text, rich: rich))
+        func width(_ at: Int = 0) -> CGFloat {
+            (storage.attribute(.paragraphStyle, at: at, effectiveRange: nil) as? NSParagraphStyle)?.headIndent ?? 0
+        }
+        XCTAssertEqual(width(), 24)
+        let before = NSAttributedString(attributedString: storage)
+        let attrs = storage.attributes(at: storage.length - 1, effectiveRange: nil)
+        storage.append(NSAttributedString(string: "\nitem", attributes: attrs))
+        XCTAssertTrue(ListDecoration.normalizeNumberedGutters(in: storage))
+        XCTAssertGreaterThan(width(), 24)
+        let after = NSAttributedString(attributedString: storage)
+        // Native Undo restores attributed snapshots; the editor uses the same
+        // normalization path after both Undo and Redo notifications.
+        storage.setAttributedString(before)
+        ListDecoration.normalizeNumberedGutters(in: storage)
+        XCTAssertEqual(width(), 24)
+        storage.setAttributedString(after)
+        ListDecoration.normalizeNumberedGutters(in: storage)
+        XCTAssertGreaterThan(width(), 24)
+        storage.deleteCharacters(in: NSRange(location: before.length, length: storage.length - before.length))
+        XCTAssertTrue(ListDecoration.normalizeNumberedGutters(in: storage))
+        XCTAssertEqual(width(), 24)
+        XCTAssertEqual(storage.string, text)
+        storage.append(NSAttributedString(string: "\nplain\n", attributes: [.font: NSFont.systemFont(ofSize: 14)]))
+        let finalStart = storage.length
+        storage.append(NSAttributedString(string: "new run", attributes: attrs))
+        ListDecoration.normalizeNumberedGutters(in: storage)
+        XCTAssertEqual(width(finalStart), 24)
+        XCTAssertEqual(RichRender.extract(text: storage.string, storage: storage).text, storage.string)
+    }
+
     private let lines = [
         "Launch checklist", // 0 heading
         "plain intro",      // 1 plain

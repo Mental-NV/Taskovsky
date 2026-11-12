@@ -18,6 +18,45 @@ import Foundation
 public enum ListDecoration {
     /// Marker gutter reserved on every line of a list paragraph.
     public static let gutterWidth: CGFloat = 24
+    /// Shared measurement and painting font; geometry is never persisted.
+    public static let numberFont = NSFont.systemFont(ofSize: 13)
+
+    /// Normalize decimal-run indents outside TextKit layout/drawing. All items
+    /// in a run reserve its widest label, including off-screen predecessors.
+    /// Attribute-only edits preserve text, ranges and all other paragraph style.
+    @discardableResult public static func normalizeNumberedGutters(in storage: NSMutableAttributedString) -> Bool {
+        let string = storage.string as NSString
+        let paragraphs = string.paragraphRanges(intersecting: NSRange(location: 0, length: string.length))
+        var changes: [(NSRange, NSMutableParagraphStyle)] = []
+        var run: [NSRange] = []
+        func finishRun() {
+            guard !run.isEmpty else { return }
+            let width = max(gutterWidth, ceil((1...run.count).map {
+                ("\($0)." as NSString).size(withAttributes: [.font: numberFont]).width + 4
+            }.max() ?? gutterWidth))
+            for range in run {
+                guard let old = storage.attribute(.paragraphStyle, at: range.location, effectiveRange: nil) as? NSParagraphStyle,
+                      old.headIndent != width || old.firstLineHeadIndent != width,
+                      let style = old.mutableCopy() as? NSMutableParagraphStyle else { continue }
+                style.headIndent = width
+                style.firstLineHeadIndent = width
+                changes.append((range, style))
+            }
+            run.removeAll(keepingCapacity: true)
+        }
+        for paragraph in paragraphs where paragraph.length > 0 {
+            let style = storage.attribute(.paragraphStyle, at: paragraph.location, effectiveRange: nil) as? NSParagraphStyle
+            if style?.textLists.first?.markerFormat == .decimal { run.append(paragraph) }
+            else { finishRun() }
+        }
+        finishRun()
+        guard !changes.isEmpty else { return false }
+        storage.beginEditing()
+        for (range, style) in changes { storage.addAttribute(.paragraphStyle, value: style, range: range) }
+        storage.endEditing()
+        return true
+    }
+
     /// Indent of a quote paragraph (bar drawn inside it).
     public static let quoteIndent: CGFloat = 16
     /// Width of the quote bar.
