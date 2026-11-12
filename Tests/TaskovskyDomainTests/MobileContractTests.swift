@@ -835,6 +835,35 @@ final class MobileContractTests: XCTestCase {
         XCTAssertFalse(TaskSortPolicy.canReorder(TaskTimestampSort.modifiedNewest.rawValue))
     }
 
+    func testTaskDueDateGroupsRespectCivilDatesAndRetainIncomingSort() throws {
+        var display = calendar
+        display.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))
+        let now = date("2026-11-08T20:00:00Z")
+        let sameInstant = date("2026-11-09T00:00:00Z")
+        let tomorrow = TaskItem(title: "All day in UTC", dueDate: sameInstant, timeZoneID: "UTC")
+        let timed = TaskItem(title: "Timed in UTC", dueDate: sameInstant, hasDueTime: true, timeZoneID: "UTC")
+        let allDay = TaskItem(title: "Today in UTC", dueDate: date("2026-11-08T00:00:00Z"), timeZoneID: "UTC")
+        let overdue = TaskItem(title: "Overdue", dueDate: date("2026-11-07T00:00:00Z"), timeZoneID: "UTC")
+        let undated = TaskItem(title: "Undated")
+        let later = TaskItem(title: "Later this year", dueDate: date("2026-11-12T00:00:00Z"), timeZoneID: "UTC")
+        let nextYear = TaskItem(title: "Same day next year", dueDate: date("2027-11-12T00:00:00Z"), timeZoneID: "UTC")
+        let input = [nextYear, undated, tomorrow, timed, later, overdue, allDay]
+        let top = TaskDueDateGroup.group(input, now: now, calendar: display, overduePosition: .top)
+        XCTAssertEqual(top.map(\.tasks), [[overdue], [timed, allDay], [tomorrow], [later], [nextYear], [undated]])
+        XCTAssertEqual(top.prefix(3).map { $0.title(now: now, calendar: display) }, ["Overdue", "Today", "Tomorrow"])
+        XCTAssertEqual(Set(top.map(\.id)).count, top.count)
+        let bottom = TaskDueDateGroup.group(input, now: now, calendar: display, overduePosition: .bottom)
+        XCTAssertEqual(bottom.map(\.tasks), [[timed, allDay], [tomorrow], [later], [nextYear], [undated], [overdue]])
+        XCTAssertTrue(TaskDueDateGroup.group([], now: now, calendar: display, overduePosition: .top).isEmpty)
+    }
+
+    func testTaskDateGroupingPreferenceReadsLegacyAndExplicitDefault() {
+        XCTAssertEqual(TaskListGrouping(stored: nil, legacyCreated: true), .creationDate)
+        XCTAssertEqual(TaskListGrouping(stored: "unknown", legacyCreated: false), .standard)
+        XCTAssertEqual(TaskListGrouping(stored: TaskListGrouping.standard.rawValue, legacyCreated: true), .standard)
+        XCTAssertEqual(TaskListGrouping(stored: TaskListGrouping.dueDate.rawValue, legacyCreated: true), .dueDate)
+    }
+
     func testTaskCreationDayGroupsUseLocalMidnightAndKeepIncomingRowOrder() throws {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "Europe/Moscow"))

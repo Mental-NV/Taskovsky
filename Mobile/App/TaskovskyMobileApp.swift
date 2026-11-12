@@ -379,27 +379,28 @@ struct MobileRootView: View {
         Button { showTaskSort = true } label: {
             Image(systemName: "arrow.up.arrow.down").frame(width: 44, height: 44)
         }.accessibilityLabel("Sort tasks")
-            .accessibilityValue(model.taskTimestampSort?.title ?? "Default Order")
+            .accessibilityValue(model.taskSort?.title ?? "Default Order")
             .accessibilityIdentifier("taskSortMenu")
             .popover(isPresented: $showTaskSort, arrowEdge: .top) {
                 VStack(spacing: 0) {
                     taskSortChoice(nil)
-                    ForEach(TaskTimestampSort.allCases, id: \.self) { taskSortChoice($0) }
-                    if destination.supportsCreatedDateGrouping {
+                    ForEach(PhoneTaskSort.choices, id: \.self) { taskSortChoice($0) }
+                    if destination.supportsTaskDateGrouping {
                         Divider()
-                        createdGroupingChoice
+                        groupingChoice(.creationDate)
+                        groupingChoice(.dueDate)
                     }
                 }.padding(8).frame(width: 245).presentationCompactAdaptation(.popover)
             }
     }
 
-    private func taskSortChoice(_ choice: TaskTimestampSort?) -> some View {
-        let selected = model.taskTimestampSort == choice
+    private func taskSortChoice(_ choice: PhoneTaskSort?) -> some View {
+        let selected = model.taskSort == choice
         return Button {
             showTaskSort = false
             taskOrderNotice = nil
             taskListDragSession = UUID()
-            model.setTaskTimestampSort(choice)
+            model.setTaskSort(choice)
         } label: {
             HStack {
                 Text(choice?.title ?? "Default Order")
@@ -420,7 +421,7 @@ struct MobileRootView: View {
                             guard let document = model.document else { return }
                             showTaskActions = false
                             batchNotice = nil
-                            let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+                            let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
                             batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
                         } label: {
                             Label("Select Tasks", systemImage: "checklist")
@@ -466,24 +467,25 @@ struct MobileRootView: View {
         }
     }
 
-    private var createdGroupingChoice: some View {
-        Button {
+    private func groupingChoice(_ grouping: TaskListGrouping) -> some View {
+        let selected = model.taskGrouping == grouping
+        return Button {
             showTaskSort = false
             taskOrderNotice = nil
             taskListDragSession = UUID()
-            model.setTaskCreatedGrouping(!model.groupsByCreationDate)
+            model.setTaskGrouping(selected ? .standard : grouping)
         } label: {
             HStack {
-                Text("Group by Created Date")
+                Text(grouping.title)
                 Spacer()
-                if model.groupsByCreationDate { Image(systemName: "checkmark").accessibilityHidden(true) }
+                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
             }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityAddTraits(model.groupsByCreationDate ? .isSelected : [])
+        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func taskDestinationRows(_ data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
-        let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
         return taskList(ordered, data: data)
     }
 
@@ -495,7 +497,7 @@ struct MobileRootView: View {
             PhoneListModeControl(model: model, list: list).id("list-mode-" + id.uuidString)
             if let scope, list.viewMode == .timeline {
                 taskTimeline(scope, data: data)
-            } else if !list.sections.isEmpty && (list.viewMode == .board || !model.groupsByCreationDate) {
+            } else if !list.sections.isEmpty && (list.viewMode == .board || model.taskGrouping == .standard) {
                 if list.viewMode == .board {
                     PhoneSectionBoard(model: model, list: list, data: data,
                                       openTask: { selectedTask = PhoneTaskRoute(id: $0) },
@@ -587,7 +589,7 @@ struct MobileRootView: View {
 
     private func sectionedPhoneRows(_ list: TaskList, data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
-        let ordered = model.taskTimestampSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
         let rows = PinnedGrouping.partition(ordered)
         let editable = !list.isArchived && model.canBeginEditing
         return ScrollView {
@@ -640,9 +642,15 @@ struct MobileRootView: View {
         return ScrollView {
             if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
             taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
-            if searchQuery == nil && destination.supportsCreatedDateGrouping && model.groupsByCreationDate {
-                ForEach(TaskCreationDayGroup.group(ordinary, calendar: calendar, sort: model.taskTimestampSort)) { group in
+            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .creationDate {
+                ForEach(TaskCreationDayGroup.group(ordinary, calendar: calendar, sort: model.taskSort?.timestamp)) { group in
                     taskGroup(group.title(calendar: calendar), tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .dueDate {
+                let settings = model.document?.snapshot.settings ?? AppSettings()
+                ForEach(TaskDueDateGroup.group(ordinary, now: model.now, calendar: calendar,
+                                             overduePosition: settings.overduePosition)) { group in
+                    taskGroup(group.title(now: model.now, calendar: calendar), tasks: group.tasks, lists: data.lists, searchQuery: nil)
                 }
             } else {
                 taskRows(ordinary, lists: data.lists, searchQuery: searchQuery)
@@ -662,8 +670,10 @@ struct MobileRootView: View {
     private func taskRows(_ tasks: [TaskItem], lists: [TaskList], searchQuery: String?, sectionList: TaskList? = nil) -> some View {
         let ordered = TaskHierarchy.displayOrder(tasks)
         let revision = model.canBeginEditing ? model.document?.revision : nil
-        let manual = searchQuery == nil && model.taskTimestampSort == nil &&
-            !(destination.supportsCreatedDateGrouping && model.groupsByCreationDate)
+        let manual = searchQuery == nil && model.taskSort == nil &&
+            !(destination.supportsTaskDateGrouping && model.taskGrouping != .standard)
+        let displayCalendar = searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .dueDate
+            ? calendar : nil
         let peers = manual && revision != nil
             ? Dictionary(grouping: tasks.filter {
                 $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt == nil &&
@@ -672,6 +682,7 @@ struct MobileRootView: View {
             : [:]
         return LazyVStack(spacing: 0) {
             ForEach(ordered, id: \.task.id) { task, depth in
+                let due = displayCalendar.flatMap { TaskDueDateGroup.displayDue(for: task, calendar: $0) } ?? task.dueDate
                 let actions = searchQuery == nil ? taskSwipeActions(for: task, lists: lists) : ([], [])
                 let siblings = peers[task.parentID] ?? []
                 let canReorder = siblings.count > 1 && siblings.contains(task.id)
@@ -693,8 +704,8 @@ struct MobileRootView: View {
                                     if let searchQuery {
                                         PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
                                     }
-                                    if !switchesDate, let due = task.dueDate {
-                                        taskDateText(due)
+                                    if !switchesDate, let due {
+                                        taskDateText(due, displayCalendar: displayCalendar)
                                     }
                                 }
                                 Spacer(minLength: 0)
@@ -705,6 +716,7 @@ struct MobileRootView: View {
                             .frame(minHeight: switchesDate ? 24 : 48).padding(.trailing, 18).padding(.vertical, 3)
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityLabel(task.title)
+                            .accessibilityValue(displayCalendar.flatMap { display in due.map { taskDateCaption($0, displayCalendar: display) } } ?? "")
                             .background {
                                 if !actions.0.isEmpty || !actions.1.isEmpty { gesture }
                             }
@@ -730,7 +742,7 @@ struct MobileRootView: View {
                             }
                         let rowContent = VStack(alignment: .leading, spacing: 0) {
                             titleButton
-                            if switchesDate, let due = task.dueDate { taskCountdownButton(task, due: due) }
+                            if switchesDate, let due { taskCountdownButton(task, due: due, displayCalendar: displayCalendar) }
                         }
                         if let list = sectionList, sectionDrag, revision != nil {
                             rowContent
@@ -764,12 +776,17 @@ struct MobileRootView: View {
         }
     }
 
-    private func taskDateText(_ due: Date) -> some View {
-        Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption)
+    private func taskDateCaption(_ due: Date, displayCalendar: Calendar?) -> String {
+        guard let displayCalendar else { return due.formatted(.dateTime.month(.abbreviated).day()) }
+        return due.formatted(Date.FormatStyle(calendar: displayCalendar, timeZone: displayCalendar.timeZone).month(.abbreviated).day())
+    }
+
+    private func taskDateText(_ due: Date, displayCalendar: Calendar?) -> some View {
+        Text(taskDateCaption(due, displayCalendar: displayCalendar)).font(.caption)
             .foregroundStyle(due < calendar.startOfDay(for: model.now) ? .red : .secondary)
     }
 
-    private func taskCountdownButton(_ task: TaskItem, due: Date) -> some View {
+    private func taskCountdownButton(_ task: TaskItem, due: Date, displayCalendar: Calendar?) -> some View {
         Button {
             if !countdownRows.insert(task.id).inserted { countdownRows.remove(task.id) }
             revealedTaskSwipe = nil
@@ -780,9 +797,9 @@ struct MobileRootView: View {
                         let now = model.isQA ? model.now : context.date
                         if let label = TaskDueCountdown.label(for: task, now: now, calendar: calendar) {
                             Text(label).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        } else { taskDateText(due) }
+                        } else { taskDateText(due, displayCalendar: displayCalendar) }
                     }
-                } else { taskDateText(due) }
+                } else { taskDateText(due, displayCalendar: displayCalendar) }
             }
             .frame(minWidth: 44, minHeight: 44, alignment: .leading)
             .contentShape(Rectangle())

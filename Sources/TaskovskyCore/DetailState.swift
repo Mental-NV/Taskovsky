@@ -38,22 +38,30 @@ public enum DueLabels {
         return dayText
     }
 
-    /// Full task-row schedule in the caller's task calendar.
-    public static func expandedRowLabel(for task: TaskItem, calendar: Calendar,
+    /// Validate the schedule in the task calendar and optionally format its
+    /// endpoints in the calendar that owns the visible group.
+    public static func expandedRowLabel(for task: TaskItem, calendar: Calendar, displayCalendar: Calendar? = nil,
                                         dayText: (Date) -> String, timeText: (Date) -> String) -> String? {
         guard let due = task.dueDate else { return nil }
         func endpoint(_ date: Date, timed: Bool) -> String {
             timed ? dayText(date) + " " + timeText(date) : dayText(date)
         }
         guard let window = task.scheduledDuration?.validated(in: calendar) else {
-            return endpoint(due, timed: task.hasDueTime)
+            let date = displayCalendar.flatMap { TaskDueDateGroup.displayDue(for: task, calendar: $0) } ?? due
+            return endpoint(date, timed: task.hasDueTime)
         }
-        let first = endpoint(window.start, timed: !window.isAllDay)
-        if window.start == window.end { return first }
-        if calendar.isDate(window.start, inSameDayAs: window.end) {
-            return window.isAllDay ? first : first + " – " + timeText(window.end)
+        var start = window.start
+        var end = window.end
+        if window.isAllDay, let displayCalendar {
+            start = CalendarDates.civilDay(start, from: calendar, to: displayCalendar)
+            end = CalendarDates.civilDay(end, from: calendar, to: displayCalendar)
         }
-        return first + " – " + endpoint(window.end, timed: !window.isAllDay)
+        let first = endpoint(start, timed: !window.isAllDay)
+        if start == end { return first }
+        if (displayCalendar ?? calendar).isDate(start, inSameDayAs: end) {
+            return window.isAllDay ? first : first + " – " + timeText(end)
+        }
+        return first + " – " + endpoint(end, timed: !window.isAllDay)
     }
 
     /// Detail header text with day-relative prefixes and overdue counts.

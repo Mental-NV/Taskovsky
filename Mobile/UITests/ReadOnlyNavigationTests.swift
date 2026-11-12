@@ -1448,6 +1448,63 @@ final class ReadOnlyNavigationTests: XCTestCase {
         expect([newest, middle, old])
     }
 
+    @MainActor func testTaskDueDateGroupingWorksWithPriorityAndSurvivesRelaunch() {
+        let app = launch(qaCase: "due-date-grouping")
+        goTo("Work", in: app)
+        let section = app.staticTexts["Review section"]
+        let menu = app.buttons["taskSortMenu"]
+        let today = app.staticTexts["Today"]
+        let pinned = app.buttons["Write meeting notes"]
+        let firstLow = app.buttons["Review the project outline"]
+        let high = app.buttons["Prepare the weekly plan"]
+        let secondLow = app.buttons["Review the draft"]
+        let tomorrow = app.staticTexts["Tomorrow"]
+        let allDay = app.buttons["Arrange the studio"]
+        var display = Calendar(identifier: .gregorian)
+        display.timeZone = TimeZone(identifier: "Europe/Moscow")!
+        let dateFormat = Date.FormatStyle(calendar: display, timeZone: display.timeZone).month(.abbreviated).day()
+        let todayCaption = display.date(from: DateComponents(year: 2026, month: 11, day: 9))!.formatted(dateFormat)
+        let tomorrowCaption = display.date(from: DateComponents(year: 2026, month: 11, day: 10))!.formatted(dateFormat)
+        func choose(_ label: String) {
+            menu.tap()
+            let choice = app.buttons[label]
+            XCTAssertTrue(choice.waitForExistence(timeout: 5))
+            choice.tap()
+            waitGone(choice)
+        }
+        func expectOrder(_ elements: [XCUIElement]) {
+            for element in elements { XCTAssertTrue(element.exists, element.debugDescription) }
+            let y = elements.map { $0.frame.minY }
+            XCTAssertEqual(y, y.sorted())
+            XCTAssertEqual(Set(y).count, y.count)
+        }
+
+        XCTAssertTrue(section.exists)
+        choose("Group by Due Date")
+        XCTAssertFalse(section.exists)
+        expectOrder([pinned, today, firstLow, high, secondLow])
+        expectOrder([today, high, tomorrow, allDay])
+        XCTAssertEqual(high.value as? String, todayCaption)
+        XCTAssertEqual(allDay.value as? String, tomorrowCaption)
+        choose("Priority")
+        expectOrder([pinned, today, high, firstLow, secondLow])
+        attach(app, "Work grouped by due date and sorted by priority")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertEqual(menu.value as? String, "Priority")
+        expectOrder([pinned, today, high, firstLow, secondLow])
+        XCTAssertEqual(high.value as? String, todayCaption)
+        XCTAssertEqual(allDay.value as? String, tomorrowCaption)
+        choose("Group by Created Date")
+        XCTAssertFalse(today.exists)
+        XCTAssertFalse(section.exists)
+        choose("Group by Created Date")
+        XCTAssertTrue(section.exists)
+        XCTAssertEqual(menu.value as? String, "Priority")
+    }
+
     @MainActor func testTaskCreatedDateGroupingRestoresSectionsAndSurvivesRelaunch() {
         let app = launch(qaCase: "created-grouping")
         goTo("Work", in: app)

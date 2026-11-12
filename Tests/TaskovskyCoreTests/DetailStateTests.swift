@@ -66,6 +66,33 @@ import Testing
         #expect(label() == nil)
     }
 
+    @Test func groupedExpandedRowsPreserveCivilDatesAndUseDisplayMidnight() throws {
+        var display = Calendar(identifier: .gregorian)
+        display.timeZone = try #require(TimeZone(identifier: "UTC"))
+        var source = display
+        source.timeZone = try #require(TimeZone(identifier: "Pacific/Kiritimati"))
+        let start = try #require(display.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 23, minute: 30)))
+        let end = start.addingTimeInterval(7_200)
+        let civilStart = try #require(source.date(from: DateComponents(year: 2026, month: 11, day: 10)))
+        let civilEnd = try #require(source.date(byAdding: .day, value: 1, to: civilStart))
+        func day(_ date: Date) -> String { "Nov \(display.component(.day, from: date))" }
+        func time(_ date: Date) -> String {
+            String(format: "%02d:%02d", display.component(.hour, from: date), display.component(.minute, from: date))
+        }
+        let timed = TaskItem(title: "Timed range", dueDate: end, hasDueTime: true, timeZoneID: source.timeZone.identifier,
+                             scheduledDuration: .init(start: start, end: end))
+        let allDay = TaskItem(title: "All-day range", dueDate: civilEnd, timeZoneID: source.timeZone.identifier,
+                              scheduledDuration: .init(start: civilStart, end: civilEnd, isAllDay: true))
+        let point = TaskItem(title: "All-day point", dueDate: civilStart, timeZoneID: source.timeZone.identifier)
+        #expect(source.isDate(start, inSameDayAs: end))
+        #expect(DueLabels.expandedRowLabel(for: timed, calendar: source, displayCalendar: display, dayText: day, timeText: time)
+                == "Nov 9 23:30 – Nov 10 01:30")
+        #expect(DueLabels.expandedRowLabel(for: allDay, calendar: source, displayCalendar: display, dayText: day, timeText: time)
+                == "Nov 10 – Nov 11")
+        #expect(DueLabels.expandedRowLabel(for: point, calendar: source, displayCalendar: display, dayText: day, timeText: time)
+                == "Nov 10")
+    }
+
     @Test func overdueCountsWholeDaysAcrossDaylightSaving() {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = TimeZone(identifier: "America/New_York")!

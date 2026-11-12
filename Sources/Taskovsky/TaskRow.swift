@@ -23,6 +23,7 @@ struct TaskRow: View {
     let showSteps: Bool
     /// Inline rename is disabled where double-click opens a pop-up window.
     let allowRename: Bool
+    var dueDisplayCalendar: Calendar? = nil
     /// Archived-list rows: no toggling, steps, or rename (selection kept).
     var readOnly = false
     /// Hierarchy nesting depth from the group's display walk. Indentation is
@@ -123,7 +124,7 @@ struct TaskRow: View {
                             .contentShape(Rectangle())
                             .onTapGesture(count: 2) { if allowRename { rename() } else { onTitleDoubleClick() } }
                             .simultaneousGesture(TapGesture().onEnded { onSelect() })
-                        if showsFullTaskTimes, let due = task.dueDate, let label = task.expandedScheduleLabel {
+                        if showsFullTaskTimes, let due = task.dueDate, let label = expandedScheduleLabel {
                             Text(label).font(.system(size: 10)).foregroundStyle(dueColor(due))
                                 .lineLimit(2).multilineTextAlignment(.trailing).help(label)
                         } else {
@@ -225,7 +226,7 @@ struct TaskRow: View {
     private var metaColor: Color { finished ? Color(nsColor: .tertiaryLabelColor) : Color(nsColor: .secondaryLabelColor) }
     private func dueColor(_ due: Date) -> Color {
         if finished { return Color(nsColor: .tertiaryLabelColor) }
-        return DueLabels.isOverdue(due: due, now: now, calendar: task.scheduleCalendar) ? .red : accent
+        return DueLabels.isOverdue(due: displayDue(due), now: now, calendar: dueCalendar) ? .red : accent
     }
     private var metadataDescription: String {
         ([tag.map { "#" + $0.name }, task.dueDate.map(dueText), countdown, listContext ?? listName].compactMap { $0 }).joined(separator: " · ")
@@ -245,17 +246,35 @@ struct TaskRow: View {
         var updated = task
         if let i = updated.checklist.firstIndex(where: { $0.id == stepID }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) }
     }
+    private var dueCalendar: Calendar { dueDisplayCalendar ?? task.scheduleCalendar }
+    private func displayDue(_ due: Date) -> Date {
+        dueDisplayCalendar.flatMap { TaskDueDateGroup.displayDue(for: task, calendar: $0) } ?? due
+    }
+    private var expandedScheduleLabel: String? {
+        guard let display = dueDisplayCalendar else { return task.expandedScheduleLabel }
+        let calendar = TaskCalendarProjection.taskCalendar(task, fallback: display)
+        return DueLabels.expandedRowLabel(for: task, calendar: calendar, displayCalendar: display,
+                                        dayText: dueDayText, timeText: dueTimeText)
+    }
+    private func dueDayText(_ date: Date) -> String {
+        guard let calendar = dueDisplayCalendar else { return task.dayText(date) }
+        return date.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.abbreviated).day())
+    }
+    private func dueTimeText(_ date: Date) -> String {
+        guard let calendar = dueDisplayCalendar else { return task.timeText(date) }
+        return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, calendar: calendar, timeZone: calendar.timeZone))
+    }
     private func dueText(_ due: Date) -> String {
-        let cal = task.scheduleCalendar
-        let day = DueLabels.day(for: due, now: now, calendar: cal)
+        let date = displayDue(due)
+        let day = DueLabels.day(for: date, now: now, calendar: dueCalendar)
         let label: String
         switch day {
         case .yesterday: label = "Yesterday"
         case .today: label = "Today"
         case .tomorrow: label = "Tomorrow"
-        case .past, .future: label = task.dayText(due)
+        case .past, .future: label = dueDayText(date)
         }
-        return DueLabels.rowLabel(for: day, dayText: label, timeText: task.hasDueTime ? task.timeText(due) : nil)
+        return DueLabels.rowLabel(for: day, dayText: label, timeText: task.hasDueTime ? dueTimeText(date) : nil)
     }
 }
 
