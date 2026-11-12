@@ -1761,3 +1761,14 @@ Final source manifest SHA256 `8b1767f38ed7093202f1f11b601db32c4d0a2ee5349701395c
 Native owned-fixture QA staged a Work task for November 12, 09:00–09:30 GMT+3 with a new hashtag. After inserting a reversible file obstruction, Add retained all fields and displayed the complete two-line red error without success. Restoring the file and double-clicking Add closed the editor and showed one event. A second tagged draft was cancelled. Independent saved-file audit found exactly one task/new tag, the exact timed range and due/default-reminder endpoint, no cancelled task/tag, unchanged other workspace fields and byte-identical settings. This is not OS notification-delivery or iPhone QA evidence; all-day failure is unit-tested, not live-tested.
 
 Source manifest SHA256 `a0b3782e2f25baf500e85a3d9d2e239909572778e385b56dd718be789cf601f8`. Original owned fixture bytes, prior guarded QA app and preferences were restored, obstruction removed, and Codex quit QA and returned idle. Exact-head hosted CI remains a pre-merge gate.
+
+<a id="quick-entry-failed-draft"></a>
+### Mac section QuickEntry rejected submission — November 12, 2026
+
+[Contract](../changes/quick-entry-failed-draft-2026-11-12.md). Native before-fix owned-fixture reproduction staged a section task with description and explicitly ignored tomorrow recognition. A reversible workspace obstruction made Add fail: the title/section remained, but the description disappeared, its editor collapsed and the date chip returned. No task was published. This was a UI regression, not a failed store-atomicity assertion.
+
+The callback now reports accepted/rejected submission, and QuickEntry clears its local draft only after acceptance. The existing section-failure test additionally verifies exact description, ignored recognition, section and one durable task on explicit retry. Full local tests passed 91 Workspace + 98 Domain + 486 Core XCTest cases plus 37 Swift tests; signed release build and independent source review passed.
+
+Native fixed-build QA repeated the same failed Add and retained title/body/expanded editor/ignored-date state/section target with zero tasks. After restoring the writable file, one explicit Add created one task. Detail showed the original description and Set date; composer and target cleared. Independent saved-file audit confirmed exactly one correctly sectioned task with exact body, no due date/reminder and unchanged other workspace fields/settings. The generic storage Retry was not used. Ordinary non-section legacy write failures and post-creation tag/reminder updates remain outside this fix; no mobile, dark appearance, VoiceOver or keyboard-only retry claim.
+
+Fixed source manifest SHA256 `a211c9a6dabe98ad019d7e0fc8b92e2bebf6fc0b66a20ece3866441777a8a93b`. Both owned obstructions were removed and fixture bytes, guarded QA app and QA preferences restored. Codex quit QA and returned idle. Exact-head hosted CI remains a pre-merge gate.
