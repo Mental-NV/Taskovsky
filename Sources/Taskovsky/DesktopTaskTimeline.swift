@@ -63,6 +63,7 @@ struct DesktopTaskTimeline: View {
                     commit(operation, taskID: request.taskID, before: request.before, scope: draft.scope)
                 }
                 self.request = nil
+                return true // Existing Timeline edit handling is unchanged.
             }
         }
         .sheet(item: $captureRequest) { request in

@@ -1750,3 +1750,14 @@ Native owned-fixture QA opened an existing rich template, changed only its name,
 The first native run exposed a truncated error message. The final build adds vertical wrapping; a new failed-save/Cancel run showed the complete two-line red error including “Cancel,” retained the draft, and Cancel returned to the original three cards without publishing the draft. Final run workspace/settings bytes were unchanged. Native deletion/capture failure gestures, VoiceOver and exhaustive appearance/resize cases were not tested; their storage outcomes are covered by unit tests where specified.
 
 Final source manifest SHA256 `8b1767f38ed7093202f1f11b601db32c4d0a2ee5349701395c41a0b379d9566b`. All temporary owned-file obstructions were removed, original fixture bytes, prior guarded QA bundle and preferences restored, and Codex quit QA and returned idle. Exact-head CI remains a pre-merge gate.
+
+<a id="calendar-creation-atomic"></a>
+### Mac Calendar creation failure, retry and Cancel — November 12, 2026
+
+[Contract](../changes/calendar-creation-atomic-2026-11-12.md). A disposable workspace obstruction reproduced eight pre-fix failures across timed/all-day and top/bottom insertion: failed saves published phantom tasks/tags and retry duplicated them. Calendar now uses staged persistence and its editor consumes the result. Ordinary Tasks quick-add, Summary and existing editing paths are unchanged.
+
+`CalendarCreationAtomicTests` covers no published state on failed writes, one durable retry, exact short/fractional timed and inclusive all-day ranges, explicit Inbox/list selection, insertion order, tags/default reminders, invalid input and recovery-blocked writes. Full local tests passed 91 Workspace + 98 Domain + 486 Core XCTest cases and 37 Swift tests; signed Mac release build and independent source review passed.
+
+Native owned-fixture QA staged a Work task for November 12, 09:00–09:30 GMT+3 with a new hashtag. After inserting a reversible file obstruction, Add retained all fields and displayed the complete two-line red error without success. Restoring the file and double-clicking Add closed the editor and showed one event. A second tagged draft was cancelled. Independent saved-file audit found exactly one task/new tag, the exact timed range and due/default-reminder endpoint, no cancelled task/tag, unchanged other workspace fields and byte-identical settings. This is not OS notification-delivery or iPhone QA evidence; all-day failure is unit-tested, not live-tested.
+
+Source manifest SHA256 `a0b3782e2f25baf500e85a3d9d2e239909572778e385b56dd718be789cf601f8`. Original owned fixture bytes, prior guarded QA app and preferences were restored, obstruction removed, and Codex quit QA and returned idle. Exact-head hosted CI remains a pre-merge gate.
