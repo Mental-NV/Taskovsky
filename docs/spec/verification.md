@@ -1867,3 +1867,11 @@ Real authorization, OS notification registration/delivery, workspace-switch inte
 Owned Mac-hosted repository/fake-center probes passed: unsaved reminder draft does not affect saved plan; acknowledged completion removes its reminder; injected failed completion write retains original bytes/reminder; unreadable/unknown/journal input cannot become an empty cancellation plan or recover the journal; independent container repositories read their own task IDs. The harness is test-only, not product scheduling code. Repository separation is not proof of future OS namespace isolation.
 
 Full local suite passed 95 Workspace + 104 Domain + 507 Core XCTest cases (706), plus 38 Swift tests. Independent design and test review passed. No app launch, notification framework access, permissions, registration or real settings changes occurred. iPhone runtime/file-protection, UUID identity persistence/relocation, opt-in behavior, native UI and physical-device delivery remain proposed/unverified. D04's separately approved physical-device feasibility gate remains required. Exact-head hosted checks remain the publication gate.
+
+<a id="iphone-reminder-identity"></a>
+
+### iPhone reminder identity persistence boundary
+
+Adds only `PhoneReminderPreferences` / `PhoneReminderPreference`, owned-file tests and the [bounded contract](../changes/iphone-reminder-identity-2026-11-12.md). No app/UI wiring, OS center, notification prompt, real reminder registration or personal settings changes. Seven tests cover absent/off/no writes, serialized concurrent enable, retained identity through toggles/reopen/container move, independent containers, foreign scope refusal, malformed/duplicate/unknown records, write failure/retry, throw-after-commit/no-op write and symlink/missing-directory refusal. This is not a cross-process lock or a delivery receipt.
+
+On macOS 27.0.1 / Xcode 27: full `swift test --disable-sandbox` passed 102 Workspace + 104 Domain + 507 Core = 713 XCTest, plus 38 Swift tests. `./scripts/build-app.sh` produced the signed release app; generic iPhone Simulator Debug build passed with signing disabled. These were builds only, not launches or physical iOS 17 runtime checks. Independent source/contract review passed. Original dirty desktop/mobile HEADs and all 229 tracked audit-file hashes remain unchanged. Exact-head remote CI is required before merge.
