@@ -275,6 +275,23 @@ final class TaskCalendarTests: XCTestCase {
         XCTAssertFalse(store.undoCalendarSchedule(token))
     }
 
+    @MainActor func testUnchangedTimedEndDoesNotWriteOrCreateUndo() throws {
+        for seconds in [0.0, 300.125] {
+            let end = date(2026, 11, 12, 10, 15).addingTimeInterval(0.25)
+            var task = timed("Short", start: end.addingTimeInterval(-seconds), end: end)
+            task.reminderDates = [end.addingTimeInterval(-600.125)]
+            task.reminderFollowsSchedule = false
+            let (store, dir) = try store(tasks: [task])
+            defer { try? FileManager.default.removeItem(at: dir) }
+            let url = dir.appendingPathComponent("workspace.json")
+            let before = try Data(contentsOf: url)
+            let initial = store.data.tasks
+            XCTAssertNil(store.scheduleOnCalendar(id: task.id, operation: .resizeEnd(end), calendar: cal()))
+            XCTAssertEqual(store.data.tasks, initial)
+            XCTAssertEqual(try Data(contentsOf: url), before)
+        }
+    }
+
     @MainActor func testResizeMinimumUnscheduleAndStaleUndoGuards() throws {
         let task = TaskItem(title: "Point", dueDate: date(2026, 11, 8, 9), hasDueTime: true, recurrence: .weekly, timeZoneID: "UTC")
         let (store, dir) = try store(tasks: [task]); defer { try? FileManager.default.removeItem(at: dir) }

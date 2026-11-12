@@ -563,8 +563,9 @@ private struct CalendarTimedBlock: View {
                         .highPriorityGesture(DragGesture(minimumDistance: 3, coordinateSpace: .global)
                             .updating($resizeDelta) { value, state, _ in state = value.translation.height }
                             .onEnded { value in
-                                let minute = window.snappedMinute(placement.resizeMinute + Double(value.translation.height / scale))
-                                schedule(entry.taskID, .resizeEnd(CalendarDates.instant(on: day, minute: minute, calendar: calendar)))
+                                let target = placement.endResizeTarget(deltaMinutes: Double(value.translation.height / scale),
+                                    day: day, calendar: calendar, window: window)
+                                schedule(entry.taskID, .resizeEnd(target))
                             })
                         .padding(.trailing, gripWidth)
                 }

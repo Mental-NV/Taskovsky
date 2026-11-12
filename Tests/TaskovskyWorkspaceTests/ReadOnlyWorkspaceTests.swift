@@ -1633,6 +1633,24 @@ extension ReadOnlyWorkspaceTests {
         XCTAssertEqual(restored.snapshot.settingsBytes, initial.snapshot.settingsBytes)
     }
 
+    func testUnchangedTimedEndResizePreservesMobileWorkspaceBytes() async throws {
+        let end = Date(timeIntervalSinceReferenceDate: 815_918_400.125)
+        for seconds in [0.0, 300.375] {
+            let task = TaskItem(title: "Short", dueDate: end, hasDueTime: true,
+                reminderDate: end - 600.25, timeZoneID: "UTC",
+                scheduledDuration: .init(start: end - seconds, end: end))
+            let files = try fixture(WorkspaceData(tasks: [task]))
+            defer { try? FileManager.default.removeItem(at: files.directory) }
+            let repo = repository(files), initial = try await repo.load()
+            guard case .unchanged = await repo.apply(.resizeEnd(end), to: task.id,
+                expected: initial.revision, calendar: initial.snapshot.settings.calendar) else {
+                return XCTFail("Expected an unchanged resize, not a write or Undo")
+            }
+            XCTAssertEqual(try Data(contentsOf: files.workspace), initial.snapshot.workspaceBytes)
+            XCTAssertEqual(try Data(contentsOf: files.settings), initial.snapshot.settingsBytes)
+        }
+    }
+
     func testScheduleNoOpPreservesPreciseRolledSeriesAndBytes() async throws {
         let due = Date(timeIntervalSinceReferenceDate: 815_918_400.125)
         var task = TaskItem(title: "Precise recurring task", dueDate: due, hasDueTime: true,

@@ -179,6 +179,11 @@ public enum CalendarScheduling {
                 task.scheduledDuration = TaskDurationRange(start: local.startOfDay(for: start), end: end, isAllDay: true)
                 task.dueDate = end; task.hasDueTime = false
             } else {
+                // Returning a coherent range's end handle to its exact endpoint
+                // must not grow an existing short/zero range or move reminders.
+                // Points still explicitly convert to a duration when resized.
+                if let oldWindow, !oldWindow.isAllDay, original.hasDueTime,
+                   due == oldWindow.end, target == oldWindow.end { return original }
                 let end = max(start.addingTimeInterval(900), target)
                 task.scheduledDuration = TaskDurationRange(start: start, end: end)
                 task.dueDate = end; task.hasDueTime = true

@@ -1454,8 +1454,8 @@ private struct PhoneCalendarTimedSegment<Content: View>: View {
                         .highPriorityGesture(DragGesture(minimumDistance: 5, coordinateSpace: .global)
                             .updating($delta) { value, state, _ in state = value.translation.height }
                             .onEnded { value in
-                                let minute = hourWindow.snappedMinute(placement.resizeMinute + value.translation.height / scale)
-                                let end = CalendarDates.instant(on: day, minute: minute, calendar: calendar)
+                                let end = placement.endResizeTarget(deltaMinutes: value.translation.height / scale,
+                                    day: day, calendar: calendar, window: hourWindow)
                                 resize(payload, .resizeEnd(end))
                             })
                 }
