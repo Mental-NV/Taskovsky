@@ -33,6 +33,7 @@ enum MacReminderStatus: Equatable {
     private let center: any MacReminderCenter
     private let repository: WorkspaceFileRepository
     private let prefix: String
+    private(set) var lastErrorDiagnostic: String?
     private var enabled = false
     private var tail: Task<MacReminderStatus, Never>?
 
@@ -54,6 +55,7 @@ enum MacReminderStatus: Equatable {
         let predecessor = tail
         let task = Task { @MainActor in
             if let predecessor { _ = await predecessor.value }
+            self.lastErrorDiagnostic = nil
             return await operation()
         }
         tail = task
@@ -75,7 +77,7 @@ enum MacReminderStatus: Equatable {
                 guard allowed else { self.enabled = false; self.center.setPresentationEnabled(false); return .denied }
                 self.enabled = true
                 return await self.reconcile(clock: clock)
-            } catch { return .failed(stage: .authorization, added: 0, removalsSubmitted: 0) }
+            } catch { self.record(error); return .failed(stage: .authorization, added: 0, removalsSubmitted: 0) }
         }
     }
 
@@ -108,7 +110,7 @@ enum MacReminderStatus: Equatable {
                 stage = .removal
                 if !ids.isEmpty { try await self.center.remove(identifiers: ids) }
                 return .disabled
-            } catch { return .failed(stage: stage, added: 0, removalsSubmitted: 0) }
+            } catch { self.record(error); return .failed(stage: stage, added: 0, removalsSubmitted: 0) }
         }
     }
 
@@ -144,7 +146,15 @@ enum MacReminderStatus: Equatable {
                 try await center.add(encode(request)); added += 1
             }
             return .ready(pending: plan.requests.count - expired, deferred: plan.deferredCount)
-        } catch { return .failed(stage: stage, added: added, removalsSubmitted: removed) }
+        } catch { record(error); return .failed(stage: stage, added: added, removalsSubmitted: removed) }
+    }
+
+    private func record(_ error: Error) {
+        let value = error as NSError
+        let knownDomains = ["UNErrorDomain", "NSCocoaErrorDomain", "NSPOSIXErrorDomain"]
+        // Do not expose localizedDescription, userInfo, paths or arbitrary domains.
+        let domain = knownDomains.contains(value.domain) ? value.domain : "Other error"
+        lastErrorDiagnostic = "\(domain) (\(value.code))"
     }
 
     private func encode(_ request: LocalReminderRequest) -> MacReminderNotification {

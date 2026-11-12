@@ -78,6 +78,20 @@ final class MacLocalNotificationsTests: XCTestCase {
         let service = MacLocalNotifications(workspaceURL: workspace, settingsURL: settings, appScope: "QA", preference: pref, center: center, clock: { clock })
         await service.setEnabled(true); XCTAssertTrue(center.requests.isEmpty); XCTAssertEqual(center.additions, 0)
     }
+    @MainActor func testErrorDiagnosticKeepsDomainCodeButNeverPrivateUserInfo() async throws {
+        let (root, workspace, settings, pref) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
+        let center = FakeReminderCenter()
+        center.requestError = NSError(domain: "UNErrorDomain", code: 1, userInfo: [NSLocalizedDescriptionKey: "PRIVATE task title", "path": "/private/secret"])
+        let service = MacLocalNotifications(workspaceURL: workspace, settingsURL: settings, appScope: "QA", preference: pref, center: center, clock: { self.now })
+        await service.setEnabled(true)
+        XCTAssertTrue(service.statusText.contains("UNErrorDomain (1)"))
+        XCTAssertFalse(service.statusText.contains("PRIVATE")); XCTAssertFalse(service.statusText.contains("secret"))
+        center.requestError = NSError(domain: "PRIVATE domain", code: 42)
+        await service.setEnabled(true)
+        XCTAssertTrue(service.statusText.contains("Other error (42)")); XCTAssertFalse(service.statusText.contains("PRIVATE"))
+        center.requestError = nil; await service.setEnabled(true)
+        XCTAssertFalse(service.statusText.contains("Other error")); XCTAssertEqual(center.requests.count, 1)
+    }
     @MainActor func testSnapshotIsReadAfterPendingWaitAndOwnershipRejectsMalformedData() async throws {
         let (root, workspace, settings, pref) = try fixture(); defer { try? FileManager.default.removeItem(at: root) }
         let center = FakeReminderCenter(); center.status = .authorized

@@ -15,6 +15,7 @@ import XCTest
     var failPending = false
     var failAuthorization = false
     var failRequest = false
+    var requestError: Error?
     var failRemoval = false
     var failAdd = false
     var failAtAddition: Int?
@@ -25,7 +26,7 @@ import XCTest
         if failAuthorization { throw CocoaError(.fileReadUnknown) }; return status
     }
     func requestAuthorization() async throws -> Bool {
-        prompts += 1; if failRequest { throw CocoaError(.fileReadUnknown) }
+        prompts += 1; if let requestError { throw requestError }; if failRequest { throw CocoaError(.fileReadUnknown) }
         status = grant ? .authorized : .denied; return grant
     }
     func pending() async throws -> [MacReminderNotification] {

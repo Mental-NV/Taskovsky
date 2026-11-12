@@ -194,7 +194,8 @@ struct MacReminderPreferenceStore {
         case let .ready(pending, deferred):
             statusText = "\(pending) reminder requests planned; \(deferred) deferred by the app limit. Delivery depends on macOS and Focus."
         case let .failed(stage, added, removed):
-            statusText = "Reminder update failed (\(stage)). \(added) additions and \(removed) removals submitted. Refresh retries; delivery is not confirmed."
+            let diagnostic = coordinator.lastErrorDiagnostic.map { " \($0)." } ?? ""
+            statusText = "Reminder update failed (\(stage))." + diagnostic + " \(added) additions and \(removed) removals submitted. Refresh retries; delivery is not confirmed."
         }
     }
 }

@@ -1,6 +1,6 @@
 # Mac local notifications: explicit opt-in integration
 
-Status: implemented; fake/pure tests, full local suite and Mac/iPhone builds passed. Native UI and real OS authorization/delivery verification pending and not performed during development.
+Status: implemented; fake/pure tests, full local suite and Mac/iPhone builds passed. A separately approved native attempt verified Off/Enable/error/Disable and failed at OS authorization without a prompt; delivery remains unverified. See verification evidence.
 
 ## User outcome and scope
 
