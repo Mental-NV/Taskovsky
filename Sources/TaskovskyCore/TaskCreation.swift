@@ -74,7 +74,7 @@ public enum TaskCreation {
     }
 
     public static func recognizeDate(in text: String, calendar: Calendar, now: Date = Date()) -> (date: Date, hasTime: Bool, range: Range<String.Index>)? {
-        let pattern = "(?i)\\b(day after tomorrow|next week|today|tomorrow|in [0-9]+ days?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\\s+(?:at\\s+)?([0-9]{1,2})(?::([0-9]{2}))?(?:\\s*(am|pm))?)?\\b"
+        let pattern = "(?i)\\b(day after tomorrow|next week|today|tomorrow|in [0-9]+ days?|monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\\s+(?:at\\s+)?([0-9]{1,2})(?::([0-9]{2}))?(?:\\s*(am|pm))?(?![0-9]|:[0-9]))?\\b"
         if let regex = try? NSRegularExpression(pattern: pattern), let match = regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)), let range = Range(match.range, in: text), let phraseRange = Range(match.range(at: 1), in: text) {
             let phrase = text[phraseRange].lowercased(); let start = calendar.startOfDay(for: now)
             let days: Int
@@ -91,7 +91,7 @@ public enum TaskCreation {
                 let resolvedHour = meridiem.map { hour % 12 + ($0 == "pm" ? 12 : 0) } ?? hour
                 if validHour, minute < 60, let timed = calendar.date(bySettingHour: resolvedHour, minute: minute, second: 0, of: date) { date = timed; hasTime = true }
             }
-            var recognizedRange = range
+            var recognizedRange = hasTime ? range : phraseRange
             if !hasTime {
                 let prefix = String(text[..<range.lowerBound])
                 let timePattern = "(?i)(?:\\bat\\s+([0-9]{1,2})(?::([0-9]{2}))?\\s*(am|pm)?|\\b([0-9]{1,2})(?::([0-9]{2}))\\s*(am|pm)?|\\b([0-9]{1,2})\\s*(am|pm))\\s+$"
@@ -103,7 +103,7 @@ public enum TaskCreation {
                         let valid = meridiem == nil ? (0...23).contains(hour) : (1...12).contains(hour)
                         let resolved = meridiem.map { hour % 12 + ($0 == "pm" ? 12 : 0) } ?? hour
                         if valid, minute < 60, let timed = calendar.date(bySettingHour: resolved, minute: minute, second: 0, of: date) {
-                            date = timed; hasTime = true; recognizedRange = prefixRange.lowerBound..<range.upperBound
+                            date = timed; hasTime = true; recognizedRange = prefixRange.lowerBound..<recognizedRange.upperBound
                         }
                     }
                 }

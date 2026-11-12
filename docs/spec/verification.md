@@ -1798,3 +1798,14 @@ Final source manifest SHA256 `771b9f37839d9c097174190db1743d5380d821a8181395d165
 ### Bounded reference capture-title probe — November 12, 2026
 
 [Observation](../ticktick-spec/capture-title-recognition-2026-11-12.md): TickTick accepted tag-only input after tag recognition/removal and displayed No Title. Taskovsky already has an Untitled display fallback; no new rejection policy is justified. Date Recognition was off, so enabled date-only behavior remains unverified. The owned probe restored the previous view/selection and left two new test tasks plus one tag without modifying existing records/settings. Source/declaration inspection and two selected MacDisassembler pseudocode queries supported navigation only. This documentation update changes no runtime behavior and runs no new product tests.
+
+<a id="recognition-invalid-clock-text"></a>
+### Rejected trailing clock recognition — November 12, 2026
+
+[Contract](../changes/recognition-invalid-clock-text-2026-11-12.md). Four invalid trailing hour/minute inputs reproduced eight pre-fix range/title failures: the clock was rejected as time but still highlighted/removed. The shared recognizer now limits the range to the accepted civil-date phrase and avoids partial numeric-suffix consumption. Valid preceding clock ranges do not swallow rejected trailing clocks.
+
+`RecognitionClockRangeTests` covers invalid hours/minutes/meridiem, malformed numeric suffixes, valid 12/24-hour controls, preceding clocks, removal disabled and shared iPhone TaskCaptureInput construction. Full local tests passed 91 Workspace + 98 Domain + 491 Core XCTest cases plus 37 Swift tests. Signed Mac release build, iPhone Simulator target build and independent source review passed. iPhone behavior is model/build-verified, not new simulator UI QA. More general malformed prefixes remain outside this narrow correction.
+
+Native owned Mac QA entered `QA clock tomorrow at 25:00`: only tomorrow was highlighted; the saved title retained `QA clock  at 25:00` (existing double-space behavior), with November 13 and Time: None. A valid `tomorrow at 23:30` control highlighted/removed the whole phrase and saved at 23:30. Each was submitted once. Independent file audit verified both exact titles/date shapes/instants, unchanged other workspace fields and byte-identical settings. No TickTick parser-parity claim; the reference recognition setting was off in the separate probe.
+
+Source manifest SHA256 `8f05eb5e68e19df5b8bf1545a3fc6206963583d1429af1fc2e51e4cd123ec408`. Owned fixture bytes, prior guarded QA bundle and preferences were restored, and Codex quit QA and returned idle. Exact-head macOS CI remains a pre-merge gate.
