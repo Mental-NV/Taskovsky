@@ -1,6 +1,6 @@
 # Mac local notifications: explicit opt-in integration
 
-Status: implemented; fake/pure tests, full local suite and Mac/iPhone builds passed. A separately approved native attempt verified Off/Enable/error/Disable and failed at OS authorization without a prompt; delivery remains unverified. See verification evidence.
+Status: draft implementation, native delivery blocked and deferred at the user’s direction. Fake/pure tests, full local suite and Mac/iPhone builds passed. Two approved bounded native attempts verified Off/Enable/error/Disable and failed at OS authorization without a prompt; delivery remains unverified. Do not treat this branch as a released notification feature.
 
 ## User outcome and scope
 
@@ -28,4 +28,15 @@ Add a dedicated local-notifications card after existing Date & Time controls, us
 
 Unit/fake tests use owned temporary preference/workspace files and injected centers/clocks. Cover missing/corrupt/write-failed opt-in; restart without prompting; explicit enable/deny/error; disable failure/retry; failed saved snapshot; exact metadata/UTC trigger conversion; no early alert and expired rejection; successful-write signals only; serialized delayed operations. Compile/package Mac and compile iPhone without launch or real center calls. Independent review before merge.
 
-Proposed later native test, requiring explicit approval: stable Taskovsky QA app, disposable isolated workspace/settings/preference files, one generic future reminder, explicit Enable and macOS authorization prompt if needed; observe one banner, then Disable/cancel owned request and restore fixture/app. No existing personal task/settings changes. Signing, actual macOS delivery, Focus behavior and physical iPhone remain NOT RUN until separately verified.
+Deferred future native test, requiring a new agreed diagnostic plan and explicit approval: stable Taskovsky QA app, disposable isolated workspace/settings/preference files, one generic future reminder, explicit Enable and macOS authorization prompt if needed; observe one banner, then Disable/cancel owned request and restore fixture/app. No existing personal task/settings changes. Build signing was checked; native authorization failed as recorded below. Actual macOS delivery, Focus behavior and physical iPhone delivery remain unverified.
+
+
+## Deferred native blocker — November 12
+
+On macOS 27.0.1, the stable isolated Taskovsky QA app’s explicit authorization action failed without presenting an OS prompt. The first attempt reported authorization failure; one approved diagnostic retry on source `6b341449` exposed sanitized `UNErrorDomain (1)`. Apple’s `UNErrorCode.notificationsNotAllowed` identifies lack of authorization, not its underlying cause. See [Apple’s error documentation](https://developer.apple.com/documentation/usernotifications/unerror/code/notificationsnotallowed).
+
+Both attempts submitted zero additions/removals at failure. After explicit Disable, scoped system logs reported zero pending notifications. The app was quit before the owned test reminder’s due time. Disposable workspace/settings, test preference absence, QA defaults and the prior guarded app bundle were restored and verified. No notification delivery or successful authorization is claimed. No system notification permission reset was performed.
+
+Read-only inspection found a launch-provenance difference: QA’s signed bundle main executable is a guarded shell launcher that executes a separate Mach-O payload; normal packaging uses a Mach-O main executable. This is a hypothesis for future investigation, not a demonstrated cause of error 1. No native-entry replacement, permission workaround, signing change or further retry was performed. The user explicitly deferred this blocker and requested fake notification evidence for now.
+
+Revisit only with a separately reviewed plan preserving stable QA identity and strict owned-fixture isolation, explicit approval for any changed native test effects, and verified disabled/zero-pending initial state. Keep delivery readiness blocked until authorization, one generic owned reminder and cleanup are observed. Fake-center, pure trigger and persistence tests remain useful but cannot establish OS delivery. The draft real transport must not silently replace those tests with a claim of readiness.

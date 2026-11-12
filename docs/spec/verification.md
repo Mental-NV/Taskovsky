@@ -1891,3 +1891,8 @@ Full local suite passed 95 Workspace + 104 Domain + 507 Core XCTest cases (706),
 
 
 Follow-up integrated validation after private-safe diagnostics and the independent phone contract checkpoint: 95 Workspace + 104 Domain + 516 Core XCTest cases (715), plus 38 Swift tests passed. Mac signed packaging and iPhone Simulator compilation passed. Independent diagnostic/privacy and conflict-resolution review passed. No second live permission attempt occurred; authorization/delivery remains blocked pending a separately reviewed test plan. Hosted exact-head CI is still required for this updated draft.
+
+
+### Mac notification native blocker deferred
+
+PR53 source `6b341449`: 715 XCTest and 38 Swift tests, signed Mac build and iPhone Simulator build passed. Exact-head CI [43230337211](https://github.com/Mental-NV/Taskovsky/actions/runs/43230337211) passed against main `5c997f57` (checkout `680967e`). The approved diagnostic retry reported `UNErrorDomain (1)` at authorization without a prompt, zero additions, and zero pending after Disable. The disposable test and guarded QA baseline were restored. Native delivery remains blocked/unverified; the user deferred further native investigation. See the [blocker and revisit criteria](../changes/mac-local-notifications-2026-11-12.md#deferred-native-blocker--november-12). No further OS attempt or launcher/signing change is part of this documentation update.
