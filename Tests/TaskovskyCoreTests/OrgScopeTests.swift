@@ -179,7 +179,7 @@ final class OrgScopeTests: XCTestCase {
         let listID = store.createList(name: "L", color: "#fff")
         guard let folderID = store.createFolder(name: "F") else { return XCTFail("folder") }
         let tagID = store.createTag(name: "T", color: "#fff")
-        let filterID = store.createFilter(TaskFilter(name: "Fil"))
+        let filterID = try XCTUnwrap(store.createFilter(TaskFilter(name: "Fil")))
         XCTAssertTrue(store.setListPinned(id: listID, pinned: true))
         XCTAssertTrue(store.setFolderPinned(id: folderID, pinned: true))
         XCTAssertTrue(store.setTagPinned(id: tagID, pinned: true))

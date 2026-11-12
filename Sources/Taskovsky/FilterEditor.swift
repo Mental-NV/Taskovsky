@@ -5,6 +5,8 @@ struct FilterEditorView: View {
     @ObservedObject var store: TaskStore
     let filter: TaskFilter?
     @Environment(\.dismiss) private var dismiss
+    @State private var draftID: UUID
+    @State private var saveError: String?
     @State private var name: String
     @State private var keyword: String
     @State private var listIDs: Set<UUID>
@@ -23,6 +25,7 @@ struct FilterEditorView: View {
 
     init(store: TaskStore, filter: TaskFilter? = nil, initialKeyword: String = "", initialDateRules: [FilterDateRule] = [], initialStatus: FilterStatus = .active, initialListIDs: [UUID]? = nil, initialTagIDs: [UUID]? = nil, initialTagMode: FilterTagMode = .any, initialPriorities: [TaskPriority] = [], initialKinds: [TaskKind] = [], initialCustomFrom: Date? = nil, initialCustomTo: Date? = nil) {
         self.store = store; self.filter = filter
+        _draftID = State(initialValue: filter?.id ?? UUID())
         _name = State(initialValue: filter?.name ?? initialKeyword)
         _keyword = State(initialValue: filter?.keyword ?? initialKeyword)
         _listIDs = State(initialValue: Set(filter?.listIDs ?? initialListIDs ?? []))
@@ -102,6 +105,7 @@ struct FilterEditorView: View {
                     Picker("Status", selection: $status) { Text("Uncompleted").tag(FilterStatus.active); Text("Completed").tag(FilterStatus.completed); Text("Won't Do").tag(FilterStatus.wontDo); Text("All").tag(FilterStatus.all) }
                 }.formStyle(.grouped).frame(height: 300)
             }
+            if let saveError { Text(saveError).font(.system(size: 12)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true) }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button("Save") { saveFilter() }.keyboardShortcut(.defaultAction).disabled(!canSave) }
         }.padding(24).frame(width: 520).tint(accent)
     }
@@ -151,7 +155,7 @@ struct FilterEditorView: View {
         // selection would broaden the filter from "nothing" to "everything".
         // Rule trees are never rewritten (fail-closed instead).
         let value = TaskFilter(
-            id: filter?.id ?? UUID(),
+            id: draftID,
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             listIDs: Array(listIDs), tagIDs: Array(tagIDs),
             priorities: Array(priorities), dateRules: Array(dateRules),
@@ -160,7 +164,14 @@ struct FilterEditorView: View {
             customDateTo: (dateRules.contains(.custom) || advanced) && hasCustomTo ? customTo : nil,
             isPinned: filter?.isPinned ?? false,
             ruleRoot: advanced ? ruleRoot : nil)
-        if filter == nil { store.createFilter(value) } else { store.updateFilter(value) }
+        let saved: Bool
+        if let filter { saved = store.updateFilter(value, expected: filter) }
+        else { saved = store.createFilter(value) != nil }
+        guard saved else {
+            saveError = store.storageError ?? "Filter was not saved. Your draft is still here; retry or cancel."
+            return
+        }
+        saveError = nil
         dismiss()
     }
 }
