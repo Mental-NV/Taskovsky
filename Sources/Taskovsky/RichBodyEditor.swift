@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import TaskovskyCore
 import TaskovskyClipboard
+import TaskovskyWorkspace
 
 /// Native AppKit rich-text body editor.
 ///
@@ -244,6 +245,8 @@ struct RichBodyEditor: NSViewRepresentable {
     var onChange: (String, RichBody?) -> Void
     var onHeightChange: (CGFloat) -> Void
     var onFocusChange: (Bool) -> Void = { _ in }
+    var descriptionSession: MacDescriptionSession? = nil
+    var descriptionRevision: Int? = nil
     var readerHeadings: [RichDescriptionPreview.Heading] = []
     var onHeadingPositions: ([Int: CGFloat]) -> Void = { _ in }
 
@@ -275,10 +278,22 @@ struct RichBodyEditor: NSViewRepresentable {
         return view
     }
 
+    static func dismantleNSView(_ view: NSTextView, coordinator: Coordinator) {
+        coordinator.captureBeforeDetach(view)
+        // The old document owns any remaining input-method context. Never let
+        // it deliver into a later document's text storage.
+        coordinator.endOldComposition(view)
+        view.delegate = nil
+        DescriptionEditorLifecycle.unregister(coordinator.editorID)
+    }
     func updateNSView(_ view: NSTextView, context: Context) {
+        if context.coordinator.committedDocumentID != nil && context.coordinator.committedDocumentID != documentID {
+            context.coordinator.captureBeforeDetach(view)
+            context.coordinator.endOldComposition(view)
+        }
         context.coordinator.host = self
         controller.textView = view
-        view.isEditable = !disabled
+        view.isEditable = !disabled && descriptionSession?.conflict(taskID: documentID, editorID: context.coordinator.editorID) == nil
         view.isSelectable = true
         context.coordinator.reloadIfNeeded(view)
         // Pane resize / drawer-vs-main reuse with unchanged text: the frame
@@ -293,6 +308,9 @@ struct RichBodyEditor: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var host: RichBodyEditor
+        let editorID = UUID()
+        private var acceptedRevision: Int?
+        private weak var liveView: NSTextView?
         /// Document the storage was last built for. The view is reused
         /// across selections: switching documents always invalidates, even
         /// when text and styles match.
@@ -310,6 +328,7 @@ struct RichBodyEditor: NSViewRepresentable {
         init(_ host: RichBodyEditor) {
             self.host = host
             committedDocumentID = host.documentID
+            acceptedRevision = host.descriptionRevision
             committedText = host.text
             committedRich = host.rich
         }
@@ -320,6 +339,7 @@ struct RichBodyEditor: NSViewRepresentable {
             let storage = RichRender.attributedString(text: host.text, rich: host.rich)
             view.textStorage?.setAttributedString(storage)
             committedDocumentID = host.documentID
+            acceptedRevision = host.descriptionRevision
             committedText = host.text
             committedRich = host.rich
             // Rewraps on window/pane resizes change content height; the view
@@ -336,7 +356,48 @@ struct RichBodyEditor: NSViewRepresentable {
             NotificationCenter.default.removeObserver(self)
         }
 
+        func captureBeforeDetach(_ view: NSTextView) {
+            guard let session = host.descriptionSession, let id = committedDocumentID else { return }
+            if view.hasMarkedText() || session.conflict(taskID: id, editorID: editorID) != nil {
+                let value = RichRender.extract(from: view)
+                if let content = DescriptionSnapshot(body: value.text, rich: value.rich) ?? DescriptionSnapshot(body: value.text, rich: nil) {
+                    session.retainUncommitted(taskID: id, editorID: editorID, content: content)
+                }
+            } else if session.hasComposition(editorID: editorID) { commit(view) }
+        }
+        func endOldComposition(_ view: NSTextView) {
+            guard host.descriptionSession != nil, view.hasMarkedText() else { return }
+            applying = true
+            view.inputContext?.discardMarkedText()
+            view.unmarkText()
+            applying = false
+        }
+        private func captureComposition(_ view: NSTextView) {
+            guard let session = host.descriptionSession, let id = committedDocumentID else { return }
+            let value = RichRender.extract(from: view)
+            session.trackComposition(taskID: id, editorID: editorID,
+                content: DescriptionSnapshot(body: value.text, rich: value.rich) ?? DescriptionSnapshot(body: value.text, rich: nil))
+        }
         func reloadIfNeeded(_ view: NSTextView) {
+            liveView = view
+            if host.descriptionSession != nil {
+                DescriptionEditorLifecycle.register(editorID) { [weak self, weak view] in
+                    guard let self, let view else { return }
+                    if view.hasMarkedText() { self.captureComposition(view) }
+                    else if self.host.descriptionSession?.hasComposition(editorID: self.editorID) == true { self.commit(view) }
+                }
+            }
+            if committedDocumentID == host.documentID {
+                if view.hasMarkedText() { captureComposition(view); return }
+                if host.descriptionSession?.hasComposition(editorID: editorID) == true {
+                    // Final delegate delivery can lag a SwiftUI refresh. Preserve
+                    // the finished native text against its actual old revision.
+                    commit(view); return
+                }
+                if host.descriptionSession?.conflict(taskID: host.documentID, editorID: editorID) != nil { return }
+                if let acceptedRevision, let incoming = host.descriptionRevision, incoming < acceptedRevision { return }
+            }
+
             // Document-scoped invalidation (see EditorDocumentGate): a new
             // document always rebuilds and drops the undo stack, even when
             // text and styles match — otherwise B inherits A's history and
@@ -349,7 +410,10 @@ struct RichBodyEditor: NSViewRepresentable {
                 documentID: host.documentID, body: host.text, rich: host.rich)
             if !reset,
                let committedText, RichBody.sameCodeUnits(committedText, host.text),
-               committedRich == host.rich, RichBody.sameCodeUnits(view.string, host.text) { return }
+               committedRich == host.rich, RichBody.sameCodeUnits(view.string, host.text) {
+                acceptedRevision = host.descriptionRevision
+                return
+            }
             let selection = view.selectedRange()
             markdownArm = nil
             applying = true
@@ -383,6 +447,7 @@ struct RichBodyEditor: NSViewRepresentable {
             // continuity, new documents were cleared above).
             host.controller.repairContinuation(beforeTyping: nil)
             committedDocumentID = host.documentID
+            acceptedRevision = host.descriptionRevision
             committedText = host.text
             committedRich = host.rich
             reportHeight(view)
@@ -395,6 +460,7 @@ struct RichBodyEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard !applying, let view = notification.object as? NSTextView else { return }
+            if host.descriptionSession != nil && view.hasMarkedText() { captureComposition(view); return }
             host.controller.applyPendingListArm(view)
             commit(view)
         }
@@ -405,12 +471,14 @@ struct RichBodyEditor: NSViewRepresentable {
         }
 
         func textDidEndEditing(_ notification: Notification) {
-            guard !applying, notification.object is NSTextView else { return }
+            guard !applying, let view = notification.object as? NSTextView else { return }
+            if host.descriptionSession?.hasComposition(editorID: editorID) == true { commit(view) }
             host.onFocusChange(false)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard !applying, let view = notification.object as? NSTextView else { return }
+            if host.descriptionSession != nil && view.hasMarkedText() { captureComposition(view); return }
             if let arm = markdownArm, arm.caret != view.selectedRange() { markdownArm = nil }
             // The assignment below strips AppKit-derived textLists from
             // typing, dropping list continuation the native Return just
@@ -529,6 +597,8 @@ struct RichBodyEditor: NSViewRepresentable {
         }
 
         func commit(_ view: NSTextView) {
+            if host.descriptionSession != nil && view.hasMarkedText() { captureComposition(view); return }
+
             // Strip stale block markers (an exited block whose key outlived
             // its style through a replacement path) before extraction, so
             // the model, the toolbar, and later reads agree. Attribute-only
@@ -564,9 +634,19 @@ struct RichBodyEditor: NSViewRepresentable {
                 }
             }
             let extracted = RichRender.extract(from: view)
+            if let session = host.descriptionSession, let id = committedDocumentID {
+                guard let content = DescriptionSnapshot(body: extracted.text, rich: extracted.rich), let revision = acceptedRevision else { return }
+                session.trackComposition(taskID: id, editorID: editorID, content: nil)
+                if let committedText, content == DescriptionSnapshot(body: committedText, rich: committedRich) { return }
+                guard let next = session.propose(taskID: id, content: content, expectedRevision: revision, editorID: editorID) else {
+                    session.retainUncommitted(taskID: id, editorID: editorID, content: content)
+                    view.isEditable = false
+                    return
+                }
+                acceptedRevision = next
+            } else { host.onChange(extracted.text, extracted.rich) }
             committedText = extracted.text
             committedRich = extracted.rich
-            host.onChange(extracted.text, extracted.rich)
             reportHeight(view)
             updateToolbarState(view)
         }

@@ -58,7 +58,13 @@ public struct MacDescriptionDraft: LocalDraftRecord {
 /// One caller-owned, dedicated recovery file. Does not create directories,
 /// assign workspace identities, mutate tasks, autoapply recovery or wire UI.
 /// Reuses the existing serialized journal with exact after-write/readback handling.
-public actor MacDescriptionJournal {
+public protocol MacDescriptionJournalAccess: Sendable {
+    func load() async -> LocalDraftLoad<MacDescriptionDraft>
+    func save(_ value: MacDescriptionDraft) async -> FieldDraftWrite
+    func close(_ value: MacDescriptionDraft) async -> FieldDraftWrite
+}
+
+public actor MacDescriptionJournal: MacDescriptionJournalAccess {
     private let workspaceID: UUID
     private let taskID: UUID
     private let journal: LocalDraftStore<MacDescriptionDraft>

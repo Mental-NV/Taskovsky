@@ -17,7 +17,7 @@ import TaskovskyWorkspace
         var displayed: DescriptionSnapshot
         var revision = 0
         var loading = true
-        var journal: MacDescriptionJournal?
+        var journal: (any MacDescriptionJournalAccess)?
         var draft: MacDescriptionDraft?
         var recovered: MacDescriptionDraft?
         var durable: MacDescriptionDraft?
@@ -31,43 +31,80 @@ import TaskovskyWorkspace
     private let location: MacDescriptionRecoveryDirectory?
     private var nodes: [UUID: Node] = [:]
     private var subscription: AnyCancellable?
-    public init(store: TaskStore) {
-        self.store = store
+    private let makeJournal: (MacDescriptionRecoveryDirectory, UUID) throws -> any MacDescriptionJournalAccess
+    public private(set) var recoveryErrors: [UUID: String] = [:]
+    public private(set) var discoveryError: String?
+    private var preparing = Set<UUID>()
+    private var compositions: [UUID: (taskID: UUID, content: DescriptionSnapshot)] = [:]
+    public convenience init(store: TaskStore) {
+        self.init(store: store, makeJournal: { try $0.journal(taskID: $1) })
+    }
+    init(store: TaskStore, makeJournal: @escaping (MacDescriptionRecoveryDirectory, UUID) throws -> any MacDescriptionJournalAccess) {
+        self.store = store; self.makeJournal = makeJournal
         location = try? MacDescriptionRecoveryDirectory(workspaceURL: store.fileURL)
         subscription = store.$data.sink { [weak self] data in self?.receive(data) }
     }
+    public var compositionSnapshots: [UUID: DescriptionSnapshot] { compositions.mapValues(\.content) }
     public var taskIDs: [UUID] { nodes.keys.sorted { $0.uuidString < $1.uuidString } }
     public var hasUnsafeMemory: Bool {
-        nodes.values.contains { node in
+        !compositions.isEmpty || nodes.values.contains { node in
             !node.conflicts.isEmpty || (node.draft != nil && node.draft != node.durable && node.displayed != node.saved)
         }
     }
     public var hasAttention: Bool {
-        nodes.values.contains { $0.recovered != nil || $0.draft != nil || !$0.conflicts.isEmpty || $0.message != nil }
+        !recoveryErrors.isEmpty || discoveryError != nil || nodes.values.contains { $0.recovered != nil || $0.draft != nil || !$0.conflicts.isEmpty || $0.message != nil }
     }
-    public func presentation(for task: TaskItem) -> Presentation? {
-        guard let node = nodes[task.id] else { return nil }
-        let recovery = node.recovered?.recovery(in: store.data, workspaceID: location?.workspaceID ?? UUID())
+    public func presentation(for task: TaskItem) -> Presentation? { presentation(taskID: task.id) }
+    public func presentation(taskID: UUID) -> Presentation? {
+        guard let node = nodes[taskID], let location else { return nil }
+        let current = store.data.tasks.filter { $0.id == taskID }
+        let task = current.count == 1 ? current.first : nil
+        let recovery = node.recovered?.recovery(in: store.data, workspaceID: location.workspaceID)
         return Presentation(content: node.displayed, revision: node.revision,
-            editable: !node.loading && node.journal != nil && node.recovered == nil && isEditable(task),
+            editable: !node.loading && node.journal != nil && node.recovered == nil && task.map(isEditable) == true,
             message: node.message, recovery: recovery, conflicts: node.conflicts)
     }
+    /// Includes records whose original task was removed, so they remain copyable.
+    public func discoverRecovery() async {
+        do {
+            guard let location else { throw CocoaError(.fileReadInvalidFileName) }
+            try location.prepare()
+            let ids = try location.savedTaskIDs()
+            discoveryError = nil
+            for id in ids { await prepare(taskID: id) }
+        } catch { discoveryError = "Description recovery could not be listed safely. Existing files were not changed." }
+        objectWillChange.send()
+    }
     public func prepare(taskID: UUID) async {
-        guard nodes[taskID] == nil, let task = store.data.tasks.first(where: { $0.id == taskID }),
-              let snapshot = DescriptionSnapshot(body: task.body, rich: task.richBody) else { return }
-        let node = Node(snapshot); nodes[taskID] = node; objectWillChange.send()
+        guard nodes[taskID] == nil, !preparing.contains(taskID) else { return }
+        preparing.insert(taskID)
+        defer { preparing.remove(taskID); objectWillChange.send() }
+        let matches = store.data.tasks.filter { $0.id == taskID }
+        let task = matches.count == 1 ? matches.first : nil
+        let snapshot = task.flatMap { DescriptionSnapshot(body: $0.body, rich: $0.richBody) }
         do {
             guard let location else { throw CocoaError(.fileWriteInvalidFileName) }
-            try location.prepare(); let journal = try location.journal(taskID: taskID); node.journal = journal
-            switch await journal.load() {
-            case .none: break
-            case .unavailable: node.journal = nil; node.message = "Recovery data could not be read safely. It has not been replaced."
+            try location.prepare(); let journal = try makeJournal(location, taskID)
+            let loaded = await journal.load()
+            let node: Node
+            switch loaded {
+            case .none:
+                guard let snapshot else {
+                    recoveryErrors[taskID] = "Description is missing or unsupported. Editing is paused; no data was replaced."
+                    return
+                }
+                node = Node(snapshot)
+            case .unavailable:
+                recoveryErrors[taskID] = "Recovery data could not be read safely. It has not been replaced."
+                return
             case .available(let record):
+                node = Node(snapshot ?? record.baseline)
                 node.recovered = record
                 node.message = "A saved description draft needs your review."
             }
-        } catch { node.message = "Description recovery is unavailable. Editing is paused to protect your text." }
-        node.loading = false; receive(store.data); objectWillChange.send()
+            node.journal = journal; node.loading = false; nodes[taskID] = node
+            recoveryErrors.removeValue(forKey: taskID); receive(store.data)
+        } catch { recoveryErrors[taskID] = "Description recovery is unavailable. Editing is paused to protect your text." }
     }
     /// The expected revision belongs to the actual AppKit rendering, not a refreshed host closure.
     public func propose(taskID: UUID, content: DescriptionSnapshot, expectedRevision: Int, editorID: UUID) -> Int? {
@@ -89,6 +126,22 @@ import TaskovskyWorkspace
         }
         node.displayed = content; node.revision += 1; node.message = "Saving description…"
         objectWillChange.send(); start(taskID, node: node); return node.revision
+    }
+    /// Marked text stays in AppKit. This memory-only copy protects teardown/quit,
+    /// but is not a claim that the input-method composition itself is durable.
+    public func hasComposition(editorID: UUID) -> Bool { compositions[editorID] != nil }
+    public func trackComposition(taskID: UUID, editorID: UUID, content: DescriptionSnapshot?) {
+        if let content { compositions[editorID] = (taskID, content) }
+        else { compositions.removeValue(forKey: editorID) }
+        objectWillChange.send()
+    }
+    public func retainUncommitted(taskID: UUID, editorID: UUID, content: DescriptionSnapshot) {
+        let node = nodes[taskID] ?? Node(content)
+        nodes[taskID] = node
+        node.conflicts[editorID] = content
+        node.message = "Uncommitted editor text is retained for copying. It has not been saved to the task."
+        compositions.removeValue(forKey: editorID)
+        objectWillChange.send()
     }
     public func retry(taskID: UUID) {
         guard let node = nodes[taskID], !node.loading else { return }
@@ -157,7 +210,7 @@ import TaskovskyWorkspace
         }
     }
     private func isEditable(_ task: TaskItem) -> Bool {
-        task.deletedAt == nil && !store.data.lists.contains { $0.id == task.listID && $0.isArchived }
+        DescriptionSnapshot(body: task.body, rich: task.richBody) != nil && task.deletedAt == nil && !store.data.lists.contains { $0.id == task.listID && $0.isArchived }
     }
     private func receive(_ workspace: WorkspaceData) {
         for (id, node) in nodes where node.draft == nil && node.recovered == nil && !node.loading {
