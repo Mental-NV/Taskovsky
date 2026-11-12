@@ -86,6 +86,8 @@ Bulk list moves validate the entire explicit batch before writing: empty, duplic
 
 On iPhone, the parent picker stages the link and names the destination for a cross-list move. It lists active task candidates. Adding a child gives it the parent’s list and the configured insertion position. Desktop and the phone repository call the same graph operations. [Phone verification](verification.md#mobile-task-hierarchy).
 
+Mac add-child and reparent commands now [stage and acknowledge durable hierarchy writes](../changes/mac-hierarchy-persistence-2026-11-12.md). A failed or stale write leaves visible data unchanged and reports failure to existing draft/navigation guards. Unchanged raw fields are preserved; incompatible affected fields or task-format transitions refuse rather than rewrite unknown data. This correction does not change graph eligibility or iPhone commands. [Verification](verification.md#mac-hierarchy-persistence).
+
 List rows can [fold linked subtasks](../changes/task-subtree-disclosure-2026-11-10.md) within their current rendered group. Folding is session-only presentation state, not a graph or storage operation. Nested folds survive an ancestor being closed and reopened. A child whose parent is absent from its group remains independently visible; counts and selected detail retain the underlying task. Relaunch starts expanded.
 
 **Acceptance.** Move a parent with a grandchild, then move only the child to a different list; verify list membership and parent links. Reject a cycle without saving it. Filter to a child alone and verify it remains visible. Reject one invalid ID mixed into an otherwise valid move.

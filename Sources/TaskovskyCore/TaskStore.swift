@@ -719,19 +719,48 @@ public final class TaskStore: ObservableObject {
     }
 
     @discardableResult public func setTaskParent(id: UUID, parentID: UUID?) -> Bool {
-        guard let changed = TaskHierarchy.setParent(childID: id, parentID: parentID, in: &data, now: Date()) else {
-            return false
-        }
-        if changed { save() }
-        return true
+        commitHierarchy { TaskHierarchy.setParent(childID: id, parentID: parentID, in: &$0, now: Date()) }
     }
 
     @discardableResult public func addSubtask(to parentID: UUID, title: String) -> UUID? {
         let id = UUID()
-        guard TaskHierarchy.addChild(id: id, to: parentID, title: title, in: &data,
-                                     position: settings.defaultAddTo, now: Date()) else { return nil }
-        save()
-        return id
+        return commitHierarchy {
+            TaskHierarchy.addChild(id: id, to: parentID, title: title, in: &$0,
+                                   position: settings.defaultAddTo, now: Date()) ? true : nil
+        } ? id : nil
+    }
+
+    private func commitHierarchy(_ change: (inout WorkspaceData) -> Bool?) -> Bool {
+        guard !blockedByLoadFailure else { return false }
+        do {
+            let bytes = try Data(contentsOf: fileURL)
+            guard try Self.decodeWorkspace(bytes) == data else {
+                storageError = "The saved workspace changed. Reload before changing linked subtasks."
+                return false
+            }
+            var staged = data
+            guard let changed = change(&staged) else { return false }
+            guard let patched = try HierarchyJSONPatch.applying(staged: staged, to: bytes),
+                  try Self.decodeWorkspace(patched) == staged else {
+                storageError = "Linked subtasks were not saved: incompatible saved fields must be resolved first."
+                return false
+            }
+            if !changed {
+                if !settingsLoadFailed { storageError = settingsSaveError }
+                return true
+            }
+            let written = writeWorkspaceBytes {
+                guard try Data(contentsOf: self.fileURL) == bytes else { throw CocoaError(.fileWriteUnknown) }
+                return patched
+            }
+            guard written || (try? Data(contentsOf: fileURL)) == patched else { return false }
+            data = staged
+            if !settingsLoadFailed { storageError = settingsSaveError }
+            return true
+        } catch {
+            storageError = "Could not save linked subtasks: \(error.localizedDescription)"
+            return false
+        }
     }
 
     /// Merges `source` into `target`: task, template, and saved-filter refs
