@@ -429,3 +429,7 @@ For a valid coherent timed duration, submitting the exact existing end through C
 ### Repeated-hour Calendar lane packing
 
 Hourly cards are clustered and assigned lanes by their clipped painted civil-minute intervals, including existing minimum visual heights. Absolute instants are not a valid packing order when civil time repeats. This retains the current single 24-hour wall grid and stored schedules; it does not introduce a second repeated-hour band. [CAL-DST-LAYOUT-004](../changes/calendar-dst-collisions-2026-11-12.md).
+
+### Mac Schedule implicit-zone preservation
+
+The Mac Schedule editor separates its displayed fallback zone from the task's optional stored identifier. An untouched selection, or a selection returned to its opening value, retains the original nil or explicit identifier. A genuinely different selected zone stays explicit and follows the existing wall-clock translation/series-edit policy. This prevents accidental zone pinning and loss of a current-occurrence baseline. It does not promise a write-free OK or introduce a floating-time mode. [SCHEDULE-ZONE-005](../changes/mac-schedule-implicit-zone-2026-11-12.md).
