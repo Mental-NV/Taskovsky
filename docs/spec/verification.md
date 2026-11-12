@@ -1700,6 +1700,8 @@ Source manifest SHA256: `42d5797a7a3d769cd8529c49f9f6150df78aff387aa24ce1c03766f
 
 **Initial follow-up interpretation, superseded below:** the initial Computer Use report described 07:15 versus 13:15 GMT+9 as a native field/caption mismatch. The later probe explicitly separated visible pixels from the tool’s accessibility representation; it did not reproduce a visual mismatch.
 
+This is a zone/cadence preservation fix, not a fully write-free editor lifecycle change. Existing updatedAt writes and inferred reminder-provenance normalization remain; arbitrary zone-edit round trips through DST are not newly guaranteed.
+
 <a id="mac-schedule-field-observation-correction"></a>
 ### Mac Schedule field observation correction — November 12, 2026
 
