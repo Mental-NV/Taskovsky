@@ -106,6 +106,8 @@ The phone submits one revision-checked command from a row or detail. It offers c
 
 <a id="bus-008"></a>
 
+Mac lifecycle mutations acknowledge the staged workspace write before publishing task/graph state or recurrence Undo snapshots. Failed writes leave the prior state intact for explicit retry. This applies to the shared lifecycle helper, including completion/reopen, trash/restore, duplication, pin/move and purge; it does not make every legacy store writer transactional. Existing eligibility/no-op policies remain unchanged. [Persistence contract](../changes/lifecycle-persistence-2026-11-12.md).
+
 ### BUS-008 — Recurrence successors and conservative Undo
 
 **Current rule.** Completion can spawn one successor for a dated recurring record when the series has not ended and no successor already references that occurrence. A recurring parent copies its currently open descendants under the successor once, with fresh task/checklist IDs, cleared states, remapped links and shifted schedules; already-finished descendants are not copied. When the parent has no successor, a recurring descendant may spawn its own successor under the old parent.

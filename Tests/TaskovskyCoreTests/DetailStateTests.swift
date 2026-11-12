@@ -115,6 +115,20 @@ import Testing
         #expect(coordinator.consume(token: claim.token) == nil)
     }
 
+    @Test func inspectingFailedUndoKeepsOriginalClaimUntilExpiryOrReplacement() {
+        let coordinator = UndoCoordinator()
+        let original = coordinator.record(taskID: UUID(), kind: .complete)
+        #expect(coordinator.claim(token: original.token) == original)
+        #expect(coordinator.claim(token: original.token) == original)
+        coordinator.expire(token: original.token)
+        #expect(coordinator.claim(token: original.token) == nil)
+        let next = coordinator.record(taskID: UUID(), kind: .trash)
+        #expect(coordinator.claim(token: original.token) == nil)
+        #expect(coordinator.claim(token: next.token) == next)
+        #expect(coordinator.consume(token: next.token) == next)
+        #expect(coordinator.claim(token: next.token) == nil)
+    }
+
     @Test func expiryClearsWithoutApplying() {
         let coordinator = UndoCoordinator()
         let claim = coordinator.record(taskID: UUID(), kind: .complete)

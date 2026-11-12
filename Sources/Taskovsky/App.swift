@@ -772,7 +772,7 @@ struct WorkspaceView: View {
         }
     }
     private func drawer(task: TaskItem) -> some View {
-        TaskDetail(store: store, drafts: drafts, actions: actions, id: task.id, onTrash: { trash(task.id); closeDrawer() }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: closeDrawer, compact: true, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
+        TaskDetail(store: store, drafts: drafts, actions: actions, id: task.id, onTrash: { if trash(task.id) { closeDrawer() } }, onComplete: { complete(task.id) }, onWontDo: { abandon(task.id) }, onClose: closeDrawer, compact: true, onRestore: { restoreExplicit(task.id) }, onPurge: { purgeCandidate = task.id }, onNavigateToTask: { selectTask($0) }).id(task.id)
             .frame(width: ResponsiveLayout.drawerWidth).frame(maxHeight: .infinity)
             .background(Color(nsColor: .textBackgroundColor))
             .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1) }
@@ -1841,9 +1841,9 @@ struct WorkspaceView: View {
         selectTask(id); quickTitle = ""; quickFocused = true
         return true
     }
-    private func trash(_ id: UUID) { actions.trash(store: store, id: id); if detailState.selection == id { detailState.clear() } }
+    @discardableResult private func trash(_ id: UUID) -> Bool { guard actions.trash(store: store, id: id) else { return false }; if detailState.selection == id { detailState.clear() }; return true }
     private func restoreExplicit(_ id: UUID) {
-        actions.restore(store: store, id: id)
+        guard actions.restore(store: store, id: id) else { return }
         if let task = store.data.tasks.first(where: { $0.id == id }), !destination.includes(task, data: store.data) { detailState.clear() }
     }
     private var contextualDate: Date? {
@@ -2599,7 +2599,7 @@ struct TaskDetailWindow: View {
     var body: some View {
         Group {
             if store.data.tasks.contains(where: { $0.id == currentID }) {
-                TaskDetail(store: store, drafts: drafts, actions: actions, id: currentID, onTrash: { NotificationCenter.default.post(name: .trashTask, object: currentID); dismiss() }, onComplete: { actions.complete(store: store, id: currentID) }, onWontDo: { actions.abandon(store: store, id: currentID) }, onClose: nil, compact: true, standalonePopup: true, onRestore: { actions.restore(store: store, id: currentID) }, onPurge: { NotificationCenter.default.post(name: .requestPurge, object: currentID) }, onNavigateToTask: { currentID = $0 }).id(currentID)
+                TaskDetail(store: store, drafts: drafts, actions: actions, id: currentID, onTrash: { NotificationCenter.default.post(name: .trashTask, object: currentID); if store.data.tasks.first(where: { $0.id == currentID })?.deletedAt != nil { dismiss() } }, onComplete: { actions.complete(store: store, id: currentID) }, onWontDo: { actions.abandon(store: store, id: currentID) }, onClose: nil, compact: true, standalonePopup: true, onRestore: { actions.restore(store: store, id: currentID) }, onPurge: { NotificationCenter.default.post(name: .requestPurge, object: currentID) }, onNavigateToTask: { currentID = $0 }).id(currentID)
             } else {
                 Text("This item is no longer available.").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             }

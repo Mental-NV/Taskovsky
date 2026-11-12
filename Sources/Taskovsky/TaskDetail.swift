@@ -136,7 +136,7 @@ struct TaskDetail: View {
     @ViewBuilder
     private var detailStatusBanner: some View {
         if isDeleted {
-            HStack { Text("This item is in Trash.").font(.caption); Spacer(); Button("Restore") { onRestore?() ?? store.restoreTask(id: id) }.controlSize(.small) }.padding(14).background(.orange.opacity(0.07))
+            HStack { Text("This item is in Trash.").font(.caption); Spacer(); Button("Restore") { if let onRestore { onRestore() } else { store.restoreTask(id: id) } }.controlSize(.small) }.padding(14).background(.orange.opacity(0.07))
         } else if archivedView {
             HStack { Text("This list is archived — read-only. Unarchive it from the sidebar to edit.").font(.caption); Spacer() }.padding(14).background(Color.primary.opacity(0.05))
         }
@@ -317,7 +317,7 @@ struct TaskDetail: View {
                 } else if archivedView {
                     Text("Archived — read-only")
                 } else {
-                    Button("Restore") { onRestore?() ?? store.restoreTask(id: id) }
+                    Button("Restore") { if let onRestore { onRestore() } else { store.restoreTask(id: id) } }
                     if onPurge != nil { Button("Delete Forever", role: .destructive, action: onPurge!) }
                 }
             } label: { HoverIcon { Image(systemName: "ellipsis").font(.system(size: 17)).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().padding(.leading, 12).help("More actions")

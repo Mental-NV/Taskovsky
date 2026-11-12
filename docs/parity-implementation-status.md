@@ -173,3 +173,5 @@ Summary Save as Note persists the final metadata-free Inbox note in one write be
 The shared capture recognizer preserves rejected trailing clock text instead of deleting it as part of a date token. Mac and iPhone retain separate views and share the corrected construction rule. This is a source-backed text-preservation repair, not a recovered TickTick parser policy or a general invalid-input grammar rewrite. [Contract](changes/recognition-invalid-clock-text-2026-11-12.md).
 
 The shared recognizer also rejects preceding-clock matches beginning inside a numeric clock component, preventing false times and partial title removal. [Bounded correction](changes/recognition-prefix-clock-boundary-2026-11-12.md); no broader TickTick parsing parity is claimed.
+
+Mac lifecycle actions now publish state/recurrence snapshots only after persistence, with acknowledged success feedback and retry-preserving Undo tokens. This is local storage correctness, not a new reference lifecycle policy. [Contract](changes/lifecycle-persistence-2026-11-12.md).

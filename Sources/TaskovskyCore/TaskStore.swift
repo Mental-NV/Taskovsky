@@ -420,25 +420,25 @@ public final class TaskStore: ObservableObject {
         var lifecycle = TaskLifecycle(data: data, completionSnapshots: completionSnapshots)
         guard let changed = change(&lifecycle) else { return false }
         if changed {
+            guard writeWorkspace(lifecycle.data) else { return false }
             data = lifecycle.data
             completionSnapshots = lifecycle.completionSnapshots
-            save()
         }
         return true
     }
 
-    public func toggleComplete(id: UUID) {
+    @discardableResult public func toggleComplete(id: UUID) -> Bool {
         let calendar = settings.calendar
-        commitLifecycle { $0.toggleComplete(id: id, now: Date(), calendar: calendar) }
+        return commitLifecycle { $0.toggleComplete(id: id, now: Date(), calendar: calendar) ? true : nil }
     }
-    public func undoCompletion(id: UUID) {
-        commitLifecycle { $0.undoCompletion(id: id, now: Date()) }
+    @discardableResult public func undoCompletion(id: UUID) -> Bool {
+        commitLifecycle { $0.undoCompletion(id: id, now: Date()) ? true : nil }
     }
-    public func markWontDo(id: UUID) {
-        commitLifecycle { $0.markWontDo(id: id, now: Date()) }
+    @discardableResult public func markWontDo(id: UUID) -> Bool {
+        commitLifecycle { $0.markWontDo(id: id, now: Date()) ? true : nil }
     }
-    public func reopenTask(id: UUID) {
-        commitLifecycle { $0.reopenTask(id: id, now: Date()) }
+    @discardableResult public func reopenTask(id: UUID) -> Bool {
+        commitLifecycle { $0.reopenTask(id: id, now: Date()) ? true : nil }
     }
     @discardableResult public func setPinned(id: UUID, pinned: Bool) -> Bool {
         commitLifecycle { $0.setPinned(id: id, pinned: pinned, now: Date()) }
@@ -505,11 +505,11 @@ public final class TaskStore: ObservableObject {
         if let sectionID { return persistSectionTask(task, tags: [], sectionID: sectionID, resolveTitle: false) }
         return persistCreatedTaskAtomically(task, tags: [], resolveTitle: false)
     }
-    public func trashTask(id: UUID) {
-        commitLifecycle { $0.trashTask(id: id, now: Date()) }
+    @discardableResult public func trashTask(id: UUID) -> Bool {
+        commitLifecycle { $0.trashTask(id: id, now: Date()) ? true : nil }
     }
-    public func restoreTask(id: UUID) {
-        commitLifecycle { $0.restoreTask(id: id, now: Date()) }
+    @discardableResult public func restoreTask(id: UUID) -> Bool {
+        commitLifecycle { $0.restoreTask(id: id, now: Date()) ? true : nil }
     }
     @discardableResult public func purgeTask(id: UUID) -> Bool {
         commitLifecycle { $0.purgeTask(id: id, now: Date()) ? true : nil }
