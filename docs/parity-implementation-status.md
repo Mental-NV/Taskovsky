@@ -151,3 +151,7 @@ Per the user's explicit local-only scope, Calendar introduces **no external inte
 | External event overlays | No external calendar events, availability or conferencing overlays |
 
 The named additional time-zone rulers use Foundation's installed time-zone database; it is a local display preference. All Calendar records and options use the existing local workspace/settings files. There are no inactive integration buttons or placeholder account flows. Existing optional URL-title recognition is unchanged and is not used to fetch Calendar data.
+
+### Calendar creation persistence hardening — November 12, 2026
+
+Mac Calendar new-task creation now retains the draft on failed storage writes and publishes task/tags/reminders only after successful persistence. Explicit retry creates one durable task; Cancel creates nothing. This is a source-backed correctness repair, not new TickTick parity or a change to ordinary quick-add/mobile creation. [Contract](changes/calendar-creation-atomic-2026-11-12.md) · [Verification](spec/verification.md#calendar-creation-atomic).

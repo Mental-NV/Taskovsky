@@ -316,6 +316,19 @@ public final class TaskStore: ObservableObject {
         return persistCreatedTaskAtomically(result.task, tags: result.addedTags, resolveTitle: false)
     }
 
+    /// Calendar creation publishes task, parsed tags and reminder state only after persistence.
+    public func createCalendarTask(title: String, listID: UUID?, duration: TaskDurationRange) -> UUID? {
+        guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              duration.start.timeIntervalSinceReferenceDate.isFinite,
+              duration.end.timeIntervalSinceReferenceDate.isFinite,
+              duration.validated(in: settings.calendar) != nil else { return nil }
+        let result = TaskCreation.make(workspace: data, settings: settings, title: title, listID: listID,
+                                       dueDate: duration.end, useDefaultList: false, recognizeDates: false,
+                                       duration: duration)
+        guard !result.task.title.isEmpty else { return nil }
+        return persistCreatedTaskAtomically(result.task, tags: result.addedTags, resolveTitle: true)
+    }
+
     private func persistCreatedTask(_ result: TaskCreationResult) -> UUID {
         insertCreatedTask(result.task, tags: result.addedTags, into: &data)
         save()

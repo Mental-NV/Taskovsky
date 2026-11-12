@@ -348,7 +348,7 @@ struct TaskCalendarWorkspace: View {
             skipBaseline: CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: calendar)
                 ? CalendarScheduleSnapshot(task) : nil)
     }
-    private func save(_ draft: CalendarEditorDraft) {
+    private func save(_ draft: CalendarEditorDraft) -> Bool {
         if let id = draft.taskID {
             if draft.skipOccurrence {
                 if let baseline = draft.skipBaseline, let current = store.data.tasks.first(where: { $0.id == id }),
@@ -361,14 +361,17 @@ struct TaskCalendarWorkspace: View {
             else { notice = "Schedule unchanged"; undo = nil }
         } else {
             let window = TaskDurationRange(start: draft.schedule.start, end: draft.schedule.end, isAllDay: draft.schedule.allDay)
-            let id = store.createTask(title: draft.title, listID: draft.listID, dueDate: draft.schedule.end,
-                useDefaultList: false, recognizeDates: false, duration: window)
+            guard let id = store.createCalendarTask(title: draft.title, listID: draft.listID, duration: window) else {
+                notice = store.storageError ?? "Could not add the Calendar task. Review the draft and try again."
+                return false
+            }
             notice = "Task added to Calendar"; undo = nil
             if let task = store.data.tasks.first(where: { $0.id == id }), !options.wrappedValue.includes(task, data: store.data) {
                 notice = "Task added. Its list or tags are hidden by the Calendar filter."
             }
         }
         editor = nil
+        return true
     }
     private func schedule(_ id: UUID, _ operation: CalendarScheduleOperation) {
         guard occurrenceChange == nil else { return }
@@ -495,7 +498,9 @@ struct CalendarTaskEditor: View {
     var lists: [TaskList]
     var calendar: Calendar
     var removeDate: () -> Void
-    var save: (CalendarEditorDraft) -> Void
+    var save: (CalendarEditorDraft) -> Bool
+    @State private var saveFailed = false
+    @State private var submitted = false
     @FocusState private var titleFocused: Bool
     private var valid: Bool {
         draft.restoreOccurrence || draft.skipOccurrence ||
@@ -511,12 +516,23 @@ struct CalendarTaskEditor: View {
                 Text("Save moves this open task to its next scheduled occurrence.").font(.caption)
                 Button("Keep editing") { draft.skipOccurrence = false }
             } else { scheduleFields }
+            if saveFailed {
+                Text("Could not add the task. Your draft is kept. Review it and try again, or Cancel.")
+                    .font(.system(size: 12)).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("calendarCreationSaveError")
+            }
             HStack {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
                 if draft.taskID != nil && !draft.restoreOccurrence && !draft.skipOccurrence { Button("Remove date") { removeDate(); dismiss() } }
                 Spacer()
-                Button(draft.taskID == nil ? "Add Task" : "Save") { save(draft); dismiss() }
-                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!valid)
+                Button(draft.taskID == nil ? "Add Task" : "Save") {
+                    guard !submitted else { return }
+                    submitted = true
+                    if save(draft) { dismiss() }
+                    else { submitted = false; saveFailed = true }
+                }
+                    .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(!valid || submitted)
             }
         }.textFieldStyle(.roundedBorder).padding(22).frame(width: 410)
             .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
