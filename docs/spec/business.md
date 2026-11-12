@@ -198,7 +198,7 @@ Mac and iPhone Tasks can skip an eligible open occurrence through the same sched
 
 Timed task durations can have a separate At the end reminder. Its effective instant comes from the saved endpoint. Default and manual reminders keep their existing behavior, and coincident instants display once. A saved point or all-day conversion clears the end reminder. Schedule Undo and occurrence baselines include the preference. [Duration end reminder](../changes/task-duration-end-reminders-2026-11-10.md).
 
-Taskovsky stores these reminders and exposes in-app reminder information. There is no operating-system notification scheduling/delivery implementation in the inspected package. An optional zone ID is not a complete TickTick Fixed/Floating Time mode: an explicit floating-time model is absent.
+Taskovsky stores these reminders and exposes in-app reminder information. There is no operating-system notification scheduling/delivery implementation in the inspected package. A shared pure [local reminder plan](../changes/local-reminder-plan-2026-11-12.md) selects eligible persisted reminder instants and computes a bounded namespaced reconciliation diff; it does not register or deliver notifications. An optional zone ID is not a complete TickTick Fixed/Floating Time mode: an explicit floating-time model is absent.
 
 **Acceptance.** Select multiple defaults, move the due date and inspect recalculated reminders; manually override one and repeat. Check all-day 09:00 and task-zone DST behavior. Archive/unarchive a list without deleting its reminder data. Do not use a stored reminder as proof that a notification will fire.
 

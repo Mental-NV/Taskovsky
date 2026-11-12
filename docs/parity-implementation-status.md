@@ -177,3 +177,5 @@ The shared recognizer also rejects preceding-clock matches beginning inside a nu
 Mac lifecycle actions now publish state/recurrence snapshots only after persistence, with acknowledged success feedback and retry-preserving Undo tokens. This is local storage correctness, not a new reference lifecycle policy. [Contract](changes/lifecycle-persistence-2026-11-12.md).
 
 Mac schedule OK/Clear use an acknowledged schedule-only patch and retain the editor on failure; current unrelated fields survive and stale scheduling edits are rejected. [Contract](changes/schedule-editor-persistence-2026-11-12.md). This is local persistence correctness, not a TickTick interaction-parity claim.
+
+A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-12.md) now exists for later platform adapters: active stored reminders, generic content, conservative 32-request budget and namespaced diff. OS permission, registration and delivery remain unimplemented/unverified; no notification parity claim.
