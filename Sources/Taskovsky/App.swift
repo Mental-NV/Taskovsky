@@ -548,13 +548,14 @@ struct WorkspaceView: View {
             }
             .background(Color(nsColor: .textBackgroundColor))
             .tint(accent)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                if !calendarActive && destination == .summary, let error = store.storageError {
+                    storageErrorBanner(error)
+                }
+            }
             .overlay(alignment: .bottom) {
-                if let error = store.storageError {
-                    HStack {
-                        Label(error, systemImage: "exclamationmark.triangle.fill")
-                        if store.needsRecovery { Button("Recover…") { recoveryAlert = true } }
-                        else { Button("Retry") { store.save() } }
-                    }.font(.caption).padding(12).background(.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 10)).padding()
+                if calendarActive || destination != .summary, let error = store.storageError {
+                    storageErrorBanner(error)
                 }
             }
             .overlay(alignment: .bottom) {
@@ -1807,6 +1808,14 @@ struct WorkspaceView: View {
         case .day(let date): "due-\(date.timeIntervalSinceReferenceDate)"
         }
     }
+    private func storageErrorBanner(_ error: String) -> some View {
+        HStack {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+            if store.needsRecovery { Button("Recover…") { recoveryAlert = true } }
+            else { Button("Retry") { store.save() } }
+        }.font(.caption).padding(12).background(.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 10)).padding()
+    }
+
     private func addTask(body: String = "", recognizeDates: Bool = true) -> Bool {
         let title = quickTitle.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return false }
         let due = contextualDate

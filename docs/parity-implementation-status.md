@@ -163,3 +163,7 @@ Rejected section submission retains description, expansion and ignored-date choi
 ### Ordinary Mac QuickEntry initial capture — November 12, 2026
 
 Ordinary initial capture now stages task and parsed tags/default reminders before publishing. Failed initial writes return rejection and retain the full draft; explicit retry creates one durable task. The earlier section-only acknowledgement limit is superseded for this initial path, not for later destination-tag/reminder updates or Summary/mobile. [Contract](changes/quick-capture-atomic-2026-11-12.md).
+
+### Atomic Summary note save — November 12, 2026
+
+Summary Save as Note persists the final metadata-free Inbox note in one write before publication. Failed attempts retain the edited report and show failure instead of false success; explicit retry remains available. Report generation/options/presets and mobile are unchanged. [Contract](changes/summary-note-atomic-2026-11-12.md).

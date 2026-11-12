@@ -295,6 +295,13 @@ public final class TaskStore: ObservableObject {
         return persistCreatedTask(result)
     }
 
+    /// Save the edited local Summary as one final, metadata-free Inbox note.
+    public func createSummaryNote(title: String, body: String) -> UUID? {
+        var note = TaskItem(title: title, body: body, kind: .note)
+        note.reminderFollowsSchedule = false
+        return persistCreatedTaskAtomically(note, tags: [], resolveTitle: false)
+    }
+
     /// Initial Mac QuickEntry capture acknowledges persistence before publishing.
     public func createQuickEntryTask(title: String, listID: UUID? = nil, kind: TaskKind = .task,
                                      dueDate: Date? = nil, useDefaultList: Bool = true,

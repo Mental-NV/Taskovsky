@@ -9,6 +9,7 @@ struct SummaryView: View {
     @State private var output = ""
     @State private var showOptions = false
     @State private var saved = false
+    @State private var saveFailed = false
     @AppStorage("Taskovsky.summaryPresets.v1", store: IsolatedDefaults.store) private var presetData = Data()
     @State private var showPresetName = false
     @State private var presetName = ""
@@ -47,7 +48,12 @@ struct SummaryView: View {
                         TextEditor(text: $output).font(.system(size: 14)).padding(16)
                         Divider()
                         HStack {
-                            if saved { Text("Saved as note").font(.caption).foregroundStyle(.secondary) }
+                            if saveFailed {
+                                Text("Could not save the note. Your report is kept; try Save as Note again.")
+                                    .font(.system(size: 12)).foregroundStyle(.red)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .accessibilityIdentifier("summaryNoteSaveError")
+                            } else if saved { Text("Saved as note").font(.caption).foregroundStyle(.secondary) }
                             Spacer()
                             Button("Save as Note", action: saveAsNote)
                             Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(output, forType: .string) }
@@ -214,15 +220,12 @@ struct SummaryView: View {
     }
     private func statusName(_ value: FilterStatus) -> String { switch value { case .all: "All Status"; case .active: "Undone"; case .completed: "Completed"; case .wontDo: "Won't Do" } }
     private func regenerate() {
-        saved = false
+        saved = false; saveFailed = false
         output = SummaryReport.generate(from: store.data, options: reportOptions, now: Date(), calendar: calendar).text
     }
     private func saveAsNote() {
-        let id = store.createTask(title: "Summary \(rangeLabel)", kind: .note, useDefaultList: false, recognizeDates: false, body: output)
-        if var note = store.data.tasks.first(where: { $0.id == id }) {
-            note.dueDate = nil; note.reminderDates = []; note.reminderFollowsSchedule = false; note.tagIDs = []; note.priority = .none
-            store.updateTask(note, applyDefaultReminders: false)
-        }
-        saved = true
+        let accepted = store.createSummaryNote(title: "Summary \(rangeLabel)", body: output) != nil
+        saved = accepted
+        saveFailed = !accepted
     }
 }
