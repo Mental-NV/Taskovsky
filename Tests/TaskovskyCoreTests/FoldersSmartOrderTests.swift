@@ -202,6 +202,24 @@ final class FoldersSmartOrderTests: XCTestCase {
                                       kind: .task, recognizeDates: false, body: ""))
         XCTAssertEqual(store.data, workspace)
         XCTAssertNotNil(store.storageError)
+
+        // The composer must retain these exact inputs after rejection so an
+        // explicit retry keeps description and the ignored-date choice.
+        let body = "Owned description retained after failed section save."
+        XCTAssertNil(store.createTask(title: "QA Draft tomorrow", inSection: section.id, listID: list.id,
+                                      kind: .task, recognizeDates: false, body: body))
+        XCTAssertEqual(store.data, workspace)
+        try FileManager.default.removeItem(at: url)
+        try JSONEncoder().encode(workspace).write(to: url)
+        let id = try XCTUnwrap(store.createTask(title: "QA Draft tomorrow", inSection: section.id, listID: list.id,
+                                               kind: .task, recognizeDates: false, body: body))
+        let created = try XCTUnwrap(store.data.tasks.first(where: { $0.id == id }))
+        XCTAssertEqual(store.data.tasks.count, 1)
+        XCTAssertEqual(created.title, "QA Draft tomorrow")
+        XCTAssertEqual(created.body, body)
+        XCTAssertEqual(created.sectionID, section.id)
+        XCTAssertNil(created.dueDate)
+        XCTAssertEqual(TaskStore(fileURL: url, seed: false).data, store.data)
     }
 
     @MainActor func testMalformedFolderRecordFailsClosedPreservingFile() throws {

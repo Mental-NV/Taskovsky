@@ -1807,15 +1807,15 @@ struct WorkspaceView: View {
         case .day(let date): "due-\(date.timeIntervalSinceReferenceDate)"
         }
     }
-    private func addTask(body: String = "", recognizeDates: Bool = true) {
-        let title = quickTitle.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
+    private func addTask(body: String = "", recognizeDates: Bool = true) -> Bool {
+        let title = quickTitle.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return false }
         let due = contextualDate
         let id: UUID
         if let sectionCaptureID {
             guard let listID = activeList?.id,
                   let created = store.createTask(title: title, inSection: sectionCaptureID, listID: listID,
                                                  kind: quickKind, recognizeDates: recognizeDates, body: body)
-            else { actions.notice(store.storageError ?? "The selected section is no longer available."); return }
+            else { actions.notice(store.storageError ?? "The selected section is no longer available."); return false }
             id = created
             self.sectionCaptureID = nil
         } else {
@@ -1828,6 +1828,7 @@ struct WorkspaceView: View {
             if case .filter = destination { } else if case .tag = destination { } else { destination = created.listID.map(Destination.list) ?? .inbox }
         }
         selectTask(id); quickTitle = ""; quickFocused = true
+        return true
     }
     private func trash(_ id: UUID) { actions.trash(store: store, id: id); if detailState.selection == id { detailState.clear() } }
     private func restoreExplicit(_ id: UUID) {

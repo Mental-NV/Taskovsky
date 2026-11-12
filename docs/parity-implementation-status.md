@@ -155,3 +155,7 @@ The named additional time-zone rulers use Foundation's installed time-zone datab
 ### Calendar creation persistence hardening — November 12, 2026
 
 Mac Calendar new-task creation now retains the draft on failed storage writes and publishes task/tags/reminders only after successful persistence. Explicit retry creates one durable task; Cancel creates nothing. This is a source-backed correctness repair, not new TickTick parity or a change to ordinary quick-add/mobile creation. [Contract](changes/calendar-creation-atomic-2026-11-12.md) · [Verification](spec/verification.md#calendar-creation-atomic).
+
+### Mac section QuickEntry draft retention — November 12, 2026
+
+Rejected section submission retains description, expansion and ignored-date choice alongside its title and section target. Accepted capture still clears the composer. This is a source-backed interrupted-flow correction, not a wider ordinary quick-add transaction guarantee or new mobile/TickTick parity claim. [Contract](changes/quick-entry-failed-draft-2026-11-12.md).

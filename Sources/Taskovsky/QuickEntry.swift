@@ -10,7 +10,7 @@ struct QuickEntry: View {
     @Binding var focused: Bool
     var showsWhenIdle = true
     var onTemplate: () -> Void
-    var onSubmit: (String, Bool) -> Void
+    var onSubmit: (String, Bool) -> Bool
     @State private var description = ""
     @State private var showDescription = false
     @State private var ignoreDate = false
@@ -87,7 +87,8 @@ struct QuickEntry: View {
     }
     private func submit() {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        onSubmit(description, !ignoreDate); description = ""; showDescription = false; ignoreDate = false
+        guard onSubmit(description, !ignoreDate) else { return }
+        description = ""; showDescription = false; ignoreDate = false
     }
 }
 
