@@ -3,7 +3,7 @@ import CryptoKit
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-// Inert Mac boundary: no concrete OS center and no app/UI integration yet.
+// Mac orchestration boundary. All center effects are injected.
 enum MacReminderAuthorization { case notDetermined, authorized, denied }
 struct MacReminderNotification: Equatable {
     let identifier: String
@@ -12,12 +12,15 @@ struct MacReminderNotification: Equatable {
     let metadata: [String: String]
 }
 @MainActor protocol MacReminderCenter: AnyObject {
+    func setPresentationEnabled(_ enabled: Bool)
     func authorization() async throws -> MacReminderAuthorization
     func requestAuthorization() async throws -> Bool
     func pending() async throws -> [MacReminderNotification]
     func remove(identifiers: [String]) async throws
     func add(_ request: MacReminderNotification) async throws
 }
+
+extension MacReminderCenter { func setPresentationEnabled(_ enabled: Bool) {} }
 
 enum MacReminderFailureStage: Equatable { case authorization, snapshot, clock, pending, ownership, removal, addition }
 enum MacReminderStatus: Equatable {
@@ -36,13 +39,14 @@ enum MacReminderStatus: Equatable {
     init(workspaceURL: URL, settingsURL: URL, appScope: String, center: any MacReminderCenter) {
         self.center = center
         repository = WorkspaceFileRepository(workspaceURL: workspaceURL, settingsURL: settingsURL)
-        // Length-delimited canonical paths and explicit app identity prevent
-        // path ambiguity, process-random hashes and QA/production collisions.
+        prefix = "taskovsky.mac-reminder.v1.\(Self.workspaceKey(workspaceURL: workspaceURL, settingsURL: settingsURL, appScope: appScope))."
+    }
+
+    nonisolated static func workspaceKey(workspaceURL: URL, settingsURL: URL, appScope: String) -> String {
         let components = [appScope, workspaceURL.resolvingSymlinksInPath().standardizedFileURL.path,
                           settingsURL.resolvingSymlinksInPath().standardizedFileURL.path]
         let key = components.map { "\($0.utf8.count):\($0)" }.joined()
-        let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
-        prefix = "taskovsky.mac-reminder.v1.\(digest)."
+        return SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
     }
 
     // Entire operations are queued across suspension points, not merely actor-isolated.
@@ -56,7 +60,9 @@ enum MacReminderStatus: Equatable {
         return await task.value
     }
 
-    func enable(now: Date) async -> MacReminderStatus {
+    func enable(now: Date) async -> MacReminderStatus { await enable(clock: { now }) }
+
+    func enable(clock: @escaping () -> Date) async -> MacReminderStatus {
         await enqueue {
             do {
                 let status = try await self.center.authorization()
@@ -66,20 +72,35 @@ enum MacReminderStatus: Equatable {
                 case .denied: allowed = false
                 case .notDetermined: allowed = try await self.center.requestAuthorization()
                 }
-                guard allowed else { self.enabled = false; return .denied }
+                guard allowed else { self.enabled = false; self.center.setPresentationEnabled(false); return .denied }
                 self.enabled = true
-                return await self.reconcile(now: now)
+                return await self.reconcile(clock: clock)
             } catch { return .failed(stage: .authorization, added: 0, removalsSubmitted: 0) }
         }
     }
 
     func refresh(now: Date) async -> MacReminderStatus {
-        await enqueue { await self.reconcile(now: now) }
+        await enqueue { await self.reconcile(clock: { now }) }
+    }
+
+    /// Restore persisted intent without requesting authorization, including
+    /// recovery after an earlier explicit request was denied.
+    func restoreEnabled(clock: @escaping () -> Date) async -> MacReminderStatus {
+        await enqueue {
+            self.enabled = true
+            return await self.reconcile(clock: clock)
+        }
+    }
+
+    /// Stops this process immediately; used when persisting opt-out fails.
+    func suspend() async {
+        _ = await enqueue { self.enabled = false; self.center.setPresentationEnabled(false); return .disabled }
     }
 
     func disable() async -> MacReminderStatus {
         await enqueue {
             self.enabled = false
+            self.center.setPresentationEnabled(false)
             var stage = MacReminderFailureStage.pending
             do {
                 let pending = try await self.center.pending()
@@ -91,18 +112,19 @@ enum MacReminderStatus: Equatable {
         }
     }
 
-    private func reconcile(now: Date) async -> MacReminderStatus {
+    private func reconcile(clock: () -> Date) async -> MacReminderStatus {
         guard enabled else { return .disabled }
         var stage = MacReminderFailureStage.authorization
         var added = 0, removed = 0
         do {
-            guard try await center.authorization() == .authorized else { return .denied }
-            stage = .snapshot
-            let saved = try await repository.loadReadOnlyForReminders()
-            let plan = LocalReminderPlan(fromPersisted: saved.snapshot.workspace, now: now)
-            guard plan.hasValidClock else { return .failed(stage: .clock, added: 0, removalsSubmitted: 0) }
+            guard try await center.authorization() == .authorized else { center.setPresentationEnabled(false); return .denied }
+            center.setPresentationEnabled(true)
             stage = .pending
             let pending = try await center.pending()
+            stage = .snapshot
+            let saved = try await repository.loadReadOnlyForReminders()
+            let plan = LocalReminderPlan(fromPersisted: saved.snapshot.workspace, now: clock())
+            guard plan.hasValidClock else { return .failed(stage: .clock, added: 0, removalsSubmitted: 0) }
             let desiredIDs = Set(plan.requests.map { prefix + $0.identifier })
             // Do not overwrite a malformed/unknown request merely because its ID
             // collides with one we would like to own.
@@ -114,8 +136,14 @@ enum MacReminderStatus: Equatable {
                 removed = diff.identifiersToRemove.count
             }
             stage = .addition
-            for request in diff.requestsToAdd { try await center.add(encode(request)); added += 1 }
-            return .ready(pending: plan.requests.count, deferred: plan.deferredCount)
+            var expired = 0
+            for request in diff.requestsToAdd {
+                let now = clock()
+                guard now.timeIntervalSinceReferenceDate.isFinite else { return .failed(stage: .clock, added: added, removalsSubmitted: removed) }
+                if request.fireDate <= now { expired += 1; continue }
+                try await center.add(encode(request)); added += 1
+            }
+            return .ready(pending: plan.requests.count - expired, deferred: plan.deferredCount)
         } catch { return .failed(stage: stage, added: added, removalsSubmitted: removed) }
     }
 

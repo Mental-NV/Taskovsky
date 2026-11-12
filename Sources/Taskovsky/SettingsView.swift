@@ -76,6 +76,7 @@ struct SettingsView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: TaskStore
     let calendarShortcuts: CalendarShortcutBindings
+    @ObservedObject var localNotifications: MacLocalNotifications
     @State private var section: Section = .smartLists
     @State private var editingTemplate: TemplateDraft?
     @State private var previewingTemplate: TaskTemplate?
@@ -192,6 +193,16 @@ struct SettingsView: View {
             group {
                 toggleRow("Time Zone", $store.settings.enableTimeZone)
                 explanation("If enabled, you can select the time zone when setting time for tasks.")
+            }
+            group {
+                row("Local Notifications") {
+                    Button(localNotifications.isEnabled ? "Disable on This Mac" : "Enable on This Mac") {
+                        let enabled = !localNotifications.isEnabled
+                        Task { await localNotifications.setEnabled(enabled) }
+                    }.disabled(localNotifications.isBusy)
+                }
+                explanation("Local alerts use generic content, not task titles. Enabling may ask for macOS notification permission.")
+                explanation(localNotifications.isBusy ? "Updating…" : localNotifications.statusText)
             }
         }
     }

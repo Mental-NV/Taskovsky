@@ -688,3 +688,8 @@ struct JSONKeySafety {
         return index > before
     }
 }
+
+/// Rejects ambiguous object keys before decoding device-local preference files.
+public enum WorkspaceJSONValidation {
+    public static func hasUniqueObjectKeys(_ data: Data) -> Bool { JSONKeySafety.hasUniqueKeys(data) }
+}
