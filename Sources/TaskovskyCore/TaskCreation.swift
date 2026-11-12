@@ -94,7 +94,7 @@ public enum TaskCreation {
             var recognizedRange = hasTime ? range : phraseRange
             if !hasTime {
                 let prefix = String(text[..<range.lowerBound])
-                let timePattern = "(?i)(?:\\bat\\s+([0-9]{1,2})(?::([0-9]{2}))?\\s*(am|pm)?|\\b([0-9]{1,2})(?::([0-9]{2}))\\s*(am|pm)?|\\b([0-9]{1,2})\\s*(am|pm))\\s+$"
+                let timePattern = "(?i)(?<![0-9])(?<![0-9]:)(?:\\bat\\s+([0-9]{1,2})(?::([0-9]{2}))?\\s*(am|pm)?|\\b([0-9]{1,2})(?::([0-9]{2}))\\s*(am|pm)?|\\b([0-9]{1,2})\\s*(am|pm))\\s+$"
                 if let timeRegex = try? NSRegularExpression(pattern: timePattern), let timeMatch = timeRegex.firstMatch(in: prefix, range: NSRange(prefix.startIndex..., in: prefix)), let prefixRange = Range(timeMatch.range, in: text) {
                     func part(_ index: Int) -> String? { Range(timeMatch.range(at: index), in: text).map { String(text[$0]).lowercased() } }
                     if let hourString = part(1) ?? part(4) ?? part(7), let hour = Int(hourString) {
