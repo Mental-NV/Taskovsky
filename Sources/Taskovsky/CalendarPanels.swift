@@ -25,6 +25,9 @@ struct CalendarEntryView: View {
     var showItemIcons = true
     var compact = false
     var trailingInset: CGFloat = 0
+    // Only timed cards opt into width adaptation; other card surfaces
+    // retain their existing icon presentation until separately observed.
+    var availableWidth: CGFloat? = nil
     var open: (UUID) -> Void
     var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
@@ -45,7 +48,10 @@ struct CalendarEntryView: View {
                         .accessibilityLabel("Future repeat preview")
                 } else if entry.isNote {
                     Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(tint)
-                } else if entry.canChangeCompletion {
+                } else if entry.canChangeCompletion && CalendarCardLayout.showsCompletionCheckbox(
+                    cardWidth: availableWidth.map(Double.init), trailingInset: Double(trailingInset),
+                    compact: compact, iconsEnabled: showItemIcons, forceReveal: temporarilyShowsIcons
+                ) {
                     Button { complete(entry) } label: {
                         Image(systemName: entry.isCompleted ? "checkmark.square.fill" : "square").font(.system(size: 10))
                     }.buttonStyle(.plain).foregroundStyle(tint)

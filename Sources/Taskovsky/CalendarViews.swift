@@ -551,7 +551,7 @@ private struct CalendarTimedBlock: View {
         let resizeWidth = min(22, width - gripWidth)
         let resizeHeight = min(9, canResizeStart && placement.endIsVisible ? height / 2 : height)
         CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showsIcon(for: entry), compact: height < 40,
-            trailingInset: gripWidth, open: open, complete: complete, edit: edit)
+            trailingInset: gripWidth, availableWidth: width, open: open, complete: complete, edit: edit)
             .frame(height: height, alignment: .top).clipped()
             .calendarDraggable(entry)
             .overlay(alignment: .bottom) {
