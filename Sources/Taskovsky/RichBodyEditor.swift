@@ -387,7 +387,7 @@ struct RichBodyEditor: NSViewRepresentable {
                     else if self.host.descriptionSession?.hasComposition(editorID: self.editorID) == true { self.commit(view) }
                 }
             }
-            if committedDocumentID == host.documentID {
+            if host.descriptionSession != nil && committedDocumentID == host.documentID {
                 if view.hasMarkedText() { captureComposition(view); return }
                 if host.descriptionSession?.hasComposition(editorID: editorID) == true {
                     // Final delegate delivery can lag a SwiftUI refresh. Preserve
@@ -750,7 +750,7 @@ private enum RichSlashFormat {
         }
     }
 
-    func apply(to controller: RichBodyController) {
+    @MainActor func apply(to controller: RichBodyController) {
         switch self {
         case .heading(let level): controller.setHeading(level)
         case .quote: controller.toggleQuote()

@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import TaskovskyCore
 import TaskovskyWorkspace
 
@@ -223,5 +224,34 @@ extension MacDescriptionSessionTests {
         XCTAssertTrue(session.hasUnsafeMemory)
         XCTAssertEqual(session.conflict(taskID: id, editorID: editor), text)
         XCTAssertEqual(session.presentation(taskID: id)?.editable, false)
+    }
+}
+
+
+extension MacDescriptionSessionTests {
+    @MainActor func testCompositionStateIsImmediateAndPublicationsAreCoalesced() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("workspace.json")
+        try JSONEncoder().encode(WorkspaceData(tasks: [])).write(to: file)
+        let session = MacDescriptionSession(store: TaskStore(fileURL: file, seed: false))
+        // Drain the initial store-subscription publication before observing edits.
+        try await Task.sleep(nanoseconds: 10_000_000)
+        let notification = expectation(description: "One coalesced publication")
+        var count = 0
+        let token = session.objectWillChange.sink { count += 1; if count == 1 { notification.fulfill() } }
+        defer { token.cancel() }
+        let task = UUID(), editor = UUID(), a = DescriptionSnapshot(body: "a", rich: nil)!, b = DescriptionSnapshot(body: "b", rich: nil)!
+        session.trackComposition(taskID: task, editorID: editor, content: a)
+        session.trackComposition(taskID: task, editorID: editor, content: b)
+        session.trackComposition(taskID: task, editorID: editor, content: b)
+        XCTAssertEqual(session.compositionSnapshots[editor], b); XCTAssertTrue(session.hasUnsafeMemory)
+        XCTAssertEqual(count, 0)
+        await fulfillment(of: [notification], timeout: 2)
+        XCTAssertEqual(count, 1)
+        session.trackComposition(taskID: task, editorID: editor, content: b)
+        try await Task.sleep(nanoseconds: 10_000_000)
+        XCTAssertEqual(count, 1)
     }
 }

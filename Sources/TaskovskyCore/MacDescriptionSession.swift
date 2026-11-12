@@ -31,6 +31,7 @@ import TaskovskyWorkspace
     private let location: MacDescriptionRecoveryDirectory?
     private var nodes: [UUID: Node] = [:]
     private var subscription: AnyCancellable?
+    private var publicationQueued = false
     private let makeJournal: (MacDescriptionRecoveryDirectory, UUID) throws -> any MacDescriptionJournalAccess
     public private(set) var recoveryErrors: [UUID: String] = [:]
     public private(set) var discoveryError: String?
@@ -73,12 +74,12 @@ import TaskovskyWorkspace
             discoveryError = nil
             for id in ids { await prepare(taskID: id) }
         } catch { discoveryError = "Description recovery could not be listed safely. Existing files were not changed." }
-        objectWillChange.send()
+        publish()
     }
     public func prepare(taskID: UUID) async {
         guard nodes[taskID] == nil, !preparing.contains(taskID) else { return }
         preparing.insert(taskID)
-        defer { preparing.remove(taskID); objectWillChange.send() }
+        defer { preparing.remove(taskID); publish() }
         let matches = store.data.tasks.filter { $0.id == taskID }
         let task = matches.count == 1 ? matches.first : nil
         let snapshot = task.flatMap { DescriptionSnapshot(body: $0.body, rich: $0.richBody) }
@@ -112,28 +113,30 @@ import TaskovskyWorkspace
         let task = store.data.tasks.first(where: { $0.id == taskID })
         guard !node.loading, node.journal != nil, node.recovered == nil, task.map(isEditable) == true, expectedRevision == node.revision else {
             node.conflicts[editorID] = content; node.message = "Another editor or saved value changed. Your local text is kept as a conflict."
-            objectWillChange.send(); return nil
+            publish(); return nil
         }
         if content == node.displayed { return node.revision }
         guard node.revision < Int.max - 1, let location else {
             node.conflicts[editorID] = content; node.message = "Description cannot be saved. Your local text is retained for copying."
-            objectWillChange.send(); return nil
+            publish(); return nil
         }
         if node.draft == nil { node.draft = MacDescriptionDraft(workspaceID: location.workspaceID, taskID: taskID, baseline: node.saved) }
         guard node.draft?.replace(with: content) == true else {
             node.conflicts[editorID] = content; node.message = "Description draft cannot advance. Your local text is retained for copying."
-            objectWillChange.send(); return nil
+            publish(); return nil
         }
         node.displayed = content; node.revision += 1; node.message = "Saving description…"
-        objectWillChange.send(); start(taskID, node: node); return node.revision
+        publish(); start(taskID, node: node); return node.revision
     }
     /// Marked text stays in AppKit. This memory-only copy protects teardown/quit,
     /// but is not a claim that the input-method composition itself is durable.
     public func hasComposition(editorID: UUID) -> Bool { compositions[editorID] != nil }
     public func trackComposition(taskID: UUID, editorID: UUID, content: DescriptionSnapshot?) {
-        if let content { compositions[editorID] = (taskID, content) }
-        else { compositions.removeValue(forKey: editorID) }
-        objectWillChange.send()
+        if let content {
+            if let previous = compositions[editorID], previous.taskID == taskID, previous.content == content { return }
+            compositions[editorID] = (taskID, content)
+        } else { guard compositions.removeValue(forKey: editorID) != nil else { return } }
+        publish()
     }
     public func retainUncommitted(taskID: UUID, editorID: UUID, content: DescriptionSnapshot) {
         let node: Node
@@ -143,7 +146,7 @@ import TaskovskyWorkspace
         node.conflicts[editorID] = content
         node.message = "Uncommitted editor text is retained for copying. It has not been saved to the task."
         compositions.removeValue(forKey: editorID)
-        objectWillChange.send()
+        publish()
     }
     public func retry(taskID: UUID) {
         guard let node = nodes[taskID], !node.loading else { return }
@@ -154,15 +157,15 @@ import TaskovskyWorkspace
               record.recovery(in: store.data, workspaceID: location.workspaceID) == .retryEligible else { return }
         node.recovered = nil; node.draft = record; node.durable = record
         node.saved = record.baseline; node.displayed = record.content; node.revision += 1
-        node.message = "Recovered draft; saving…"; objectWillChange.send(); start(taskID, node: node)
+        node.message = "Recovered draft; saving…"; publish(); start(taskID, node: node)
     }
     public func keepSaved(taskID: UUID) async {
         guard let node = nodes[taskID], !node.running, let record = node.recovered, let journal = node.journal else { return }
-        node.loading = true; objectWillChange.send()
+        node.loading = true; publish()
         let result = await journal.close(record)
         if result == .saved { node.recovered = nil; node.message = nil; node.loading = false; receive(store.data) }
         else { node.message = "The saved draft could not be cleared. It is still preserved." }
-        node.loading = false; objectWillChange.send()
+        node.loading = false; publish()
     }
     public func canDiscardCurrent(taskID: UUID) -> Bool {
         guard let node = nodes[taskID] else { return false }
@@ -174,7 +177,7 @@ import TaskovskyWorkspace
               node.revision == expectedRevision, node.displayed == expectedContent,
               let captured = node.draft, captured.content == expectedContent, let journal = node.journal,
               !compositions.values.contains(where: { $0.taskID == taskID }) else { return }
-        node.loading = true; objectWillChange.send()
+        node.loading = true; publish()
         // If cleanup is pending, this newer draft has not been offered yet.
         let result: FieldDraftWrite
         if let cleanup = node.cleanup { result = await journal.close(cleanup) }
@@ -182,13 +185,13 @@ import TaskovskyWorkspace
         node.loading = false
         guard node.draft == captured, node.revision == expectedRevision else {
             node.message = "The draft changed while discard was pending. Text remains retained."
-            objectWillChange.send(); return
+            publish(); return
         }
         if result == .saved {
             node.draft = nil; node.durable = nil; node.cleanup = nil; node.message = nil
             receive(store.data)
         } else { node.message = "The draft could not be discarded safely. It remains retained for retry or copying." }
-        objectWillChange.send()
+        publish()
     }
     public func conflict(taskID: UUID, editorID: UUID) -> DescriptionSnapshot? { nodes[taskID]?.conflicts[editorID] }
     /// Explicit caller action only; copying alone does not discard the retained candidate.
@@ -196,7 +199,7 @@ import TaskovskyWorkspace
         guard let node = nodes[taskID] else { return }
         node.conflicts.removeValue(forKey: editorID)
         if node.conflicts.isEmpty, node.draft == nil, node.recovered == nil { node.message = nil }
-        objectWillChange.send()
+        publish()
     }
     public func recoveryContent(taskID: UUID) -> DescriptionSnapshot? { nodes[taskID]?.recovered?.content }
     public func finishPending() async {
@@ -209,7 +212,7 @@ import TaskovskyWorkspace
         Task { await persist(id, node: node) }
     }
     private func persist(_ id: UUID, node: Node) async {
-        defer { node.running = false; objectWillChange.send() }
+        defer { node.running = false; publish() }
         guard let journal = node.journal else { return }
         while true {
             if let cleanup = node.cleanup {
@@ -234,7 +237,16 @@ import TaskovskyWorkspace
             node.saved = captured.content
             // Rotate before awaiting cleanup so newer typing gets a fresh identity.
             node.draft = nil; node.cleanup = captured
-            objectWillChange.send()
+            publish()
+        }
+    }
+    private func publish() {
+        guard !publicationQueued else { return }
+        publicationQueued = true
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.publicationQueued = false
+            self.objectWillChange.send()
         }
     }
     private func isEditable(_ task: TaskItem) -> Bool {
@@ -245,6 +257,6 @@ import TaskovskyWorkspace
             guard let task = workspace.tasks.first(where: { $0.id == id }), let value = DescriptionSnapshot(body: task.body, rich: task.richBody) else { continue }
             if value != node.displayed { node.saved = value; node.displayed = value; node.revision += 1 }
         }
-        objectWillChange.send()
+        publish()
     }
 }
