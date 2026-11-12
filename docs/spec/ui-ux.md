@@ -497,3 +497,5 @@ Use the Tasks view selector in an active list, folder or saved filter. Open a fo
 ### Mac Settings template Preview
 
 [Preview contract](../changes/mac-template-preview-2026-11-12.md): Settings template cards open a 560×400-point read-only sheet with fixed Preview header and Apply/help footer, scrolling title, description and checklist content. Close/Escape do not save. Apply uses the displayed template snapshot and closes only after successful task creation; failures remain visible and retryable. Explicit Edit stays in card options. This is a Mac representation; the iPhone editor is unchanged. Geometry is Taskovsky-owned, not a verified pixel measurement of TickTick.
+
+Mac template Edit/New displays a 12-point red save error above its actions and retains all staged fields when persistence fails. Explicit Save retries; Cancel/Escape dismisses without publishing that draft. [Transactional management contract](../changes/template-management-atomic-2026-11-12.md).

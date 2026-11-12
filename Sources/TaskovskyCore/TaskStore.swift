@@ -429,10 +429,27 @@ public final class TaskStore: ObservableObject {
     @discardableResult public func saveTemplate(from id: UUID, name: String? = nil) -> UUID? {
         guard let task = data.tasks.first(where: { $0.id == id }) else { return nil }
         let template = TaskTemplate(name: name ?? task.title, title: task.title, body: task.body, checklist: task.checklist, priority: task.priority, tagIDs: task.tagIDs, kind: task.kind, richBody: task.richBody?.valid(for: task.body), customRecurrence: task.customRecurrence, scheduledDuration: task.scheduledDuration)
-        data.templates.append(template); save(); return template.id
+        var staged = data
+        staged.templates.append(template)
+        guard writeWorkspace(staged) else { return nil }
+        data = staged
+        return template.id
     }
-    public func updateTemplate(_ template: TaskTemplate) { if let i = data.templates.firstIndex(where: { $0.id == template.id }) { data.templates[i] = template } else { data.templates.append(template) }; save() }
-    public func deleteTemplate(id: UUID) { data.templates.removeAll { $0.id == id }; save() }
+    @discardableResult public func updateTemplate(_ template: TaskTemplate) -> Bool {
+        var staged = data
+        if let i = staged.templates.firstIndex(where: { $0.id == template.id }) { staged.templates[i] = template }
+        else { staged.templates.append(template) }
+        guard writeWorkspace(staged) else { return false }
+        data = staged
+        return true
+    }
+    @discardableResult public func deleteTemplate(id: UUID) -> Bool {
+        var staged = data
+        staged.templates.removeAll { $0.id == id }
+        guard writeWorkspace(staged) else { return false }
+        data = staged
+        return true
+    }
     public func reorderTemplates(_ ids: [UUID], expectedOrder: [UUID]) -> Bool {
         var staged = data
         let change = TaskTemplateChange.reorder(ids: ids, expectedOrder: expectedOrder)
