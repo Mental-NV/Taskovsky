@@ -1,6 +1,6 @@
 # RICH-GUTTER-001 — Preserve readable long numbered-list markers
 
-Status: implemented and bounded Mac verification passed; hosted CI pending. Base `5783072`.
+Status: implemented and bounded Mac verification passed. Hosted checks and integration are tracked in [PR #33](https://github.com/Mental-NV/Taskovsky/pull/33). Base `5783072`.
 
 ## Problem and scope
 
