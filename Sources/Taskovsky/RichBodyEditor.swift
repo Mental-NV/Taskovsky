@@ -551,6 +551,18 @@ struct RichBodyEditor: NSViewRepresentable {
                     }
                 }
             }
+            if let storage = view.textStorage {
+                // Recompute after typing, formatting and Undo/Redo, not in
+                // TextKit's layout callback. Keep the current typing arm.
+                let typing = view.typingAttributes
+                applying = true
+                let changed = ListDecoration.normalizeNumberedGutters(in: storage)
+                applying = false
+                if changed {
+                    view.typingAttributes = typing
+                    host.controller.repairContinuation(beforeTyping: typing)
+                }
+            }
             let extracted = RichRender.extract(from: view)
             committedText = extracted.text
             committedRich = extracted.rich

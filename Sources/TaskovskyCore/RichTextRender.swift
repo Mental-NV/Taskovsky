@@ -213,6 +213,7 @@ public enum RichRender {
                 }
             }
         }
+        ListDecoration.normalizeNumberedGutters(in: result)
         return result
     }
 
