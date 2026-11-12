@@ -2,7 +2,7 @@
 
 ## Authority and scope
 
-This document describes the behavior implemented in source baseline `cfdec454acff91285ac00beaa20c0cf0f0961ee1` (main), reviewed on 2026-11-08. Executable source takes precedence over old reports and source comments. These are current-behavior requirements, not a claim of complete TickTick equivalence or a promise that every path is correct.
+This document was initially reconciled against source baseline `cfdec454acff91285ac00beaa20c0cf0f0961ee1` (main), reviewed on 2026-11-08, and has since been updated incrementally. See the [current integration baseline](../current-baseline.md) for the merged platform targets and recent checkpoints; the dated follow-up notes below describe their original verification scope. Executable source takes precedence over old reports and source comments. These are current-behavior requirements, not a claim of complete TickTick equivalence or a promise that every path is correct.
 
 Each stable `BUS-###` identifier names one behavior area. Acceptance cases below are review scenarios, not blanket pass claims. The follow-up CI implementation runs existing automated tests and release packaging on a hosted Mac; exact revisions, outcomes and limits are in the verification ledger. No new native macOS interaction or TickTick experiment was performed for this refresh. See the [verification ledger](verification.md), [UI/UX specification](ui-ux.md), and separate [TickTick parity tracker](../parity-implementation-status.md). The [iPhone scope](iphone.md) and [component proposals](../architecture/components.md) distinguish the original proposals from the November 9 partial implementation and remaining gates.
 

@@ -4,7 +4,13 @@ Taskovsky uses separate documents for product behavior, platform UI, implementat
 
 ## Current baseline and authority
 
-The baseline is the source at [`cfdec454acff91285ac00beaa20c0cf0f0961ee1`](https://github.com/Mental-NV/Taskovsky/commit/cfdec454acff91285ac00beaa20c0cf0f0961ee1), inspected on November 8, 2026. Source is the authority for what currently exists. Test files alone are evidence of intended cases, not evidence they passed. The follow-up [macOS CI implementation](spec/ci-cd.md) supplies fresh automated test/build results; exact checkout/run evidence is in the [verification ledger](spec/verification.md). No new interactive app session or TickTick experiment was performed for this reconciliation.
+Use the [current integration baseline](current-baseline.md) and latest source before planning work. Main now contains both the native Mac app and a separate iPhone target; the phone is not merely proposed. The latest checked integration is `dc6c7ab` (November 12, 2026). This pointer does not certify full parity or all manual acceptance cases.
+
+## Historical baseline and rollout notes
+
+The paragraphs below retain their original dated evidence. “Uncommitted,” “isolated” and “pending” describe those historical checkpoints, not the current main branch. Use the current integration index and per-feature verification records to determine what is already merged.
+
+The original November 8 baseline was the source at [`cfdec454acff91285ac00beaa20c0cf0f0961ee1`](https://github.com/Mental-NV/Taskovsky/commit/cfdec454acff91285ac00beaa20c0cf0f0961ee1), inspected on November 8, 2026. Source is the authority for what currently exists. Test files alone are evidence of intended cases, not evidence they passed. The follow-up [macOS CI implementation](spec/ci-cd.md) supplies fresh automated test/build results; exact checkout/run evidence is in the [verification ledger](spec/verification.md). No new interactive app session or TickTick experiment was performed for this reconciliation.
 
 A source-derived behavior can still be a bug. Known deviations are recorded separately instead of quietly being turned into desired requirements. The baseline includes [merged PR #2](https://github.com/Mental-NV/Taskovsky/pull/2): local Calendar plus fixes for the [five earlier findings](code-review-findings-2026-11-08.md) and [four Calendar findings](pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026). The documentation records those merged fixes. Follow-up CI reruns existing regressions; a separately approved `TaskDetail` view-section extraction addresses a compiler limit without changing intended behavior, as recorded in the verification ledger.
 
