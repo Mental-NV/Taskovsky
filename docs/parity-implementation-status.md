@@ -183,3 +183,7 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 ### Persistence follow-up: Mac schedule writes
 
 [CAL-SAVE-017](changes/calendar-lossless-save-2026-11-12.md) addresses reproduced local data preservation defects, not a new TickTick parity claim. Calendar commands/Undo and explicit Schedule Save/Clear preserve unrelated raw data and refuse stale independent-store baselines. Hosted verification passed as recorded in the [ledger](spec/verification.md#calendar-lossless-save); iPhone views and scheduling policy are unchanged.
+
+## Minimum-height Calendar outline follow-up (draft)
+
+A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-11-12.md) passed isolated dark rendering. Final-source tests/review and native interaction verification remain pending. This does not close full Calendar parity or PR65 focus gaps.

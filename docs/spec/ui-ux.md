@@ -512,3 +512,7 @@ Mac completion sound/success feedback and trash/restore feedback follow accepted
 ### Schedule save failure
 
 Mac schedule OK and Clear keep the popover and all staged fields on rejection, displaying an inline red 11-point message above the footer. Successful acknowledgement dismisses it. Cancel/Escape remains deliberate discard. A stale task requires reopening; failure never silently rebases the opening snapshot. [Contract](../changes/schedule-editor-persistence-2026-11-12.md).
+
+## Pending minimum-height timed card correction
+
+The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. It remains a draft pending final tests/review and native interaction checks; other compact cards are unchanged.

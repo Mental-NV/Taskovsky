@@ -68,7 +68,10 @@ struct CalendarEntryView: View {
         .font(.system(size: compact ? 11 : 12))
         .padding(.horizontal, 4).padding(.vertical, compact ? 1 : 4)
         .padding(.trailing, trailingInset)
-        .frame(maxWidth: .infinity, maxHeight: compact && !fillsAllocatedHeight ? nil : .infinity, alignment: .topLeading)
+        // Accept the timed slot even when the title has a larger intrinsic height.
+        // Paint the border inside that slot; the caller still clips overflowing content.
+        .frame(maxWidth: .infinity, minHeight: fillsAllocatedHeight ? 0 : nil,
+               maxHeight: compact && !fillsAllocatedHeight ? nil : .infinity, alignment: .topLeading)
         .background(style == .filled ? tint.opacity(entry.isCompleted ? 0.06 : 0.15) : Color.clear)
         .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 2) }
         .overlay { if style == .outline { RoundedRectangle(cornerRadius: 3).stroke(tint.opacity(0.5), lineWidth: 0.7) } }
