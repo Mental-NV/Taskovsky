@@ -117,6 +117,7 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
     private var reserved: Record?
     private var latestOffered: Record?
     private var closing: Record?
+    private var abandoning: Record?
     private var retiredIDs = Set<UUID>()
 
     public init(fileURL: URL,
@@ -131,7 +132,7 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
         return value
     }
     public func begin(_ draft: Record) -> FieldDraftWrite {
-        guard closing == nil, !retiredIDs.contains(draft.id), draft.version == 1, draft.sequence >= 0, draft.sequence < Int.max else { return .refused }
+        guard closing == nil, abandoning == nil, !retiredIDs.contains(draft.id), draft.version == 1, draft.sequence >= 0, draft.sequence < Int.max else { return .refused }
         if reserved == nil {
             switch read() {
             case .none: reserved = draft; latestOffered = draft
@@ -164,6 +165,19 @@ public actor LocalDraftStore<Record: LocalDraftRecord> {
         guard latestOffered == expected || closing == expected,
               case .available(let current) = read(), current == expected else { return .refused }
         return close(id: expected.id)
+    }
+    /// Explicit user abandonment of the exact latest offered generation. The
+    /// removal candidate may be an older durable generation after a failed write.
+    public func abandon(expected: Record) -> FieldDraftWrite {
+        guard latestOffered == expected || abandoning == expected || closing == expected else { return .refused }
+        if let abandoning, abandoning != expected { return .refused }
+        abandoning = expected
+        if reserved == nil, closing == nil, case .none = read() {
+            abandoning = nil; retiredIDs.insert(expected.id); return .saved
+        }
+        let result = close(id: expected.id)
+        if result == .saved { abandoning = nil }
+        return result
     }
     public func close(id: UUID) -> FieldDraftWrite {
         guard let expected = reserved ?? closing, expected.id == id else { return .refused }

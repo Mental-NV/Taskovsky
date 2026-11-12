@@ -62,6 +62,7 @@ public protocol MacDescriptionJournalAccess: Sendable {
     func load() async -> LocalDraftLoad<MacDescriptionDraft>
     func save(_ value: MacDescriptionDraft) async -> FieldDraftWrite
     func close(_ value: MacDescriptionDraft) async -> FieldDraftWrite
+    func abandon(_ value: MacDescriptionDraft) async -> FieldDraftWrite
 }
 
 public actor MacDescriptionJournal: MacDescriptionJournalAccess {
@@ -98,6 +99,10 @@ public actor MacDescriptionJournal: MacDescriptionJournalAccess {
     public func close(_ value: MacDescriptionDraft) async -> FieldDraftWrite {
         guard owns(value), (try? validate()) != nil else { return .refused }
         return await journal.close(expected: value)
+    }
+    public func abandon(_ value: MacDescriptionDraft) async -> FieldDraftWrite {
+        guard owns(value), (try? validate()) != nil else { return .refused }
+        return await journal.abandon(expected: value)
     }
     private func owns(_ value: MacDescriptionDraft) -> Bool {
         value.workspaceID == workspaceID && value.taskID == taskID && value.version == 1 && value.sequence >= 0 && value.sequence < Int.max

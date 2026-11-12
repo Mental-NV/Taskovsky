@@ -306,7 +306,7 @@ struct RichBodyEditor: NSViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, NSTextViewDelegate {
+    @MainActor final class Coordinator: NSObject, NSTextViewDelegate {
         var host: RichBodyEditor
         let editorID = UUID()
         private var acceptedRevision: Int?
@@ -771,7 +771,7 @@ private enum RichSlashFormat {
 
 /// Owns the text view for toolbar commands. Shared by the toolbar and the
 /// editor so controls operate on the live selection and typing attributes.
-final class RichBodyController: ObservableObject {
+@MainActor final class RichBodyController: ObservableObject {
     weak var textView: NSTextView?
     @Published var active = RichToolbarState()
     @Published var linkDraft = ""

@@ -136,7 +136,9 @@ import TaskovskyWorkspace
         objectWillChange.send()
     }
     public func retainUncommitted(taskID: UUID, editorID: UUID, content: DescriptionSnapshot) {
-        let node = nodes[taskID] ?? Node(content)
+        let node: Node
+        if let existing = nodes[taskID] { node = existing }
+        else { node = Node(content); node.loading = false }
         nodes[taskID] = node
         node.conflicts[editorID] = content
         node.message = "Uncommitted editor text is retained for copying. It has not been saved to the task."
@@ -162,6 +164,32 @@ import TaskovskyWorkspace
         else { node.message = "The saved draft could not be cleared. It is still preserved." }
         node.loading = false; objectWillChange.send()
     }
+    public func canDiscardCurrent(taskID: UUID) -> Bool {
+        guard let node = nodes[taskID] else { return false }
+        return !node.running && !node.loading && node.draft != nil && node.recovered == nil
+            && !compositions.values.contains(where: { $0.taskID == taskID })
+    }
+    public func discardCurrent(taskID: UUID, expectedContent: DescriptionSnapshot, expectedRevision: Int) async {
+        guard let node = nodes[taskID], !node.running, !node.loading, node.recovered == nil,
+              node.revision == expectedRevision, node.displayed == expectedContent,
+              let captured = node.draft, captured.content == expectedContent, let journal = node.journal,
+              !compositions.values.contains(where: { $0.taskID == taskID }) else { return }
+        node.loading = true; objectWillChange.send()
+        // If cleanup is pending, this newer draft has not been offered yet.
+        let result: FieldDraftWrite
+        if let cleanup = node.cleanup { result = await journal.close(cleanup) }
+        else { result = await journal.abandon(captured) }
+        node.loading = false
+        guard node.draft == captured, node.revision == expectedRevision else {
+            node.message = "The draft changed while discard was pending. Text remains retained."
+            objectWillChange.send(); return
+        }
+        if result == .saved {
+            node.draft = nil; node.durable = nil; node.cleanup = nil; node.message = nil
+            receive(store.data)
+        } else { node.message = "The draft could not be discarded safely. It remains retained for retry or copying." }
+        objectWillChange.send()
+    }
     public func conflict(taskID: UUID, editorID: UUID) -> DescriptionSnapshot? { nodes[taskID]?.conflicts[editorID] }
     /// Explicit caller action only; copying alone does not discard the retained candidate.
     public func discardConflict(taskID: UUID, editorID: UUID) {
@@ -173,10 +201,10 @@ import TaskovskyWorkspace
     public func recoveryContent(taskID: UUID) -> DescriptionSnapshot? { nodes[taskID]?.recovered?.content }
     public func finishPending() async {
         for (id, node) in nodes where node.draft != nil || node.cleanup != nil { start(id, node: node) }
-        while nodes.values.contains(where: { $0.running }) { try? await Task.sleep(nanoseconds: 10_000_000) }
+        while nodes.values.contains(where: { $0.running || $0.loading }) { try? await Task.sleep(nanoseconds: 10_000_000) }
     }
     private func start(_ id: UUID, node: Node) {
-        guard !node.running, node.journal != nil, node.recovered == nil else { return }
+        guard !node.running, !node.loading, node.journal != nil, node.recovered == nil else { return }
         node.running = true
         Task { await persist(id, node: node) }
     }

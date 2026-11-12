@@ -52,6 +52,7 @@ import TaskovskyWorkspace
 struct DescriptionRecoveryView: View {
     @ObservedObject var session: MacDescriptionSession
     @State private var discardTask: UUID?
+    @State private var discardLive: (id: UUID, content: DescriptionSnapshot, revision: Int)?
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -82,7 +83,11 @@ struct DescriptionRecoveryView: View {
                                 }
                             } else if view.conflicts.isEmpty {
                                 snapshot(view.content)
-                                Button("Retry Save") { session.retry(taskID: id) }
+                                HStack {
+                                    Button("Retry Save") { session.retry(taskID: id) }
+                                    Button("Discard Unsaved Draft…") { discardLive = (id, view.content, view.revision) }
+                                        .disabled(!session.canDiscardCurrent(taskID: id))
+                                }
                             }
                             ForEach(view.conflicts.keys.sorted(by: { $0.uuidString < $1.uuidString }), id: \.self) { editor in
                                 if let content = view.conflicts[editor] {
@@ -96,6 +101,15 @@ struct DescriptionRecoveryView: View {
                 Button("Check Recovery Files Again") { Task { await session.discoverRecovery() } }
             }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
         }
+        .alert("Discard this unsaved description?", isPresented: Binding(get: { discardLive != nil }, set: { if !$0 { discardLive = nil } })) {
+            Button("Cancel", role: .cancel) { discardLive = nil }
+            Button("Discard Unsaved Draft", role: .destructive) {
+                if let reviewed = discardLive {
+                    Task { await session.discardCurrent(taskID: reviewed.id, expectedContent: reviewed.content, expectedRevision: reviewed.revision) }
+                }
+                discardLive = nil
+            }
+        } message: { Text("The task's saved description is kept. Discard is refused if this draft changed or its recovery file cannot be cleared safely.") }
         .alert("Discard this saved recovery draft?", isPresented: Binding(get: { discardTask != nil }, set: { if !$0 { discardTask = nil } })) {
             Button("Cancel", role: .cancel) { discardTask = nil }
             Button("Discard Recovery", role: .destructive) {
