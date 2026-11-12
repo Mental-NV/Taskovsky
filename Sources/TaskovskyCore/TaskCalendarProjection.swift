@@ -319,10 +319,19 @@ public enum CalendarTimedLayout {
             let c = calendar.dateComponents([.hour, .minute, .second], from: date)
             return Double((c.hour ?? 0) * 60 + (c.minute ?? 0)) + Double(c.second ?? 0) / 60
         }
-        let sorted = entries.filter { !$0.isAllDay && $0.start < visibleEnd && $0.end > visibleStart }.sorted {
+        // Absolute ordering reverses during a repeated civil hour. Lane packing
+        // must use the same clipped coordinates that the views actually paint.
+        let sorted = entries.compactMap { entry -> (entry: CalendarEntry, start: Double, end: Double)? in
+            guard !entry.isAllDay, entry.start < visibleEnd, entry.end > visibleStart else { return nil }
+            let rawStart = minute(entry.start), rawEnd = minute(entry.end)
+            let a = max(Double(window.firstMinute), rawStart)
+            let b = min(Double(window.endMinute), max(rawStart + 15, rawEnd))
+            guard a < b else { return nil }
+            return (entry, a, b)
+        }.sorted {
             if $0.start != $1.start { return $0.start < $1.start }
             if $0.end != $1.end { return $0.end > $1.end }
-            return $0.id < $1.id
+            return $0.entry.id < $1.entry.id
         }
         var result: [CalendarTimedPlacement] = [], cluster: [CalendarTimedPlacement] = []
         var laneEnds: [Double] = [], clusterEnd = -1.0
@@ -331,11 +340,8 @@ public enum CalendarTimedLayout {
             for var item in cluster { item.columnCount = count; result.append(item) }
             cluster = []; laneEnds = []; clusterEnd = -1
         }
-        for entry in sorted {
-            let rawStart = minute(entry.start), rawEnd = minute(entry.end)
-            let a = max(Double(window.firstMinute), rawStart)
-            let b = min(Double(window.endMinute), max(rawStart + 15, rawEnd))
-            guard a < b else { continue }
+        for item in sorted {
+            let entry = item.entry, a = item.start, b = item.end
             if a >= clusterEnd { flush() }
             let lane = laneEnds.firstIndex { $0 <= a } ?? laneEnds.count
             if lane == laneEnds.count { laneEnds.append(b) } else { laneEnds[lane] = b }

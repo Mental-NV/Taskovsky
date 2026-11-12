@@ -523,6 +523,79 @@ final class MobileContractTests: XCTestCase {
         XCTAssertTrue(months.marks.allSatisfy { local.component(.day, from: $0) == 1 })
     }
 
+    func testRepeatedHourCalendarCardsPackByPaintedIntervals() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let day = date("2026-11-01T04:00:00Z")
+        let spans = [("A", "2026-11-01T05:10:00Z", "2026-11-01T05:30:00Z"),
+                     ("B", "2026-11-01T05:50:00Z", "2026-11-01T05:55:00Z"),
+                     ("C", "2026-11-01T06:20:00Z", "2026-11-01T06:40:00Z")]
+        let tasks = spans.map { name, start, end in
+            TaskItem(title: name, dueDate: date(end), hasDueTime: true,
+                scheduledDuration: .init(start: date(start), end: date(end)))
+        }
+        let entries = TaskCalendarProjection.project(data: WorkspaceData(tasks: tasks),
+            range: DateInterval(start: day, duration: 25 * 3600), options: .init(), calendar: local).entries
+        let permutations = [[0,1,2], [0,2,1], [1,0,2], [1,2,0], [2,0,1], [2,1,0]]
+        var baseline: [CalendarTimedPlacement]?
+        for order in permutations {
+            let placements = CalendarTimedLayout.placements(entries: order.map { entries[$0] }, day: day, calendar: local)
+            if let baseline { XCTAssertEqual(placements, baseline) } else { baseline = placements }
+            let a = try XCTUnwrap(placements.first { $0.entry.title == "A" })
+            let b = try XCTUnwrap(placements.first { $0.entry.title == "B" })
+            let c = try XCTUnwrap(placements.first { $0.entry.title == "C" })
+            XCTAssertEqual(a.columnCount, 2)
+            XCTAssertEqual(c.columnCount, 2)
+            XCTAssertNotEqual(a.column, c.column)
+            XCTAssertEqual(b.columnCount, 1)
+            XCTAssertEqual(a.startMinute, 70); XCTAssertEqual(c.startMinute, 80)
+            XCTAssertEqual(b.startMinute, 110); XCTAssertEqual(b.endMinute, 125)
+        }
+    }
+
+    func testHourlyPackingKeepsPaintedRectanglesDisjointAcrossDSTAndClipping() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        for text in ["2026-11-01T04:00:00Z", "2026-03-08T05:00:00Z", "2026-11-02T05:00:00Z"] {
+            let day = date(text)
+            let tasks = (0..<36).map { index -> TaskItem in
+                let start = day + Double(index * 7 + 45) * 60
+                let end = start + Double(index % 4) * 600
+                return TaskItem(title: "Card \(index)", dueDate: end, hasDueTime: true,
+                    scheduledDuration: index % 5 == 0 ? nil : .init(start: start, end: end))
+            }
+            let entries = TaskCalendarProjection.project(data: WorkspaceData(tasks: tasks),
+                range: DateInterval(start: day, duration: 25 * 3600), options: .init(), calendar: local).entries
+            for window in [CalendarHourlyWindow.full, .init(foldedHours: .init(earlyEnd: 1, lateStart: 3))] {
+                let placements = CalendarTimedLayout.placements(entries: entries, day: day, calendar: local, window: window)
+                XCTAssertEqual(placements, CalendarTimedLayout.placements(entries: Array(entries.reversed()), day: day, calendar: local, window: window))
+                for (index, a) in placements.enumerated() {
+                    XCTAssertTrue(entries.contains(a.entry)) // layout never rewrites timestamps
+                    XCTAssertGreaterThanOrEqual(a.startMinute, Double(window.firstMinute))
+                    XCTAssertLessThanOrEqual(a.endMinute, Double(window.endMinute))
+                    for b in placements.dropFirst(index + 1) where a.startMinute < b.endMinute && b.startMinute < a.endMinute {
+                        XCTAssertEqual(a.columnCount, b.columnCount)
+                        XCTAssertNotEqual(a.column, b.column, "Painted cards overlap: \(a.entry.title), \(b.entry.title)")
+                    }
+                }
+            }
+        }
+    }
+
+    func testThousandCardHourlyLayoutPerformance() throws {
+        let day = date("2026-11-12T00:00:00Z")
+        let tasks = (0..<1000).map { index -> TaskItem in
+            let start = day + Double(index % 1380) * 60
+            return TaskItem(title: "Card \(index)", dueDate: start + 1800, hasDueTime: true,
+                scheduledDuration: .init(start: start, end: start + 1800))
+        }
+        let entries = TaskCalendarProjection.project(data: WorkspaceData(tasks: tasks),
+            range: DateInterval(start: day, duration: 86400), options: .init(), calendar: calendar).entries
+        measure {
+            XCTAssertEqual(CalendarTimedLayout.placements(entries: entries, day: day, calendar: calendar).count, 1000)
+        }
+    }
+
     func testUnchangedTimedEndResizePreservesShortAndZeroRanges() throws {
         for seconds in [0.0, 300.0, 300.125] {
             let start = date("2026-11-09T10:00:00Z").addingTimeInterval(0.25)

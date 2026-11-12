@@ -425,3 +425,7 @@ The local [Tasks Timeline](../changes/task-timeline-2026-11-09.md) projects the 
 ### Unchanged timed Calendar end resize
 
 For a valid coherent timed duration, submitting the exact existing end through Calendar end resize preserves the entire task, including short/zero ranges, reminders and recurrence overrides. Actual changed targets retain the 15-minute minimum; explicit point-to-duration conversion is unchanged. [CAL-END-RESIZE-003](../changes/calendar-end-resize-noop-2026-11-12.md).
+
+### Repeated-hour Calendar lane packing
+
+Hourly cards are clustered and assigned lanes by their clipped painted civil-minute intervals, including existing minimum visual heights. Absolute instants are not a valid packing order when civil time repeats. This retains the current single 24-hour wall grid and stored schedules; it does not introduce a second repeated-hour band. [CAL-DST-LAYOUT-004](../changes/calendar-dst-collisions-2026-11-12.md).
