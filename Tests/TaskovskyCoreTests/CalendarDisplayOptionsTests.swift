@@ -156,4 +156,76 @@ final class CalendarDisplayOptionsTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: workspace), bytes)
     }
 
+    @MainActor func testMacCalendarListColorPreservesWorkspaceAndExplicitOverrides() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let workspace = dir.appendingPathComponent("workspace.json")
+        let settings = dir.appendingPathComponent("settings.json")
+        let list = TaskList(name: "Work", color: "#123456", symbol: "briefcase", isPinned: true)
+        let other = TaskList(name: "Other", color: "#654321", isArchived: true)
+        let task = TaskItem(title: "Keep exact", listID: list.id)
+        let data = WorkspaceData(tasks: [task], lists: [list, other])
+        let encoded = try JSONEncoder().encode(data)
+        var document = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var rawLists = try XCTUnwrap(document["lists"] as? [[String: Any]])
+        rawLists[0]["unknownListField"] = "Keep this field"
+        document["lists"] = rawLists
+        let bytes = try JSONSerialization.data(withJSONObject: document)
+        try bytes.write(to: workspace)
+        var options = AppSettings()
+        options.calendarOptions.sourceColors[.list(list.id)] = "#445566"
+        options.calendarOptions.sourceColors[.inbox] = "#AABBCC"
+        try JSONEncoder().encode(options).write(to: settings)
+        let store = TaskStore(fileURL: workspace, settingsURL: settings, seed: false)
+
+        XCTAssertFalse(store.saveCalendarListColor(id: list.id, expected: list.color, color: "#ABCDEF"))
+        XCTAssertEqual(try Data(contentsOf: workspace), bytes)
+        var cleared = options.calendarOptions.sourceColors
+        cleared[.list(list.id)] = nil
+        XCTAssertTrue(store.saveCalendarSourceColors(cleared, expected: options.calendarOptions.sourceColors))
+        XCTAssertEqual(try Data(contentsOf: workspace), bytes)
+        let clearedSettings = try Data(contentsOf: settings)
+
+        for (id, expected, color) in [
+            (list.id, "#000000", "#ABCDEF"),
+            (list.id, list.color, "#INVALID"),
+            (other.id, other.color, "#ABCDEF"),
+            (UUID(), list.color, "#ABCDEF")
+        ] {
+            XCTAssertFalse(store.saveCalendarListColor(id: id, expected: expected, color: color))
+        }
+        XCTAssertTrue(store.saveCalendarListColor(id: list.id, expected: list.color, color: list.color))
+        XCTAssertEqual(try Data(contentsOf: workspace), bytes)
+
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: dir.path)
+        let savedWhileReadOnly = store.saveCalendarListColor(id: list.id, expected: list.color, color: "#ABCDEF")
+        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: dir.path)
+        XCTAssertFalse(savedWhileReadOnly)
+        XCTAssertEqual(store.data, data)
+        XCTAssertEqual(try Data(contentsOf: workspace), bytes)
+
+        var external = data
+        external.tasks[0].title = "External edit"
+        try JSONEncoder().encode(external).write(to: workspace)
+        XCTAssertFalse(store.saveCalendarListColor(id: list.id, expected: list.color, color: "#ABCDEF"))
+        XCTAssertEqual(try JSONDecoder().decode(WorkspaceData.self, from: Data(contentsOf: workspace)), external)
+        try bytes.write(to: workspace)
+
+        XCTAssertTrue(store.saveCalendarListColor(id: list.id, expected: list.color, color: "#abcdef"))
+        var updated = data
+        updated.lists[0].color = "#ABCDEF"
+        XCTAssertEqual(store.data, updated)
+        rawLists[0]["color"] = "#ABCDEF"
+        document["lists"] = rawLists
+        let saved = try JSONSerialization.jsonObject(with: Data(contentsOf: workspace))
+        XCTAssertEqual(try JSONSerialization.data(withJSONObject: saved, options: .sortedKeys),
+                       try JSONSerialization.data(withJSONObject: document, options: .sortedKeys))
+        XCTAssertEqual(try Data(contentsOf: settings), clearedSettings)
+        let reloaded = TaskStore(fileURL: workspace, settingsURL: settings, seed: false)
+        XCTAssertEqual(reloaded.data, updated)
+        XCTAssertEqual(reloaded.settings.calendarOptions.sourceColors, cleared)
+        XCTAssertEqual(TaskCalendarProjection.color(for: task, data: reloaded.data, by: .list, overrides: cleared), "#ABCDEF")
+    }
+
 }
