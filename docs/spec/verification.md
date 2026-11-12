@@ -1858,3 +1858,12 @@ Seven fake-center tests passed: default-off/no prompt and explicit grant; exact 
 Full local suite passed 91 Workspace + 104 Domain + 507 Core XCTest cases (702), plus 38 Swift tests. Signed Mac release packaging and iPhone Simulator compilation passed. Independent design and final code reviews passed after adding partial-progress receipts and actual path-isolation coverage. Original dirty desktop/mobile worktrees were audited unchanged (21 + 208 files and original HEADs). Codex remained idle; QA app, fixtures and preferences were untouched.
 
 Real authorization, OS notification registration/delivery, workspace-switch integration, persisted opt-in, app UI and physical iPhone behavior remain NOT RUN / unimplemented. Exact-head hosted CI remains required before merge.
+
+<a id="iphone-reminder-contract"></a>
+### iPhone reminder adapter contract probes — November 12, 2026
+
+[Proposed phone adapter](../changes/iphone-local-notifications-2026-11-12.md). This checkpoint adds documentation and four tests only, on merged shared planner/read-only repository APIs. It does not depend on the unmerged Mac OS transport and does not add a shipped iPhone adapter, preference identity or UI.
+
+Owned Mac-hosted repository/fake-center probes passed: unsaved reminder draft does not affect saved plan; acknowledged completion removes its reminder; injected failed completion write retains original bytes/reminder; unreadable/unknown/journal input cannot become an empty cancellation plan or recover the journal; independent container repositories read their own task IDs. The harness is test-only, not product scheduling code. Repository separation is not proof of future OS namespace isolation.
+
+Full local suite passed 95 Workspace + 104 Domain + 507 Core XCTest cases (706), plus 38 Swift tests. Independent design and test review passed. No app launch, notification framework access, permissions, registration or real settings changes occurred. iPhone runtime/file-protection, UUID identity persistence/relocation, opt-in behavior, native UI and physical-device delivery remain proposed/unverified. D04's separately approved physical-device feasibility gate remains required. Exact-head hosted checks remain the publication gate.
