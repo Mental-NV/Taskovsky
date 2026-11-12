@@ -168,3 +168,69 @@ jobs:
           path: ${{ env.CI_LOG_DIR }}
           if-no-files-found: error
           retention-days: 14
+
+
+  ios-simulator-compile:
+    name: Compile iPhone and tests (Simulator ARM64)
+    runs-on: macos-15
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - name: Check out event revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate compile gate command contract
+        run: python3 -m unittest discover -s scripts/tests -p test_ios_compile_gate.py
+
+      - name: Verify pinned toolchain and revision
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/ci-ios
+          {
+            test -d "$DEVELOPER_DIR"
+            test "$(uname -m)" = arm64
+            test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+            test "$(xcodebuild -version | head -n 1)" = 'Xcode 26.3'
+            printf 'event_sha=%s\npr_head_sha=%s\npr_base_sha=%s\n' "$EXPECTED_SHA" "$PR_HEAD_SHA" "$PR_BASE_SHA"
+            printf 'image_os=%s\nimage_version=%s\n' "${ImageOS:-unknown}" "${ImageVersion:-unknown}"
+            sw_vers
+          } 2>&1 | tee build/ci-ios/runner.log
+
+      - name: Compile iPhone app and test bundles without launching
+        id: compile
+        run: ./scripts/build-ios-simulator-ci.sh build/ci-ios
+
+      - name: Write compile-only result
+        if: always()
+        env:
+          COMPILE_OUTCOME: ${{ steps.compile.outcome }}
+        run: |
+          set -euo pipefail
+          mkdir -p build/ci-ios
+          {
+            printf '# iPhone Simulator compile gate\n\nCheckout: `%s`\n\nOutcome: %s\n' "$(git rev-parse HEAD)" "$COMPILE_OUTCOME"
+            printf '\nThis compiles the app and test bundles only. No simulator boot, test execution, device installation, signing or native UI verification occurred.\n'
+          } | tee build/ci-ios/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload iPhone compile diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ios-compile-diagnostics-${{ github.sha }}-${{ runner.arch }}
+          path: |
+            build/ci-ios/*.log
+            build/ci-ios/*.json
+            build/ci-ios/*.md
+            build/ci-ios/compile.xcresult
+          if-no-files-found: error
+          retention-days: 14

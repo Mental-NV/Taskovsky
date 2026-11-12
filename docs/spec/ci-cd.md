@@ -4,12 +4,12 @@
 
 **Implemented**, in [`.github/workflows/macos-ci.yml`](../../.github/workflows/macos-ci.yml), after the user requested implementation and verification on November 8, 2026. The original workflow from PR #1 is present in main `6ee96eeb8f88e74a105c518de2202233ea528efa`. This follow-up adds documentation-only path filtering on its own branch. The [verification ledger](verification.md#hosted-macos-ci) records historical test/build results; the [filter verification entry](verification.md#docs-only-ci-filter) distinguishes static acceptance from hosted execution for this change.
 
-The workflow runs the existing Swift tests and release-app packaging on a GitHub-hosted Mac regardless of a developer's local OS. It is CI plus downloadable build artifacts, **not continuous deployment, Developer ID signing or notarization**. There is no native UI-test target. Architecture extraction and the iPhone app remain proposals.
+The workflow runs the existing Swift tests and release-app packaging on a GitHub-hosted Mac regardless of a developer's local OS. It is CI plus downloadable build artifacts, **not continuous deployment, Developer ID signing or notarization**. The current source also contains a separate iPhone app and native test targets. The new [iPhone compile-only gate](#ci-006) compiles those targets; it does not execute their tests. Interactive native checks remain separate.
 
 <a id="ci-001"></a>
 ## CI-001 — Runner and toolchain
 
-The single job is `Test and package (macOS 15, ARM64)`, on standard hosted `macos-15`. It asserts `uname -m == arm64`. `DEVELOPER_DIR` selects `/Applications/Xcode_26.3.app/Contents/Developer`; setup asserts Xcode 26.3 and logs compiler, SDK, OS, architecture and runner-image versions. Missing or unexpected tools fail rather than silently falling back.
+The desktop job is `Test and package (macOS 15, ARM64)`, on standard hosted `macos-15`. It asserts `uname -m == arm64`. `DEVELOPER_DIR` selects `/Applications/Xcode_26.3.app/Contents/Developer`; setup asserts Xcode 26.3 and logs compiler, SDK, OS, architecture and runner-image versions. Missing or unexpected tools fail rather than silently falling back.
 
 The initial proposed Xcode 16.4 pin was actually tested. Its Swift 6.1.2 compiler failed to type-check the existing `TaskDetail.body` at `TaskDetail.swift:73`, before test execution. Xcode 26.3/Swift 6.2.4 reproduced the same source compiler failure. The user then explicitly approved a behavior-preserving `TaskDetail.body` refactor: eight original view sections became private computed `@ViewBuilder` properties, with the original state, bindings, actions and layout retained. The package deployment target and tests are unchanged. See the ledger for actual results after the refactor.
 
@@ -84,3 +84,13 @@ Start with no build cache. Ad-hoc signing needs no private certificate and does 
 For a feature branch, push changes to a draft/open PR and inspect its latest applicable macOS CI run. Match the PR head, base and tested merge SHA in provenance before accepting results. Require all applicable stages and inspect failures in `tests.log`, `build.log`, `signature.log` or `package.log`; retrieve `summary.md` and environment logs from diagnostics. A changed code/mixed head needs a new result. A filtered documentation-only head needs static document review, not a fabricated runtime pass; manually dispatch it if new binary evidence is needed.
 
 The [verification ledger](verification.md#hosted-macos-ci) is the implementation acceptance record, including the baseline run, controlled failure behavior, archive validation and exact environment. Hosted success does not close the recorded minimum-OS, Intel or manual UI gaps. The [filter follow-up](verification.md#docs-only-ci-filter) separately records what was exercised for the updated triggers. A later required-status change or deployment needs its own authorization.
+
+
+<a id="ci-006"></a>
+## CI-006 — iPhone Simulator compile-only gate
+
+The independent `Compile iPhone and tests (Simulator ARM64)` job uses the same pinned `macos-15` / Xcode 26.3 environment and event revision. Existing documentation-only exclusions apply to both jobs. Missing tools fail rather than silently selecting a different Xcode. No branch protection, permissions or signing secrets change.
+
+`./scripts/build-ios-simulator-ci.sh build/ci-ios` runs `build-for-testing` for the shared `TaskovskyMobile` scheme, Debug, `iphonesimulator`, generic iOS Simulator destination, ARM64 and disabled signing. It records the resolved iOS 17.0 deployment target, checks app/test bundles and the test-run manifest, and preserves provenance/build logs and `.xcresult` diagnostics for 14 days. Use a fresh output directory for local reruns; previous evidence is not deleted. The small Python command-double suite tests failure propagation and the non-execution contract, not iOS behavior.
+
+**This is a compile gate, not a test run.** It does not boot a Simulator, launch/install an app, run `MobileContracts`/`MobileNavigation`, request permissions, contact an Apple developer account, publish a signed iPhone release, or prove iOS 17 runtime/physical-device/UI compatibility. Both desktop and iPhone compilation jobs must succeed for a code PR; independent native gates can still block readiness. First hosted execution is pending in [the change record](../changes/ios-simulator-compile-ci-2026-11-12.md).
