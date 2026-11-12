@@ -369,7 +369,7 @@ A Year day preview projects the selected civil day in the displayed Calendar zon
 
 **Evidence.** [TaskCalendar](../../Sources/TaskovskyCore/TaskCalendar.swift); [TaskCalendarProjection](../../Sources/TaskovskyCore/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
 
-Calendar List and Tag coloring can use a saved per-source override. Without one, a card follows its list or first existing assigned tag. Tag mode falls back to the Calendar list color when no assigned tag exists. Inbox has its own override and Priority uses fixed colors. Reset removes the override so the current workspace color applies again. Changing these preferences preserves workspace records and schedules. [Source color contract](../changes/calendar-source-colors-2026-11-10.md).
+Calendar List and Tag coloring can use a saved per-source override. Without one, a card follows its list or first existing assigned tag. Tag mode falls back to the Calendar list color when no assigned tag exists. Inbox has its own override and Priority uses fixed colors. Reset removes the override so the current workspace color applies again. Calendar-only preference edits preserve workspace records and schedules. On Mac, applying a named list color updates the shared list record. A saved Calendar override keeps precedence until the user saves **Use List Color**. [Source color contract](../changes/calendar-source-colors-2026-11-10.md) and [shared Mac list colors](../changes/mac-calendar-shared-list-color-2026-11-12.md).
 
 <a id="bus-028"></a>
 ### BUS-028 — Read-only recurrence forecasts and Arrange

@@ -582,20 +582,44 @@ private struct CalendarSourceColorSettings: View {
         let rows = CalendarColorSource.swatches(in: store.data, by: mode)
         VStack(alignment: .leading, spacing: 14) {
             Text(mode == .list ? "Calendar List Colors" : "Calendar Tag Colors").font(.headline)
-            Text("These colors apply only in Calendar.").font(.caption).foregroundStyle(.secondary)
+            Text(mode == .list ? "Named list colors apply in Tasks and Calendar. Inbox and existing overrides apply in Calendar." :
+                "These colors apply only in Calendar.")
+                .font(.caption).foregroundStyle(.secondary)
             ScrollView {
                 VStack(spacing: 8) {
                     if rows.isEmpty { Text("No tags to customize.").foregroundStyle(.secondary) }
                     ForEach(rows) { row in
-                        CalendarSourceColorRow(row: row, override: Binding(get: { draft[row.id] }, set: { draft[row.id] = $0 }))
+                        if case .list(let id) = row.id {
+                            if let legacy = original[row.id] {
+                                HStack(spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(row.name)
+                                        Text(draft[row.id] == nil ? "Uses list color after save" : "Calendar override")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }.frame(maxWidth: .infinity, alignment: .leading)
+                                    CalendarSourceSwatch(color: draft[row.id] == nil ? row.defaultColor : legacy)
+                                        .accessibilityHidden(true)
+                                    Button("Use List Color") { draft[row.id] = nil }
+                                        .disabled(draft[row.id] == nil)
+                                        .accessibilityLabel("Use List Color for " + row.name)
+                                }
+                            } else {
+                                CalendarSourceColorRow(row: row, override: .constant(nil), saveListColor: { expected, value in
+                                    store.saveCalendarListColor(id: id, expected: expected, color: value)
+                                })
+                            }
+                        } else {
+                            CalendarSourceColorRow(row: row, override: Binding(get: { draft[row.id] }, set: { draft[row.id] = $0 }))
+                        }
                     }
                 }.padding(.vertical, 2)
             }.frame(maxHeight: 280)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
             HStack {
                 Spacer()
-                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
-                Button("Done") {
+                Button(mode == .list ? "Cancel Calendar Changes" : "Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button(mode == .list ? "Save Calendar Changes" : "Done") {
                     if store.saveCalendarSourceColors(draft, expected: original) { dismiss() }
                     else { error = store.storageError ?? "Calendar colors changed. Open the editor again to review them." }
                 }.keyboardShortcut(.defaultAction)
@@ -607,8 +631,11 @@ private struct CalendarSourceColorSettings: View {
 private struct CalendarSourceColorRow: View {
     let row: CalendarColorSource.Swatch
     @Binding var override: String?
+    var saveListColor: ((String, String) -> Bool)? = nil
     @State private var editing = false
     @State private var hex = ""
+    @State private var expectedColor = ""
+    @State private var saveFailed = false
 
     private var color: String { override ?? row.defaultColor }
     private var normalizedHex: String? {
@@ -620,17 +647,20 @@ private struct CalendarSourceColorRow: View {
         HStack(spacing: 12) {
             Text(row.name).frame(maxWidth: .infinity, alignment: .leading)
             Button {
+                expectedColor = color
                 hex = color
+                saveFailed = false
                 editing = true
             } label: {
-                RoundedRectangle(cornerRadius: 4).fill(Color(hex: color))
-                    .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(.primary.opacity(0.18)) }
-                    .frame(width: 34, height: 19)
+                CalendarSourceSwatch(color: color)
             }.buttonStyle(.plain)
-                .accessibilityLabel("Color for " + row.name).accessibilityValue(override ?? "Default")
+                .accessibilityLabel("Color for " + row.name)
+                .accessibilityValue(saveListColor == nil ? override ?? "Default" : color)
                 .popover(isPresented: $editing, arrowEdge: .trailing) { picker }
-            Button("Default") { override = nil }
-                .disabled(override == nil).accessibilityLabel("Use default color for " + row.name)
+            if saveListColor == nil {
+                Button("Default") { override = nil }
+                    .disabled(override == nil).accessibilityLabel("Use default color for " + row.name)
+            }
         }
     }
 
@@ -639,7 +669,10 @@ private struct CalendarSourceColorRow: View {
             Text(row.name).font(.headline)
             HStack(spacing: 6) {
                 ForEach(palette, id: \.self) { preset in
-                    Button { select(preset) } label: {
+                    Button {
+                        if saveListColor == nil { select(preset) }
+                        else { hex = preset }
+                    } label: {
                         Circle().fill(Color(hex: preset)).frame(width: 22, height: 22)
                     }.buttonStyle(.plain).accessibilityLabel("Preset " + preset)
                 }
@@ -649,6 +682,14 @@ private struct CalendarSourceColorRow: View {
                     .accessibilityLabel("Hex color").onSubmit(applyHex)
                 Button("Apply", action: applyHex).disabled(normalizedHex == nil)
             }
+            if saveListColor != nil {
+                Text("Apply saves the list color in Tasks and Calendar.").font(.caption).foregroundStyle(.secondary)
+                if saveFailed {
+                    Text("The list color could not be saved. Check the workspace or reopen the editor.")
+                        .font(.caption).foregroundStyle(.red)
+                }
+                Button("Cancel") { editing = false }.keyboardShortcut(.cancelAction)
+            }
         }.padding(12).frame(width: 240)
     }
 
@@ -657,8 +698,22 @@ private struct CalendarSourceColorRow: View {
     }
 
     private func select(_ value: String) {
-        override = value
+        if let saveListColor {
+            guard saveListColor(expectedColor, value) else { saveFailed = true; return }
+        } else {
+            override = value
+        }
         editing = false
+    }
+}
+
+private struct CalendarSourceSwatch: View {
+    let color: String
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 4).fill(Color(hex: color))
+            .overlay { RoundedRectangle(cornerRadius: 4).strokeBorder(.primary.opacity(0.18)) }
+            .frame(width: 34, height: 19)
     }
 }
 

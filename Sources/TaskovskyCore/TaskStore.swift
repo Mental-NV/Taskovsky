@@ -89,12 +89,18 @@ public final class TaskStore: ObservableObject {
     }
 
     private func writeWorkspace(_ replacement: WorkspaceData? = nil) -> Bool {
+        writeWorkspaceBytes {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            return try encoder.encode(replacement ?? data)
+        }
+    }
+
+    private func writeWorkspaceBytes(_ encode: () throws -> Data) -> Bool {
         guard !blockedByLoadFailure else { return false }
         do {
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            try encoder.encode(replacement ?? data).write(to: fileURL, options: .atomic)
+            try encode().write(to: fileURL, options: .atomic)
             if !settingsLoadFailed { storageError = settingsSaveError }
             return true
         } catch {
@@ -131,6 +137,29 @@ public final class TaskStore: ObservableObject {
         publishingSavedSettings = true
         defer { publishingSavedSettings = false }
         settings = replacement
+        return true
+    }
+
+    public func saveCalendarListColor(id: UUID, expected: String, color: String) -> Bool {
+        guard !blockedByLoadFailure, !settingsLoadFailed,
+              settings.calendarOptions.sourceColors[.list(id)] == nil else { return false }
+        var draft = data
+        guard let changed = ListOrganizationCommand.setListColor(id, expected: expected, color: color)
+            .apply(to: &draft, now: Date()) else { return false }
+        guard let bytes = try? Data(contentsOf: fileURL),
+              let saved = try? Self.decodeWorkspace(bytes), saved == data else { return false }
+        guard changed else { return true }
+        // Patch the loaded document so a color edit preserves fields the model doesn't round-trip.
+        guard var document = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+              var lists = document["lists"] as? [[String: Any]],
+              let index = lists.firstIndex(where: { ($0["id"] as? String).flatMap(UUID.init(uuidString:)) == id }),
+              let color = draft.lists.first(where: { $0.id == id })?.color else { return false }
+        lists[index]["color"] = color
+        document["lists"] = lists
+        guard writeWorkspaceBytes({
+            try JSONSerialization.data(withJSONObject: document, options: [.prettyPrinted, .sortedKeys])
+        }) else { return false }
+        data = draft
         return true
     }
 

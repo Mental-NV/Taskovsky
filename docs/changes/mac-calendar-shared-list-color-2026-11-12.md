@@ -1,0 +1,18 @@
+# CAL-COLOR-002 — Edit shared named-list colors from Mac Calendar
+
+Approved November 12, 2026 by the scoped Taskovsky implementation request. Base `952f9de1bb65ee34c6c1e43ffd7e33a92b6dc4f4`. Affects [BUS-015 and BUS-027](../spec/business.md#bus-015), [UX-017](../spec/ui-ux.md#ux-017) and [TT-033](../parity-implementation-status.md#tt-033).
+
+On TickTick for Mac 8.2.20 (922), a disposable named-list swatch changed from blue to green through Calendar View Options. Its already-open Month card refreshed, the Tasks sidebar dot became green, and the card stayed green through navigation. The live check covered named lists and navigation. It did not cover tags, Inbox, app relaunch or sync. Separate bounded static inspection of the named-list callback and writer supports a shared project color update. [TickTick Calendar guide](https://help.ticktick.com/articles/7055782085826445312)
+
+Taskovsky currently saves per-source overrides through [CAL-COLOR-001](calendar-source-colors-2026-11-10.md). In Mac Calendar's List colors, a named list without an override opens the existing palette and hex controls with its shared list color. Apply writes that one list field. The label explains the effect on Tasks and Calendar. The editor uses the existing sizing, palette, typography and semantic feedback. The named swatch is keyboard accessible and has an accessible label. Cancel or dismissal discards the draft. Invalid input disables Apply. Failed or conflicting saves keep the draft and show an error.
+
+A named list with a saved override displays its effective Calendar color and identifies it as a Calendar override. **Use List Color** stages removal in the enclosing Calendar colors sheet. **Save Calendar Changes** commits the settings change and **Cancel Calendar Changes** discards it. These controls apply to Calendar overrides. A named list color already saved with Apply remains saved. Until the override removal is saved, the row cannot save a shared color. Reopen the sheet after saving the transition to edit the shared list color. Existing overrides load without migration. Each action writes one file. Inbox and tags retain their Calendar-only editor, Priority retains its fixed colors, and iPhone retains the existing preferences flow.
+
+The shared command compares the expected color and active list ID, validates the replacement and changes only that field. The Mac store writes an updated workspace before publishing it. A stale, archived or missing target, unreadable workspace or failed write leaves the saved state intact. A same-color Apply is a no-op. This edit follows existing list color operations, which have no Undo command.
+
+- **CAL-COLOR-002-A:** Apply a valid named-list color in a disposable Mac workspace. Verify existing Calendar cards and the Tasks sidebar reflect it, navigation and app relaunch retain it, and only the selected list color changes in the fixture. Apply followed by Cancel Calendar Changes retains the explicitly saved list color.
+- **CAL-COLOR-002-B:** Cancel or dismiss a staged edit. Check invalid hex and exercise stale, missing and archived lists and storage failure. Verify saved and published state is preserved.
+- **CAL-COLOR-002-C:** Seed a legacy named-list override. Verify it still masks the shared color. Cancel a staged Use List Color removal, then repeat and save. Verify the shared color becomes effective and adjacent preferences survive.
+- **CAL-COLOR-002-D:** Verify existing Inbox, Tag and Priority behavior and compile and run the existing iPhone Calendar options regression on a simulator.
+
+Run `swift test --disable-sandbox`, `./scripts/build-app.sh`, an isolated native Mac fixture check, and the iPhone simulator check. Record actual results in [verification](../spec/verification.md).

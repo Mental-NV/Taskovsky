@@ -37,6 +37,7 @@ public enum ListPlacement: Hashable, Sendable {
 public enum ListOrganizationCommand: Sendable {
     case saveList(TaskList, creating: Bool)
     case setListViewMode(UUID, TaskListViewMode)
+    case setListColor(UUID, expected: String, color: String)
     case deleteList(UUID)
     case duplicateList(UUID, copyID: UUID)
     case saveFolder(ListFolder, creating: Bool)
@@ -77,6 +78,14 @@ public enum ListOrganizationCommand: Sendable {
             guard matches.count == 1, let index = matches.first, !data.lists[index].isArchived else { return nil }
             guard data.lists[index].viewMode != mode else { return false }
             data.lists[index].viewMode = mode
+            return true
+        case .setListColor(let id, let expected, let color):
+            let matches = data.lists.indices.filter { data.lists[$0].id == id }
+            guard matches.count == 1, let index = matches.first, !data.lists[index].isArchived,
+                  data.lists[index].color == expected,
+                  let color = CalendarColorSource.Overrides.normalizedHex(color) else { return nil }
+            guard CalendarColorSource.Overrides.normalizedHex(expected) != color else { return false }
+            data.lists[index].color = color
             return true
         case .deleteList(let id):
             guard data.lists.contains(where: { $0.id == id }) else { return nil }
