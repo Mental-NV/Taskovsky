@@ -3,9 +3,10 @@ import TaskovskyCore
 
 struct ScheduleEditor: View {
     @Environment(\.dismiss) private var dismiss
-    let task: TaskItem
+    @State private var task: TaskItem
     let settings: AppSettings
-    let save: (TaskItem) -> Void
+    let save: (TaskItem, TaskItem) -> Bool
+    @State private var saveFailed = false
     @State private var date: Date
     @State private var hasDate: Bool
     @State private var hasTime: Bool
@@ -26,8 +27,8 @@ struct ScheduleEditor: View {
     private enum Row { case time, reminder, duration, repeatRule, end }
     private var calendar: Calendar { var cal = settings.calendar; cal.timeZone = TimeZone(identifier: zoneID) ?? .current; return cal }
 
-    init(task: TaskItem, settings: AppSettings, save: @escaping (TaskItem) -> Void) {
-        self.task = task; self.settings = settings; self.save = save
+    init(task: TaskItem, settings: AppSettings, save: @escaping (TaskItem, TaskItem) -> Bool) {
+        _task = State(initialValue: task); self.settings = settings; self.save = save
         _zoneSelection = State(initialValue: ScheduleZoneSelection(storedIdentifier: task.timeZoneID,
             fallbackIdentifier: TimeZone.current.identifier))
         _date = State(initialValue: task.dueDate ?? Calendar.current.startOfDay(for: Date()))
@@ -207,6 +208,11 @@ struct ScheduleEditor: View {
                 }
             }
             Divider()
+            if saveFailed {
+                Text("Could not save schedule. Your draft is kept. Retry, or reopen if the task changed.")
+                    .font(.system(size: 11)).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("scheduleSaveError")
+            }
             HStack {
                 Button("Clear") { clear() }.buttonStyle(.plain)
                 Spacer()
@@ -335,7 +341,7 @@ struct ScheduleEditor: View {
         hasDate = true
     }
     private func clear() {
-        var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.endReminderEnabled = false; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence); updated.scheduledDuration = nil; updated.timeZoneID = nil; save(updated); dismiss()
+        var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.endReminderEnabled = false; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence); updated.scheduledDuration = nil; updated.timeZoneID = nil; submit(updated)
     }
     private func apply() {
         // Custom and legacy repeats stay mutually exclusive: a valid custom
@@ -359,7 +365,12 @@ struct ScheduleEditor: View {
         updated.reminderFollowsSchedule = hasDate ? automaticReminder : nil
         updated.timeZoneID = hasDate && (timed || settings.enableTimeZone || task.timeZoneID != nil) ? zoneSelection.storedIdentifier : nil
         if task.dueDate != updated.dueDate || task.recurrence != updated.recurrence { updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil }
-        save(updated); dismiss()
+        submit(updated)
+    }
+    private func submit(_ candidate: TaskItem) {
+        guard save(candidate, task) else { saveFailed = true; return }
+        saveFailed = false
+        dismiss()
     }
     private func format(_ value: Date, dateStyle: DateFormatter.Style, timeStyle: DateFormatter.Style) -> String {
         let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone

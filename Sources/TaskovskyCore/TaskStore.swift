@@ -205,6 +205,31 @@ public final class TaskStore: ObservableObject {
         }
     }
 
+    /// Mac schedule editor owns scheduling fields, never the entire opening record.
+    public func saveSchedule(_ candidate: TaskItem, expected: TaskItem) -> Bool {
+        guard candidate.id == expected.id,
+              let index = data.tasks.firstIndex(where: { $0.id == expected.id }) else { return false }
+        let current = data.tasks[index]
+        guard current.deletedAt == nil, !isInArchivedList(current),
+              current.kind == expected.kind, current.completedAt == expected.completedAt,
+              current.wontDoAt == expected.wontDoAt,
+              CalendarScheduleSnapshot(current) == CalendarScheduleSnapshot(expected) else { return false }
+        var updated = CalendarScheduleSnapshot(candidate).restoring(on: current)
+        var calendar = settings.calendar
+        if let id = updated.timeZoneID, let zone = TimeZone(identifier: id) { calendar.timeZone = zone }
+        let schedule = Self.coherentSchedule(dueDate: updated.dueDate, hasDueTime: updated.hasDueTime,
+                                            window: updated.scheduledDuration, calendar: calendar)
+        updated.dueDate = schedule.dueDate; updated.hasDueTime = schedule.hasDueTime
+        updated.scheduledDuration = schedule.window
+        TaskSchedulePolicy.reconcileSeries(of: &updated, from: current)
+        TaskSchedulePolicy.normalizeEndReminder(of: &updated)
+        updated.updatedAt = Date()
+        var staged = data; staged.tasks[index] = updated
+        guard writeWorkspace(staged) else { return false }
+        data = staged
+        return true
+    }
+
     public func updateTask(_ task: TaskItem, applyDefaultReminders: Bool = true) {
         guard let index = data.tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var task = task

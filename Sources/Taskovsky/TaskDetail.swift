@@ -123,7 +123,7 @@ struct TaskDetail: View {
                     }.font(.system(size: 12)).foregroundStyle(task.dueDate.map { pastDue($0) ? .red : accent } ?? .secondary).padding(4)
                 }
             }.buttonStyle(.plain).help("Schedule, repeat, and reminders").disabled(locked)
-                .popover(isPresented: scheduling, arrowEdge: .bottom) { ScheduleEditor(task: task, settings: store.settings) { updated in store.updateTask(updated, applyDefaultReminders: false) } }
+                .popover(isPresented: scheduling, arrowEdge: .bottom) { ScheduleEditor(task: task, settings: store.settings) { updated, expected in store.saveSchedule(updated, expected: expected) } }
             Spacer(minLength: 5)
             Menu {
                 ForEach(TaskPriority.allCases, id: \.self) { priority in
