@@ -1698,6 +1698,21 @@ The captured selection value now preserves the original optional identifier when
 
 Source manifest SHA256: `42d5797a7a3d769cd8529c49f9f6150df78aff387aa24ce1c03766f99346733a`. Settings bytes were identical; workspace bytes were not, consistent with existing save/modified-time behavior. All initial fixture bytes, prior guarded QA app and preferences were restored; Codex quit QA and stopped idle. Exact-head hosted CI remains a separate pre-merge check.
 
-**Separate observed follow-up:** with the host in Europe/Moscow, Change initially due November 13 at 13:15 host time, expanding Time and choosing Asia/Tokyo showed 07:15 in the expanded native Time field while the detail caption showed 13:15 GMT+9. The mismatch appeared before save and after reopening; JSON confirmed the intended minus-six-hour translation of both duration endpoints. Cause and editing implications are not established. Investigate independently rather than treat this zone-identity fix as full timezone-control correctness.
+**Initial follow-up interpretation, superseded below:** the initial Computer Use report described 07:15 versus 13:15 GMT+9 as a native field/caption mismatch. The later probe explicitly separated visible pixels from the tool’s accessibility representation; it did not reproduce a visual mismatch.
 
-This is a zone/cadence preservation fix, not a fully write-free editor lifecycle change. Existing updatedAt writes and inferred reminder-provenance normalization remain; arbitrary zone-edit round trips through DST are not newly guaranteed.
+<a id="mac-schedule-field-observation-correction"></a>
+### Mac Schedule field observation correction — November 12, 2026
+
+No product code changed. A scoped native follow-up on the same verified PR37 source (`efc9ff9`, merged as `7d97097`) compared visible fields and the Computer Use accessibility representation with host Europe/Moscow:
+
+| Owned fixture / control | Visible field and caption | Tool accessibility representation |
+|---|---|---|
+| Explicit UTC, Time | 10:15 | 13:15 |
+| Explicit UTC, Duration | 09:45–10:15 | 12:45–13:15 |
+| Staged Asia/Tokyo, Time | 13:15 | 07:15 |
+
+A separate unshown AppKit `NSDatePicker` probe set the same instant (`2026-11-13T04:15:00Z`) with UTC, Asia/Tokyo and Europe/Moscow calendars/time zones. The cell’s raw `accessibilityAttributeValue(.value)` returned a Date equal to that same instant in all three cases; formatting for the selected zones produced 04:15, 13:15 and 07:15 respectively. This establishes native absolute-value semantics in the standalone control, not the implementation of the Computer Use formatter or VoiceOver speech. A host-zone rendering of that timestamp is not evidence that the visible control uses the wrong zone.
+
+The visible Taskovsky fields matched their captions. The attempted minute entry/increment did not reliably activate; the draft was canceled, not saved. The original host-zone choice was confirmed on reopening. Real minute editing and VoiceOver speech remain unverified. No timezone conversion, accessibility override or picker reconstruction is justified by this observation alone.
+
+Both owned fixture files were byte-identical after the canceled probe. The prior guarded Taskovsky QA bundle, initial fixture bytes and QA preferences were restored; the app quit and Codex returned idle. Original development worktrees were not modified. This documentation-only correction uses source review, native observations and the standalone AppKit probe; it does not rerun application builds/tests or claim broader timezone parity.
