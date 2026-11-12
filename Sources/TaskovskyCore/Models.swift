@@ -1,6 +1,17 @@
 import Foundation
 
-public enum TaskPriority: String, Codable, CaseIterable, Sendable { case none, low, medium, high }
+public enum TaskPriority: String, Codable, CaseIterable, Sendable {
+    case none, low, medium, high
+
+    public var rank: Int {
+        switch self {
+        case .high: 0
+        case .medium: 1
+        case .low: 2
+        case .none: 3
+        }
+    }
+}
 public enum RepeatRule: String, Codable, CaseIterable, Sendable { case none, daily, weekdays, weekly, monthly, yearly }
 public enum TaskKind: String, Codable, CaseIterable, Sendable { case task, note }
 

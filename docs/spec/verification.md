@@ -1627,3 +1627,18 @@ The iPhone run exercised typed input. System clipboard paste was verified on Mac
 | iPhone regression | On a disposable iPhone 13 Pro simulator with iOS 26.5, `testCalendarSourceColorSavesAndResetCanBeCancelled` and `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` passed. The simulator was removed. |
 
 The native Mac run covered the standard light appearance and a Month fixture. Dark appearance, reduced motion, VoiceOver and physical iPhone were outside this run. TickTick's separate named-list live check demonstrated propagation across Calendar and Tasks and persistence across navigation. TickTick relaunch and sync were outside that check.
+
+<a id="task-due-date-grouping"></a>
+
+## Task due-date grouping — November 12, 2026
+
+[TASK-GROUP-002](../changes/task-due-date-grouping-2026-11-10.md) was ported onto `411f0ef123b8bc15bfa6af75cdac4c6307674489` and verified at implementation commit `07e6be17cef67e9010bbbdb8bab0d64a44651354`. The earlier local prototype is separate evidence. The port leaves linked-subtask disclosure for separate review.
+
+| Check | Observed result |
+| --- | --- |
+| Mac tests and release package | macOS 27.0.1 arm64, Xcode 27.0 (27A266a). `swift test --disable-sandbox --manifest-cache local` with a writable module cache passed 652 XCTest executions (including two runs of the domain cases) and 37 Swift Testing cases. The cases cover civil dates across zones, bucket and row order, legacy preferences, and expanded ranges. `./scripts/build-app.sh` and strict signature verification passed. |
+| Native Mac | In the guarded release QA app, Work retained its Pinned group. The Los Angeles all-day deadline showed Today, the timed deadline showed Tomorrow 1:30 in Moscow, and the Kiritimati all-day deadline showed Tomorrow. Due Date grouping and Priority survived relaunch. Switching to Created Date replaced the due buckets; turning that off restored the ordinary section layout. The Sort menu showed that date grouping suspends manual reordering. |
+| iPhone simulator | Three workflows passed with no failures, skips or runtime warnings on iPhone 13 Pro, iOS 26.5. They exercised Priority with due grouping and relaunch, creation grouping and relaunch, and manual drag within section boundaries with no drag grip in date grouping. |
+| Fixture audit | Workspace and settings were byte-identical after the Mac test and after both read-only iPhone grouping workflows. The original guarded Mac app and QA preferences were restored. The disposable iPhone simulator was removed. |
+
+The current native checks did not cover dark appearance, reduced motion, VoiceOver, physical iPhone, or a Mac pointer drag. TickTick was not reopened for this recovery.

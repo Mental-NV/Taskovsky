@@ -194,6 +194,72 @@ public struct TaskCreationDayGroup: Identifiable, Sendable {
     }
 }
 
+public enum TaskListGrouping: String, Sendable {
+    case standard, creationDate, dueDate
+
+    public init(stored: String?, legacyCreated: Bool) {
+        self = stored.flatMap(Self.init(rawValue:)) ?? (legacyCreated ? .creationDate : .standard)
+    }
+
+    public var title: String {
+        switch self {
+        case .standard: "Default Groups"
+        case .creationDate: "Group by Created Date"
+        case .dueDate: "Group by Due Date"
+        }
+    }
+}
+
+/// Due-date buckets preserve the incoming sort within each display day.
+public struct TaskDueDateGroup: Identifiable, Sendable {
+    public enum Bucket: Hashable, Sendable {
+        case overdue, day(Date), undated
+    }
+
+    public let id: Bucket
+    public let tasks: [TaskItem]
+
+    public func title(now: Date, calendar: Calendar) -> String {
+        switch id {
+        case .overdue: return "Overdue"
+        case .undated: return "No Date"
+        case .day(let day):
+            if calendar.isDate(day, inSameDayAs: now) { return "Today" }
+            if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now),
+               calendar.isDate(day, inSameDayAs: tomorrow) { return "Tomorrow" }
+            let format = Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone)
+                .weekday(.wide).month(.abbreviated).day()
+            return day.formatted(calendar.component(.year, from: day) == calendar.component(.year, from: now)
+                                 ? format : format.year())
+        }
+    }
+
+    public static func displayDue(for task: TaskItem, calendar: Calendar) -> Date? {
+        guard let due = task.dueDate, due.timeIntervalSinceReferenceDate.isFinite else { return nil }
+        if task.hasDueTime { return due }
+        let taskCalendar = TaskCalendarProjection.taskCalendar(task, fallback: calendar)
+        return CalendarDates.civilDay(due, from: taskCalendar, to: calendar)
+    }
+
+    public static func group(_ tasks: [TaskItem], now: Date, calendar: Calendar,
+                             overduePosition: TaskPosition) -> [Self] {
+        let today = calendar.startOfDay(for: now)
+        let buckets = Dictionary(grouping: tasks) { task -> Bucket in
+            guard let due = displayDue(for: task, calendar: calendar) else { return .undated }
+            let day = calendar.startOfDay(for: due)
+            return day < today ? .overdue : .day(day)
+        }
+        let days = buckets.keys.compactMap { bucket -> Date? in
+            if case .day(let date) = bucket { return date }
+            return nil
+        }.sorted().map(Bucket.day)
+        let order = overduePosition == .top ? [.overdue] + days + [.undated] : days + [.undated, .overdue]
+        return order.compactMap { bucket in
+            buckets[bucket].map { Self(id: bucket, tasks: $0) }
+        }
+    }
+}
+
 public enum FilterDateRule: String, Codable, CaseIterable, Sendable {
     case all, today, tomorrow, next7, overdue, noDate
     case thisWeek, nextWeek, lastWeek, thisMonth, nextMonth, lastMonth, repeating, custom

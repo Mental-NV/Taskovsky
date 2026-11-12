@@ -161,7 +161,6 @@ extension Color {
 extension TaskPriority {
     var label: String { self == .none ? "No priority" : rawValue.capitalized + " priority" }
     var color: Color { switch self { case .high: .red; case .medium: Color(hex: "#F59E0B"); case .low: accent; case .none: .secondary } }
-    var rank: Int { switch self { case .high: 0; case .medium: 1; case .low: 2; case .none: 3 } }
 }
 extension RepeatRule { var label: String { self == .none ? "Does not repeat" : rawValue.capitalized } }
 extension TaskItem {
@@ -255,7 +254,8 @@ struct WorkspaceView: View {
     // both mean stored-array order and enable drag reordering.
     @AppStorage("Taskovsky.taskSort", store: IsolatedDefaults.store) private var sort = "Date"
     @AppStorage("Taskovsky.showTaskCountdown", store: IsolatedDefaults.store) private var showsTaskCountdown = false
-    @AppStorage("Taskovsky.taskGroupByCreated", store: IsolatedDefaults.store) private var groupsByCreationDate = false
+    @AppStorage("Taskovsky.taskGroupByCreated", store: IsolatedDefaults.store) private var legacyCreatedGrouping = false
+    @AppStorage("Taskovsky.taskGrouping", store: IsolatedDefaults.store) private var groupingPreference = ""
     private var canShowTaskCountdown: Bool {
         guard listViewBinding.wrappedValue == .list else { return false }
         switch destination {
@@ -263,10 +263,12 @@ struct WorkspaceView: View {
         case .notes, .completed, .wontDo, .summary, .search, .trash: return false
         }
     }
-    private var canGroupByCreationDate: Bool { destination.supportsCreatedDateGrouping && listViewBinding.wrappedValue == .list }
-    private var isGroupingByCreationDate: Bool { groupsByCreationDate && canGroupByCreationDate }
+    private var canGroupByDate: Bool { destination.supportsTaskDateGrouping && listViewBinding.wrappedValue == .list }
+    private var taskGrouping: TaskListGrouping {
+        canGroupByDate ? TaskListGrouping(stored: groupingPreference, legacyCreated: legacyCreatedGrouping) : .standard
+    }
     private var reorderUnavailableMessage: String? {
-        if isGroupingByCreationDate { return "Turn off Group by Created Date and choose None in Sort to reorder tasks." }
+        if taskGrouping != .standard { return "Turn off date grouping and choose None in Sort to reorder tasks." }
         return TaskSortPolicy.isManual(sort) ? nil : TaskSortPolicy.reorderDisabledMessage
     }
     @State private var showCompleted = true
@@ -1399,14 +1401,23 @@ struct WorkspaceView: View {
         }.labelsHidden().accessibilityIdentifier("taskDestinationViewMode")
     }
 
+    private func groupingChoice(_ grouping: TaskListGrouping) -> some View {
+        Toggle(grouping.title, isOn: Binding(get: { taskGrouping == grouping }, set: { enabled in
+            groupingPreference = (enabled ? grouping : .standard).rawValue
+        }))
+    }
+
     private var taskSortMenu: some View {
         Menu {
             Picker("Sort by", selection: Binding(get: { TaskSortPolicy.normalized(sort) }, set: { sort = $0 })) {
                 ForEach(["None", "Date", "Priority", "Title"], id: \.self) { Text($0).tag($0) }
                 ForEach(TaskTimestampSort.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
             }
-            if canGroupByCreationDate { Toggle("Group by Created Date", isOn: $groupsByCreationDate) }
-            Text(isGroupingByCreationDate ? "Turn off creation grouping to reorder tasks." : "None follows your drags and is saved.")
+            if canGroupByDate {
+                groupingChoice(.creationDate)
+                groupingChoice(.dueDate)
+            }
+            Text(taskGrouping == .standard ? "None follows your drags and is saved." : "Turn off date grouping to reorder tasks.")
                 .font(.caption)
             if destination != .completed && destination != .trash && destination != .wontDo {
                 Toggle("Show Completed & Won't Do", isOn: $showCompleted)
@@ -1414,7 +1425,7 @@ struct WorkspaceView: View {
         } label: {
             HoverIcon { Image(systemName: "arrow.up.arrow.down").font(.system(size: 15)).foregroundStyle(.secondary).padding(6) }
         }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor))
-            .fixedSize().help("Sort and display (None enables drag reordering when creation grouping is off)")
+            .fixedSize().help("Sort and display (None enables drag reordering when date grouping is off)")
     }
 
     private func taskPane(now: Date, overlay: Bool, paneWidth: CGFloat) -> some View {
@@ -1497,7 +1508,7 @@ struct WorkspaceView: View {
             if isArchivedView { Text("Archived lists are read-only. Unarchive the list from the sidebar to edit, or use a row's Move to for a deliberate move.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if let scope = timelineScope, mode == .timeline {
                 DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask).id(scope)
-            } else if let list = activeList, !list.sections.isEmpty && !isGroupingByCreationDate {
+            } else if let list = activeList, !list.sections.isEmpty && taskGrouping == .standard {
                 if mode == .board {
                     sectionBoard(list, overlay: overlay, now: now)
                 } else {
@@ -1725,7 +1736,7 @@ struct WorkspaceView: View {
         // Manual order and timestamp sorts use one active group across due
         // dates. Reminders and Trash retain their semantic groups.
         let usesFlatOrder = TaskSortPolicy.isManual(sort) || TaskTimestampSort(rawValue: sort) != nil
-        if isGroupingByCreationDate || (usesFlatOrder && destination != .trash && destination != .reminders) {
+        if taskGrouping != .standard || (usesFlatOrder && destination != .trash && destination != .reminders) {
             var active: [TaskItem] = []; var history: [TaskItem] = []
             for task in tasks {
                 switch ManualGroupPolicy.bucket(completedAt: task.completedAt, wontDoAt: task.wontDoAt, deletedAt: task.deletedAt) {
@@ -1737,10 +1748,16 @@ struct WorkspaceView: View {
             // Pinned items keep their own group and follow the selected order.
             let (pinned, rest) = PinnedGrouping.partition(active)
             if !pinned.isEmpty { result.append(.init(PinnedGrouping.pinnedGroupTitle, pinned)) }
-            if isGroupingByCreationDate {
+            if taskGrouping == .creationDate {
                 let calendar = store.settings.calendar
                 result += TaskCreationDayGroup.group(rest, calendar: calendar, sort: TaskTimestampSort(rawValue: sort)).map {
                     .init($0.title(calendar: calendar), $0.tasks, id: "created-\($0.day.timeIntervalSinceReferenceDate)")
+                }
+            } else if taskGrouping == .dueDate {
+                let settings = store.settings
+                result += TaskDueDateGroup.group(rest, now: now, calendar: settings.calendar,
+                                                overduePosition: settings.overduePosition).map {
+                    .init($0.title(now: now, calendar: settings.calendar), $0.tasks, id: dueGroupID($0.id))
                 }
             } else if !rest.isEmpty {
                 result.append(.init(ManualGroupPolicy.activeGroupTitle, rest))
@@ -1778,6 +1795,13 @@ struct WorkspaceView: View {
         var result = keys.map { DisplayedTaskGroup($0, values[$0]!) }
         if !pinned.isEmpty { result.insert(.init(PinnedGrouping.pinnedGroupTitle, pinned), at: 0) }
         return result
+    }
+    private func dueGroupID(_ bucket: TaskDueDateGroup.Bucket) -> String {
+        switch bucket {
+        case .overdue: "due-overdue"
+        case .undated: "due-undated"
+        case .day(let date): "due-\(date.timeIntervalSinceReferenceDate)"
+        }
     }
     private func addTask(body: String = "", recognizeDates: Bool = true) {
         let title = quickTitle.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
@@ -1892,7 +1916,7 @@ private extension WorkspaceView {
         // Grip visibility is resolved inside TaskRow from whole-row hover or
         // selection; the drag source lives on the grip only. Tapping the grip
         // selects in manual mode and reports the sorted-mode notice otherwise.
-        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, readOnly: readOnly, depth: depth, gripActive: interactive, onGripActivate: interactive ? {
+        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, dueDisplayCalendar: taskGrouping == .dueDate ? store.settings.calendar : nil, readOnly: readOnly, depth: depth, gripActive: interactive, onGripActivate: interactive ? {
             if let message = reorderUnavailableMessage { actions.notice(message) }
             else { selectTask(task.id) }
         } : nil, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })
