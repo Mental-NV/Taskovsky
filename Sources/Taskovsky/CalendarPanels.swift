@@ -25,6 +25,8 @@ struct CalendarEntryView: View {
     var showItemIcons = true
     var compact = false
     var trailingInset: CGFloat = 0
+    // Timed cards paint their whole allocated duration, including compact cards.
+    var fillsAllocatedHeight = false
     var open: (UUID) -> Void
     var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
@@ -66,7 +68,7 @@ struct CalendarEntryView: View {
         .font(.system(size: compact ? 11 : 12))
         .padding(.horizontal, 4).padding(.vertical, compact ? 1 : 4)
         .padding(.trailing, trailingInset)
-        .frame(maxWidth: .infinity, maxHeight: compact ? nil : .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: compact && !fillsAllocatedHeight ? nil : .infinity, alignment: .topLeading)
         .background(style == .filled ? tint.opacity(entry.isCompleted ? 0.06 : 0.15) : Color.clear)
         .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 2) }
         .overlay { if style == .outline { RoundedRectangle(cornerRadius: 3).stroke(tint.opacity(0.5), lineWidth: 0.7) } }
