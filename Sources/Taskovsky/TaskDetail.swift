@@ -1,5 +1,6 @@
 import SwiftUI
 import TaskovskyCore
+import TaskovskyWorkspace
 
 /// Unsaved per-task detail drafts (subtask text, tag field, popover visibility).
 /// Owned by the workspace and keyed by task so dock/drawer/pop-up transitions
@@ -20,6 +21,7 @@ final class DetailDrafts: ObservableObject {
 }
 
 struct TaskDetail: View {
+    @EnvironmentObject private var descriptions: MacDescriptionSession
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
     let actions: TaskActionCenter
@@ -160,6 +162,9 @@ struct TaskDetail: View {
 
     @ViewBuilder
     private var richBodySection: some View {
+        let description = descriptions.presentation(for: task)
+        let content = description?.content
+        let descriptionLocked = locked || description?.editable != true
         // Native rich-text body: toolbar plus an auto-growing AppKit
         // editor. The outer detail ScrollView scrolls; the editor
         // reports its content height so docked, drawer, and pop-up
@@ -174,23 +179,33 @@ struct TaskDetail: View {
                     RichBodyReader(documentID: task.id, preview: preview)
                 }
         }
+        if let error = descriptions.recoveryErrors[id] { Text(error).foregroundStyle(.red) }
+        if let message = description?.message {
+            HStack {
+                Text(message).font(.caption)
+                Button("Review / Retry…") { DescriptionEditorLifecycle.showRecovery() }
+            }
+        }
         if !locked {
-            RichBodyToolbar(controller: richController, disabled: false)
+            RichBodyToolbar(controller: richController, disabled: descriptionLocked)
         }
         ZStack(alignment: .topLeading) {
             RichBodyEditor(
                 controller: richController,
                 documentID: task.id,
-                text: task.body,
-                rich: task.richBody?.valid(for: task.body),
-                disabled: locked,
-                onChange: updateBody,
+                text: content?.body ?? task.body,
+                rich: content != nil ? content?.rich : task.richBody?.valid(for: task.body),
+                disabled: descriptionLocked,
+                onChange: { _, _ in },
                 onHeightChange: { bodyHeight = $0 },
-                onFocusChange: { bodyFocused = $0 }
+                onFocusChange: { bodyFocused = $0 },
+                descriptionSession: descriptions,
+                descriptionRevision: description?.revision
             )
+            .id(task.id) // Each task owns its AppKit input context and Undo stack.
             .frame(height: max(task.kind == .note ? 120 : 60, bodyHeight))
             .accessibilityLabel(task.kind == .note ? "Note content" : "Task description")
-            if task.body.isEmpty && !bodyFocused && !locked {
+            if (content?.body ?? task.body).isEmpty && !bodyFocused && !descriptionLocked {
                 HStack(spacing: 4) {
                     Button("Write something") { richController.focus() }.foregroundStyle(.tertiary)
                     Text("or").foregroundStyle(.tertiary)
@@ -198,6 +213,7 @@ struct TaskDetail: View {
                 }.buttonStyle(.plain).font(.system(size: 14)).padding(.top, 4).padding(.leading, 1)
             }
         }.frame(minHeight: task.kind == .note ? 120 : 60, alignment: .topLeading)
+            .task(id: id) { await descriptions.prepare(taskID: id) }
             .sheet(isPresented: showTemplates) { TemplatePicker(store: store, onChoose: applyTemplate) }
     }
 

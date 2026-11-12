@@ -227,6 +227,36 @@ public final class TaskStore: ObservableObject {
         return commitCalendarSchedule(updated, at: index)
     }
 
+    /// Paired description-only acknowledgement; unrelated live task fields survive.
+    @discardableResult public func saveDescription(taskID: UUID, content: DescriptionSnapshot, expected: DescriptionSnapshot) -> Bool {
+        guard !blockedByLoadFailure else { return false }
+        do {
+            let bytes = try Data(contentsOf: fileURL)
+            guard try Self.decodeWorkspace(bytes) == data else {
+                storageError = "The saved workspace changed. Your description draft is kept; reload before retrying."
+                return false
+            }
+            guard let patched = try DescriptionJSONPatch.applying(taskID: taskID, content: content, expected: expected, to: bytes, now: Date()) else {
+                storageError = "The description could not be saved safely. Keep your draft; the task changed or has unsupported fields."
+                return false
+            }
+            let staged = try Self.decodeWorkspace(patched)
+            if patched != bytes {
+                let written = writeWorkspaceBytes {
+                    guard try Data(contentsOf: self.fileURL) == bytes else { throw CocoaError(.fileWriteUnknown) }
+                    return patched
+                }
+                guard written || (try? Data(contentsOf: fileURL)) == patched else { return false }
+                data = staged
+            }
+            if !settingsLoadFailed { storageError = settingsSaveError }
+            return true
+        } catch {
+            storageError = "Could not save description: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     public func updateTask(_ task: TaskItem, applyDefaultReminders: Bool = true) {
         guard let index = data.tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var task = task

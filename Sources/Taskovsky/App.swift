@@ -48,10 +48,12 @@ enum LaunchIsolation {
 struct TaskovskyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store: TaskStore
+    @StateObject private var descriptions: MacDescriptionSession
     @StateObject private var drafts = DetailDrafts()
     @StateObject private var actions = TaskActionCenter()
     @StateObject private var calendarShortcuts = CalendarShortcutBindings()
     init() {
+        let initialStore: TaskStore
         if LaunchIsolation.isIsolated {
             // Explicit file, no migration side effects on real storage. A
             // missing/invalid flag value still isolates (fresh temp
@@ -62,11 +64,15 @@ struct TaskovskyApp: App {
                 try? FileManager.default.createDirectory(at: workspace.deletingLastPathComponent(), withIntermediateDirectories: true)
                 try? Data("{\"tasks\":[],\"lists\":[],\"tags\":[],\"filters\":[]}".utf8).write(to: workspace)
             }
-            _store = StateObject(wrappedValue: TaskStore(fileURL: workspace, settingsURL: LaunchIsolation.settingsOverride, seed: false))
+            initialStore = TaskStore(fileURL: workspace, settingsURL: LaunchIsolation.settingsOverride, seed: false)
         } else {
             AppMigration.migratePreferences()
-            _store = StateObject(wrappedValue: TaskStore())
+            initialStore = TaskStore()
         }
+        _store = StateObject(wrappedValue: initialStore)
+        let session = MacDescriptionSession(store: initialStore)
+        _descriptions = StateObject(wrappedValue: session)
+        DescriptionEditorLifecycle.session = session
     }
     var body: some Scene {
         // Content floor for the measured compact reference (rail 62 + center
@@ -74,7 +80,7 @@ struct TaskovskyApp: App {
         // ~28pt hidden-titlebar chrome. A 580 content value here landed a 608
         // frame. The exact 580 total-window floor is enforced from measured
         // chrome by WindowFloorBridge in the workspace root.
-        WindowGroup("Taskovsky") { WorkspaceView(store: store, drafts: drafts, actions: actions).frame(minWidth: CGFloat(ResponsiveLayout.minWindowWidth), minHeight: 552).ignoresSafeArea(.container, edges: .top) }
+        WindowGroup("Taskovsky") { WorkspaceView(store: store, drafts: drafts, actions: actions).environmentObject(descriptions).task { await descriptions.discoverRecovery() }.frame(minWidth: CGFloat(ResponsiveLayout.minWindowWidth), minHeight: 552).ignoresSafeArea(.container, edges: .top) }
             .defaultSize(width: 1280, height: 740)
             .windowStyle(.hiddenTitleBar)
             .commands {
@@ -86,6 +92,7 @@ struct TaskovskyApp: App {
                     Button("New List") { NotificationCenter.default.post(name: .newList, object: nil) }.keyboardShortcut("l", modifiers: [.command, .shift])
                 }
                 CommandGroup(after: .newItem) {
+                    Button("Description Recovery…") { DescriptionEditorLifecycle.showRecovery() }
                     Button("Search") { NotificationCenter.default.post(name: .openSearch, object: nil) }.keyboardShortcut("f")
                     Button("Toggle Sidebar") { NotificationCenter.default.post(name: .toggleSidebar, object: nil) }.keyboardShortcut("s", modifiers: [.command, .option])
                     #if DEBUG
@@ -99,7 +106,7 @@ struct TaskovskyApp: App {
         Settings { SettingsView(store: store, calendarShortcuts: calendarShortcuts) }
             .defaultSize(width: 800, height: 680).windowStyle(.hiddenTitleBar)
         WindowGroup("Task Details", for: UUID.self) { $id in
-            if let id { TaskDetailWindow(store: store, drafts: drafts, actions: actions, id: id) }
+            if let id { TaskDetailWindow(store: store, drafts: drafts, actions: actions, id: id).environmentObject(descriptions) }
         }.defaultSize(width: 464, height: 630)
     }
 }
@@ -125,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
     }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { DescriptionEditorLifecycle.requestTermination() }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 

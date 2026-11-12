@@ -88,3 +88,37 @@ final class MacDescriptionDraftTests: XCTestCase {
     }
 
 }
+
+extension MacDescriptionDraftTests {
+    func testAbandonFailedNewerWriteRetriesExactIntentAndPreservesExternalFile() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("draft.json"), block = root.appendingPathComponent("block")
+        let owner = UUID(), task = UUID()
+        var a = MacDescriptionDraft(workspaceID: owner, taskID: task, baseline: DescriptionSnapshot(body: "saved", rich: nil)!)
+        a.replace(with: DescriptionSnapshot(body: "A", rich: nil)!)
+        try JSONEncoder().encode(a).write(to: file); try Data().write(to: block)
+        let journal = MacDescriptionJournal(fileURL: file, workspaceID: owner, taskID: task,
+            write: { _, _ in throw CocoaError(.fileWriteUnknown) },
+            remove: { url in
+                if FileManager.default.fileExists(atPath: block.path) { throw CocoaError(.fileWriteUnknown) }
+                try FileManager.default.removeItem(at: url)
+            })
+        _ = await journal.load()
+        var b = a; b.replace(with: DescriptionSnapshot(body: "B", rich: nil)!)
+        let write = await journal.save(b); XCTAssertEqual(write, .failed)
+        let stale = await journal.abandon(a); XCTAssertEqual(stale, .refused)
+        let failed = await journal.abandon(b); XCTAssertEqual(failed, .failed)
+        var c = b; c.replace(with: DescriptionSnapshot(body: "C", rich: nil)!)
+        let changed = await journal.abandon(c); XCTAssertEqual(changed, .refused)
+        let external = try JSONEncoder().encode(c); try external.write(to: file)
+        try FileManager.default.removeItem(at: block)
+        let refused = await journal.abandon(b); XCTAssertEqual(refused, .refused)
+        XCTAssertEqual(try Data(contentsOf: file), external)
+        try JSONEncoder().encode(a).write(to: file)
+        let retry = await journal.abandon(b); XCTAssertEqual(retry, .saved)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+        let late = await journal.save(b); XCTAssertEqual(late, .refused)
+    }
+}

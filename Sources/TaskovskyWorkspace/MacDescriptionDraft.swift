@@ -58,37 +58,51 @@ public struct MacDescriptionDraft: LocalDraftRecord {
 /// One caller-owned, dedicated recovery file. Does not create directories,
 /// assign workspace identities, mutate tasks, autoapply recovery or wire UI.
 /// Reuses the existing serialized journal with exact after-write/readback handling.
-public actor MacDescriptionJournal {
+public protocol MacDescriptionJournalAccess: Sendable {
+    func load() async -> LocalDraftLoad<MacDescriptionDraft>
+    func save(_ value: MacDescriptionDraft) async -> FieldDraftWrite
+    func close(_ value: MacDescriptionDraft) async -> FieldDraftWrite
+    func abandon(_ value: MacDescriptionDraft) async -> FieldDraftWrite
+}
+
+public actor MacDescriptionJournal: MacDescriptionJournalAccess {
     private let workspaceID: UUID
     private let taskID: UUID
     private let journal: LocalDraftStore<MacDescriptionDraft>
+    private let validate: @Sendable () throws -> Void
     public init(fileURL: URL, workspaceID: UUID, taskID: UUID,
+                validate: @escaping @Sendable () throws -> Void = {},
                 write: @escaping @Sendable (Data, URL) throws -> Void = { try $0.write(to: $1, options: localFileWriteOptions) },
                 remove: @escaping @Sendable (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) {
-        self.workspaceID = workspaceID; self.taskID = taskID
+        self.workspaceID = workspaceID; self.taskID = taskID; self.validate = validate
         journal = LocalDraftStore(fileURL: fileURL, write: { bytes, url in
-            do { try write(bytes, url) }
-            catch { guard (try? Data(contentsOf: url)) == bytes else { throw error } }
+            do { try validate(); try write(bytes, url) }
+            catch { try validate(); guard (try? Data(contentsOf: url)) == bytes else { throw error } }
         }, remove: { url in
-            do { try remove(url) }
+            do { try validate(); try remove(url) }
             catch let error {
-                do { _ = try Data(contentsOf: url); throw error }
+                do { try validate(); _ = try Data(contentsOf: url); throw error }
                 catch let read as CocoaError where read.code == .fileReadNoSuchFile { return }
             }
         })
     }
     public func load() async -> LocalDraftLoad<MacDescriptionDraft> {
+        guard (try? validate()) != nil else { return .unavailable }
         let loaded = await journal.load()
         if case .available(let value) = loaded, !owns(value) { return .unavailable }
         return loaded
     }
     public func save(_ value: MacDescriptionDraft) async -> FieldDraftWrite {
-        guard owns(value) else { return .refused }
+        guard owns(value), (try? validate()) != nil else { return .refused }
         return await journal.begin(value)
     }
     public func close(_ value: MacDescriptionDraft) async -> FieldDraftWrite {
-        guard owns(value) else { return .refused }
+        guard owns(value), (try? validate()) != nil else { return .refused }
         return await journal.close(expected: value)
+    }
+    public func abandon(_ value: MacDescriptionDraft) async -> FieldDraftWrite {
+        guard owns(value), (try? validate()) != nil else { return .refused }
+        return await journal.abandon(expected: value)
     }
     private func owns(_ value: MacDescriptionDraft) -> Bool {
         value.workspaceID == workspaceID && value.taskID == taskID && value.version == 1 && value.sequence >= 0 && value.sequence < Int.max

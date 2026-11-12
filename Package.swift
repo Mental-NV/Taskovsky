@@ -41,6 +41,7 @@ let domainSources = [
 let desktopSources = [
     "AppMigration.swift",
     "MacReminderCoordinator.swift",
+    "MacDescriptionSession.swift",
     "DetailState.swift",
     "DragPayloads.swift",
     "IsolatedLaunch.swift",
@@ -67,7 +68,7 @@ let package = Package(
         .target(name: "TaskovskyWorkspace", dependencies: ["TaskovskyDomain"]),
         .target(name: "TaskovskyClipboard", dependencies: ["TaskovskyDomain"]),
         .target(name: "TaskovskyCore", dependencies: ["TaskovskyDomain", "TaskovskyWorkspace"], exclude: domainSources),
-        .executableTarget(name: "Taskovsky", dependencies: ["TaskovskyCore", "TaskovskyClipboard"]),
+        .executableTarget(name: "Taskovsky", dependencies: ["TaskovskyCore", "TaskovskyClipboard", "TaskovskyWorkspace"]),
         .testTarget(name: "TaskovskyCoreTests", dependencies: ["TaskovskyCore", "TaskovskyClipboard"]),
         .testTarget(name: "TaskovskyDomainTests", dependencies: ["TaskovskyDomain"]),
         .testTarget(name: "TaskovskyWorkspaceTests", dependencies: ["TaskovskyDomain", "TaskovskyWorkspace"])
