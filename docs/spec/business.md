@@ -447,3 +447,7 @@ Hourly cards are clustered and assigned lanes by their clipped painted civil-min
 ### Mac Schedule implicit-zone preservation
 
 The Mac Schedule editor separates its displayed fallback zone from the task's optional stored identifier. An untouched selection, or a selection returned to its opening value, retains the original nil or explicit identifier. A genuinely different selected zone stays explicit and follows the existing wall-clock translation/series-edit policy. This prevents accidental zone pinning and loss of a current-occurrence baseline. It does not promise a write-free OK or introduce a floating-time mode. [SCHEDULE-ZONE-005](../changes/mac-schedule-implicit-zone-2026-11-12.md).
+
+### Mac acknowledged schedule persistence
+
+Calendar scheduling commands and scoped Undo, plus explicit Schedule Save/Clear, use a staged schedule-only raw patch. Independently changed known workspace data is refused rather than overwritten; unrelated raw members are preserved. Unsupported changed nested schedule data is refused. Failure does not publish a changed task. The final byte recheck is best-effort stale detection, not cross-process locking. See [CAL-SAVE-017](../changes/calendar-lossless-save-2026-11-12.md); hosted verification is pending for this implementation.

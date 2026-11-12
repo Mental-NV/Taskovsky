@@ -179,3 +179,7 @@ Mac lifecycle actions now publish state/recurrence snapshots only after persiste
 Mac schedule OK/Clear use an acknowledged schedule-only patch and retain the editor on failure; current unrelated fields survive and stale scheduling edits are rejected. [Contract](changes/schedule-editor-persistence-2026-11-12.md). This is local persistence correctness, not a TickTick interaction-parity claim.
 
 A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-12.md) now exists for later platform adapters: active stored reminders, generic content, conservative 32-request budget and namespaced diff. An inert [Mac coordinator boundary](changes/mac-reminder-coordinator-2026-11-12.md) is exercised with a fake center only; real center/UI/settings integration is absent. OS permission, registration and delivery remain unimplemented/unverified; no notification parity claim.
+
+### Persistence follow-up: Mac schedule writes
+
+[CAL-SAVE-017](changes/calendar-lossless-save-2026-11-12.md) addresses reproduced local data preservation defects, not a new TickTick parity claim. Calendar commands/Undo and explicit Schedule Save/Clear preserve unrelated raw data and refuse stale independent-store baselines. Implementation verification remains pending in the [ledger](spec/verification.md#calendar-lossless-save); iPhone views and scheduling policy are unchanged.
