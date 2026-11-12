@@ -580,22 +580,15 @@ struct WorkspaceView: View {
                         _ = store.setTagParent(id: id, parentID: parentTagID)
                     }
                     else { _ = store.createTag(name: name, color: color, parentID: parentTagID) }
+                    return true // Tag persistence remains outside this List editor correction.
                 } else {
-                    if let id = item.entityID {
-                        // Preserve folder membership, trailing placement,
-                        // archive/pin flags, and smart-list inclusion on
-                        // unrelated edits: the editor carries the stored
-                        // values, so saving them back keeps them.
-                        let stored = store.data.lists.first { $0.id == id }
-                        store.updateList(TaskList(id: id, name: name, color: color, kind: kind, symbol: symbol, viewMode: viewMode, folderID: folderID, belowFolders: belowFolders, isArchived: stored?.isArchived ?? false, showsInSmartLists: showsInSmartLists, isPinned: stored?.isPinned ?? false))
-                    } else {
-                        let id = store.createList(name: name, color: color, kind: kind, symbol: symbol, folderID: folderID, showsInSmartLists: showsInSmartLists)
-                        if viewMode != .list, var list = store.data.lists.first(where: { $0.id == id }) {
-                            list.viewMode = viewMode
-                            store.updateList(list)
-                        }
-                        destination = .list(id)
-                    }
+                    var list = item.originalList ?? TaskList(id: item.id, name: name, color: color)
+                    list.name = name; list.color = color; list.kind = kind; list.symbol = symbol
+                    list.viewMode = viewMode; list.folderID = folderID; list.belowFolders = belowFolders
+                    list.showsInSmartLists = showsInSmartLists
+                    guard store.saveListEditor(list, expected: item.originalList) else { return false }
+                    if item.entityID == nil { destination = .list(list.id) }
+                    return true
                 }
             }
         }

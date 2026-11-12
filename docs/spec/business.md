@@ -218,6 +218,8 @@ Taskovsky stores these reminders and exposes in-app reminder information. There 
 
 The list editor can use a single Unicode emoji as the icon. When creating or renaming a list with the default icon, a leading emoji moves to the icon if a title follows it. Explicit icon choices and unchanged names take precedence. [List emoji contract](../changes/list-emoji-icons-2026-11-10.md).
 
+Mac explicit New/Edit List sheets [acknowledge a single durable list write](../changes/mac-list-editor-save-2026-11-12.md) before dismissing or navigating. Failed saves keep the draft; a stale opening list snapshot refuses rather than overwriting concurrent changes. This does not change legacy list-menu, tag/folder or phone operations.
+
 The phone manager uses staged list and folder edits. It shares deletion, duplication, ungrouping and reorder operations with Desktop. [Phone verification](verification.md#mobile-list-organization).
 
 **Acceptance.** Create a list in a folder, rename it, move it to the root, then ungroup the folder and reload. Verify task IDs/content remain. Delete a list referenced by a filter and inspect both Inbox records and the unavailable filter selection.
