@@ -29,6 +29,7 @@ let domainSources = [
     "BoardProjection.swift",
     "SummaryReport.swift",
     "LegacyRecurrence.swift",
+    "LocalReminderPlan.swift",
     "TaskDestination.swift",
     "TaskCreation.swift",
     "TaskTextBatch.swift",
