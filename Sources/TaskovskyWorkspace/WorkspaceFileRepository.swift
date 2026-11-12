@@ -117,6 +117,20 @@ public actor WorkspaceFileRepository {
         return try readCurrentFiles()
     }
 
+    /// Read-only reminder input. Never replays an interrupted transaction or
+    /// substitutes default/optimistic state for an unavailable persisted snapshot.
+    public func loadReadOnlyForReminders() throws -> WorkspaceDocument {
+        guard !FileManager.default.fileExists(atPath: tagTransactionURL.path) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        let result = try readCurrentFiles()
+        guard result.allowsKnownFieldWrites,
+              !FileManager.default.fileExists(atPath: tagTransactionURL.path) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        return result
+    }
+
     private func readCurrentFiles() throws -> WorkspaceDocument {
         try document(workspace: Data(contentsOf: workspaceURL), settings: Data(contentsOf: settingsURL))
     }
