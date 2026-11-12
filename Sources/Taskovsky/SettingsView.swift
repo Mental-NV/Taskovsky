@@ -78,6 +78,7 @@ struct SettingsView: View {
     let calendarShortcuts: CalendarShortcutBindings
     @State private var section: Section = .smartLists
     @State private var editingTemplate: TemplateDraft?
+    @State private var previewingTemplate: TaskTemplate?
     @State private var templateQuery = ""
     @State private var templateDragScope = UUID()
     @State private var templateDropTarget: UUID?
@@ -128,6 +129,7 @@ struct SettingsView: View {
         }.frame(minWidth: 800, minHeight: 680).tint(accent)
             .background(WindowChrome()).ignoresSafeArea(.container, edges: .top)
             .sheet(item: $editingTemplate) { draft in TemplateEditor(draft: draft) { store.updateTemplate($0) } }
+            .sheet(item: $previewingTemplate) { template in TemplatePreview(store: store, template: template) }
             .onAppear {
                 // Consumes the parked section from a fresh-launch Edit action.
                 // Already-open windows retarget live via the notification above.
@@ -268,7 +270,7 @@ struct SettingsView: View {
 
     private func templateCard(_ template: TaskTemplate, order: [UUID]) -> some View {
         ZStack(alignment: .topTrailing) {
-            Button { editingTemplate = TemplateDraft(template) } label: {
+            Button { previewingTemplate = template } label: {
                 VStack(alignment: .leading, spacing: 7) {
                     Text(template.name).font(.system(size: 14, weight: .semibold)).lineLimit(2).padding(.trailing, 20)
                     if !template.checklist.isEmpty {

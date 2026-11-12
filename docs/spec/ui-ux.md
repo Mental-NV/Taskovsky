@@ -492,3 +492,8 @@ The recurring Calendar Schedule editor offers Skip this occurrence when the shar
 ## UX-018 — Tasks Timeline
 
 Use the Tasks view selector in an active list, folder or saved filter. Open a folder from its sidebar context menu. Task labels stay visible as the date axis scrolls. Select Day, Week or Month, page to another period or return to Today, and use the schedule editor from a task row or Arrange Undated Tasks. Click a blank date to stage capture. Drag a scheduled mark to move it or its end grip to resize. Add on date provides a date picker. Section headings align with chart bands, and folder and filter headings identify the source list. Drag from Arrange to a date on the chart, then use Undo to restore the undated state. The palette colors the current chart by list, tag, or priority. Trackpad pinch and Control-scroll zoom over the date axis. The zoom buttons anchor the middle of the visible axis. See the [change contract](../changes/task-timeline-2026-11-09.md).
+
+
+### Mac Settings template Preview
+
+[Preview contract](../changes/mac-template-preview-2026-11-12.md): Settings template cards open a 560×400-point read-only sheet with fixed Preview header and Apply/help footer, scrolling title, description and checklist content. Close/Escape do not save. Apply uses the displayed template snapshot and closes only after successful task creation; failures remain visible and retryable. Explicit Edit stays in card options. This is a Mac representation; the iPhone editor is unchanged. Geometry is Taskovsky-owned, not a verified pixel measurement of TickTick.
