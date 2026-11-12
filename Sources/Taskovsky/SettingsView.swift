@@ -448,13 +448,14 @@ private struct TemplateDraft: Identifiable {
 private struct TemplateEditor: View {
     @Environment(\.dismiss) private var dismiss
     let draft: TemplateDraft
-    let save: (TaskTemplate) -> Void
+    let save: (TaskTemplate) -> Bool
     @State private var name: String
     @State private var title: String
     @State private var bodyText: String
     @State private var checklist: String
     @State private var priority: TaskPriority
-    init(draft: TemplateDraft, save: @escaping (TaskTemplate) -> Void) {
+    @State private var saveFailed = false
+    init(draft: TemplateDraft, save: @escaping (TaskTemplate) -> Bool) {
         self.draft = draft; self.save = save
         _name = State(initialValue: draft.original?.name ?? ""); _title = State(initialValue: draft.original?.title ?? "")
         _bodyText = State(initialValue: draft.original?.body ?? ""); _checklist = State(initialValue: draft.original?.checklist.map(\.title).joined(separator: "\n") ?? "")
@@ -470,6 +471,12 @@ private struct TemplateEditor: View {
             Text("Checklist (one item per line)").font(.system(size: 13, weight: .medium))
             TextEditor(text: $checklist).frame(height: 90).border(Color.secondary.opacity(0.25))
             Picker("Priority", selection: $priority) { ForEach(TaskPriority.allCases, id: \.self) { Text($0.label).tag($0) } }
+            if saveFailed {
+                Text("Could not save the template. Your draft is still here. Try Save again or Cancel.")
+                    .font(.system(size: 12)).foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("templateEditorSaveError")
+            }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button("Save") {
                 var fields = TaskTemplateFields(template: draft.original)
                 fields.name = name
@@ -485,7 +492,7 @@ private struct TemplateEditor: View {
                 }
                 guard let template = fields.updated(id: draft.id, original: draft.original,
                                                     allowsReplacingStyledBody: true) else { return }
-                save(template); dismiss()
+                if save(template) { dismiss() } else { saveFailed = true }
             }.keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(24).frame(width: 480).tint(accent)
     }

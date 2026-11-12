@@ -138,6 +138,8 @@ Templates capture one record's title, body/styles, quick steps, priority, valid 
 
 Mac template instantiation publishes a created task and returns its ID only after the workspace save succeeds. A failed save leaves the published workspace unchanged and returns nil; top/bottom insertion and section placement retain their existing policy. This is not a general transactional rewrite of template editing or task creation. [Atomic creation contract](../changes/template-creation-atomic-2026-11-12.md).
 
+Mac Save as Template, Edit/New and Delete also stage their template-array changes until workspace persistence succeeds. A failed Settings Save leaves the draft open with an error; Cancel discards only the draft. Existing append/update-by-ID behavior and content capture remain unchanged. This does not make unrelated store APIs transactional. [Management contract](../changes/template-management-atomic-2026-11-12.md).
+
 [Template search and order](../changes/template-search-order-2026-11-10.md) use the saved local template array. Search is view state. Reorder saves a permutation of the existing records and preserves their identities and contents.
 
 **Acceptance.** Duplicate a nested task and check no copied child points to an original ancestor inside the copied subtree. Instantiate a template after deleting one of its tags; the missing tag must not return. Apply a template to a task with children and verify those links remain. Reopen a previously pinned task and inspect its grouping.
