@@ -290,6 +290,14 @@ public struct CalendarTimedPlacement: Identifiable, Equatable, Sendable {
     public var resizeMinute: Double
     public var id: String { entry.id }
 
+    public func endResizeTarget(deltaMinutes: Double, day: Date, calendar: Calendar, window: CalendarHourlyWindow) -> Date {
+        // A zero range has a minimum visual hit area; it is not its stored end.
+        // Preserve subsecond precision when the pointer returns to its origin.
+        if entry.hasDuration && deltaMinutes == 0 { return entry.due }
+        let minute = window.snappedMinute(resizeMinute + deltaMinutes)
+        return CalendarDates.instant(on: day, minute: minute, calendar: calendar)
+    }
+
     public func startResizeTarget(deltaMinutes: Double, day: Date, calendar: Calendar, window: CalendarHourlyWindow) -> Date {
         guard deltaMinutes != 0 else { return entry.start }
         let minute = window.snappedMinute(startMinute + deltaMinutes)
@@ -334,7 +342,7 @@ public enum CalendarTimedLayout {
             cluster.append(CalendarTimedPlacement(entry: entry, startMinute: a, endMinute: b, column: lane,
                                                   columnCount: 1, startIsVisible: entry.start >= visibleStart,
                                                   endIsVisible: entry.end <= visibleEnd,
-                                                  resizeMinute: entry.hasDuration ? rawEnd : b))
+                                                  resizeMinute: entry.hasDuration ? minute(entry.due) : b))
             clusterEnd = max(clusterEnd, b)
         }
         flush()

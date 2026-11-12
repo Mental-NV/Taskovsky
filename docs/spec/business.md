@@ -421,3 +421,7 @@ On iPhone, Show Details adds time and source list to Agenda and Month. Clocks us
 ### BUS-031 — Tasks Timeline
 
 The local [Tasks Timeline](../changes/task-timeline-2026-11-09.md) projects the current task schedule in an active list, folder, or saved filter. It keeps undated open tasks available to arrange, excludes archived lists and follows saved filter rules. Its view choice is stored per list and stays in the session for folders and filters. Schedule changes use the existing precise editor or the chart drag controls, with the same recurrence, reminder and Undo policy. Date-axis capture stages an all-day task before the user confirms creation. An Arrange drop schedules an existing undated task as an all-day date or a timed point and preserves its organization. Scheduled Timeline rows use saved section order and inherited parent membership, even when the parent is outside the visible scope.
+
+### Unchanged timed Calendar end resize
+
+For a valid coherent timed duration, submitting the exact existing end through Calendar end resize preserves the entire task, including short/zero ranges, reminders and recurrence overrides. Actual changed targets retain the 15-minute minimum; explicit point-to-duration conversion is unchanged. [CAL-END-RESIZE-003](../changes/calendar-end-resize-noop-2026-11-12.md).

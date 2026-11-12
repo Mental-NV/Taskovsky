@@ -523,6 +523,77 @@ final class MobileContractTests: XCTestCase {
         XCTAssertTrue(months.marks.allSatisfy { local.component(.day, from: $0) == 1 })
     }
 
+    func testUnchangedTimedEndResizePreservesShortAndZeroRanges() throws {
+        for seconds in [0.0, 300.0, 300.125] {
+            let start = date("2026-11-09T10:00:00Z").addingTimeInterval(0.25)
+            let end = start.addingTimeInterval(seconds)
+            var original = TaskItem(title: "Short timed range", dueDate: end, hasDueTime: true,
+                reminderDate: end.addingTimeInterval(-600), recurrence: .daily,
+                timeZoneID: "UTC", scheduledDuration: .init(start: start, end: end))
+            for follows in [false, true] {
+                original.reminderFollowsSchedule = follows
+                for scope in [CalendarScheduleScope.series, .currentOccurrence] {
+                    let result = try XCTUnwrap(CalendarScheduling.prepared(.resizeEnd(end), to: original,
+                        displayCalendar: calendar, settings: .init(), policyCalendar: calendar, scope: scope))
+                    XCTAssertEqual(result, original, "duration \(seconds), follows \(follows), scope \(scope)")
+                }
+            }
+        }
+    }
+
+    func testUnchangedTimedEndRetainsExistingOccurrenceOverride() throws {
+        let end = date("2026-11-09T10:15:00Z").addingTimeInterval(0.125)
+        var original = TaskItem(title: "Rescheduled", dueDate: end, hasDueTime: true,
+            recurrence: .daily, scheduledDuration: .init(start: end - 300, end: end))
+        original = try XCTUnwrap(CalendarScheduling.prepared(.move(start: end + 86_100, allDay: false),
+            to: original, displayCalendar: calendar, settings: .init(), policyCalendar: calendar,
+            scope: .currentOccurrence))
+        XCTAssertNotNil(original.originalOccurrenceSchedule)
+        for scope in [CalendarScheduleScope.series, .currentOccurrence] {
+            let result = try XCTUnwrap(CalendarScheduling.prepared(.resizeEnd(end + 86_400), to: original,
+                displayCalendar: calendar, settings: .init(), policyCalendar: calendar, scope: scope))
+            XCTAssertEqual(result, original)
+        }
+    }
+
+    func testTimedEndGestureUsesStoredEndNotMinimumVisualHeight() throws {
+        let day = date("2026-11-12T00:00:00Z")
+        let end = day + 10 * 3600 + 15 * 60 + 0.125
+        for seconds in [0.0, 300.375] {
+            let task = TaskItem(title: "Short", dueDate: end, hasDueTime: true,
+                scheduledDuration: .init(start: end - seconds, end: end))
+            let projection = TaskCalendarProjection.project(data: WorkspaceData(tasks: [task]),
+                range: DateInterval(start: day, duration: 86400), options: .init(), calendar: calendar)
+            let placement = try XCTUnwrap(CalendarTimedLayout.placements(entries: projection.entries,
+                day: day, calendar: calendar).first)
+            XCTAssertEqual(placement.resizeMinute, 615)
+            XCTAssertEqual(placement.endResizeTarget(deltaMinutes: 0, day: day, calendar: calendar, window: .full), end)
+            XCTAssertEqual(placement.endResizeTarget(deltaMinutes: 15, day: day, calendar: calendar, window: .full), day + 630 * 60)
+        }
+        let point = TaskItem(title: "Point", dueDate: end, hasDueTime: true)
+        let projection = TaskCalendarProjection.project(data: WorkspaceData(tasks: [point]),
+            range: DateInterval(start: day, duration: 86400), options: .init(), calendar: calendar)
+        let placement = try XCTUnwrap(CalendarTimedLayout.placements(entries: projection.entries, day: day, calendar: calendar).first)
+        XCTAssertEqual(placement.endResizeTarget(deltaMinutes: 0, day: day, calendar: calendar, window: .full), day + 630 * 60)
+    }
+
+    func testChangedTimedEndStillClampsAndPointsStillConvert() throws {
+        let start = date("2026-11-09T10:00:00Z").addingTimeInterval(0.25)
+        let end = start.addingTimeInterval(300.125)
+        let original = TaskItem(title: "Short", dueDate: end, hasDueTime: true,
+            scheduledDuration: .init(start: start, end: end))
+        for target in [end.addingTimeInterval(0.125), start.addingTimeInterval(-60)] {
+            let changed = try XCTUnwrap(CalendarScheduling.applying(.resizeEnd(target), to: original, displayCalendar: calendar))
+            XCTAssertEqual(changed.dueDate, start.addingTimeInterval(900))
+            XCTAssertEqual(changed.scheduledDuration?.start, start)
+        }
+        let point = TaskItem(title: "Point", dueDate: end, hasDueTime: true)
+        let converted = try XCTUnwrap(CalendarScheduling.applying(.resizeEnd(end), to: point, displayCalendar: calendar))
+        XCTAssertEqual(converted.scheduledDuration, .init(start: end, end: end.addingTimeInterval(900)))
+        XCTAssertNil(CalendarScheduling.applying(.resizeEnd(Date(timeIntervalSinceReferenceDate: .infinity)), to: original, displayCalendar: calendar))
+        XCTAssertNil(CalendarScheduling.applying(.resizeEnd(end), to: TaskItem(title: "Undated"), displayCalendar: calendar))
+    }
+
     func testTimedStartResizeKeepsDueAndReminderProvenance() throws {
         let start = date("2026-11-09T10:00:00Z")
         let due = start.addingTimeInterval(300)
