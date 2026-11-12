@@ -51,6 +51,7 @@ struct MobileRootView: View {
     @State private var initialized = false
     @State private var section: PhoneSection = .tasks
     @State private var destination: TaskDestination = .today
+    @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
     @State private var capturePresented = false
     @State private var drawer = false
@@ -668,7 +669,8 @@ struct MobileRootView: View {
         }
     }
     private func taskRows(_ tasks: [TaskItem], lists: [TaskList], searchQuery: String?, sectionList: TaskList? = nil) -> some View {
-        let ordered = TaskHierarchy.displayOrder(tasks)
+        let showsDisclosure = searchQuery == nil
+        let ordered = TaskHierarchy.listRows(tasks, collapsed: showsDisclosure ? collapsedSubtasks : [])
         let revision = model.canBeginEditing ? model.document?.revision : nil
         let manual = searchQuery == nil && model.taskSort == nil &&
             !(destination.supportsTaskDateGrouping && model.taskGrouping != .standard)
@@ -681,7 +683,8 @@ struct MobileRootView: View {
             }, by: \.parentID).mapValues { $0.map(\.id) }
             : [:]
         return LazyVStack(spacing: 0) {
-            ForEach(ordered, id: \.task.id) { task, depth in
+            ForEach(ordered, id: \.task.id) { row in
+                let task = row.task
                 let due = displayCalendar.flatMap { TaskDueDateGroup.displayDue(for: task, calendar: $0) } ?? task.dueDate
                 let actions = searchQuery == nil ? taskSwipeActions(for: task, lists: lists) : ([], [])
                 let siblings = peers[task.parentID] ?? []
@@ -752,11 +755,14 @@ struct MobileRootView: View {
                                     }
                                 }
                         } else { rowContent }
+                        if showsDisclosure && row.hasChildren {
+                            taskSubtreeDisclosure(task)
+                        }
                         if let revision, canReorder || sectionDrag {
                             PhoneTaskRowGrip(task: task, payload: PhoneBoardDrag(session: taskListDragSession,
                                 listID: task.listID, taskID: task.id, revision: revision))
                         }
-                    }.padding(.leading, 2 + CGFloat(min(depth, 4)) * 14)
+                    }.padding(.leading, 2 + CGFloat(min(row.depth, 4)) * 14)
                 }
                 .modifier(PhoneTaskRowOrderDrop(accept: canReorder ? { drag, after in
                     guard drag.session == taskListDragSession, let revision, drag.revision == revision,
@@ -767,6 +773,21 @@ struct MobileRootView: View {
                 if task.id != ordered.last?.task.id { Divider().padding(.leading, 46) }
             }
         }.background(PhoneStyle.card, in: RoundedRectangle(cornerRadius: 16)).padding(.horizontal, 16)
+    }
+
+    private func taskSubtreeDisclosure(_ task: TaskItem) -> some View {
+        let expanded = !collapsedSubtasks.contains(task.id)
+        return Button {
+            revealedTaskSwipe = nil
+            if expanded { collapsedSubtasks.insert(task.id) } else { collapsedSubtasks.remove(task.id) }
+        } label: {
+            Image(systemName: expanded ? "chevron.down" : "chevron.forward")
+                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityLabel((expanded ? "Hide subtasks of " : "Show subtasks of ") + task.title)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+            .accessibilityIdentifier("taskSubtreeDisclosure-" + task.id.uuidString)
     }
 
     private func reorderPhoneTask(_ id: UUID, relativeTo target: UUID, after: Bool, expected: WorkspaceRevision) {

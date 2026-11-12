@@ -272,6 +272,8 @@ struct WorkspaceView: View {
         return TaskSortPolicy.isManual(sort) ? nil : TaskSortPolicy.reorderDisabledMessage
     }
     @State private var showCompleted = true
+    @State private var collapsedSubtasks: Set<UUID> = []
+    @State private var inlineTaskRenames: Set<UUID> = []
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
     @State private var sectionEditor: TaskList?
@@ -1548,14 +1550,7 @@ struct WorkspaceView: View {
                             // must never silently rewrite dates, priorities,
                             // or status. Ordinary list moves still work.
                             if !collapsed.contains(group.id) {
-                                let groupIDs = items.map(\.id)
-                                // Subtasks nest directly under their parent when
-                                // the parent is in the same group; orphans
-                                // (parent filtered out) render as top-level
-                                // rows so nothing vanishes.
-                                ForEach(TaskHierarchy.displayOrder(items), id: \.task.id) { entry in
-                                    taskRow(entry.task, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth, depth: entry.depth)
-                                }
+                                taskListRows(items, overlay: overlay, now: now, paneWidth: paneWidth)
                             }
                         }
                     }.padding(.horizontal, 16).padding(.bottom, 24)
@@ -1620,12 +1615,16 @@ struct WorkspaceView: View {
     }
     @ViewBuilder private func sectionRows(_ items: [TaskItem], key: String, overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
         if !collapsed.contains(key) {
-            let groupIDs = items.map(\.id)
-            ForEach(TaskHierarchy.displayOrder(items), id: \.task.id) { entry in
-                taskRow(entry.task, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth, depth: entry.depth)
-            }
+            taskListRows(items, overlay: overlay, now: now, paneWidth: paneWidth)
         }
     }
+    private func taskListRows(_ items: [TaskItem], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
+        let groupIDs = items.map(\.id)
+        return ForEach(TaskHierarchy.listRows(items, collapsed: collapsedSubtasks), id: \.task.id) { row in
+            taskRow(row, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth)
+        }
+    }
+
     private func sectionBoard(_ list: TaskList, overlay: Bool, now: Date) -> some View {
         let rows = BoardProjection.tasks(forList: list.id, in: store.data)
         return ScrollView(.horizontal, showsIndicators: false) {
@@ -1680,7 +1679,12 @@ struct WorkspaceView: View {
             Button("Duplicate") { if let id = store.duplicateTask(id: task.id) { selectTask(id) } }
             Button("Save as Template") { _ = store.saveTemplate(from: task.id) }
             if task.kind == .task {
-                Button("Add Subtask") { if let id = store.addSubtask(to: task.id, title: "New subtask") { selectTask(id) } }
+                Button("Add Subtask") {
+                    if let id = store.addSubtask(to: task.id, title: "New subtask") {
+                        collapsedSubtasks.remove(task.id)
+                        selectTask(id)
+                    }
+                }
                 if task.parentID != nil {
                     Button("Move to Top Level") { _ = store.setTaskParent(id: task.id, parentID: nil) }
                 }
@@ -1909,14 +1913,28 @@ struct MergeTagsSheet: View {
 /// The drop halves commit atomically on drop only; anything invalid leaves
 /// the saved order untouched.
 private extension WorkspaceView {
-    func taskRow(_ task: TaskItem, groupIDs: [UUID], overlay: Bool, now: Date, paneWidth: CGFloat, depth: Int = 0) -> some View {
+    func taskRow(_ row: TaskHierarchy.ListRow, groupIDs: [UUID], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
+        let task = row.task
         let isActive = task.deletedAt == nil
         let readOnly = isInArchivedList(task)
         let interactive = isActive && !readOnly
+        let disclosure: (expanded: Bool, toggle: () -> Void)? = row.hasChildren
+            ? (!collapsedSubtasks.contains(task.id), {
+                if collapsedSubtasks.remove(task.id) != nil { return }
+                guard inlineTaskRenames.isDisjoint(with: groupIDs) else {
+                    actions.notice("Finish or cancel the inline rename before hiding subtasks.")
+                    return
+                }
+                collapsedSubtasks.insert(task.id)
+            })
+            : nil
         // Grip visibility is resolved inside TaskRow from whole-row hover or
         // selection; the drag source lives on the grip only. Tapping the grip
         // selects in manual mode and reports the sorted-mode notice otherwise.
-        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, dueDisplayCalendar: taskGrouping == .dueDate ? store.settings.calendar : nil, readOnly: readOnly, depth: depth, gripActive: interactive, onGripActivate: interactive ? {
+        return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, dueDisplayCalendar: taskGrouping == .dueDate ? store.settings.calendar : nil, readOnly: readOnly, depth: row.depth, subtaskDisclosure: disclosure,
+                       onInlineRenameChanged: { active in
+            if active { inlineTaskRenames.insert(task.id) } else { inlineTaskRenames.remove(task.id) }
+        }, gripActive: interactive, onGripActivate: interactive ? {
             if let message = reorderUnavailableMessage { actions.notice(message) }
             else { selectTask(task.id) }
         } : nil, toggle: { complete(task.id) }, onSelect: { selectTask(task.id) }, onTitleDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } }, onRowDoubleClick: { if !sidePeekMode && overlay { openPopup(task.id) } })

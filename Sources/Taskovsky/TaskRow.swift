@@ -29,6 +29,8 @@ struct TaskRow: View {
     /// Hierarchy nesting depth from the group's display walk. Indentation is
     /// capped so deep chains stay readable; the data itself is unbounded.
     var depth = 0
+    var subtaskDisclosure: (expanded: Bool, toggle: () -> Void)?
+    var onInlineRenameChanged: ((Bool) -> Void)?
     /// Dedicated grip drag source. Built here (never passed in as a view) so
     /// visibility follows whole-row hover OR selection while the 14pt slot
     /// stays reserved and the row never reflows. Nil action means no grip
@@ -144,10 +146,12 @@ struct TaskRow: View {
                         }
                     }
                 }
-            }.frame(height: hasExtras ? 24 : 40)
+            }.padding(.leading, 12)
+                .frame(height: hasExtras ? 24 : 40)
+                .overlay(alignment: .leading) { subtaskDisclosureButton }
             if let previewLine {
                 Text(previewLine).font(.system(size: 13)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.tail)
-                    .padding(.leading, 20)
+                    .padding(.leading, 32)
             }
             if showSteps && !task.checklist.isEmpty {
                 VStack(alignment: .leading, spacing: 5) {
@@ -161,9 +165,9 @@ struct TaskRow: View {
                                 .foregroundStyle(step.isCompleted ? Color(nsColor: .tertiaryLabelColor) : Color.secondary).lineLimit(1)
                         }
                     }
-                }.padding(.leading, 20)
+                }.padding(.leading, 32)
             }
-        }.padding(.leading, 12 + CGFloat(min(max(depth, 0), 6)) * 14).padding(.trailing, 7).padding(.vertical, hasExtras ? 8 : 0)
+        }.padding(.leading, CGFloat(min(max(depth, 0), 6)) * 14).padding(.trailing, 7).padding(.vertical, hasExtras ? 8 : 0)
         .frame(minHeight: 40)
         .background(rowBackground, in: RoundedRectangle(cornerRadius: 9))
         .overlay(alignment: .bottom) { Rectangle().fill(Color.primary.opacity(0.045)).frame(height: 1).padding(.leading, 40).padding(.trailing, 7) }
@@ -172,6 +176,24 @@ struct TaskRow: View {
         .onTapGesture { if swallowSelect { swallowSelect = false } else { onSelect() } }
         .onTapGesture(count: 2) { onRowDoubleClick() }
         .accessibilityAction(named: "Rename", rename)
+        .onChange(of: editing) { _, active in onInlineRenameChanged?(active) }
+        .onDisappear { if editing { onInlineRenameChanged?(false) } }
+    }
+    @ViewBuilder private var subtaskDisclosureButton: some View {
+        if let disclosure = subtaskDisclosure {
+            Button {
+                consumeNextSelect()
+                disclosure.toggle()
+            } label: {
+                Image(systemName: disclosure.expanded ? "chevron.down" : "chevron.forward")
+                    .font(.system(size: 8, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12, height: 24).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+                .accessibilityLabel((disclosure.expanded ? "Hide subtasks of " : "Show subtasks of ") + task.title)
+                .accessibilityValue(disclosure.expanded ? "Expanded" : "Collapsed")
+                .accessibilityIdentifier("taskSubtreeDisclosure-" + id.uuidString)
+        }
     }
     /// Pane content width passed down statelessly from the workspace geometry
     /// (list width docked, available width in overlay). The metadata budget is

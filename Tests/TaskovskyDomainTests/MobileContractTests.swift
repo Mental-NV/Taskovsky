@@ -835,6 +835,29 @@ final class MobileContractTests: XCTestCase {
         XCTAssertFalse(TaskSortPolicy.canReorder(TaskTimestampSort.modifiedNewest.rawValue))
     }
 
+    func testTaskListDisclosureKeepsNestedFoldsWithinTheRenderedGroup() {
+        let root = TaskItem(title: "Root")
+        let child = TaskItem(title: "Child", parentID: root.id)
+        let grandchild = TaskItem(title: "Grandchild", parentID: child.id)
+        let sibling = TaskItem(title: "Sibling", parentID: root.id)
+        let separate = TaskItem(title: "Separate", parentID: UUID())
+        let items = [child, root, separate, sibling, grandchild]
+        let open = TaskHierarchy.listRows(items, collapsed: [])
+        XCTAssertEqual(open.map(\.task.id), [root.id, child.id, grandchild.id, sibling.id, separate.id])
+        XCTAssertEqual(open.map(\.depth), [0, 1, 2, 1, 0])
+        XCTAssertEqual(open.map(\.hasChildren), [true, true, false, false, false])
+        let folded = TaskHierarchy.listRows(items, collapsed: [root.id, child.id])
+        XCTAssertEqual(folded.map(\.task.id), [root.id, separate.id])
+        XCTAssertEqual(folded.map(\.hasChildren), [true, false])
+        let reopened = TaskHierarchy.listRows(items, collapsed: [child.id])
+        XCTAssertEqual(reopened.map(\.task.id), [root.id, child.id, sibling.id, separate.id])
+        let orphan = TaskHierarchy.listRows([grandchild], collapsed: [root.id, child.id])
+        XCTAssertEqual(orphan.map(\.task.id), [grandchild.id])
+        XCTAssertEqual(orphan.map(\.depth), [0])
+        XCTAssertEqual(orphan.map(\.hasChildren), [false])
+        XCTAssertEqual(TaskHierarchy.listRows([root], collapsed: [root.id]).map(\.hasChildren), [false])
+    }
+
     func testTaskDueDateGroupsRespectCivilDatesAndRetainIncomingSort() throws {
         var display = calendar
         display.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Los_Angeles"))

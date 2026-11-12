@@ -171,6 +171,27 @@ public enum TaskHierarchy {
         return result
     }
 
+    public struct ListRow: Sendable {
+        public let task: TaskItem
+        public let depth: Int
+        public let hasChildren: Bool
+    }
+
+    /// Fold only descendants actually nested in this rendered group.
+    public static func listRows(_ items: [TaskItem], collapsed: Set<UUID>) -> [ListRow] {
+        let ordered = displayOrder(items)
+        var rows: [ListRow] = []
+        var collapsedDepth: Int?
+        for (index, row) in ordered.enumerated() {
+            if let collapsedDepth, row.depth > collapsedDepth { continue }
+            let next = index + 1
+            let hasChildren = next < ordered.count && ordered[next].depth > row.depth
+            rows.append(ListRow(task: row.task, depth: row.depth, hasChildren: hasChildren))
+            collapsedDepth = hasChildren && collapsed.contains(row.task.id) ? row.depth : nil
+        }
+        return rows
+    }
+
     /// Subtask progress: total children plus finished ones (completed or
     /// Won't Do). Nil when the task has no subtasks.
     public static func progress(of id: UUID, in tasks: [TaskItem]) -> (done: Int, total: Int)? {

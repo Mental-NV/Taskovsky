@@ -1642,3 +1642,12 @@ The native Mac run covered the standard light appearance and a Month fixture. Da
 | Fixture audit | Workspace and settings were byte-identical after the Mac test and after both read-only iPhone grouping workflows. The original guarded Mac app and QA preferences were restored. The disposable iPhone simulator was removed. |
 
 The current native checks did not cover dark appearance, reduced motion, VoiceOver, physical iPhone, or a Mac pointer drag. TickTick was not reopened for this recovery.
+
+
+<a id="task-subtree-disclosure"></a>
+
+### TASK-HIERARCHY-002 — Recovered linked-subtask disclosure
+
+The [change contract](../changes/task-subtree-disclosure-2026-11-10.md) is recovered from the preserved November 10 draft and ported onto due-date-grouping PR #30 head `e594db764abfe569e2a77c2cb411c2c70ef9b3ba`. This separate slice retains the newer iPhone manual-order/drop controls and date captions. The original desktop and mobile worktrees are not modified.
+
+Historical draft QA is not evidence for this port. The initial cloud check covers patch integration and whitespace only; this cloud environment has no Swift compiler or macOS/iOS runtime. Fresh compilation, native rename-interruption/disclosure QA, simulator regressions, fixture-byte audits and exact-head hosted CI are pending. The PR remains draft until those checks and independent review complete. No full TickTick parity, physical-device, VoiceOver, dark/reduced-motion or narrow-window verification is claimed.
