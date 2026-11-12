@@ -598,6 +598,60 @@ public final class TaskStore: ObservableObject {
         let list = TaskList(name: name.trimmingCharacters(in: .whitespacesAndNewlines), color: color, kind: kind, symbol: symbol, folderID: folder, showsInSmartLists: showsInSmartLists); data.lists.append(list); save(); return list.id
     }
 
+    /// Explicit New/Edit List sheet only. Legacy menu operations remain separate.
+    @discardableResult public func saveListEditor(_ candidate: TaskList, expected: TaskList?) -> Bool {
+        guard !blockedByLoadFailure else { return false }
+        var value = candidate
+        value.name = value.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.name.isEmpty else { storageError = "Enter a list name before saving."; return false }
+        if let expected {
+            guard expected.id == value.id, data.lists.first(where: { $0.id == value.id }) == expected else {
+                storageError = "This list changed or was deleted. Keep your draft and reopen the list before saving."
+                return false
+            }
+            value.sections = expected.sections
+            value.isPinned = expected.isPinned
+            value.isArchived = expected.isArchived
+        }
+        if let folder = value.folderID, !data.folders.contains(where: { $0.id == folder }) {
+            value.folderID = nil; value.belowFolders = false
+        }
+        if value.folderID != nil { value.belowFolders = false }
+        do {
+            let original: Data?
+            do { original = try Data(contentsOf: fileURL) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile && data == WorkspaceData() { original = nil }
+            let bytes = try original ?? JSONEncoder().encode(data)
+            guard try Self.decodeWorkspace(bytes) == data else {
+                storageError = "The saved workspace changed. Keep your draft and reload before saving this list."
+                return false
+            }
+            guard let patched = try ListEditorJSONPatch.applying(value, expected: expected, to: bytes) else {
+                storageError = "This list could not be saved safely. Keep your draft; unsupported or conflicting saved fields must be resolved first."
+                return false
+            }
+            let staged = try Self.decodeWorkspace(patched)
+            if patched == bytes {
+                if !settingsLoadFailed { storageError = settingsSaveError }
+                return true
+            }
+            let written = writeWorkspaceBytes {
+                let current: Data?
+                do { current = try Data(contentsOf: self.fileURL) }
+                catch let error as CocoaError where error.code == .fileReadNoSuchFile { current = nil }
+                guard current == original else { throw CocoaError(.fileWriteUnknown) }
+                return patched
+            }
+            guard written || (try? Data(contentsOf: fileURL)) == patched else { return false }
+            data = staged
+            if !settingsLoadFailed { storageError = settingsSaveError }
+            return true
+        } catch {
+            storageError = "Could not save list: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     /// Archives or unarchives a list. Archive hides its tasks from smart
     /// destinations and suppresses their reminders; the list keeps its order
     /// and folder slot, and unarchiving restores it exactly.

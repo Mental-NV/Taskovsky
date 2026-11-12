@@ -412,6 +412,7 @@ struct TaskDetail: View {
 
 struct EntityEditor: Identifiable {
     let id = UUID()
+    var originalList: TaskList? = nil
     var entityID: UUID?
     var isTag: Bool
     var name = ""
@@ -433,7 +434,7 @@ struct EntityEditor: Identifiable {
     /// Preselected parent for new sub-tags, or the stored parent for edits.
     var parentTagID: UUID? = nil
     init(isTag: Bool, folderID: UUID? = nil, parentTagID: UUID? = nil) { self.isTag = isTag; self.folderID = folderID; self.parentTagID = parentTagID }
-    init(list: TaskList) { entityID = list.id; isTag = false; name = list.name; color = list.color; kind = list.kind; symbol = list.symbol ?? ""; folderID = list.folderID; belowFolders = list.belowFolders; showsInSmartLists = list.showsInSmartLists; viewMode = list.viewMode }
+    init(list: TaskList) { originalList = list; entityID = list.id; isTag = false; name = list.name; color = list.color; kind = list.kind; symbol = list.symbol ?? ""; folderID = list.folderID; belowFolders = list.belowFolders; showsInSmartLists = list.showsInSmartLists; viewMode = list.viewMode }
     init(tag: TaskTag) { entityID = tag.id; isTag = true; name = tag.name; color = tag.color; parentTagID = tag.parentID }
 }
 struct EntitySheet: View {
@@ -441,7 +442,8 @@ struct EntitySheet: View {
     let editor: EntityEditor
     let folders: [ListFolder]
     let tags: [TaskTag]
-    let save: (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Void
+    let save: (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Bool
+    @State private var saveFailed = false
     @State private var name: String
     @State private var color: String
     @State private var kind: TaskKind
@@ -452,7 +454,7 @@ struct EntitySheet: View {
     @State private var parentTagID: UUID?
     private let symbols = ["line.3.horizontal", "house", "briefcase", "book", "star", "cart", "heart", "folder", "list.bullet"]
     @FocusState private var focused: Bool
-    init(editor: EntityEditor, folders: [ListFolder] = [], tags: [TaskTag] = [], save: @escaping (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Void) {
+    init(editor: EntityEditor, folders: [ListFolder] = [], tags: [TaskTag] = [], save: @escaping (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Bool) {
         self.editor = editor; self.folders = folders; self.tags = tags; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind); _symbol = State(initialValue: editor.symbol); _folderID = State(initialValue: editor.folderID); _showsInSmartLists = State(initialValue: editor.showsInSmartLists); _viewMode = State(initialValue: editor.viewMode); _parentTagID = State(initialValue: editor.parentTagID)
     }
     /// Cycle-safe parent options: the tag itself and its descendants can
@@ -507,6 +509,7 @@ struct EntitySheet: View {
                 .accessibilityLabel("List or board view")
             }
             if editor.entityID != nil && !editor.isTag { Text("List type sets the default for new items.").font(.caption).foregroundStyle(.secondary) }
+            if saveFailed { Text("The list was not saved. Your draft is preserved. Check the workspace error, then retry or reopen the list if it changed.").font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).accessibilityLabel("List save failed; draft preserved") }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(28).frame(width: 360).tint(accent).onAppear { focused = true }
     }
@@ -517,9 +520,9 @@ struct EntitySheet: View {
         let selectedIcon = cleanedSymbol.isEmpty ? nil : cleanedSymbol
         let identity = editor.isTag ? (name: cleaned, symbol: selectedIcon) :
             ListIcon.resolvingName(cleaned, symbol: selectedIcon, previousName: editor.entityID == nil ? nil : editor.name)
-        save(identity.name, color, kind, identity.symbol, folderID, folderID == nil ? editor.belowFolders : false,
+        let saved = save(identity.name, color, kind, identity.symbol, folderID, folderID == nil ? editor.belowFolders : false,
              parentTagID, showsInSmartLists, viewMode)
-        dismiss()
+        if saved { dismiss() } else { saveFailed = true }
     }
 }
 
