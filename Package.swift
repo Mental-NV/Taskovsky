@@ -41,6 +41,7 @@ let domainSources = [
 let desktopSources = [
     "AppMigration.swift",
     "MacReminderCoordinator.swift",
+    "MacDescriptionSession.swift",
     "DetailState.swift",
     "DragPayloads.swift",
     "IsolatedLaunch.swift",

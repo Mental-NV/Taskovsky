@@ -14,4 +14,10 @@ Remaining integration:
 
 Recovery ownership will use the canonical workspace path namespace and a dedicated adjacent directory; automatic relocation is unsupported. Symlink/root validation and journal failure handling must be implemented before product wiring. No real user data or notification settings may be used for testing.
 
-Five new owned tests target write failure/retry, current title/schedule preservation, stale body refusal, exact Unicode, unknown raw preservation, unsupported rich metadata and rich envelope transitions. They have not run locally because cloud has no Swift/Xcode. CI is the compile/test gate; native IME/Undo/sibling/close/relaunch remains a separate release gate. Do not merge this integration as a completed editor fix before those gates pass.
+Six first-boundary owned tests target write failure/retry, current title/schedule preservation, stale body refusal, exact Unicode, unknown raw preservation, unsupported rich metadata and rich envelope transitions. They passed macOS CI at 7691aa2 (run 43256469358), including release packaging. Cloud has no Swift/Xcode. CI is the compile/test gate; native IME/Undo/sibling/close/relaunch remains a separate release gate. Do not merge this integration as a completed editor fix before those gates pass.
+
+## Shared draft checkpoint (not wired)
+
+The next checkpoint adds an app-owned path namespace, read/write/remove link checks, and a shared session with serialized journal-before-workspace persistence. Stale editor candidates are retained for copying. Workspace write failure leaves saved task data unchanged while a successful journal provides recovery; cleanup must complete before a new journal identity is written. Link checks are not a cross-process filesystem race guarantee.
+
+Basic owned tests cover failure/retry/reopen, stale sibling candidates, namespace ownership and replacing a journal path with a link. These new tests await macOS CI. Delayed-operation tests, orphan recovery discovery, AppKit callbacks, composition/Undo protection, explicit review controls and close/quit protection are still incomplete. Neither this checkpoint nor the earlier CI success means the current user-facing autosave issue is fixed.
