@@ -43,6 +43,12 @@ Implementation must not silently change the approved specification to match what
 
 Test-file existence, a green historical report and static code inspection are not a current pass. Record passed, failed and not-run separately with exact commit. Tests for proposed modules do not exist merely because a test strategy is written here.
 
+### Reuse the guarded Mac QA app
+
+For Computer Use on the development Mac, keep the existing **Taskovsky QA** bundle at `/private/tmp/TaskovskyNativeQA/Taskovsky QA.app` with identifier `local.taskovsky.native-qa`. The executable entry is `Contents/MacOS/Taskovsky`. It is a launcher that requires an explicit, canonical pair of disposable workspace and settings paths. It rejects missing or mismatched arguments, symlinks and hard-linked fixture files, then runs `Contents/MacOS/TaskovskyQAReal`.
+
+When testing a new build, prepare the replacement payload and fixture in staging. Preserve the app name, identifier, stable path, launcher contract and existing ad hoc signing mode. Verify the guard and strict signature before using the staged bundle. Keep the signed prior bundle intact so it can be restored after the run. Launch with the exact fixture paths accepted by the guard. A rebuilt ad hoc bundle can have a different code hash, so approval reuse depends on the actual Computer Use request.
+
 ## 6 Review and finish together
 
 Review the diff against acceptance cases, documentation and unintended scope. For UI, compare actual states and transitions rather than only one screenshot. Check data compatibility and unsupported-feature handling before releasing a limited client.
