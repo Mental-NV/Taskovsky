@@ -1,4 +1,5 @@
 import TaskovskyDomain
+import TaskovskyWorkspace
 import Foundation
 import Combine
 
@@ -480,8 +481,56 @@ public final class TaskStore: ObservableObject {
         TaskSchedulePolicy.coherentSchedule(dueDate: dueDate, hasDueTime: hasDueTime, window: window, calendar: calendar)
     }
 
-    @discardableResult public func createFilter(_ filter: TaskFilter) -> UUID { data.filters.append(filter); save(); return filter.id }
-    public func updateFilter(_ filter: TaskFilter) { guard let i = data.filters.firstIndex(where: { $0.id == filter.id }) else { return }; data.filters[i] = filter; save() }
+    @discardableResult public func createFilter(_ filter: TaskFilter) -> UUID? {
+        saveFilterChange(.create(filter)) ? filter.id : nil
+    }
+    @discardableResult public func updateFilter(_ filter: TaskFilter, expected: TaskFilter? = nil) -> Bool {
+        if let expected {
+            guard let current = data.filters.first(where: { $0.id == filter.id }),
+                  expected.id == filter.id, (try? SavedFilterChange.sameDefinition(current, expected)) == true else {
+                storageError = "This filter changed or was deleted. Keep your draft and reopen the filter before saving."
+                return false
+            }
+        }
+        return saveFilterChange(.update(filter))
+    }
+
+    private func saveFilterChange(_ change: SavedFilterChange) -> Bool {
+        guard !blockedByLoadFailure else { return false }
+        do {
+            let original: Data?
+            do { original = try Data(contentsOf: fileURL) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile && data == WorkspaceData() { original = nil }
+            let bytes = try original ?? JSONEncoder().encode(data)
+            guard try Self.decodeWorkspace(bytes) == data else {
+                storageError = "The saved workspace changed. Keep your draft and reload before saving this filter."
+                return false
+            }
+            guard let patched = try SavedFilterJSONPatch.applying(change, to: bytes) else {
+                storageError = "This filter could not be saved safely. Keep your draft; unsupported or conflicting saved fields must be resolved first."
+                return false
+            }
+            let staged = try Self.decodeWorkspace(patched)
+            if patched == bytes {
+                if !settingsLoadFailed { storageError = settingsSaveError }
+                return true
+            }
+            let written = writeWorkspaceBytes {
+                let current: Data?
+                do { current = try Data(contentsOf: self.fileURL) }
+                catch let error as CocoaError where error.code == .fileReadNoSuchFile { current = nil }
+                guard current == original else { throw CocoaError(.fileWriteUnknown) }
+                return patched
+            }
+            guard written || (try? Data(contentsOf: fileURL)) == patched else { return false }
+            data = staged
+            if !settingsLoadFailed { storageError = settingsSaveError }
+            return true
+        } catch {
+            storageError = "Could not save filter: \(error.localizedDescription)"
+            return false
+        }
+    }
     public func deleteFilter(id: UUID) { data.filters.removeAll { $0.id == id }; save() }
     @discardableResult public func saveTemplate(from id: UUID, name: String? = nil) -> UUID? {
         guard let task = data.tasks.first(where: { $0.id == id }) else { return nil }

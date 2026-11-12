@@ -302,6 +302,8 @@ Dates include Today/Tomorrow, bounded Next 7, Overdue, No Date, this/next/last w
 
 <a id="bus-022"></a>
 
+Mac filter creation/update now persists a staged change before publishing it. The filter editor's original snapshot guards concurrent saved edits, and current disk/store disagreement refuses a write. A lexical filter-only patch preserves unrelated and unchanged raw JSON; an incompatible changed field fails closed. Other legacy entity save paths are not covered. [Contract and verification scope](../changes/filter-save-acknowledgement-2026-11-12.md).
+
 ### BUS-022 — Advanced filters
 
 The iPhone uses the shared filter predicate and a separate rule editor. It stages tree edits, preserves unavailable references, and asks before saving Normal criteria over an advanced tree. [Phone verification](verification.md#mobile-saved-filters).
