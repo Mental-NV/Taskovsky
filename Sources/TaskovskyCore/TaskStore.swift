@@ -451,7 +451,7 @@ public final class TaskStore: ObservableObject {
         }
         guard let task = TaskCreation.fromTemplate(workspace: data, settings: settings, id: id, listID: listID, dueDate: dueDate, useDefaultList: useDefaultList) else { return nil }
         if let sectionID { return persistSectionTask(task, tags: [], sectionID: sectionID, resolveTitle: false) }
-        if settings.defaultAddTo == .top { data.tasks.insert(task, at: 0) } else { data.tasks.append(task) }; save(); return task.id
+        return persistCreatedTaskAtomically(task, tags: [], resolveTitle: false)
     }
     public func trashTask(id: UUID) {
         commitLifecycle { $0.trashTask(id: id, now: Date()) }
