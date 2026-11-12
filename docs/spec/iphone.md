@@ -891,3 +891,6 @@ Repository links below are pinned to the inspected commit to make the original s
 [src-render]: https://github.com/Mental-NV/Taskovsky/blob/f85e2f6a9c538f36829961961a0749197f29c4e2/Sources/TaskovskyCore/RichTextRender.swift
 [src-schedule]: https://github.com/Mental-NV/Taskovsky/blob/f85e2f6a9c538f36829961961a0749197f29c4e2/Sources/TaskovskyCore/ScheduleDraft.swift
 [src-settings]: https://github.com/Mental-NV/Taskovsky/blob/f85e2f6a9c538f36829961961a0749197f29c4e2/Sources/TaskovskyCore/Settings.swift
+
+
+The separately tested [phone reminder ownership record](../changes/iphone-reminder-identity-2026-11-12.md) now provides a non-UI persistence boundary in Workspace. It is not wired to the phone app: no Enable action, OS notification center or delivery is added by this boundary. Missing records stay off; explicit intent can persist a stable workspace UUID without depending on the sandbox path.
