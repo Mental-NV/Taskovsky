@@ -894,3 +894,5 @@ Repository links below are pinned to the inspected commit to make the original s
 
 
 The separately tested [phone reminder ownership record](../changes/iphone-reminder-identity-2026-11-12.md) now provides a non-UI persistence boundary in Workspace. It is not wired to the phone app: no Enable action, OS notification center or delivery is added by this boundary. Missing records stay off; explicit intent can persist a stable workspace UUID without depending on the sandbox path.
+
+A [fake-only phone coordinator](../changes/iphone-reminder-coordinator-2026-11-12.md) now composes that identity boundary with saved snapshots and the shared planner. All center effects are injected; no concrete OS implementation or phone UI/lifecycle wiring exists. Explicit intent, no-prompt restore, queued ordering, scoped cleanup and partial failure behavior are exercised with test fakes only.
