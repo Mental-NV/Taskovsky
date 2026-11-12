@@ -278,3 +278,21 @@ public func remainingOccurrences(
     }
     return out
 }
+
+/// Separates a picker's effective display zone from the optional stored zone.
+/// Merely displaying the host fallback must not make an implicit zone explicit.
+public struct ScheduleZoneSelection: Equatable, Sendable {
+    public var identifier: String
+    private let originalIdentifier: String?
+    private let initialDisplayIdentifier: String
+
+    public init(storedIdentifier: String?, fallbackIdentifier: String) {
+        originalIdentifier = storedIdentifier
+        initialDisplayIdentifier = storedIdentifier ?? fallbackIdentifier
+        identifier = initialDisplayIdentifier
+    }
+
+    public var storedIdentifier: String? {
+        identifier == initialDisplayIdentifier ? originalIdentifier : identifier
+    }
+}

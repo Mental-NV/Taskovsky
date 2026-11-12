@@ -22,6 +22,81 @@ final class ScheduleDraftTests: XCTestCase {
             duration: TaskDurationRange(start: date(2026, 11, 4, 9, 0), end: date(2026, 11, 4, 10, 30)))
     }
 
+    func testZoneSelectionPreservesOptionalIdentityAndOpeningFallback() {
+        var implicit = ScheduleZoneSelection(storedIdentifier: nil, fallbackIdentifier: "America/New_York")
+        XCTAssertEqual(implicit.identifier, "America/New_York")
+        XCTAssertNil(implicit.storedIdentifier)
+        implicit.identifier = "Asia/Tokyo"
+        XCTAssertEqual(implicit.storedIdentifier, "Asia/Tokyo")
+        implicit.identifier = "America/New_York"
+        XCTAssertNil(implicit.storedIdentifier)
+        for identifier in ["UTC", "US/Eastern", "Europe/Moscow"] {
+            var explicit = ScheduleZoneSelection(storedIdentifier: identifier, fallbackIdentifier: "Asia/Tokyo")
+            XCTAssertEqual(explicit.storedIdentifier, identifier)
+            explicit.identifier = "Europe/Paris"
+            XCTAssertEqual(explicit.storedIdentifier, "Europe/Paris")
+            explicit.identifier = identifier
+            XCTAssertEqual(explicit.storedIdentifier, identifier)
+        }
+    }
+
+    @MainActor func testUntouchedImplicitZoneKeepsCurrentSecondRepeatedHour() throws {
+        let due = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-01T06:30:00Z"))
+        let task = TaskItem(title: "Repeated-hour fixture", dueDate: due, hasDueTime: true,
+            reminderDate: due - 600, reminderFollowsSchedule: false,
+            scheduledDuration: .init(start: due - 900, end: due))
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("workspace.json")
+        try JSONEncoder().encode(WorkspaceData(tasks: [task])).write(to: url)
+        let store = TaskStore(fileURL: url, seed: false)
+        var submitted = task
+        submitted.timeZoneID = ScheduleZoneSelection(storedIdentifier: nil, fallbackIdentifier: "America/New_York").storedIdentifier
+        store.updateTask(submitted)
+        let saved = try XCTUnwrap(TaskStore(fileURL: url, seed: false).data.tasks.first)
+        XCTAssertNil(saved.timeZoneID)
+        XCTAssertEqual(saved.dueDate, due)
+        XCTAssertEqual(saved.scheduledDuration, task.scheduledDuration)
+        XCTAssertEqual(saved.reminderDates, task.reminderDates)
+    }
+
+    @MainActor func testUnchangedImplicitZoneSavePreservesOccurrenceAndRepeatedHour() throws {
+        var local = calendar
+        local.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let due = try XCTUnwrap(ISO8601DateFormatter().date(from: "2026-11-01T06:30:00Z")) // second 01:30
+        let task = TaskItem(title: "Owned recurring fixture", dueDate: due, hasDueTime: true,
+            reminderDate: due - 600, recurrence: .daily, reminderFollowsSchedule: false,
+            scheduledDuration: .init(start: due - 1800, end: due))
+        let moved = try XCTUnwrap(CalendarScheduling.prepared(.move(start: due + 86400 - 1800, allDay: false),
+            to: task, displayCalendar: local, settings: .init(), policyCalendar: local, scope: .currentOccurrence))
+        XCTAssertNotNil(moved.originalOccurrenceSchedule)
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let url = dir.appendingPathComponent("workspace.json")
+        try JSONEncoder().encode(WorkspaceData(tasks: [moved])).write(to: url)
+        let store = TaskStore(fileURL: url, seed: false)
+        let selection = ScheduleZoneSelection(storedIdentifier: moved.timeZoneID, fallbackIdentifier: local.timeZone.identifier)
+        var submitted = moved
+        submitted.timeZoneID = selection.storedIdentifier
+        store.updateTask(submitted)
+        let saved = try XCTUnwrap(TaskStore(fileURL: url, seed: false).data.tasks.first)
+        XCTAssertNil(saved.timeZoneID)
+        XCTAssertEqual(saved.originalOccurrenceSchedule, moved.originalOccurrenceSchedule)
+        XCTAssertEqual(saved.dueDate, moved.dueDate)
+        XCTAssertEqual(saved.scheduledDuration, moved.scheduledDuration)
+        XCTAssertEqual(saved.originalOccurrenceSchedule?.due, due)
+        var explicit = selection
+        explicit.identifier = "Asia/Tokyo"
+        submitted = saved
+        submitted.timeZoneID = explicit.storedIdentifier
+        store.updateTask(submitted)
+        let changed = try XCTUnwrap(TaskStore(fileURL: url, seed: false).data.tasks.first)
+        XCTAssertEqual(changed.timeZoneID, "Asia/Tokyo")
+        XCTAssertNil(changed.originalOccurrenceSchedule)
+    }
+
     // MARK: - Effective values
 
     func testEffectiveDueAndHasTime() {

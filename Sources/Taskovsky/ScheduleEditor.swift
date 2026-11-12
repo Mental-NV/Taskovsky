@@ -19,7 +19,8 @@ struct ScheduleEditor: View {
     @State private var hasEnd: Bool
     @State private var reminders: [Date]
     @State private var remindsAtEnd: Bool
-    @State private var zoneID: String
+    @State private var zoneSelection: ScheduleZoneSelection
+    private var zoneID: String { zoneSelection.identifier }
     @State private var automaticReminder = true
     @State private var expanded: Row?
     private enum Row { case time, reminder, duration, repeatRule, end }
@@ -27,7 +28,8 @@ struct ScheduleEditor: View {
 
     init(task: TaskItem, settings: AppSettings, save: @escaping (TaskItem) -> Void) {
         self.task = task; self.settings = settings; self.save = save
-        _zoneID = State(initialValue: task.timeZoneID ?? TimeZone.current.identifier)
+        _zoneSelection = State(initialValue: ScheduleZoneSelection(storedIdentifier: task.timeZoneID,
+            fallbackIdentifier: TimeZone.current.identifier))
         _date = State(initialValue: task.dueDate ?? Calendar.current.startOfDay(for: Date()))
         _hasDate = State(initialValue: task.dueDate != nil)
         _hasTime = State(initialValue: task.hasDueTime)
@@ -63,7 +65,7 @@ struct ScheduleEditor: View {
             timeZoneID: zoneID)
     }
     private func writeBack(_ draft: ScheduleDraft) {
-        date = draft.due; hasTime = draft.hasTime; zoneID = draft.timeZoneID
+        date = draft.due; hasTime = draft.hasTime; zoneSelection.identifier = draft.timeZoneID
         if let window = draft.duration {
             hasDuration = true
             durationStart = window.start; durationEnd = window.end; durationAllDay = window.isAllDay
@@ -123,7 +125,7 @@ struct ScheduleEditor: View {
                     if hasTime { DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute).labelsHidden().fixedSize() }
                 }.font(.system(size: 11)).padding(.horizontal, 8)
                 if settings.enableTimeZone && hasTime {
-                    Picker("Time Zone", selection: $zoneID) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) } }.font(.system(size: 11))
+                    Picker("Time Zone", selection: $zoneSelection.identifier) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) } }.font(.system(size: 11))
                 }
             }
             row("Reminder", symbol: "bell", value: reminderLabel, row: .reminder).disabled(!hasDate)
@@ -355,7 +357,7 @@ struct ScheduleEditor: View {
         updated.reminderDates = hasDate ? reminders : []
         updated.endReminderEnabled = remindsAtEnd && timedDurationEnd != nil
         updated.reminderFollowsSchedule = hasDate ? automaticReminder : nil
-        updated.timeZoneID = hasDate && (timed || settings.enableTimeZone || task.timeZoneID != nil) ? zoneID : nil
+        updated.timeZoneID = hasDate && (timed || settings.enableTimeZone || task.timeZoneID != nil) ? zoneSelection.storedIdentifier : nil
         if task.dueDate != updated.dueDate || task.recurrence != updated.recurrence { updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil }
         save(updated); dismiss()
     }
