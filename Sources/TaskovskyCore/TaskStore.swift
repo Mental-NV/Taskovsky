@@ -444,7 +444,10 @@ public final class TaskStore: ObservableObject {
         return true
     }
 
-    @discardableResult public func createTaskFromTemplate(id: UUID, listID: UUID? = nil, dueDate: Date? = nil, useDefaultList: Bool = true, sectionID: UUID? = nil) -> UUID? {
+    @discardableResult public func createTaskFromTemplate(id: UUID, listID: UUID? = nil, dueDate: Date? = nil, useDefaultList: Bool = true, sectionID: UUID? = nil, expectedTemplate: TaskTemplate? = nil) -> UUID? {
+        if let expectedTemplate {
+            guard expectedTemplate.id == id, data.templates.first(where: { $0.id == id }) == expectedTemplate else { return nil }
+        }
         if let sectionID {
             guard data.lists.contains(where: { $0.id == listID && !$0.isArchived && $0.sections.contains(where: { $0.id == sectionID }) })
             else { return nil }
