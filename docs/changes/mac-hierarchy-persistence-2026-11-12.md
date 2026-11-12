@@ -1,0 +1,13 @@
+# Durable Mac linked-subtask commands
+
+Status: implemented correction after an owned write-blocked regression failed four assertions for add-child and cross-list reparent. Both methods previously mutated visible data and returned success after a failed void save. TaskDetail then cleared a typed child title; context-menu creation could navigate to a phantom child.
+
+Stage the existing TaskHierarchy helpers without changing eligibility, list/section inheritance, subtree relocation, timestamps, array order or top/bottom insertion preferences. Do not substitute the stricter general lifecycle dispatcher: existing note-child and archived/trashed detachment behavior must remain unchanged. Only publish/return ID or success after an acknowledged atomic write; exact readback may acknowledge a throw-after-commit. Existing UI success guards then preserve the draft and avoid navigation on failure. No embedded checklist, iPhone UI, recurrence or notification changes.
+
+Before committing, verify fresh decoded disk equals current store; recheck exact bytes immediately before replacement. No external-process lock or automatic rebase. Commands operate on IDs against current data, not stale full-task snapshots. A stale disk or incompatible field is an explicit failure with no optimistic state. No-op parent changes are accepted only after disk checks and do not rewrite bytes.
+
+A narrow raw tasks patch preserves all unrelated JSON and unchanged fields, including unknown task/checklist/rich data. Compute the complete helper-produced task diff, including descendants. Reparent preserves task IDs/order; add-child permits exactly one insertion at the selected top/bottom position. Protected `tasks` envelopes retain format and raw extra data; refuse a required format transition rather than silently coercing it. Changed fields must match their previously understood raw values; decoder-sanitized or unsupported changed values fail closed. Validate the patched document decodes exactly to staged data and non-task model data is unchanged. Other save paths retain their separate limitations.
+
+Tests: fail-before/pass-after blocked writes, explicit retry, subtree list/section movement, title/order/inherited fields, no-op and invalid graph, stale disk, unknown unchanged fields and incompatible affected fields, protected envelope formats, and existing note/archived-detach cases. UI draft retention/navigation remains a source-derived consequence until a separate owned native check exercises it.
+
+[Integrated verification](../spec/verification.md#mac-hierarchy-persistence).
