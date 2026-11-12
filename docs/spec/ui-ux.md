@@ -504,3 +504,7 @@ Mac template Edit/New displays a 12-point red save error above its actions and r
 ### Lifecycle storage feedback
 
 Mac completion sound/success feedback and trash/restore feedback follow accepted persistence. Failed trash/restore does not close the selected drawer/pop-up or clear its selection. Failed lifecycle Undo leaves the original claim available only until its existing five-second expiry; it is consumed after a successful write, not before. The storage-error banner remains the failure explanation. Calendar schedule Undo retains its separate behavior. [Contract](../changes/lifecycle-persistence-2026-11-12.md).
+
+### Schedule save failure
+
+Mac schedule OK and Clear keep the popover and all staged fields on rejection, displaying an inline red 11-point message above the footer. Successful acknowledgement dismisses it. Cancel/Escape remains deliberate discard. A stale task requires reopening; failure never silently rebases the opening snapshot. [Contract](../changes/schedule-editor-persistence-2026-11-12.md).
