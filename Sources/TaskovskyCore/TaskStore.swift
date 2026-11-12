@@ -224,11 +224,7 @@ public final class TaskStore: ObservableObject {
         updated.scheduledDuration = schedule.window
         TaskSchedulePolicy.reconcileSeries(of: &updated, from: current)
         TaskSchedulePolicy.normalizeEndReminder(of: &updated)
-        updated.updatedAt = Date()
-        var staged = data; staged.tasks[index] = updated
-        guard writeWorkspace(staged) else { return false }
-        data = staged
-        return true
+        return commitCalendarSchedule(updated, at: index)
     }
 
     /// Paired description-only acknowledgement; unrelated live task fields survive.
@@ -1029,13 +1025,41 @@ public final class TaskStore: ObservableObject {
     }
 
     private func commitCalendarSchedule(_ task: TaskItem, at index: Int) -> Bool {
-        let previous = data.tasks[index]
-        var task = task
-        task.updatedAt = Date()
-        data.tasks[index] = task
-        guard !writeWorkspace() else { return true }
-        data.tasks[index] = previous
-        return false
+        guard !blockedByLoadFailure, data.tasks.indices.contains(index),
+              data.tasks[index].id == task.id else { return false }
+        do {
+            let bytes = try Data(contentsOf: fileURL)
+            let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+            guard try encoder.encode(Self.decodeWorkspace(bytes)) == encoder.encode(data) else {
+                storageError = "The saved workspace changed. Reload before changing its schedule."
+                return false
+            }
+            var staged = data
+            let unchanged = try encoder.encode(task) == encoder.encode(data.tasks[index])
+            staged.tasks[index] = task
+            if !unchanged { staged.tasks[index].updatedAt = Date() }
+            guard let patched = try ScheduleJSONPatch.applying(taskID: task.id, staged: staged, to: bytes),
+                  try encoder.encode(Self.decodeWorkspace(patched)) == encoder.encode(staged) else {
+                storageError = "The schedule was not saved: unsupported saved fields must be resolved first."
+                return false
+            }
+            if patched == bytes {
+                if !settingsLoadFailed { storageError = settingsSaveError }
+                return true
+            }
+            // Best-effort stale detection, not cross-process locking or CAS.
+            let written = writeWorkspaceBytes {
+                guard try Data(contentsOf: self.fileURL) == bytes else { throw CocoaError(.fileWriteUnknown) }
+                return patched
+            }
+            guard written || (try? Data(contentsOf: fileURL)) == patched else { return false }
+            data = staged
+            if !settingsLoadFailed { storageError = settingsSaveError }
+            return true
+        } catch {
+            storageError = "Could not save schedule: \(error.localizedDescription)"
+            return false
+        }
     }
 
     private static func starterData() -> WorkspaceData {

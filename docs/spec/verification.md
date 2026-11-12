@@ -1921,3 +1921,20 @@ An owned blocked-write regression confirmed current Mac description autosave pub
 Five owned tests cover exact Unicode/style-only content, mismatched rich rejection, recovery classification against unrelated or conflicting changes, foreign ownership, reopen, stale sequence/cleanup, late callbacks after close, write failure before/after commit, unknown record preservation and same-instance failed-write/failed-cleanup retry. Independent review found and corrected two journal lifecycle holes: stale close after a failed newer write, and late begin recreating a closed identity. Existing phone APIs are unchanged; full regression tests include their journal behavior. Recovery is an explicit classification, not authorization to apply it.
 
 Full tests on macOS 27.0.1 / Xcode 27 passed 130 Workspace + 104 Domain + 519 Core = 753 XCTest plus 38 Swift tests. Signed Mac packaging and generic iPhone Simulator Debug build (signing disabled) passed. Exact-head CI is required before merge. Native IME, Undo/Redo, sibling editor, close/quit and recovery/relaunch are UNRUN and remain required for later integration. Current Mac editor data-loss risk is still open.
+
+
+<a id="hosted-ios-compile"></a>
+## Hosted iPhone compile-only gate — November 12, 2026
+
+[PR #62](https://github.com/Mental-NV/Taskovsky/pull/62), code head `9e0a950423f683fcdf8b4eb2c278ef70e90b80a4`, was tested as merge checkout `b1163f8b6c74b0ffa17b509cef3d2fa2cd34a776` against `9049f6079fab23929f457174f256caa6bdb8e570` in [run 43265519146](https://github.com/Mental-NV/Taskovsky/actions/runs/43265519146). Both jobs passed.
+
+The ARM64 generic iOS Simulator build-for-testing compiled TaskovskyMobile, MobileContracts and MobileNavigation with Xcode 26.3 (17C529), SDK 26.2 and resolved minimum iOS 17.0. The four command-contract harness tests also passed. App/test products and the xctestrun manifest were checked; diagnostics uploaded. **No mobile tests, Simulator runtime, physical device, notifications or UI interactions were executed.** This proves compile compatibility against that SDK, not runtime behavior at the deployment minimum.
+
+The unchanged desktop job passed 753 XCTest + 38 Swift Testing cases and release/signature/archive verification without retry. Documentation-only skips and read-only workflow permissions remain unchanged. See [CI-006](ci-cd.md#ci-006) and the [change specification](../changes/ios-simulator-compile-ci-2026-11-12.md). PR #61's native editor gates remain separate and unsatisfied by this build-only result.
+
+<a id="calendar-lossless-save"></a>
+## Mac lossless schedule writes — November 12, 2026
+
+[CAL-SAVE-017](../changes/calendar-lossless-save-2026-11-12.md) starts from `ddef08a`. Test-only assessment PR63 head `a59dfff`, hosted run 43271155062 / job 131367711370, executed 755 XCTest cases: exactly four expected assertions in two new tests failed on both attempts; the previous 753 cases and 38 Swift Testing cases passed. A stale independent store accepted a Calendar move and rewrote saved bytes; an unknown ordinary-task member was lost. This does not prove a problem in the usual shared-store window arrangement. Release build/signature passed; no native interaction occurred.
+
+The subsequent fix stages Calendar/Undo and explicit Schedule saves, rejects stale known baselines using exact encoded bytes, and preserves untouched raw members. Added owned cases cover separate writers, Unicode-equivalent text, no-op, retry, protected envelopes and nested unsupported data. Code head `22e1222` passed run 43273408292: checkout `cf84f6a` merges it into `ddef08a`. Desktop job 131375383986 passed 766 XCTest + 38 Swift Testing cases on the first attempt, release/signature/archive/upload. iPhone job 131375383524 passed generic ARM64 Simulator app and test-bundle compilation, Xcode 26.3 / SDK 26.2, without launching or executing tests. Independent source review found no remaining blocker. No native UI or concurrency-locking claim. PR61 editor integration remains separate and native-gated.
