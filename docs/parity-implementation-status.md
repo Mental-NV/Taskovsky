@@ -167,3 +167,7 @@ Ordinary initial capture now stages task and parsed tags/default reminders befor
 ### Atomic Summary note save — November 12, 2026
 
 Summary Save as Note persists the final metadata-free Inbox note in one write before publication. Failed attempts retain the edited report and show failure instead of false success; explicit retry remains available. Report generation/options/presets and mobile are unchanged. [Contract](changes/summary-note-atomic-2026-11-12.md).
+
+### Rejected trailing clock text — November 12, 2026
+
+The shared capture recognizer preserves rejected trailing clock text instead of deleting it as part of a date token. Mac and iPhone retain separate views and share the corrected construction rule. This is a source-backed text-preservation repair, not a recovered TickTick parser policy or a general invalid-input grammar rewrite. [Contract](changes/recognition-invalid-clock-text-2026-11-12.md).
