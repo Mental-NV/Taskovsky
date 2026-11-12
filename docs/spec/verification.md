@@ -1611,3 +1611,19 @@ The drag check exercised Pinned. The native More-section reorder control, VoiceO
 | Saved files and restoration | Both settings files stayed byte-identical. On Mac, existing workspace records matched after accounting for encoded defaults absent from the seed. The recognized task saved November 11 at 09:00 Europe/Moscow with the default 30-minute duration and due-time reminder. On iPhone, the two new tasks were first and every original record matched. The original Mac QA app and preferences were restored, and the disposable simulator was removed. |
 
 The iPhone run exercised typed input. System clipboard paste was verified on Mac. Physical iPhone, VoiceOver and other destination layouts were outside these native checks.
+
+<a id="mac-calendar-shared-list-color"></a>
+
+## Shared named-list colors in Mac Calendar — November 12, 2026
+
+[CAL-COLOR-002](../changes/mac-calendar-shared-list-color-2026-11-12.md) was checked on implementation commit `f484f522b76c19d9cdbde92e7b04e2c1e060f742`. Environment was macOS 27.0.1 arm64 and Xcode 27.0 (27A266a).
+
+| Check | Observed result |
+| --- | --- |
+| Mac tests and package | `swift test --disable-sandbox --manifest-cache local` with a writable module cache passed 472 XCTest and 36 Swift Testing cases. `./scripts/build-app.sh` and strict signature verification passed. The new test covers invalid, missing, archived and stale targets, a read-only directory, an external workspace edit, no-op, reload, and preservation of unknown list fields. |
+| Native Mac shared edit | A signed Debug QA app used a disposable workspace. The Work swatch started at `#4A90D9`. Invalid hex disabled Apply. Cancelling a different preset left the saved color. Applying `#58A58B` and then choosing Cancel Calendar Changes retained the shared save. Month cards and the Tasks sidebar reflected the new color. Navigation and a full app quit/relaunch retained it. Escape dismissed the popover and its enclosing color sheet and discarded the pending preset. |
+| Native Mac legacy override | Recipes showed an existing purple Calendar override. A staged Use List Color removal was cancelled and the override remained. Saving it separately restored the pink shared list color. Reopening after relaunch showed the Work, Recipes and Inbox swatches. |
+| Fixture audit | Only Work's color field changed in workspace JSON. The existing settings values and Inbox override survived, and the Recipes override was removed. The settings serializer normalized the default list UUID case and encoded omitted defaults. Relaunch and Escape caused no additional file writes. |
+| iPhone regression | On a disposable iPhone 13 Pro simulator with iOS 26.5, `testCalendarSourceColorSavesAndResetCanBeCancelled` and `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` passed. The simulator was removed. |
+
+The native Mac run covered the standard light appearance and a Month fixture. Dark appearance, reduced motion, VoiceOver and physical iPhone were outside this run. TickTick's separate named-list live check demonstrated propagation across Calendar and Tasks and persistence across navigation. TickTick relaunch and sync were outside that check.

@@ -15,4 +15,4 @@ The shared command compares the expected color and active list ID, validates the
 - **CAL-COLOR-002-C:** Seed a legacy named-list override. Verify it still masks the shared color. Cancel a staged Use List Color removal, then repeat and save. Verify the shared color becomes effective and adjacent preferences survive.
 - **CAL-COLOR-002-D:** Verify existing Inbox, Tag and Priority behavior and compile and run the existing iPhone Calendar options regression on a simulator.
 
-Run `swift test --disable-sandbox`, `./scripts/build-app.sh`, an isolated native Mac fixture check, and the iPhone simulator check. Record actual results in [verification](../spec/verification.md).
+Run `swift test --disable-sandbox`, `./scripts/build-app.sh`, an isolated native Mac fixture check, and the iPhone simulator check. See the [verification record](../spec/verification.md#mac-calendar-shared-list-color) for the checked revision and results.
