@@ -1960,3 +1960,11 @@ See the [bounded correction](../changes/calendar-minimum-outline-2026-11-12.md) 
 ## iPhone temporary feedback lifetime
 
 See [MOB-FEEDBACK-001](../changes/phone-feedback-lifetime-2026-11-13.md). On November 13, six hosted feedback/model tests and one native Timeline expiry test passed on the owned Taskovsky QA iPhone 13 Pro simulator (iOS 26.3.1). The native test recorded before/after screenshots and verified dismissal leaves the scheduled task moved; Undo disappears with its success notice. Independent source review passed. The initial test attempt exposed a constructor isolation compile error, fixed before the passing run; a test incorrectly expected Pin to offer Undo, corrected to completion. Following explicit approval, this iPhone change was published and merged as PR #71 on November 13 (merge commit `15caa243`). The Mac feedback follow-up remains separately tracked in PR #72. No new macOS UI/capture, physical-device or live VoiceOver usability test is claimed.
+
+### Mac Search staged list tree — November 13
+
+[Change record](../changes/search-list-tree-2026-11-13.md). Seven focused state/tree/key tests and full 782 XCTest + 38 Swift Testing tests
+passed at source `bbe60b9`; signed release and independent review passed. Native
+AX lifecycle, forward/reverse keyboard routing and 24-list scrolling passed. QA
+restored and Codex stopped. No screenshot, live VoiceOver or exact visual-parity
+claim. Matching/archive rules unchanged. Hosted exact-head CI remains required.
