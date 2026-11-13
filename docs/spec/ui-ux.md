@@ -515,6 +515,10 @@ Mac completion sound/success feedback and trash/restore feedback follow accepted
 
 Mac schedule OK and Clear keep the popover and all staged fields on rejection, displaying an inline red 11-point message above the footer. Successful acknowledgement dismisses it. Cancel/Escape remains deliberate discard. A stale task requires reopening; failure never silently rebases the opening snapshot. [Contract](../changes/schedule-editor-persistence-2026-11-12.md).
 
+### Mac temporary feedback lifetime
+
+Calendar, Tasks Timeline and grouped Board success/Undo feedback, Summary save acknowledgment and description-reader copied label expire after five seconds. Repeated events restart the interval; stale timers cannot dismiss newer feedback. Errors remain actionable until dismissal/replacement. This uses Taskovsky's established completion-toast duration, not a measured TickTick timing. See [lifetime change](../changes/mac-feedback-lifetime-2026-11-13.md).
+
 ## Pending minimum-height timed card correction
 
 The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark interaction remains unverified and deferred per the user's November 13 light-only direction. Other compact cards are unchanged.

@@ -8,7 +8,7 @@ struct SummaryView: View {
     @State private var reportOptions = SummaryReportOptions(customStart: Date(), customEnd: Date())
     @State private var output = ""
     @State private var showOptions = false
-    @State private var saved = false
+    @StateObject private var feedback = DesktopNotice()
     @State private var saveFailed = false
     @AppStorage("Taskovsky.summaryPresets.v1", store: IsolatedDefaults.store) private var presetData = Data()
     @State private var showPresetName = false
@@ -53,7 +53,7 @@ struct SummaryView: View {
                                     .font(.system(size: 12)).foregroundStyle(.red)
                                     .fixedSize(horizontal: false, vertical: true)
                                     .accessibilityIdentifier("summaryNoteSaveError")
-                            } else if saved { Text("Saved as note").font(.caption).foregroundStyle(.secondary) }
+                            } else if let event = feedback.event { Text(event.message).font(.caption).foregroundStyle(.secondary) }
                             Spacer()
                             Button("Save as Note", action: saveAsNote)
                             Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(output, forType: .string) }
@@ -67,6 +67,7 @@ struct SummaryView: View {
             }
         }
         .onAppear(perform: regenerate)
+        .onDisappear { feedback.dismiss() }
         .onChange(of: reportOptions) { _, _ in regenerate() }
         .alert(renamingPreset == nil ? "Save Summary Preset" : "Rename Summary Preset", isPresented: $showPresetName) {
             TextField("Name", text: $presetName)
@@ -220,12 +221,12 @@ struct SummaryView: View {
     }
     private func statusName(_ value: FilterStatus) -> String { switch value { case .all: "All Status"; case .active: "Undone"; case .completed: "Completed"; case .wontDo: "Won't Do" } }
     private func regenerate() {
-        saved = false; saveFailed = false
+        feedback.dismiss(); saveFailed = false
         output = SummaryReport.generate(from: store.data, options: reportOptions, now: Date(), calendar: calendar).text
     }
     private func saveAsNote() {
         let accepted = store.createSummaryNote(title: "Summary \(rangeLabel)", body: output) != nil
-        saved = accepted
+        if accepted { feedback.show("Saved as note") } else { feedback.dismiss() }
         saveFailed = !accepted
     }
 }

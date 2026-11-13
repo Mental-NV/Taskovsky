@@ -79,7 +79,6 @@ struct MobileRootView: View {
     @State private var showTaskActions = false
     @State private var showTextBatch = false
     @State private var batchRequest: PhoneBatchRequest?
-    @State private var batchNotice: String?
     @State private var showArrange = false
     @State private var showCalendarActions = false
     @State private var calendarEdit: PhoneCalendarEditRequest?
@@ -206,7 +205,7 @@ struct MobileRootView: View {
                                     let candidates = TaskBatchEdit.calendarPostponeCandidates(in: snapshot.workspace, options: options)
                                     calendarAction("Postpone Tasks", symbol: "clock.arrow.circlepath") {
                                         guard let document = model.document else { return }
-                                        batchNotice = nil
+                                        model.clearBatchNotice()
                                         batchRequest = PhoneBatchRequest(scope: "Calendar sources", tasks: candidates,
                                                                          document: document, onlyAction: .postpone)
                                     }.disabled(!model.canBeginEditing || candidates.isEmpty)
@@ -241,7 +240,7 @@ struct MobileRootView: View {
                 switch section {
                 case .tasks:
                     Text(title(destination, in: snapshot.workspace)).font(.largeTitle.bold()).frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
-                    if let batchNotice {
+                    if let batchNotice = model.batchNotice {
                         Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("batchNotice")
                     }
@@ -251,7 +250,7 @@ struct MobileRootView: View {
                     }
                     taskDestination(snapshot.workspace)
                 case .calendar:
-                    if let batchNotice {
+                    if let batchNotice = model.batchNotice {
                         Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
                             .accessibilityIdentifier("batchNotice")
                     }
@@ -327,12 +326,12 @@ struct MobileRootView: View {
         .sheet(isPresented: $showTextBatch) { textBatchSheet.presentationDetents([.large]) }
         .sheet(item: $batchRequest) { request in taskBatchSheet(request).presentationDetents([.large]) }
         .onChange(of: destination) { _, _ in
-            batchNotice = nil
+            model.clearBatchNotice()
             revealedTaskSwipe = nil
             taskOrderNotice = nil
             taskListDragSession = UUID()
         }
-        .onChange(of: section) { _, _ in batchNotice = nil; revealedTaskSwipe = nil }
+        .onChange(of: section) { _, _ in model.clearBatchNotice(); revealedTaskSwipe = nil }
         .sheet(item: $calendarPreferenceRoute) { route in
             PhoneCalendarPreferences(model: model, route: route)
         }
@@ -421,7 +420,7 @@ struct MobileRootView: View {
                         Button {
                             guard let document = model.document else { return }
                             showTaskActions = false
-                            batchNotice = nil
+                            model.clearBatchNotice()
                             let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
                             batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
                         } label: {
@@ -463,7 +462,7 @@ struct MobileRootView: View {
         return TaskBatchSheet(scope: request.scope, tasks: request.tasks, data: data,
                               calendar: calendar, today: model.now, onlyAction: request.onlyAction) { edit in
             let error = await model.saveBatch(edit, expected: request.document.revision)
-            if error == nil { batchNotice = edit.action.kind.completionMessage }
+            if error == nil { model.showBatchNotice(edit.action.kind.completionMessage) }
             return error
         }
     }

@@ -56,8 +56,7 @@ struct TaskCalendarWorkspace: View {
     @State private var yearDayPreview: CalendarDayPreview?
     @State private var postponeRequest: PostponeRequest?
     @State private var occurrenceChange: CalendarOccurrenceChange?
-    @State private var undo: CalendarScheduleUndo?
-    @State private var notice = ""
+    @StateObject private var feedback = DesktopNotice()
     @State private var compactLayout = false
     @State private var agendaWindow = CalendarAgendaWindow()
     @State private var optionHeld = false
@@ -127,6 +126,7 @@ struct TaskCalendarWorkspace: View {
             .onChange(of: geometry.size.width) { _, width in compactLayout = width < 760; if width >= 760 { sidebarOverlay = false } }
         }
         .background(Color(nsColor: .textBackgroundColor))
+        .onDisappear { feedback.dismiss() }
         .focusedSceneValue(\.calendarDateJump, dateJumpAction)
         .background {
             WindowKeyboardInput(optionChanged: { optionHeld = $0 }, handleKeyDown: { event in
@@ -159,8 +159,7 @@ struct TaskCalendarWorkspace: View {
                            calendar: request.settings.calendar, today: focus, onlyAction: .postpone) { edit in
                 let error = saveDesktopTaskBatch(edit, to: store, expected: request.data, settings: request.settings)
                 if error == nil {
-                    notice = edit.action.kind.completionMessage
-                    undo = nil
+                    feedback.show(edit.action.kind.completionMessage)
                 }
                 return error
             }
@@ -179,16 +178,13 @@ struct TaskCalendarWorkspace: View {
             Button("Cancel", role: .cancel) { }
         }
         .overlay(alignment: .bottom) {
-            if undo != nil || !notice.isEmpty {
+            if let event = feedback.event {
                 HStack(spacing: 14) {
-                    Text(notice.isEmpty ? "Schedule updated" : notice)
-                    if let undo {
-                        Button("Undo schedule") {
-                            notice = store.undoCalendarSchedule(undo) ? "Schedule restored" : "Schedule changed since this edit"
-                            self.undo = nil
-                        }.buttonStyle(.borderless)
+                    Text(event.message)
+                    if event.undo != nil {
+                        Button("Undo schedule") { feedback.undo(in: store) }.buttonStyle(.borderless)
                     }
-                    Button { undo = nil; notice = "" } label: { Image(systemName: "xmark") }
+                    Button { feedback.dismiss() } label: { Image(systemName: "xmark") }
                         .buttonStyle(.plain).accessibilityLabel("Dismiss Calendar feedback")
                 }.font(.system(size: 12)).padding(12)
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
@@ -322,8 +318,7 @@ struct TaskCalendarWorkspace: View {
         if let itemID = entry.checklistID {
             store.setChecklistItemCompleted(taskID: entry.taskID, itemID: itemID, completed: !entry.isCompleted)
         } else {
-            undo = nil
-            notice = ""
+            feedback.dismiss()
             onComplete(entry.taskID)
         }
     }
@@ -355,19 +350,19 @@ struct TaskCalendarWorkspace: View {
                    CalendarScheduleSnapshot(current) == baseline,
                    CalendarScheduling.canSkipCurrentOccurrence(current, in: store.data.tasks, calendar: calendar) {
                     commitSchedule(id, .skipOccurrence, scope: .series)
-                } else { notice = "Schedule changed. Open the current task and try again." }
+                } else { feedback.show("Schedule changed. Open the current task and try again.", persistent: true) }
             } else if draft.restoreOccurrence { commitSchedule(id, .restoreOccurrence, scope: .series) }
             else if let operation = draft.schedule.operation { commitSchedule(id, operation, scope: draft.scope) }
-            else { notice = "Schedule unchanged"; undo = nil }
+            else { feedback.show("Schedule unchanged") }
         } else {
             let window = TaskDurationRange(start: draft.schedule.start, end: draft.schedule.end, isAllDay: draft.schedule.allDay)
             guard let id = store.createCalendarTask(title: draft.title, listID: draft.listID, duration: window) else {
-                notice = store.storageError ?? "Could not add the Calendar task. Review the draft and try again."
+                feedback.show(store.storageError ?? "Could not add the Calendar task. Review the draft and try again.", persistent: true)
                 return false
             }
-            notice = "Task added to Calendar"; undo = nil
+            feedback.show("Task added to Calendar")
             if let task = store.data.tasks.first(where: { $0.id == id }), !options.wrappedValue.includes(task, data: store.data) {
-                notice = "Task added. Its list or tags are hidden by the Calendar filter."
+                feedback.show("Task added. Its list or tags are hidden by the Calendar filter.")
             }
         }
         editor = nil
@@ -384,18 +379,19 @@ struct TaskCalendarWorkspace: View {
         guard let task = store.data.tasks.first(where: { $0.id == change.taskID }),
               CalendarScheduling.canRescheduleCurrentOccurrence(task, in: store.data.tasks),
               CalendarScheduleSnapshot(task) == change.before else {
-            notice = "Schedule changed. Review the current task and try again."
+            feedback.show("Schedule changed. Review the current task and try again.", persistent: true)
             return
         }
         commitSchedule(change.taskID, change.operation, scope: scope)
     }
     private func commitSchedule(_ id: UUID, _ operation: CalendarScheduleOperation, scope: CalendarScheduleScope) {
         if let token = store.scheduleOnCalendar(id: id, operation: operation, calendar: calendar, scope: scope) {
-            undo = token
-            if case .skipOccurrence = operation { notice = "Occurrence skipped" }
-            else { notice = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated" }
+            if case .skipOccurrence = operation { feedback.show("Occurrence skipped", undo: token) }
+            else { feedback.show(scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated", undo: token) }
         } else if case .skipOccurrence = operation {
-            notice = store.storageError ?? "Could not skip this occurrence."
+            feedback.show(store.storageError ?? "Could not skip this occurrence.", persistent: true)
+        } else {
+            feedback.show(store.storageError ?? "Schedule unchanged", persistent: store.storageError != nil)
         }
     }
     private func moveToDay(_ id: UUID, _ day: Date, _ forceAllDay: Bool) {

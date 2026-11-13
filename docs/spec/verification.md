@@ -1958,3 +1958,11 @@ See the [bounded correction](../changes/calendar-minimum-outline-2026-11-12.md) 
 [LIST-VIS-001](../changes/mac-list-editor-preview-2026-11-13.md) reuses the preserved candidate on current main plus [UI-MAP-001](../changes/ui-macro-parity-plan-2026-11-13.md). Full local regression: 771 XCTest + 38 Swift Testing pass; two new hosted preview/sheet tests pass. Independent source review found no blocker; native sheet interaction and production screenshot are separate open checks. Historical offscreen renders are not screen captures or proof of actual sheet layout. Dark QA is deferred under the user's light-only scope.
 
 Follow-up for `517816b`: release/signature passed. Native light AX-only sheet checks passed initial focus, mode-label changes, empty/named Return, Escape/Cancel, Save/reopen and sampled preview focus exclusion; tag data unchanged. QA bundle/fixture/preferences restored and Codex stopped. Exact visible dimensions, fallback/clipping and failed-save interaction remain unverified; capture was not retried. This is functional coverage, not screenshot-level parity.
+
+### Mac temporary feedback lifetime — November 13
+
+[Change and audit](../changes/mac-feedback-lifetime-2026-11-13.md). Automated lifetime regression tests and full build results are recorded in the change receipt; native visual timing remains separate. iPhone feedback is a separate workstream. No OS notifications or permission changes involved.
+
+## iPhone temporary feedback lifetime
+
+See [MOB-FEEDBACK-001](../changes/phone-feedback-lifetime-2026-11-13.md). On November 13, six hosted feedback/model tests and one native Timeline expiry test passed on the owned Taskovsky QA iPhone 13 Pro simulator (iOS 26.3.1). The native test recorded before/after screenshots and verified dismissal leaves the scheduled task moved; Undo disappears with its success notice. Independent source review passed. The initial test attempt exposed a constructor isolation compile error, fixed before the passing run; a test incorrectly expected Pin to offer Undo, corrected to completion. Following explicit approval, this iPhone change was published and merged as PR #71 on November 13 (merge commit `15caa243`). The Mac feedback follow-up remains separately tracked in PR #72. No new macOS UI/capture, physical-device or live VoiceOver usability test is claimed.
