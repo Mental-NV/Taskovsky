@@ -186,6 +186,10 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 
 [CAL-SAVE-017](changes/calendar-lossless-save-2026-11-12.md) addresses reproduced local data preservation defects, not a new TickTick parity claim. Calendar commands/Undo and explicit Schedule Save/Clear preserve unrelated raw data and refuse stale independent-store baselines. Hosted verification passed as recorded in the [ledger](spec/verification.md#calendar-lossless-save); iPhone views and scheduling policy are unchanged.
 
+## Minimum-height Calendar outline follow-up (draft)
+
+A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-11-12.md) passed isolated dark rendering. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark-theme interaction is explicitly deferred per the user's November 13 light-only direction. This does not close full Calendar parity or PR65 focus gaps.
+
 ## Mac contextual detail controls — November 13
 
 The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.

@@ -1941,6 +1941,10 @@ The unchanged desktop job passed 753 XCTest + 38 Swift Testing cases and release
 
 The subsequent fix stages Calendar/Undo and explicit Schedule saves, rejects stale known baselines using exact encoded bytes, and preserves untouched raw members. Added owned cases cover separate writers, Unicode-equivalent text, no-op, retry, protected envelopes and nested unsupported data. Code head `22e1222` passed run 43273408292: checkout `cf84f6a` merges it into `ddef08a`. Desktop job 131375383986 passed 766 XCTest + 38 Swift Testing cases on the first attempt, release/signature/archive/upload. iPhone job 131375383524 passed generic ARM64 Simulator app and test-bundle compilation, Xcode 26.3 / SDK 26.2, without launching or executing tests. Independent source review found no remaining blocker. No native UI or concurrency-locking claim. PR61 editor integration remains separate and native-gated.
 
+## Minimum-height timed Calendar outline probe
+
+See the [bounded correction](../changes/calendar-minimum-outline-2026-11-12.md) for source, 72 offscreen dark renders and retained limitations. This is rendering evidence, not production-app interaction evidence. Clean candidate tests passed (766 XCTest and 38 Swift Testing), and independent source review found no actionable issue. Release build and strict signature verification passed; subsequent native light QA sampled title/context/accessibility and move/resize/Undo, with pre-existing narrow-title misses documented. Production Dark interaction is unverified and explicitly deferred by the user's November 13 light-only scope. Final exact-head CI remains required.
+
 ## Mac contextual detail controls — November 13
 
 [Change contract](../changes/mac-detail-contextual-controls-2026-11-13.md). Isolated branch `fix/mac-detail-disclosures`, based on `77b646c`; original main checkout untouched. The public TickTick task-details and formatting images were read directly. Installed TickTick accessibility observation was bounded and restored its selection; no denied screen capture or system setting changes.
