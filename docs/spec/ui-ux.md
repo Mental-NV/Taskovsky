@@ -551,3 +551,7 @@ Task-row checklist controls are disabled and their handlers reject changes when 
 ### Schedule Time with Duration
 
 Time displays effective duration/point time state and the effective due endpoint. When Duration is active, Add/Remove time invokes its existing All-day conversion; both surfaces agree. Conversion uses existing civil-day/09:00 rules and remains staged until OK. [SCHEDULE-TIME-002](../changes/schedule-duration-time-state-2026-11-13.md).
+
+### Locked detail tag chips
+
+Trash/archived detail tag chips remain visible but disabled, with read-only labels rather than an enabled Remove action. Active detail retains tag removal. [DETAIL-TAG-001](../changes/detail-locked-tags-2026-11-13.md).
