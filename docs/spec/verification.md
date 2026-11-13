@@ -2006,3 +2006,7 @@ Isolated from main `993679c`. [Change contract](../changes/subtask-inline-focus-
 ## Tasks row tag menu — November 13, 2026
 
 [Bounded contract](../changes/task-row-tags-2026-11-13.md), based on main `7148337`. Candidate adds functional reachability for tag assignment from row context menu, not observed submenu geometry parity. 819 XCTest +38 Swift Testing, release build/strict signature and independent source review passed. Native target/checkmark/filtered disappearance/locked cases and exact-head CI pending; no screenshot.
+
+## Task-row scheduling — November 13, 2026
+
+[Change contract](../changes/task-row-schedule-2026-11-13.md), based on main `a8b491f`. Shared editor is reused; row routing/dismissal/native focus are new acceptance gates. Full tests/release, independent review, native QA and hosted CI pending; no screenshot or date-strip visual-parity claim.
