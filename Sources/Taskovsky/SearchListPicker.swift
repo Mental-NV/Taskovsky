@@ -47,7 +47,8 @@ struct SearchListPicker: View {
     let onCancel: () -> Void
     @State private var draft: SearchListSelectionDraft
     @State private var expanded: Set<UUID>
-    @FocusState private var focused: SearchListFocus?
+    @State private var focused: SearchListFocus? = .all
+    @FocusState private var keyboardFocused: Bool
 
     init(lists: [TaskList], folders: [ListFolder], selection: Set<UUID>, onApply: @escaping (Set<UUID>) -> Void, onCancel: @escaping () -> Void) {
         self.lists = lists; self.folders = folders; self.onApply = onApply; self.onCancel = onCancel
@@ -66,28 +67,44 @@ struct SearchListPicker: View {
         let index = focused.flatMap { order.firstIndex(of: $0) } ?? (backwards ? 0 : -1)
         focused = order[(index + (backwards ? -1 : 1) + order.count) % order.count]
     }
+    private func activateFocused() {
+        switch focused {
+        case .all: draft.selectAll()
+        case .list(let id): draft.toggle(id)
+        case .folder(let id):
+            if expanded.contains(id) { expanded.remove(id) } else { expanded.insert(id) }
+        case .cancel: onCancel()
+        case .apply: onApply(draft.ids)
+        case nil: break
+        }
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("Lists").font(.system(size: 13, weight: .semibold)).padding(12)
             Divider()
+            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    Button { draft.selectAll() } label: { row("All", selected: draft.ids.isEmpty, symbol: "tray.full") }
-                        .buttonStyle(.plain).focusable().focused($focused, equals: .all).accessibilityValue(draft.ids.isEmpty ? "Selected" : "Not selected")
+                    Button { focused = .all; keyboardFocused = true; draft.selectAll() } label: { row("All", selected: draft.ids.isEmpty, symbol: "tray.full") }
+                        .id(SearchListFocus.all).buttonStyle(.plain).background(focused == .all ? Color.primary.opacity(0.07) : .clear).accessibilityValue(draft.ids.isEmpty ? "Selected" : "Not selected")
                     leaf(TaskFilter.inboxListID, name: "Inbox", symbol: "tray")
                     ForEach(tree.leading) { list in leaf(list.id, name: list.name, symbol: list.symbol) }
                     ForEach(tree.groups) { group in folder(group) }
                     ForEach(tree.trailing) { list in leaf(list.id, name: list.name, symbol: list.symbol) }
                 }.padding(.vertical, 6)
             }.frame(maxHeight: 340)
+                .onChange(of: focused) { _, value in if let value { proxy.scrollTo(value) } }
+            }
             Divider()
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel).focusable().focused($focused, equals: .cancel)
-                Button("OK") { onApply(draft.ids) }.focusable().focused($focused, equals: .apply)
+                Button("Cancel", action: onCancel).background(focused == .cancel ? Color.primary.opacity(0.07) : .clear)
+                Button("OK") { onApply(draft.ids) }.background(focused == .apply ? Color.primary.opacity(0.07) : .clear)
             }.padding(10)
         }.frame(width: 280).accessibilityIdentifier("SearchListPicker")
-            .onAppear { focused = .all }
+            .focusable().focusEffectDisabled().focused($keyboardFocused)
+            .onAppear { DispatchQueue.main.async { keyboardFocused = true } }
+            .onKeyPress(.space) { activateFocused(); return .handled }
             .onKeyPress(keys: [.tab], phases: .down) { press in advanceFocus(backwards: press.modifiers.contains(.shift)); return .handled }
             .onKeyPress(.return) { if focused == .cancel { onCancel() } else { onApply(draft.ids) }; return .handled }
             .onKeyPress(.escape) { onCancel(); return .handled }
@@ -97,6 +114,7 @@ struct SearchListPicker: View {
         let mark = draft.mark(for: group.lists.map(\.id))
         return VStack(alignment: .leading, spacing: 2) {
             Button {
+                focused = .folder(group.id); keyboardFocused = true
                 if isExpanded { expanded.remove(group.id) } else { expanded.insert(group.id) }
             } label: {
                 HStack(spacing: 8) {
@@ -106,7 +124,7 @@ struct SearchListPicker: View {
                     Spacer(minLength: 4)
                     Image(systemName: mark == .mixed ? "minus" : "checkmark").opacity(mark == .none ? 0 : 1)
                 }.font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 6).contentShape(Rectangle())
-            }.buttonStyle(.plain).focusable().focused($focused, equals: SearchListFocus.folder(group.id))
+            }.id(SearchListFocus.folder(group.id)).buttonStyle(.plain).background(focused == SearchListFocus.folder(group.id) ? Color.primary.opacity(0.07) : .clear)
                 .accessibilityLabel(group.folder.name + " folder")
                 .accessibilityValue((isExpanded ? "Expanded" : "Collapsed") + ", " + mark.rawValue + " explicit selection")
                 .help("Expand or collapse folder")
@@ -116,8 +134,8 @@ struct SearchListPicker: View {
         }
     }
     private func leaf(_ id: UUID, name: String, symbol: String?) -> some View {
-        Button { draft.toggle(id) } label: { row(name, selected: draft.ids.contains(id), symbol: symbol) }
-            .buttonStyle(.plain).focusable().focused($focused, equals: .list(id)).accessibilityValue(draft.ids.contains(id) ? "Selected" : "Not selected")
+        Button { focused = .list(id); keyboardFocused = true; draft.toggle(id) } label: { row(name, selected: draft.ids.contains(id), symbol: symbol) }
+            .id(SearchListFocus.list(id)).buttonStyle(.plain).background(focused == .list(id) ? Color.primary.opacity(0.07) : .clear).accessibilityValue(draft.ids.contains(id) ? "Selected" : "Not selected")
     }
     private func row(_ name: String, selected: Bool, symbol: String?) -> some View {
         HStack(spacing: 8) {
