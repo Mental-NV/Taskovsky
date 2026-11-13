@@ -531,3 +531,7 @@ The [staged list tree](../changes/search-list-tree-2026-11-13.md) replaces the f
 immediate All Lists menu. Folder rows disclose children and report mixed explicit
 selection. Only OK changes active results; Cancel/dismissal discards the draft.
 Empty selection remains All. Geometry is a Taskovsky choice, not exact TickTick parity.
+
+### Undated Schedule Time entry
+
+Time is available before choosing a date: activating it seeds today's start-of-day in the schedule calendar, enables time and opens the existing editor. It remains a draft until OK; dismissing discards. Already dated drafts are not reseeded. [SCHEDULE-TIME-001](../changes/schedule-undated-time-2026-11-13.md).
