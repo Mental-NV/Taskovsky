@@ -1,5 +1,7 @@
 # TickTick feature parity tracker
 
+**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](changes/light-theme-priority-2026-11-13.md).
+
 This is the **canonical progress tracker** for Taskovsky's feature comparison with TickTick. It is separate from the [Taskovsky business specification](spec/business.md), [UI/UX specification](spec/ui-ux.md), and [TickTick research notes](ticktick-spec/README.md). Use it to decide what exists, what differs, what still needs evidence, and what belongs to a later implementation task.
 
 For current integrated code, use the [current baseline index](current-baseline.md) and latest source. The following November 8 snapshot and display follow-up are historical; later feature rows/verification records include merged Mac and iPhone implementation. This correction is not a new full parity audit.
@@ -187,3 +189,7 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 ## Minimum-height Calendar outline follow-up (draft)
 
 A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-11-12.md) passed isolated dark rendering. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark-theme interaction is explicitly deferred per the user's November 13 light-only direction. This does not close full Calendar parity or PR65 focus gaps.
+
+## Mac contextual detail controls — November 13
+
+The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.

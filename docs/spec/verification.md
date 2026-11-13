@@ -1,5 +1,7 @@
 # Baseline evidence and known deviations
 
+**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](../changes/light-theme-priority-2026-11-13.md).
+
 ## Snapshot and evidence levels
 
 Source baseline: [`cfdec454acff91285ac00beaa20c0cf0f0961ee1`](https://github.com/Mental-NV/Taskovsky/commit/cfdec454acff91285ac00beaa20c0cf0f0961ee1), inspected November 8, 2026. This is main after [PR #2](https://github.com/Mental-NV/Taskovsky/pull/2) merged; its implementation head is [`b9de0dfe4522a818c5d08674dfbe04a396ad330a`](https://github.com/Mental-NV/Taskovsky/commit/b9de0dfe4522a818c5d08674dfbe04a396ad330a). PR #1 retains its documentation structure while incorporating that baseline. The initial documentation tree preserved that source. The authorized CI follow-up adds one workflow and, after hosted compiler failures and explicit user approval, extracts existing `TaskDetail.body` sections into private computed views. Other application source, final tests, fixtures, package/build scripts and dependencies remain unchanged.
@@ -1942,3 +1944,11 @@ The subsequent fix stages Calendar/Undo and explicit Schedule saves, rejects sta
 ## Minimum-height timed Calendar outline probe
 
 See the [bounded correction](../changes/calendar-minimum-outline-2026-11-12.md) for source, 72 offscreen dark renders and retained limitations. This is rendering evidence, not production-app interaction evidence. Clean candidate tests passed (766 XCTest and 38 Swift Testing), and independent source review found no actionable issue. Release build and strict signature verification passed; subsequent native light QA sampled title/context/accessibility and move/resize/Undo, with pre-existing narrow-title misses documented. Production Dark interaction is unverified and explicitly deferred by the user's November 13 light-only scope. Final exact-head CI remains required.
+
+## Mac contextual detail controls — November 13
+
+[Change contract](../changes/mac-detail-contextual-controls-2026-11-13.md). Isolated branch `fix/mac-detail-disclosures`, based on `77b646c`; original main checkout untouched. The public TickTick task-details and formatting images were read directly. Installed TickTick accessibility observation was bounded and restored its selection; no denied screen capture or system setting changes.
+
+- `swift test --disable-sandbox`: 769 XCTest and 38 Swift Testing tests passed on the Mac. Three new Mac tests cover presentation default/reset/lock plus actual AppKit bold/italic/underline dispatch, unchanged text, native Undo, title focus exclusion and locked-body exclusion with no visible window or screen capture.
+- Release packaging/signature and hosted run `43380149914` passed (head `a85208d`, same source `4071083`); both Mac and iPhone compile jobs succeeded. Scoped native accessibility interaction passed default collapse/toggle/Bold/Undo/title-focus exclusion/task switching, progress Cancel/Done, checklist read-only value, note exclusion and narrow detail popup controls. QA app quit and original bundle/fixture/preferences restored byte-for-byte.
+- Visual idle/hover behavior, exact toolbar layout, narrow-toolbar scrolling and screenshot comparison remain unverified because denied capture was not retried. This is a bounded functional fix, not a full visual parity claim. Dark theme deferred by user; iPhone presentation unchanged.

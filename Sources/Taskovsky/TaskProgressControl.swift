@@ -7,32 +7,59 @@ struct TaskProgressControl: View {
     let locked: Bool
     @State private var editTask: TaskItem?
 
+    @State private var hovered = false
+    @FocusState private var focused: Bool
+
     var body: some View {
-        if task.canEditManualProgress && !locked {
-            Button { editTask = task } label: { indicator }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Set task progress")
-                .accessibilityValue("\(task.progressPercent)%")
-                .popover(item: $editTask, arrowEdge: .bottom) { task in
-                    TaskProgressEditor(store: store, task: task)
+        // The header separator is the progress surface, not a permanent row.
+        // Keep a larger hit region without pushing the title down.
+        separator
+            .frame(height: 1)
+            .overlay {
+                Group {
+                if task.canEditManualProgress && !locked {
+                    Button { editTask = task } label: {
+                        Color.clear.frame(height: 12).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).focused($focused)
+                    .accessibilityLabel("Set task progress")
+                    .accessibilityValue("\(task.progressPercent)%")
+                    .help("Set task progress")
+                    .popover(item: $editTask, arrowEdge: .bottom) { task in
+                        TaskProgressEditor(store: store, task: task)
+                    }
+                } else {
+                    Color.clear.frame(height: 12).contentShape(Rectangle())
                 }
-        } else {
-            indicator
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(task.checklist.isEmpty ? "Task progress" : "Task progress from checklist")
-                .accessibilityValue("\(task.progressPercent)%")
-        }
+                }.onHover { hovered = $0 }
+            }
+            .overlay(alignment: .topTrailing) {
+                if hovered || focused || editTask != nil {
+                    Text("\(task.progressPercent)%")
+                        .font(.system(size: 10)).monospacedDigit()
+                        .padding(.horizontal, 5).padding(.vertical, 2)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 3))
+                        .offset(x: -16, y: -22)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
+            .onChange(of: task.id) { _, _ in
+                hovered = false; focused = false; editTask = nil
+            }
+            .accessibilityElement(children: .contain)
     }
 
-    private var indicator: some View {
-        HStack(spacing: 8) {
-            ProgressView(value: Double(task.progressPercent), total: 100)
-                .progressViewStyle(.linear).controlSize(.small).accessibilityHidden(true)
-            Text("\(task.progressPercent)%").monospacedDigit()
+    private var separator: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Rectangle().fill(Color(nsColor: .separatorColor))
+                Rectangle().fill(Color.accentColor)
+                    .frame(width: geometry.size.width * CGFloat(task.progressPercent) / 100)
+            }
         }
-        .font(.caption).foregroundStyle(.secondary)
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(task.checklist.isEmpty ? "Task progress" : "Task progress from checklist")
+        .accessibilityValue("\(task.progressPercent)%")
     }
 }
 

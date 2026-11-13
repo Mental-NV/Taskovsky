@@ -51,8 +51,23 @@ final class RichBodyTextView: NSTextView {
     override var undoManager: UndoManager? { ownedUndo }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if handleHistoryKey(event) || handleQAClipboardKey(event) { return true }
+        if handleFormattingKey(event) || handleHistoryKey(event) || handleQAClipboardKey(event) { return true }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// Formatting shortcuts belong to the focused editor, even when its
+    /// optional toolbar is collapsed. They never target a title or another task.
+    private func handleFormattingKey(_ event: NSEvent) -> Bool {
+        guard isEditable, !hasMarkedText(), window?.firstResponder === self,
+              event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command,
+              let controller = (delegate as? RichBodyEditor.Coordinator)?.host.controller else { return false }
+        switch event.charactersIgnoringModifiers?.lowercased() {
+        case "b": controller.toggleTrait(.boldFontMask)
+        case "i": controller.toggleTrait(.italicFontMask)
+        case "u": controller.toggleUnderline()
+        default: return false
+        }
+        return true
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -70,7 +85,7 @@ final class RichBodyTextView: NSTextView {
     }
 
     override func keyDown(with event: NSEvent) {
-        if handleHistoryKey(event) || handleQAClipboardKey(event) { return }
+        if handleFormattingKey(event) || handleHistoryKey(event) || handleQAClipboardKey(event) { return }
         let inCode = selectionStartsInCodeParagraph
         if !inCode, event.characters == "/", !event.isARepeat,
            event.modifierFlags.intersection([.command, .control]).isEmpty,
@@ -1413,13 +1428,13 @@ struct RichBodyToolbar: View {
             HStack(spacing: 2) {
                 toolButton(symbol: "bold", label: "Bold (⌘B)", active: controller.active.bold) {
                     controller.toggleTrait(.boldFontMask)
-                }.keyboardShortcut("b", modifiers: .command)
+                }
             toolButton(symbol: "italic", label: "Italic (⌘I)", active: controller.active.italic) {
                 controller.toggleTrait(.italicFontMask)
-            }.keyboardShortcut("i", modifiers: .command)
+            }
             toolButton(symbol: "underline", label: "Underline (⌘U)", active: controller.active.underline) {
                 controller.toggleUnderline()
-            }.keyboardShortcut("u", modifiers: .command)
+            }
             toolButton(symbol: "strikethrough", label: "Strikethrough", active: controller.active.strikethrough) {
                 controller.toggleStrikethrough()
             }
