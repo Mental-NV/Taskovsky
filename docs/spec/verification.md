@@ -1966,3 +1966,57 @@ Follow-up for `517816b`: release/signature passed. Native light AX-only sheet ch
 ## iPhone temporary feedback lifetime
 
 See [MOB-FEEDBACK-001](../changes/phone-feedback-lifetime-2026-11-13.md). On November 13, six hosted feedback/model tests and one native Timeline expiry test passed on the owned Taskovsky QA iPhone 13 Pro simulator (iOS 26.3.1). The native test recorded before/after screenshots and verified dismissal leaves the scheduled task moved; Undo disappears with its success notice. Independent source review passed. The initial test attempt exposed a constructor isolation compile error, fixed before the passing run; a test incorrectly expected Pin to offer Undo, corrected to completion. Following explicit approval, this iPhone change was published and merged as PR #71 on November 13 (merge commit `15caa243`). The Mac feedback follow-up remains separately tracked in PR #72. No new macOS UI/capture, physical-device or live VoiceOver usability test is claimed.
+
+### Mac Search staged list tree — November 13
+
+[Change record](../changes/search-list-tree-2026-11-13.md). Seven focused state/tree/key tests and full 782 XCTest + 38 Swift Testing tests
+passed at source `bbe60b9`; signed release and independent review passed. Native
+AX lifecycle, forward/reverse keyboard routing and 24-list scrolling passed. QA
+restored and Codex stopped. No screenshot, live VoiceOver or exact visual-parity
+claim. Matching/archive rules unchanged. Hosted exact-head CI remains required.
+
+## Full Search staged tag selection — November 13, 2026
+
+Source `1a2a73f`, isolated `/private/tmp/TaskovskySearchTags`, base main `c5979c1`: [SEARCH-TAGS-001](../changes/search-staged-tags-2026-11-13.md). Full `swift test --disable-sandbox` passed 786 XCTest and 38 Swift Testing cases. `scripts/build-app.sh` release and strict signature verification passed. Independent source review found no actionable defect; native keyboard, dismissal/reopen and scroll QA are running separately. Hosted CI not yet run. No actual screenshot is available; prior screen capture denial remains respected. These results establish code/tests, not exact rendered parity or reference multi-tag matching semantics.
+
+## Full Search staged custom-date range — November 13, 2026
+
+Source `3e5ed7f`, isolated `/private/tmp/TaskovskySearchDates`, base main `a941153`: [SEARCH-DATE-001](../changes/search-staged-custom-range-2026-11-13.md). Full `swift test --disable-sandbox` passed 790 XCTest and 38 Swift Testing cases. Independent source/spec/test review found no actionable defect. Signed release, native Menu/popover/date-edit/Cancel/Confirm QA and hosted CI remain pending at this checkpoint. No actual screenshot or visual parity claim; capture denial is respected. Existing inclusive matching and other date-rule combinations are unchanged.
+
+Native follow-up at source `3e5ed7f` found Return with an enabled bound exited full Search to Today; this failed acceptance and blocked merge despite green CI `43417523170`. AX Confirm, empty-bound disabled state, draft isolation, Cancel/Escape/outside dismissal, applied bounds reopening, remove preserving another date rule/inactive dates and Save-as-Filter mapping passed. QA bundle/fixture/preferences were restored; no screenshot available. Source `9fdbd7c` removes the default Confirm shortcut and handles Return within a focused popover, with an empty-bound guard. Independent review found no definite source defect; full 790 XCTest +38 Swift Testing passed again. Release and native keyboard recheck are pending, including native date-segment editing and footer focus. Do not treat the original QA or CI as verification of this correction.
+
+## Search custom-date keyboard-access follow-up
+
+Matched baseline/candidate traces after PR76 reached native date segments in both, but did not establish checkbox/footer focus. The baseline-vs-candidate root focus differed; causality/regression remains unresolved. [SEARCH-DATE-002](../changes/search-date-keyboard-access-2026-11-13.md) introduces an explicit local native-control loop without changing OS preferences. Four control/key-loop tests and full suite pass; independent source review found no definite blocker. Release/native event, footer geometry and focus-loop QA remain pending. Not yet merged; no screenshot or full keyboard parity claim.
+
+Acceptance follow-up for source `2649147`: native AX-only QA verified initial Due from checkbox focus; Tab/Shift-Tab through both toggles, enabled native date segments, Cancel and enabled Confirm with wrap; Space activation of both toggles/footer buttons; empty Return guard and enabled Return apply without leaving Search; native day-segment editing retained on reopen; Cancel/Escape/outside discard. Stable QA bundle, fixture and preferences restored and verified; Codex stopped. No setting or screen-capture changes. Native AX supplied no frame coordinates and no screenshot was available. An additional owned native view layout regression at the exact 320×174 content size verifies nonzero control frames, containment and non-overlap for empty/enabled bounds, not pixels or actual popover/window placement. Full suite with this test: 795 XCTest +38 Swift Testing passed. Source-identical release/signature and source-head hosted CI `43427187869` passed. Final test/docs head requires its own CI before merge.
+
+Hosted macOS 15 final-head geometry test initially failed because raw rounded-button frames overlap. Diagnostic run `43433760417` measured Cancel frame `(162,17,76,32)` and Confirm `(232,17,83,32)`, with 7pt horizontal native alignment insets; alignment rectangles in their shared footer coordinates are `(157,0,62,20)` and `(227,0,69,20)`, retaining the intended 8pt layout gap. AppKit constraints use alignment rectangles, not decorative frame margins. The test is corrected to compare alignment rectangles in form coordinates, retain raw frame containment, and separately verify sampled interior hit points target their respective Cancel/Confirm button. Production source remains `2649147`, already native-QA checked. Full local 795 XCTest +38 Swift Testing pass with the corrected test. New exact-head hosted CI required; this is not a visual screenshot or proof of arbitrary edge hit behavior.
+
+## Full Search week-range captions — November 13, 2026
+
+Source `cdb4d4b`, isolated checkout based on main `b054f8c`: [SEARCH-WEEK-001](../changes/search-week-range-captions-2026-11-13.md). Full 799 XCTest +38 Swift Testing passed; independent source/test review found no actionable defect. Release, scoped AX menu-label/selection/custom-dialog/filter-mapping QA and hosted CI remain pending. No screenshot or text-clipping/pixel-parity claim; no settings/capture changes. Existing matching rules unchanged.
+
+## Full Search All Dates reset — November 13, 2026
+
+Source `1dd1c08`, isolated main `40c09ba` follow-up: [SEARCH-DATE-003](../changes/search-all-dates-reset-2026-11-13.md). Full 803 XCTest +38 Swift Testing passed, including actual matcher reset→specific-week regression. Independent source/test/spec review found no actionable defect or scope creep. Signed release, scoped native reset/custom/other-criterion checks and exact-head hosted CI pending. No screenshot or reference combination/pixel-parity claim.
+
+## Mobile date filter selection
+
+The [bounded mobile date selection change](../changes/mobile-date-all-selection-2026-11-13.md) has source review and automated regression evidence. Native Search/Normal form Done/Cancel and accessibility selection acceptance and hosted exact-head CI remain pending. No screenshot, physical-device behavior or TickTick visual parity is claimed.
+
+## Add Subtask inline focus — November 13, 2026
+
+Isolated from main `993679c`. [Change contract](../changes/subtask-inline-focus-2026-11-13.md). Candidate adds one-shot selected-row focus, reveal and scroll after successful visible child creation. Automated full tests/release, independent review, hosted CI and native keyboard/scroll/interruption checks pending. No screenshot or parity completion claim.
+
+## Tasks row tag menu — November 13, 2026
+
+[Bounded contract](../changes/task-row-tags-2026-11-13.md), based on main `7148337`. Candidate adds functional reachability for tag assignment from row context menu, not observed submenu geometry parity. 819 XCTest +38 Swift Testing, release build/strict signature and independent source review passed. Native target/checkmark/filtered disappearance/locked cases and exact-head CI pending; no screenshot.
+
+## Task-row scheduling — November 13, 2026
+
+[Change contract](../changes/task-row-schedule-2026-11-13.md), based on main `a8b491f`. Shared editor is reused; row routing/dismissal/native focus are new acceptance gates. Full tests/release, independent review, native QA and hosted CI pending; no screenshot or date-strip visual-parity claim.
+
+## Task-row conversion verification
+
+Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](../changes/task-row-conversion-2026-11-13.md).

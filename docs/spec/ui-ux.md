@@ -203,6 +203,7 @@ A row with children nested in its current group has a 12 × 24 disclosure button
 Interactions:
 
 - Single click selects. Checkbox/checklist clicks avoid selecting the row by consuming only that click.
+- After successful row-menu Add Subtask, a child included in the current list projection is revealed and requested for inline title editing once. Explicit creation focus is independent of the Pop-up double-click route; excluded children do not change filters or destinations. The existing default title and Escape semantics remain unchanged. [Bounded contract](../changes/subtask-inline-focus-2026-11-13.md).
 - Double-click title starts inline rename unless the narrow Pop-up route owns double-click. Return or focus loss commits a changed nonempty trimmed value; Escape exits without saving the draft. An accessibility Rename action follows the same permission checks.
 - Trash disables completion and rename. Archived list rows also disable checklist edits and drag while retaining selection. Archived context menus retain an explicit Move to Inbox/active-list escape hatch.
 - Active task menu offers completion/reopen, Won't Do, pin (only active), priority, move, duplicate, save template, add subtask, make subtask of a valid same-list parent, move to top level, and trash. Notes omit completion/subtask actions. Trash menus offer Restore/Delete Forever.
@@ -333,7 +334,9 @@ Results are grouped Tasks (first five), Lists/Tags/Filters (first eight each). T
 
 Up/Down move a bounded selection and scroll it into view. Return opens selection; without selection it opens full results. View more also opens full results. Recent-term selection fills the query. The footer says “Press Return to see all results.” Closing dismisses; full search close routes to Inbox.
 
-Full Search replaces center content and hides the docked sidebar. Selected results open detail without removing query/results. It has padding 28; 20-bold heading or editable rounded search field (max 350); close, pencil and Save as Filter (disabled for empty trimmed query). Criteria row scrolls horizontally, spacing 18: dates, lists including Inbox, tags with Any/All/No Tags/Any Tag, task/note kinds, status. Custom range adds From/To enabled date bounds and an explanatory prompt if neither is set. Results use vertical padding 20/spacing 4. “No results found” has top padding 50. It uses saved-filter eligibility, unlike the quick dialog's broader nondeleted task lookup.
+Full Search replaces center content and hides the docked sidebar. Selected results open detail without removing query/results. It has padding 28; 20-bold heading or editable rounded search field (max 350); close, pencil and Save as Filter (disabled for empty trimmed query). Full Search All Dates clears the date-rule selection; choosing a specific rule or confirming Custom removes the unrestricted sentinel while preserving combinations among specific rules. This avoids selected dates appearing ineffective; see [SEARCH-DATE-003](../changes/search-all-dates-reset-2026-11-13.md). Full Search This/Next/Last Week menu choices include localized date-range captions derived from the configured calendar, week start and time zone; matching semantics are unchanged. See [SEARCH-WEEK-001](../changes/search-week-range-captions-2026-11-13.md). Criteria row scrolls horizontally, spacing 18: dates, lists including Inbox, tags with Any/All/No Tags/Any Tag, task/note kinds, status. Custom opens a staged Due from/Due to popover. Confirm requires at least one bound and atomically applies the draft; Cancel/Escape/outside dismissal discards. An applied Custom range can be reopened or explicitly removed without changing other date rules. See [SEARCH-DATE-001](../changes/search-staged-custom-range-2026-11-13.md). The isolated [keyboard-access follow-up](../changes/search-date-keyboard-access-2026-11-13.md) uses native form controls and an explicit local key-view loop; native acceptance remains separate. Results use vertical padding 20/spacing 4. “No results found” has top padding 50. It uses saved-filter eligibility, unlike the quick dialog's broader nondeleted task lookup.
+
+Full-search Tags now uses a staged 280pt popover with a maximum 340pt scroll region. All clears IDs; No Tags/Any Tag and Any selected/All selected preserve the existing matching policy and inactive IDs. OK/Return applies, Cancel/Escape/outside dismissal discards. Tab/Shift-Tab and Space follow the Lists picker convention. These are Taskovsky presentation rules; TickTick multi-tag matching remains unverified. See [SEARCH-TAGS-001](../changes/search-staged-tags-2026-11-13.md).
 
 Filter editor: width 520/padding 24/spacing 16, title 18 bold, name field, Normal/Advanced segments. Normal grouped form is height 300: keyword, multi-list/tag/priority/date/type, status, inclusive custom range. Missing referenced lists/tags stay selected as Unavailable rather than being silently removed. Saving a name-only edit must not broaden dead-reference intent.
 
@@ -526,3 +529,46 @@ The locally implemented [minimum-height outline correction](../changes/calendar-
 ## Mac List editor preview — LIST-VIS-001
 
 Add/Edit List uses the existing editable form with an illustrative trailing List/Board preview when the horizontal proposal fits; otherwise the unchanged form remains available. Draft name, icon, color, kind and view selection update only the preview. Tag and Folder editors are unchanged. The preview is decorative, does not show real tasks and has no focus, gesture or save actions. Timeline remains selectable with an explicit preview-unavailable explanation. The candidate's form/preview widths are Taskovsky design choices, not measured TickTick dimensions. See [change and acceptance record](../changes/mac-list-editor-preview-2026-11-13.md); native sheet checks remain separate from hosted rendering/tests.
+
+### Mac full Search list selector
+
+The [staged list tree](../changes/search-list-tree-2026-11-13.md) replaces the flat
+immediate All Lists menu. Folder rows disclose children and report mixed explicit
+selection. Only OK changes active results; Cancel/dismissal discards the draft.
+Empty selection remains All. Geometry is a Taskovsky choice, not exact TickTick parity.
+
+### Undated Schedule Time entry
+
+Time is available before choosing a date: activating it seeds today's start-of-day in the schedule calendar, enables time and opens the existing editor. It remains a draft until OK; dismissing discards. Already dated drafts are not reseeded. [SCHEDULE-TIME-001](../changes/schedule-undated-time-2026-11-13.md).
+
+### Normal saved-filter Date reset
+
+Explicit All resets date criteria; subsequent specific choices remove the unrestricted sentinel while preserving other selected specific rules. Loading or saving an unrelated field does not normalize legacy criteria. Custom bound drafts remain inactive after reset. [FILTER-DATE-001](../changes/filter-date-reset-2026-11-13.md).
+
+### Normal filter Priority and Type All
+
+Priority and Type menus expose All as a one-action reset of their own draft selections. Empty selection checks All and remains unrestricted; other criteria and Save/Cancel stay unchanged. [FILTER-ALL-001](../changes/filter-all-options-2026-11-13.md).
+
+### Embedded checklist in Trash rows
+
+Task-row checklist controls are disabled and their handlers reject changes when the task is deleted or the row is read-only. Restore re-enables active task editing; no checklist data is changed by the policy. [TASK-TRASH-001](../changes/trash-checklist-readonly-2026-11-13.md).
+
+### Schedule Time with Duration
+
+Time displays effective duration/point time state and the effective due endpoint. When Duration is active, Add/Remove time invokes its existing All-day conversion; both surfaces agree. Conversion uses existing civil-day/09:00 rules and remains staged until OK. [SCHEDULE-TIME-002](../changes/schedule-duration-time-state-2026-11-13.md).
+
+### Locked detail tag chips
+
+Trash/archived detail tag chips remain visible but disabled, with read-only labels rather than an enabled Remove action. Active detail retains tag removal. [DETAIL-TAG-001](../changes/detail-locked-tags-2026-11-13.md).
+
+### Row tag assignment follow-up
+
+Active Tasks list-row menus now include Tags choices using existing tag definitions and parent-qualified labels. Checked choices assign/remove only the context-clicked record; retained unknown IDs and unrelated fields remain. Trash/archived menus do not expose assignment. [Contract and evidence limits](../changes/task-row-tags-2026-11-13.md).
+
+### Row scheduling entry point
+
+Active task-row context menus include Schedule…, opening the shared staged editor anchored to that row without selecting it or depending on the detail-pane mode. Notes/history/Trash/archived rows omit this new action. [Functional approximation and acceptance limits](../changes/task-row-schedule-2026-11-13.md).
+
+## Task-row conversion
+
+Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](../changes/task-row-conversion-2026-11-13.md).

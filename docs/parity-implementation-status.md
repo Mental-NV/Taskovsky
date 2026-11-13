@@ -205,3 +205,42 @@ Mac Calendar/Timeline/grouped Board schedule success no longer remains indefinit
 ### iPhone feedback lifetime correction — November 13, 2026
 
 The [temporary feedback change](changes/phone-feedback-lifetime-2026-11-13.md) covers iPhone Calendar/Tasks scheduling, lifecycle, capture and batch successes with identity-safe expiry; errors remain actionable. Timing is a Taskovsky policy, not measured TickTick parity. Verification is recorded separately.
+
+### Full Search list tree — local November 13 follow-up
+
+The Mac All Lists selector has a staged folder/list draft with OK/Cancel and mixed
+folder indicators, based on retained reference observation. [Verification/limits](changes/search-list-tree-2026-11-13.md).
+Native AX lifecycle/keyboard/scrolling verification passed; published as PR #74; hosted
+Mac compiler correction pending. This is not a full Search or exact visual parity claim.
+
+### Full Search staged tags follow-up
+
+[SEARCH-TAGS-001](changes/search-staged-tags-2026-11-13.md) closes the source-level immediate tag-menu gap for TT-023/TT-024 with a disposable OK/Cancel draft. Existing matching policies stay unchanged. Native interaction, final CI and actual visual parity are separate acceptance gates; implementation is not yet merged.
+
+### Full Search staged custom-date follow-up
+
+[SEARCH-DATE-001](changes/search-staged-custom-range-2026-11-13.md) replaces immediate inline bound edits with a cancelable popover and disabled empty Confirm, following the retained reference interaction. Existing inclusive matcher and date-rule combinations are preserved, not claimed reference-equivalent. Native/CI gates remain pending; not yet merged.
+
+### Full Search week captions
+
+[SEARCH-WEEK-001](changes/search-week-range-captions-2026-11-13.md) adds observed date-range context to existing This/Next/Last Week menu choices. Calendar rules, match/selection semantics and other choices stay unchanged; not whole-menu/pixel parity. Native/CI acceptance pending.
+
+### Full Search All Dates reset correction
+
+[SEARCH-DATE-003](changes/search-all-dates-reset-2026-11-13.md) fixes the unrestricted date sentinel coexisting with specific choices and neutralizing them. Search All Dates is now a true reset; source-backed correction, not a claim of reference combination semantics. Native/CI gates pending.
+
+### TT-005 bounded creation-focus follow-up
+
+The [Mac inline-focus candidate](changes/subtask-inline-focus-2026-11-13.md) addresses the row-menu creation-to-edit gap only for a child included in the current list projection. Automatic next-child chaining and blank-title cleanup are not implemented; existing child creation semantics remain. Native acceptance and final checks are pending.
+
+### Tasks row tag assignment
+
+The [row Tags menu](changes/task-row-tags-2026-11-13.md) closes functional reachability for assigning existing tags without a detail-panel detour. TickTick submenu geometry/contents remain unobserved; native interaction acceptance is separate from the passed policy tests.
+
+### Tasks row scheduling reachability
+
+The [Schedule… row entry point](changes/task-row-schedule-2026-11-13.md) reuses the existing editor for active tasks. It is a functional approximation of observed row date access, not a copy of unverified TickTick shortcut icons. Native acceptance remains separate from schedule-domain coverage.
+
+## Task-row conversion checkpoint
+
+Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](changes/task-row-conversion-2026-11-13.md).
