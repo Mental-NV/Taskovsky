@@ -193,3 +193,7 @@ A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-
 ## Mac contextual detail controls — November 13
 
 The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.
+
+### iPhone feedback lifetime correction — November 13, 2026
+
+The [temporary feedback change](changes/phone-feedback-lifetime-2026-11-13.md) covers iPhone Calendar/Tasks scheduling, lifecycle, capture and batch successes with identity-safe expiry; errors remain actionable. Timing is a Taskovsky policy, not measured TickTick parity. Verification is recorded separately.
