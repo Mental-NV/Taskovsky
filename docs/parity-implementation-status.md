@@ -208,3 +208,7 @@ The Mac All Lists selector has a staged folder/list draft with OK/Cancel and mix
 folder indicators, based on retained reference observation. [Verification/limits](changes/search-list-tree-2026-11-13.md).
 Native AX lifecycle/keyboard/scrolling verification passed; published as PR #74; hosted
 Mac compiler correction pending. This is not a full Search or exact visual parity claim.
+
+### Full Search staged tags follow-up
+
+[SEARCH-TAGS-001](changes/search-staged-tags-2026-11-13.md) closes the source-level immediate tag-menu gap for TT-023/TT-024 with a disposable OK/Cancel draft. Existing matching policies stay unchanged. Native interaction, final CI and actual visual parity are separate acceptance gates; implementation is not yet merged.
