@@ -14,6 +14,7 @@ struct SearchCustomDatePicker: View {
     let onApply: (SearchCustomDateDraft) -> Void
     let onCancel: () -> Void
     @State private var draft: SearchCustomDateDraft
+    @FocusState private var keyboardFocused: Bool
     init(from: Date, hasFrom: Bool, to: Date, hasTo: Bool,
          onApply: @escaping (SearchCustomDateDraft) -> Void, onCancel: @escaping () -> Void) {
         self.onApply = onApply; self.onCancel = onCancel
@@ -38,9 +39,12 @@ struct SearchCustomDatePicker: View {
             HStack {
                 Spacer()
                 Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
-                Button("Confirm", action: confirm).disabled(!draft.canConfirm).keyboardShortcut(.defaultAction)
+                Button("Confirm", action: confirm).disabled(!draft.canConfirm)
             }
         }.font(.system(size: 13)).padding(12).frame(width: 320)
             .accessibilityIdentifier("SearchCustomDatePicker")
+            .focusable().focusEffectDisabled().focused($keyboardFocused)
+            .onAppear { DispatchQueue.main.async { keyboardFocused = true } }
+            .onKeyPress(.return) { confirm(); return .handled }
     }
 }
