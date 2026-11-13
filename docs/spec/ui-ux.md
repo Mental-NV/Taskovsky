@@ -547,3 +547,7 @@ Priority and Type menus expose All as a one-action reset of their own draft sele
 ### Embedded checklist in Trash rows
 
 Task-row checklist controls are disabled and their handlers reject changes when the task is deleted or the row is read-only. Restore re-enables active task editing; no checklist data is changed by the policy. [TASK-TRASH-001](../changes/trash-checklist-readonly-2026-11-13.md).
+
+### Schedule Time with Duration
+
+Time displays effective duration/point time state and the effective due endpoint. When Duration is active, Add/Remove time invokes its existing All-day conversion; both surfaces agree. Conversion uses existing civil-day/09:00 rules and remains staged until OK. [SCHEDULE-TIME-002](../changes/schedule-duration-time-state-2026-11-13.md).
