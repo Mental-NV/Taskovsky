@@ -1,6 +1,6 @@
 # Minimum-height timed Calendar outline
 
-Status: published in PR67, stacked on PR66 source `b8c0d5e`; light-theme interaction and independent source review passed. Final exact-head checks are required. On November 13 the user explicitly deferred Dark-theme work and directed completion of the white/light-theme UI.
+Status: published in PR67, now targeting main after PR66 merged as `f5c5b08`; light-theme interaction and independent source review passed. Final exact-head checks are required. On November 13 the user explicitly deferred Dark-theme work and directed completion of the white/light-theme UI.
 
 ## Observed defect and scope
 
@@ -32,4 +32,4 @@ These receipts identify preserved local artifacts, not a portable automated test
 
 ## Hosted verification and scope
 
-Exact source head `7769514` passed hosted run `43374899581`: macOS Swift tests, release build, signature and archive checks, plus iPhone Simulator compile-only. This documentation update requires its own final checks. The user has delegated review/merge and asked to finish PR66 and its dependent correction under the light-only scope. Dark interaction must be verified when Dark work resumes; no OS appearance, capture permission or notification setting is changed for this scope decision.
+Exact source head `7769514` passed hosted run `43374899581`: macOS Swift tests, release build, signature and archive checks, plus iPhone Simulator compile-only. Documentation head `3b7f528` passed hosted run `43379926715` while stacked. After PR66 merged, PR67 was retargeted to main; this receipt update triggers fresh integration checks against that base before merge. The user has delegated review/merge and asked to finish PR66 and its dependent correction under the light-only scope. Dark interaction must be verified when Dark work resumes; no OS appearance, capture permission or notification setting is changed for this scope decision.
