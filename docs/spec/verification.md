@@ -1994,3 +1994,7 @@ Source `cdb4d4b`, isolated checkout based on main `b054f8c`: [SEARCH-WEEK-001](.
 ## Full Search All Dates reset — November 13, 2026
 
 Source `1dd1c08`, isolated main `40c09ba` follow-up: [SEARCH-DATE-003](../changes/search-all-dates-reset-2026-11-13.md). Full 803 XCTest +38 Swift Testing passed, including actual matcher reset→specific-week regression. Independent source/test/spec review found no actionable defect or scope creep. Signed release, scoped native reset/custom/other-criterion checks and exact-head hosted CI pending. No screenshot or reference combination/pixel-parity claim.
+
+## Mobile date filter selection
+
+The [bounded mobile date selection change](../changes/mobile-date-all-selection-2026-11-13.md) has source review and automated regression evidence. Native Search/Normal form Done/Cancel and accessibility selection acceptance and hosted exact-head CI remain pending. No screenshot, physical-device behavior or TickTick visual parity is claimed.
