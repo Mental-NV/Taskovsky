@@ -220,3 +220,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### Full Search week captions
 
 [SEARCH-WEEK-001](changes/search-week-range-captions-2026-11-13.md) adds observed date-range context to existing This/Next/Last Week menu choices. Calendar rules, match/selection semantics and other choices stay unchanged; not whole-menu/pixel parity. Native/CI acceptance pending.
+
+### Full Search All Dates reset correction
+
+[SEARCH-DATE-003](changes/search-all-dates-reset-2026-11-13.md) fixes the unrestricted date sentinel coexisting with specific choices and neutralizing them. Search All Dates is now a true reset; source-backed correction, not a claim of reference combination semantics. Native/CI gates pending.
