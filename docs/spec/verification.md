@@ -1948,3 +1948,7 @@ The subsequent fix stages Calendar/Undo and explicit Schedule saves, rejects sta
 - `swift test --disable-sandbox`: 769 XCTest and 38 Swift Testing tests passed on the Mac. Three new Mac tests cover presentation default/reset/lock plus actual AppKit bold/italic/underline dispatch, unchanged text, native Undo, title focus exclusion and locked-body exclusion with no visible window or screen capture.
 - Release packaging/signature and hosted run `43380149914` passed (head `a85208d`, same source `4071083`); both Mac and iPhone compile jobs succeeded. Scoped native accessibility interaction passed default collapse/toggle/Bold/Undo/title-focus exclusion/task switching, progress Cancel/Done, checklist read-only value, note exclusion and narrow detail popup controls. QA app quit and original bundle/fixture/preferences restored byte-for-byte.
 - Visual idle/hover behavior, exact toolbar layout, narrow-toolbar scrolling and screenshot comparison remain unverified because denied capture was not retried. This is a bounded functional fix, not a full visual parity claim. Dark theme deferred by user; iPhone presentation unchanged.
+
+### Mac temporary feedback lifetime — November 13
+
+[Change and audit](../changes/mac-feedback-lifetime-2026-11-13.md). Automated lifetime regression tests and full build results are recorded in the change receipt; native visual timing remains separate. iPhone feedback is a separate workstream. No OS notifications or permission changes involved.

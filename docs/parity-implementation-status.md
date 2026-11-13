@@ -189,3 +189,7 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 ## Mac contextual detail controls — November 13
 
 The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.
+
+### Feedback lifetime correction — November 13
+
+Mac Calendar/Timeline/grouped Board schedule success no longer remains indefinitely; Summary saved and reader copied acknowledgment share the same bounded lifetime. Actionable errors remain persistent. This is a Taskovsky usability correction with automated tests, not proof of TickTick's exact timeout. See [audit and evidence](changes/mac-feedback-lifetime-2026-11-13.md).

@@ -9,8 +9,7 @@ struct DesktopTaskTimeline: View {
     @State private var request: ScheduleRequest?
     @State private var captureRequest: CaptureRequest?
     @State private var gesture: GestureRequest?
-    @State private var undo: CalendarScheduleUndo?
-    @State private var notice: String?
+    @StateObject private var feedback = DesktopNotice()
 
     private struct ScheduleRequest: Identifiable {
         var id: UUID { draft.id }
@@ -34,15 +33,13 @@ struct DesktopTaskTimeline: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let notice {
+            if let event = feedback.event {
                 HStack {
-                    Text(notice).font(.caption)
-                    if let undo {
-                        Button("Undo") {
-                            self.notice = store.undoCalendarSchedule(undo) ? "Schedule restored" : "Schedule changed since this edit"
-                            self.undo = nil
-                        }
+                    Text(event.message).font(.caption)
+                    if event.undo != nil {
+                        Button("Undo") { feedback.undo(in: store) }
                     }
+                    Button("Dismiss") { feedback.dismiss() }
                 }.padding(.horizontal, 16)
             }
             TaskTimelineView(scope: scope, data: store.data, now: now, calendar: store.settings.calendar,
@@ -51,6 +48,7 @@ struct DesktopTaskTimeline: View {
                              beginAdjustment: store.needsRecovery ? nil : beginAdjustment,
                              arrangement: store.needsRecovery ? nil : TaskTimelineArrangeControls(drop: arrangeByDrop))
         }
+        .onDisappear { feedback.dismiss() }
         .sheet(item: $request) { request in
             CalendarTaskEditor(draft: request.draft, lists: [], calendar: store.settings.calendar,
                                removeDate: {
@@ -76,11 +74,11 @@ struct DesktopTaskTimeline: View {
                 guard let taskID = store.createTimelineTask(title: title, on: request.day, listID: listID) else {
                     return store.storageError ?? "Could not add the task to this list."
                 }
-                notice = "Task added to Timeline"
+                feedback.show("Task added to Timeline")
                 if case .filter(let id) = scope,
                    let task = store.data.tasks.first(where: { $0.id == taskID }),
                    store.data.filters.first(where: { $0.id == id })?.matches(task, lists: store.data.lists, now: now, calendar: store.settings.calendar) == false {
-                    notice = "Task added. It does not match this filter."
+                    feedback.show("Task added. It does not match this filter.")
                 }
                 return nil
             }
@@ -154,16 +152,15 @@ struct DesktopTaskTimeline: View {
                         scope: CalendarScheduleScope = .series) -> Bool {
         guard let task = store.data.tasks.first(where: { $0.id == taskID }),
               CalendarScheduleSnapshot(task) == before else {
-            notice = "Schedule changed. Review the current task and try again."
+            feedback.show("Schedule changed. Review the current task and try again.", persistent: true)
             return false
         }
         if let token = store.scheduleOnCalendar(id: taskID, operation: operation, scope: scope) {
-            undo = token
-            if case .skipOccurrence = operation { notice = "Occurrence skipped" }
-            else { notice = scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated" }
+            if case .skipOccurrence = operation { feedback.show("Occurrence skipped", undo: token) }
+            else { feedback.show(scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated", undo: token) }
             return true
         }
-        notice = store.storageError ?? "Schedule unchanged"
+        feedback.show(store.storageError ?? "Schedule unchanged", persistent: true)
         return false
     }
 }

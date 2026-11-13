@@ -1359,7 +1359,7 @@ struct RichBodyReader: View {
     @State private var collapsed: Set<Int> = []
     @State private var positions: [Int: CGFloat] = [:]
     @State private var height: CGFloat = 60
-    @State private var copiedCode: Int?
+    @StateObject private var copiedCode = DesktopNotice()
 
     var body: some View {
         let reading = preview.readingView(collapsed: collapsed)
@@ -1374,10 +1374,10 @@ struct RichBodyReader: View {
                 ScrollView(.horizontal) {
                     HStack {
                         ForEach(Array(code.enumerated()), id: \.element.id) { index, block in
-                            Button(copiedCode == block.id ? "Copied" : code.count == 1 ? "Copy Code Block" : "Copy Code Block \(index + 1)", systemImage: "doc.on.doc") {
+                            Button(copiedCode.event?.message == String(block.id) ? "Copied" : code.count == 1 ? "Copy Code Block" : "Copy Code Block \(index + 1)", systemImage: "doc.on.doc") {
                                 let board = RichBodyTextView.descriptionClipboard
                                 board.clearContents()
-                                if board.setString(block.text, forType: .string) { copiedCode = block.id }
+                                if board.setString(block.text, forType: .string) { copiedCode.show(String(block.id)) }
                             }.accessibilityIdentifier("copyRichCodeBlock-\(index)")
                         }
                     }
@@ -1409,7 +1409,9 @@ struct RichBodyReader: View {
                 }
             }
         }.padding(18).frame(width: 530, height: 430)
-            .onChange(of: collapsed) { _, _ in copiedCode = nil }
+            .onChange(of: collapsed) { _, _ in copiedCode.dismiss() }
+            .onChange(of: documentID) { _, _ in copiedCode.dismiss() }
+            .onDisappear { copiedCode.dismiss() }
     }
 }
 

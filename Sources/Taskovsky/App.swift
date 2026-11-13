@@ -2059,8 +2059,7 @@ private struct DesktopScopedBoard: View {
     let open: (UUID) -> Void
     let toggle: (UUID) -> Void
     @State private var grouping: ScopedBoardGrouping
-    @State private var notice: String?
-    @State private var undo: CalendarScheduleUndo?
+    @StateObject private var feedback = DesktopNotice()
     @State private var pending: PendingSchedule?
     @State private var frames: [ScopedBoardColumn.ID: CGRect] = [:]
     @State private var drag: CardDrag?
@@ -2103,12 +2102,10 @@ private struct DesktopScopedBoard: View {
                 Picker("Group board by", selection: $grouping) {
                     ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
                 }.pickerStyle(.segmented).fixedSize().accessibilityIdentifier("scopedBoardGrouping")
-                if let notice { Text(notice).font(.caption).accessibilityIdentifier("scopedBoardNotice") }
-                if let undo {
-                    Button("Undo") {
-                        notice = store.undoCalendarSchedule(undo) ? "Schedule restored" : "Schedule changed. Undo was skipped."
-                        self.undo = nil
-                    }
+                if let event = feedback.event {
+                    Text(event.message).font(.caption).accessibilityIdentifier("scopedBoardNotice")
+                    if event.undo != nil { Button("Undo") { feedback.undo(in: store) } }
+                    Button("Dismiss") { feedback.dismiss() }
                 }
                 Spacer()
             }.padding(.horizontal, 16)
@@ -2149,6 +2146,7 @@ private struct DesktopScopedBoard: View {
                 .onPreferenceChange(ScopedBoardDragFrames.self) { frames = $0 }
             }
         }
+        .onDisappear { feedback.dismiss() }
         .onChange(of: grouping) { _, _ in cancelDrag() }
         .onChange(of: columnWidth) { _, _ in cancelDrag() }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in cancelDrag() }
@@ -2210,7 +2208,8 @@ private struct DesktopScopedBoard: View {
               let task = store.data.tasks.first(where: { $0.id == id }) else { return }
         switch operation {
         case .list(let list):
-            notice = store.moveTasksToList(ids: [id], listID: list) ? "Moved to list" : "Could not move this task."
+            if store.moveTasksToList(ids: [id], listID: list) { feedback.show("Moved to list") }
+            else { feedback.show(store.storageError ?? "Could not move this task.", persistent: true) }
         case .schedule:
             let change = PendingSchedule(taskID: id, before: CalendarScheduleSnapshot(task), column: target)
             if CalendarScheduling.canRescheduleCurrentOccurrence(task, in: store.data.tasks) { pending = change }
@@ -2224,11 +2223,10 @@ private struct DesktopScopedBoard: View {
               CalendarScheduleSnapshot(task) == change.before,
               case .schedule(let operation) = projection.move(change.taskID, to: change.column),
               let token = store.scheduleOnCalendar(id: change.taskID, operation: operation, scope: scope) else {
-            notice = "The schedule could not be changed."
+            feedback.show(store.storageError ?? "The schedule could not be changed.", persistent: true)
             return
         }
-        undo = token
-        notice = "Schedule updated"
+        feedback.show("Schedule updated", undo: token)
     }
 }
 

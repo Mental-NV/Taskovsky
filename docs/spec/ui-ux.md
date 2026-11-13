@@ -514,3 +514,7 @@ Mac completion sound/success feedback and trash/restore feedback follow accepted
 ### Schedule save failure
 
 Mac schedule OK and Clear keep the popover and all staged fields on rejection, displaying an inline red 11-point message above the footer. Successful acknowledgement dismisses it. Cancel/Escape remains deliberate discard. A stale task requires reopening; failure never silently rebases the opening snapshot. [Contract](../changes/schedule-editor-persistence-2026-11-12.md).
+
+### Mac temporary feedback lifetime
+
+Calendar, Tasks Timeline and grouped Board success/Undo feedback, Summary save acknowledgment and description-reader copied label expire after five seconds. Repeated events restart the interval; stale timers cannot dismiss newer feedback. Errors remain actionable until dismissal/replacement. This uses Taskovsky's established completion-toast duration, not a measured TickTick timing. See [lifetime change](../changes/mac-feedback-lifetime-2026-11-13.md).
