@@ -539,3 +539,7 @@ Time is available before choosing a date: activating it seeds today's start-of-d
 ### Normal saved-filter Date reset
 
 Explicit All resets date criteria; subsequent specific choices remove the unrestricted sentinel while preserving other selected specific rules. Loading or saving an unrelated field does not normalize legacy criteria. Custom bound drafts remain inactive after reset. [FILTER-DATE-001](../changes/filter-date-reset-2026-11-13.md).
+
+### Embedded checklist in Trash rows
+
+Task-row checklist controls are disabled and their handlers reject changes when the task is deleted or the row is read-only. Restore re-enables active task editing; no checklist data is changed by the policy. [TASK-TRASH-001](../changes/trash-checklist-readonly-2026-11-13.md).
