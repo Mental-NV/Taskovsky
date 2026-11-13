@@ -227,7 +227,8 @@ struct TaskDetail: View {
     private var tagSection: some View {
         HStack(spacing: 6) {
             ForEach(store.data.tags.filter { task.tagIDs.contains($0.id) }) { tag in
-                Button { if !locked { var updated = task; updated.tagIDs.removeAll { $0 == tag.id }; store.updateTask(updated) } } label: { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).padding(.horizontal, 8).padding(.vertical, 5).background(Color(hex: tag.color).opacity(0.08), in: Capsule()) }.buttonStyle(.plain).help("Remove tag \(tag.name)")
+                Button { if !locked { var updated = task; updated.tagIDs.removeAll { $0 == tag.id }; store.updateTask(updated) } } label: { Text("#" + tag.name).font(.system(size: 11)).foregroundStyle(Color(hex: tag.color)).padding(.horizontal, 8).padding(.vertical, 5).background(Color(hex: tag.color).opacity(0.08), in: Capsule()) }.buttonStyle(.plain).disabled(locked).help(locked ? "Tag \(tag.name) (read-only)" : "Remove tag \(tag.name)")
+                    .accessibilityLabel(locked ? "Tag \(tag.name) (read-only)" : "Remove tag \(tag.name)")
             }
             if !locked { Button { showTags.wrappedValue.toggle() } label: { Image(systemName: "number").font(.system(size: 12)).foregroundStyle(.tertiary).padding(5) }.buttonStyle(.plain).help("Add tags").popover(isPresented: showTags, arrowEdge: .bottom) { tagPicker } }
         }
