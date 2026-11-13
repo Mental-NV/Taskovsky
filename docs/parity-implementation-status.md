@@ -216,3 +216,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### Full Search staged custom-date follow-up
 
 [SEARCH-DATE-001](changes/search-staged-custom-range-2026-11-13.md) replaces immediate inline bound edits with a cancelable popover and disabled empty Confirm, following the retained reference interaction. Existing inclusive matcher and date-rule combinations are preserved, not claimed reference-equivalent. Native/CI gates remain pending; not yet merged.
+
+### Full Search week captions
+
+[SEARCH-WEEK-001](changes/search-week-range-captions-2026-11-13.md) adds observed date-range context to existing This/Next/Last Week menu choices. Calendar rules, match/selection semantics and other choices stay unchanged; not whole-menu/pixel parity. Native/CI acceptance pending.

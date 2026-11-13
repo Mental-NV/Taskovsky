@@ -171,7 +171,7 @@ struct SearchPane: View {
         Menu {
             ForEach(FilterDateRule.allCases, id: \.self) { rule in
                 Button { if rule == .custom { pickingCustomDates = true } else { toggle(rule, in: $dateRules) } } label: {
-                    if dateRules.contains(rule) { Label(rule.label, systemImage: "checkmark") } else { Text(rule.label) }
+                    if dateRules.contains(rule) { Label(SearchWeekRange.label(for: rule, now: .now, calendar: store.settings.calendar), systemImage: "checkmark") } else { Text(SearchWeekRange.label(for: rule, now: .now, calendar: store.settings.calendar)) }
                 }
             }
             if dateRules.contains(.custom) {
