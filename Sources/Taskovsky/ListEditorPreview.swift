@@ -39,7 +39,7 @@ struct ListEditorPreview: View {
                             Text(column.title)
                                 .font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
                             ForEach(0..<(column == .open ? 2 : (kind == .note ? 0 : 1)), id: \.self) { index in
-                                sampleRow(index, status: column).padding(8)
+                                sampleRow(index, status: column, compact: true).padding(8)
                                     .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 5))
                             }
                         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -60,11 +60,11 @@ struct ListEditorPreview: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Illustrative \(modeName) preview for \(title). No saved items are displayed.")
     }
-    private func sampleRow(_ index: Int, status: BoardProjection.Column = .open) -> some View {
+    private func sampleRow(_ index: Int, status: BoardProjection.Column = .open, compact: Bool = false) -> some View {
         HStack(spacing: 6) {
             Image(systemName: kind == .note ? "doc.text" : status == .completed ? "checkmark.square" : status == .wontDo ? "xmark.square" : "square")
                 .font(.system(size: 12)).foregroundStyle(tint)
-            Text(kind == .note ? "Sample note \(index + 1)" : "Sample task \(index + 1)")
+            Text(compact ? (index == 0 ? "Plan" : "Read") : kind == .note ? "Sample note \(index + 1)" : "Sample task \(index + 1)")
                 .font(.system(size: 12)).lineLimit(1)
             Spacer(minLength: 0)
         }
