@@ -159,7 +159,7 @@ struct TaskRow: View {
                         HStack(spacing: 8) {
                             Button(action: { consumeNextSelect(); toggleStep(step.id) }) {
                                 TaskCheckbox(state: step.isCompleted ? .completed : .open, color: .secondary, size: 12)
-                            }.buttonStyle(.plain).disabled(readOnly).help(step.isCompleted ? "Uncheck subtask" : "Check subtask")
+                            }.buttonStyle(.plain).disabled(!ChecklistRowEditing.canEdit(task, readOnly: readOnly)).help(step.isCompleted ? "Uncheck subtask" : "Check subtask")
                                 .accessibilityLabel((step.isCompleted ? "Uncheck " : "Check ") + step.title)
                             Text(step.title.isEmpty ? "Untitled" : step.title).font(.system(size: 13))
                                 .foregroundStyle(step.isCompleted ? Color(nsColor: .tertiaryLabelColor) : Color.secondary).lineLimit(1)
@@ -264,7 +264,7 @@ struct TaskRow: View {
         if !value.isEmpty && value != task.title { var updated = task; updated.title = value; store.updateTask(updated) }
     }
     private func toggleStep(_ stepID: UUID) {
-        guard !readOnly else { return }
+        guard ChecklistRowEditing.canEdit(task, readOnly: readOnly) else { return }
         var updated = task
         if let i = updated.checklist.firstIndex(where: { $0.id == stepID }) { updated.checklist[i].isCompleted.toggle(); store.updateTask(updated) }
     }
