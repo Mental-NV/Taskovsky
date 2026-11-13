@@ -1998,3 +1998,7 @@ Source `1dd1c08`, isolated main `40c09ba` follow-up: [SEARCH-DATE-003](../change
 ## Mobile date filter selection
 
 The [bounded mobile date selection change](../changes/mobile-date-all-selection-2026-11-13.md) has source review and automated regression evidence. Native Search/Normal form Done/Cancel and accessibility selection acceptance and hosted exact-head CI remain pending. No screenshot, physical-device behavior or TickTick visual parity is claimed.
+
+## Add Subtask inline focus — November 13, 2026
+
+Isolated from main `993679c`. [Change contract](../changes/subtask-inline-focus-2026-11-13.md). Candidate adds one-shot selected-row focus, reveal and scroll after successful visible child creation. Automated full tests/release, independent review, hosted CI and native keyboard/scroll/interruption checks pending. No screenshot or parity completion claim.

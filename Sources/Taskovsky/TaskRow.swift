@@ -30,6 +30,8 @@ struct TaskRow: View {
     /// capped so deep chains stay readable; the data itself is unbounded.
     var depth = 0
     var subtaskDisclosure: (expanded: Bool, toggle: () -> Void)?
+    var requestedRenameID: UUID? = nil
+    var onRequestedRenameHandled: (() -> Void)? = nil
     var onInlineRenameChanged: ((Bool) -> Void)?
     /// Dedicated grip drag source. Built here (never passed in as a view) so
     /// visibility follows whole-row hover OR selection while the 14pt slot
@@ -176,6 +178,20 @@ struct TaskRow: View {
         .onTapGesture { if swallowSelect { swallowSelect = false } else { onSelect() } }
         .onTapGesture(count: 2) { onRowDoubleClick() }
         .accessibilityAction(named: "Rename", rename)
+        .task(id: requestedRenameID) {
+            guard requestedRenameID == id else { return }
+            await Task.yield()
+            guard !Task.isCancelled else { return }
+            if let current = store.data.tasks.first(where: { $0.id == id }),
+               TaskRowRenamePolicy.shouldBegin(requestedID: requestedRenameID, task: current, selection: selection, readOnly: readOnly) {
+                // Explicit Add Subtask editing is independent of double-click's
+                // pop-up-detail policy. It does not open a separate window.
+                draft = task.title
+                editing = true
+                titleFocused = true
+            }
+            onRequestedRenameHandled?()
+        }
         .onChange(of: editing) { _, active in onInlineRenameChanged?(active) }
         .onDisappear { if editing { onInlineRenameChanged?(false) } }
     }
@@ -348,5 +364,19 @@ private struct TaskRowLineLayout: Layout {
         guard budget > 0, budget.isFinite else { return 0 }
         let size = subview.sizeThatFits(ProposedViewSize(width: budget, height: height))
         return min(max(0, size.width), budget)
+    }
+}
+
+/// One-shot explicit creation focus must never target a stale or locked row.
+enum TaskRowRenamePolicy {
+    static func sectionKey(for id: UUID, visible: [TaskItem], list: TaskList, data: WorkspaceData) -> String? {
+        let partition = PinnedGrouping.partition(visible)
+        if partition.pinned.contains(where: { $0.id == id }) { return "pinned-\(list.id)" }
+        guard let group = TaskSectionGroup.project(partition.rest, for: list, in: data)
+            .first(where: { $0.tasks.contains(where: { $0.id == id }) }) else { return nil }
+        return "section-\(list.id)-" + (group.id?.uuidString ?? "none")
+    }
+    static func shouldBegin(requestedID: UUID?, task: TaskItem, selection: UUID?, readOnly: Bool) -> Bool {
+        requestedID == task.id && selection == task.id && task.deletedAt == nil && !readOnly
     }
 }
