@@ -1,5 +1,7 @@
 # TickTick feature parity tracker
 
+**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](changes/light-theme-priority-2026-11-13.md).
+
 This is the **canonical progress tracker** for Taskovsky's feature comparison with TickTick. It is separate from the [Taskovsky business specification](spec/business.md), [UI/UX specification](spec/ui-ux.md), and [TickTick research notes](ticktick-spec/README.md). Use it to decide what exists, what differs, what still needs evidence, and what belongs to a later implementation task.
 
 For current integrated code, use the [current baseline index](current-baseline.md) and latest source. The following November 8 snapshot and display follow-up are historical; later feature rows/verification records include merged Mac and iPhone implementation. This correction is not a new full parity audit.
