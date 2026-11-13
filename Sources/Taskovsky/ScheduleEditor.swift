@@ -57,7 +57,7 @@ struct ScheduleEditor: View {
     }
     /// The staged range end, which IS the due date while duration is on.
     private var effectiveDate: Date { hasDuration ? durationEnd : date }
-    private var effectiveHasTime: Bool { staged().effectiveHasTime }
+    private var effectiveHasTime: Bool { hasDate && staged().effectiveHasTime }
     /// The draft as a value, so day/time/zone decisions run through the
     /// tested `ScheduleDraft` helper instead of ad-hoc state math.
     private func staged() -> ScheduleDraft {
@@ -349,10 +349,12 @@ struct ScheduleEditor: View {
             writeBack(draft)
         } else {
             var draft = staged()
+            let retainedTime = draft.effectiveHasTime
             draft.removeDuration()
             // removeDuration keeps the end as the due date; duration states
             // below are now unused until re-enabled.
             date = draft.due
+            hasTime = retainedTime
             hasDuration = false
         }
         applyReminderDefault()
