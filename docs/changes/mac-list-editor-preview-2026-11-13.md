@@ -75,3 +75,9 @@ Independent review found and corrected initially misleading Board sample labels 
 Reused the preserved candidate without overwriting it; integrated onto `3c2db92` plus the merged UI macro map. Source review found no blocking defect and confirmed unchanged form/submit/Tag behavior. Two new hosted Mac tests render List/Board/Timeline task/note, short/long-name variants, bound the preview pane, retain the original Tag width and ensure rendering never invokes Save. These tests do not certify real sheet proposal/fallback or interactive focus.
 
 The full Mac suite passed **771 XCTest plus 38 Swift Testing**. Release build and native AX-only sheet acceptance are pending at this checkpoint. Historical 24 owned renders above remain bounded supplemental evidence; no new production screenshot or exact pixel parity is claimed.
+
+### Current native acceptance receipt — source `517816b`
+
+Release build and strict signature verification passed. Scoped native light-theme **accessibility-only** QA verified normal and compact window openings, initial List name focus, List/Board/Timeline selection updating the preview accessibility label, and no preview-row focus in sampled Tab traversal. Empty Return kept the draft open; named Return created a disposable Board list. Reopening retained Board; Escape discarded an unsaved draft, Cancel discarded a pending Timeline change, and later Save retained Timeline across reopening. Tag controls remained and saved tags matched the original fixture. Original QA bundle, fixture and preferences were restored byte-for-byte; Codex stopped.
+
+Exact sheet dimensions, visual fit/fallback, failed-save interaction and production screenshot remain unverified. No capture retry or permission/settings change occurred. Prior regression tests cover save failure at the store boundary, not this native sheet case. Publication was blocked pending explicit user approval for this branch; no remote branch or PR exists at this checkpoint.

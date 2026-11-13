@@ -1956,3 +1956,5 @@ See the [bounded correction](../changes/calendar-minimum-outline-2026-11-12.md) 
 ## Mac List editor preview integration — November 13
 
 [LIST-VIS-001](../changes/mac-list-editor-preview-2026-11-13.md) reuses the preserved candidate on current main plus [UI-MAP-001](../changes/ui-macro-parity-plan-2026-11-13.md). Full local regression: 771 XCTest + 38 Swift Testing pass; two new hosted preview/sheet tests pass. Independent source review found no blocker; native sheet interaction and production screenshot are separate open checks. Historical offscreen renders are not screen captures or proof of actual sheet layout. Dark QA is deferred under the user's light-only scope.
+
+Follow-up for `517816b`: release/signature passed. Native light AX-only sheet checks passed initial focus, mode-label changes, empty/named Return, Escape/Cancel, Save/reopen and sampled preview focus exclusion; tag data unchanged. QA bundle/fixture/preferences restored and Codex stopped. Exact visible dimensions, fallback/clipping and failed-save interaction remain unverified; capture was not retried. This is functional coverage, not screenshot-level parity.
