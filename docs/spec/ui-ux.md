@@ -515,4 +515,4 @@ Mac schedule OK and Clear keep the popover and all staged fields on rejection, d
 
 ## Pending minimum-height timed card correction
 
-The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. It remains a draft pending final tests/review and native interaction checks; other compact cards are unchanged.
+The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark interaction remains unverified and deferred per the user's November 13 light-only direction. Other compact cards are unchanged.
