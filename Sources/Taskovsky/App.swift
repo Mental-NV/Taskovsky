@@ -1691,6 +1691,13 @@ struct WorkspaceView: View {
             if CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) {
                 Button("Skip this occurrence…") { occurrenceSkip = TaskOccurrenceSkipRequest(task) }
             }
+            if TaskRowConversion.toNote(taskID: task.id, in: store.data) != nil {
+                Button("Convert to Note") {
+                    if let updated = TaskRowConversion.toNote(taskID: task.id, in: store.data) {
+                        store.updateTask(updated)
+                    }
+                }
+            }
             Button("Duplicate") { if let id = store.duplicateTask(id: task.id) { selectTask(id) } }
             Button("Save as Template") { _ = store.saveTemplate(from: task.id) }
             if task.kind == .task {
