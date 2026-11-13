@@ -1,6 +1,6 @@
 # LIST-VIS-001 — Mac List editor live preview
 
-Status: **In implementation: existing candidate integrated onto main `3c2db92`; native acceptance pending.**
+Status: **Published as draft PR #73 after explicit user approval. Automated and bounded native AX checks passed; actual visual fit/fallback and failed-save interaction remain unverified.**
 
 The user requested macro-area parity planning and implementation on November 13. This is the first P-ORG slice in [UI-MAP-001](ui-macro-parity-plan-2026-11-13.md), after finishing in-flight feedback fixes. The paragraphs below retain the original candidate history. Light theme is the active gate; historical Dark probe results are supplemental, not a requirement.
 
@@ -81,3 +81,7 @@ The full Mac suite passed **771 XCTest plus 38 Swift Testing**. Release build an
 Release build and strict signature verification passed. Scoped native light-theme **accessibility-only** QA verified normal and compact window openings, initial List name focus, List/Board/Timeline selection updating the preview accessibility label, and no preview-row focus in sampled Tab traversal. Empty Return kept the draft open; named Return created a disposable Board list. Reopening retained Board; Escape discarded an unsaved draft, Cancel discarded a pending Timeline change, and later Save retained Timeline across reopening. Tag controls remained and saved tags matched the original fixture. Original QA bundle, fixture and preferences were restored byte-for-byte; Codex stopped.
 
 Exact sheet dimensions, visual fit/fallback, failed-save interaction and production screenshot remain unverified. No capture retry or permission/settings change occurred. Prior regression tests cover save failure at the store boundary, not this native sheet case. Publication was blocked pending explicit user approval for this branch; no remote branch or PR exists at this checkpoint.
+
+### Publication and integration update
+
+After explicit user approval, published [PR #73](https://github.com/Mental-NV/Taskovsky/pull/73). Integrated main `442b87b`; conflicts were documentation-only and both List preview and Mac/iPhone feedback receipts were preserved. Source is unchanged from the native-tested candidate. Exact-head hosted checks and integration review are pending. Earlier unpublished/pending statements above describe historical checkpoints, not the current publication state.

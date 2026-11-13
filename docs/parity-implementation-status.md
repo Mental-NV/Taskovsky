@@ -196,7 +196,7 @@ The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-
 
 ## Organization dialog preview — November 13
 
-The P-ORG slice of [UI-MAP-001](changes/ui-macro-parity-plan-2026-11-13.md) adds an illustrative Mac List/Board preview to Add/Edit List, matching the observed two-pane interaction pattern in [the reference](ticktick-spec/lists-and-tags.md). Source exists on this feature branch; exact geometry and actual sheet focus/Save/Cancel still require the checks in [LIST-VIS-001](changes/mac-list-editor-preview-2026-11-13.md). Timeline preview, Tag/Folder layout and iPhone are not changed. This is not a whole-dialog pixel-equivalence claim.
+The P-ORG slice of [UI-MAP-001](changes/ui-macro-parity-plan-2026-11-13.md) adds an illustrative Mac List/Board preview to Add/Edit List, matching the observed two-pane interaction pattern in [the reference](ticktick-spec/lists-and-tags.md). Source is published in draft PR #73; bounded native focus/Save/Cancel checks passed, while exact geometry and visible fallback remain unverified as recorded in [LIST-VIS-001](changes/mac-list-editor-preview-2026-11-13.md). Timeline preview, Tag/Folder layout and iPhone are not changed. This is not a whole-dialog pixel-equivalence claim.
 
 ### Feedback lifetime correction — November 13
 
