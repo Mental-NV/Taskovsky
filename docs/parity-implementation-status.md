@@ -197,3 +197,7 @@ The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-
 ### Feedback lifetime correction — November 13
 
 Mac Calendar/Timeline/grouped Board schedule success no longer remains indefinitely; Summary saved and reader copied acknowledgment share the same bounded lifetime. Actionable errors remain persistent. This is a Taskovsky usability correction with automated tests, not proof of TickTick's exact timeout. See [audit and evidence](changes/mac-feedback-lifetime-2026-11-13.md).
+
+### iPhone feedback lifetime correction — November 13, 2026
+
+The [temporary feedback change](changes/phone-feedback-lifetime-2026-11-13.md) covers iPhone Calendar/Tasks scheduling, lifecycle, capture and batch successes with identity-safe expiry; errors remain actionable. Timing is a Taskovsky policy, not measured TickTick parity. Verification is recorded separately.
