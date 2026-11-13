@@ -1990,3 +1990,7 @@ Hosted macOS 15 final-head geometry test initially failed because raw rounded-bu
 ## Full Search week-range captions — November 13, 2026
 
 Source `cdb4d4b`, isolated checkout based on main `b054f8c`: [SEARCH-WEEK-001](../changes/search-week-range-captions-2026-11-13.md). Full 799 XCTest +38 Swift Testing passed; independent source/test review found no actionable defect. Release, scoped AX menu-label/selection/custom-dialog/filter-mapping QA and hosted CI remain pending. No screenshot or text-clipping/pixel-parity claim; no settings/capture changes. Existing matching rules unchanged.
+
+## Full Search All Dates reset — November 13, 2026
+
+Source `1dd1c08`, isolated main `40c09ba` follow-up: [SEARCH-DATE-003](../changes/search-all-dates-reset-2026-11-13.md). Full 803 XCTest +38 Swift Testing passed, including actual matcher reset→specific-week regression. Independent source/test/spec review found no actionable defect or scope creep. Signed release, scoped native reset/custom/other-criterion checks and exact-head hosted CI pending. No screenshot or reference combination/pixel-parity claim.
