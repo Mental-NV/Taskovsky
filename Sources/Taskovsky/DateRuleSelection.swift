@@ -1,8 +1,8 @@
 import TaskovskyCore
 
-/// Full Search's unfiltered state is empty; `.all` must not coexist with
+/// Normal date pickers’ unfiltered state is empty; `.all` must not coexist with
 /// specific OR-ed rules or it would silently make those choices ineffective.
-enum SearchDateSelection {
+enum DateRuleSelection {
     static func toggling(_ rule: FilterDateRule, in selected: Set<FilterDateRule>) -> Set<FilterDateRule> {
         guard rule != .all else { return [] }
         var next = selected.subtracting([.all])

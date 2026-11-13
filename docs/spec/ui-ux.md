@@ -535,3 +535,7 @@ Empty selection remains All. Geometry is a Taskovsky choice, not exact TickTick 
 ### Undated Schedule Time entry
 
 Time is available before choosing a date: activating it seeds today's start-of-day in the schedule calendar, enables time and opens the existing editor. It remains a draft until OK; dismissing discards. Already dated drafts are not reseeded. [SCHEDULE-TIME-001](../changes/schedule-undated-time-2026-11-13.md).
+
+### Normal saved-filter Date reset
+
+Explicit All resets date criteria; subsequent specific choices remove the unrestricted sentinel while preserving other selected specific rules. Loading or saving an unrelated field does not normalize legacy criteria. Custom bound drafts remain inactive after reset. [FILTER-DATE-001](../changes/filter-date-reset-2026-11-13.md).

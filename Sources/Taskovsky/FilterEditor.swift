@@ -95,7 +95,13 @@ struct FilterEditorView: View {
                         ForEach(TaskPriority.allCases, id: \.self) { priority in Toggle(priority.label, isOn: membership(priority, in: $priorities)) }
                     } label: { selectionLabel("Priority", count: priorities.count) }
                     Menu {
-                        ForEach(FilterDateRule.allCases, id: \.self) { rule in Toggle(rule.label, isOn: membership(rule, in: $dateRules)) }
+                        ForEach(FilterDateRule.allCases, id: \.self) { rule in
+                            Button { dateRules = DateRuleSelection.toggling(rule, in: dateRules) } label: {
+                                if rule == .all ? (dateRules.isEmpty || dateRules.contains(.all)) : dateRules.contains(rule) {
+                                    Label(rule.label, systemImage: "checkmark")
+                                } else { Text(rule.label) }
+                            }
+                        }
                     } label: { selectionLabel("Date", count: dateRules.count) }
                     if dateRules.contains(.custom) { customRangeRow }
                     Menu {
