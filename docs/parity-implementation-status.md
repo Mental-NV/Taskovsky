@@ -185,3 +185,7 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 ### Persistence follow-up: Mac schedule writes
 
 [CAL-SAVE-017](changes/calendar-lossless-save-2026-11-12.md) addresses reproduced local data preservation defects, not a new TickTick parity claim. Calendar commands/Undo and explicit Schedule Save/Clear preserve unrelated raw data and refuse stale independent-store baselines. Hosted verification passed as recorded in the [ledger](spec/verification.md#calendar-lossless-save); iPhone views and scheduling policy are unchanged.
+
+## Mac contextual detail controls — November 13
+
+The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.
