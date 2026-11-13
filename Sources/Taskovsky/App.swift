@@ -274,6 +274,7 @@ struct WorkspaceView: View {
     @State private var showCompleted = true
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var inlineTaskRenames: Set<UUID> = []
+    @State private var requestedTaskRename: UUID?
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
     @State private var sectionEditor: TaskList?
@@ -645,6 +646,7 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: destination) { _, _ in
+            requestedTaskRename = nil
             sectionCaptureID = nil
             if let task = selectedTask, !destination.includes(task, data: store.data) { detailState.clear() }
             quickKind = nextCreationKind ?? (activeList?.kind == .note ? .note : .task); nextCreationKind = nil
@@ -775,6 +777,7 @@ struct WorkspaceView: View {
     }
 
     private func selectTask(_ id: UUID) {
+        if requestedTaskRename != id { requestedTaskRename = nil }
         // Side peek opens the overlay drawer; pop-up mode only selects (a double
         // click opens a separate window) and docked mode shows the detail anyway.
         withAnimation(reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22)) { detailState.select(id, overlay: sidePeekMode) }
@@ -1428,7 +1431,8 @@ struct WorkspaceView: View {
         let tasks = filteredTasks(now: now)
         let groups = grouped(tasks, now: now)
         let mode = listViewBinding.wrappedValue
-        return VStack(alignment: .leading, spacing: 0) {
+        return ScrollViewReader { scroll in
+        VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 5) {
                 Button(action: toggleSidebar) {
                     HoverIcon {
@@ -1569,6 +1573,15 @@ struct WorkspaceView: View {
             }
         }
         .frame(maxHeight: mode == .board ? .infinity : nil, alignment: .top)
+        .onChange(of: requestedTaskRename) { _, id in
+            guard let id else { return }
+            // Wait for the newly inserted row and expanded group to be laid out.
+            DispatchQueue.main.async {
+                guard detailState.selection == id else { return }
+                scroll.scrollTo(id)
+            }
+        }
+        }
     }
     private func sectionList(_ list: TaskList, tasks: [TaskItem], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
         let pinned = PinnedGrouping.partition(tasks)
@@ -1615,7 +1628,7 @@ struct WorkspaceView: View {
     private func taskListRows(_ items: [TaskItem], overlay: Bool, now: Date, paneWidth: CGFloat) -> some View {
         let groupIDs = items.map(\.id)
         return ForEach(TaskHierarchy.listRows(items, collapsed: collapsedSubtasks), id: \.task.id) { row in
-            taskRow(row, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth)
+            taskRow(row, groupIDs: groupIDs, overlay: overlay, now: now, paneWidth: paneWidth).id(row.task.id)
         }
     }
 
@@ -1677,6 +1690,18 @@ struct WorkspaceView: View {
                     if let id = store.addSubtask(to: task.id, title: "New subtask") {
                         collapsedSubtasks.remove(task.id)
                         selectTask(id)
+                        let now = Date()
+                        let visible = filteredTasks(now: now)
+                        if visible.contains(where: { $0.id == id }) {
+                            for group in grouped(visible, now: now) where group.tasks.contains(where: { $0.id == id }) {
+                                collapsed.remove(group.id)
+                            }
+                            if let list = activeList, !list.sections.isEmpty, taskGrouping == .standard,
+                               let key = TaskRowRenamePolicy.sectionKey(for: id, visible: visible, list: list, data: store.data) {
+                                collapsed.remove(key)
+                            }
+                            requestedTaskRename = id
+                        }
                     }
                 }
                 if task.parentID != nil {
@@ -1937,6 +1962,8 @@ private extension WorkspaceView {
         // selection; the drag source lives on the grip only. Tapping the grip
         // selects in manual mode and reports the sorted-mode notice otherwise.
         return TaskRow(store: store, id: task.id, selection: $detailState.selection, now: now, listContext: listContext(for: task), paneWidth: paneWidth, showPreview: showDetailsPreview, showSteps: showChecklistItems, allowRename: sidePeekMode || !overlay, dueDisplayCalendar: taskGrouping == .dueDate ? store.settings.calendar : nil, readOnly: readOnly, depth: row.depth, subtaskDisclosure: disclosure,
+                       requestedRenameID: requestedTaskRename,
+                       onRequestedRenameHandled: { if requestedTaskRename == task.id { requestedTaskRename = nil } },
                        onInlineRenameChanged: { active in
             if active { inlineTaskRenames.insert(task.id) } else { inlineTaskRenames.remove(task.id) }
         }, gripActive: interactive, onGripActivate: interactive ? {

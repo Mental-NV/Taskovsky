@@ -203,6 +203,7 @@ A row with children nested in its current group has a 12 × 24 disclosure button
 Interactions:
 
 - Single click selects. Checkbox/checklist clicks avoid selecting the row by consuming only that click.
+- After successful row-menu Add Subtask, a child included in the current list projection is revealed and requested for inline title editing once. Explicit creation focus is independent of the Pop-up double-click route; excluded children do not change filters or destinations. The existing default title and Escape semantics remain unchanged. [Bounded contract](../changes/subtask-inline-focus-2026-11-13.md).
 - Double-click title starts inline rename unless the narrow Pop-up route owns double-click. Return or focus loss commits a changed nonempty trimmed value; Escape exits without saving the draft. An accessibility Rename action follows the same permission checks.
 - Trash disables completion and rename. Archived list rows also disable checklist edits and drag while retaining selection. Archived context menus retain an explicit Move to Inbox/active-list escape hatch.
 - Active task menu offers completion/reopen, Won't Do, pin (only active), priority, move, duplicate, save template, add subtask, make subtask of a valid same-list parent, move to top level, and trash. Notes omit completion/subtask actions. Trash menus offer Restore/Delete Forever.

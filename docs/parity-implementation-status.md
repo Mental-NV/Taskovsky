@@ -224,3 +224,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### Full Search All Dates reset correction
 
 [SEARCH-DATE-003](changes/search-all-dates-reset-2026-11-13.md) fixes the unrestricted date sentinel coexisting with specific choices and neutralizing them. Search All Dates is now a true reset; source-backed correction, not a claim of reference combination semantics. Native/CI gates pending.
+
+### TT-005 bounded creation-focus follow-up
+
+The [Mac inline-focus candidate](changes/subtask-inline-focus-2026-11-13.md) addresses the row-menu creation-to-edit gap only for a child included in the current list projection. Automatic next-child chaining and blank-title cleanup are not implemented; existing child creation semantics remain. Native acceptance and final checks are pending.
