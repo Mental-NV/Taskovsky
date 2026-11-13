@@ -1680,6 +1680,7 @@ struct WorkspaceView: View {
             Menu("Priority") { ForEach(TaskPriority.allCases, id: \.self) { value in Button(value.label) { var t = task; t.priority = value; store.updateTask(t) } } }
             Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
             taskSectionMoveMenu(task)
+            TaskRowTagMenu(store: store, taskID: task.id)
             if CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) {
                 Button("Skip this occurrence…") { occurrenceSkip = TaskOccurrenceSkipRequest(task) }
             }

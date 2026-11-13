@@ -228,3 +228,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### TT-005 bounded creation-focus follow-up
 
 The [Mac inline-focus candidate](changes/subtask-inline-focus-2026-11-13.md) addresses the row-menu creation-to-edit gap only for a child included in the current list projection. Automatic next-child chaining and blank-title cleanup are not implemented; existing child creation semantics remain. Native acceptance and final checks are pending.
+
+### Tasks row tag assignment
+
+The [row Tags menu](changes/task-row-tags-2026-11-13.md) closes functional reachability for assigning existing tags without a detail-panel detour. TickTick submenu geometry/contents remain unobserved; native interaction acceptance is separate from the passed policy tests.

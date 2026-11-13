@@ -2002,3 +2002,7 @@ The [bounded mobile date selection change](../changes/mobile-date-all-selection-
 ## Add Subtask inline focus — November 13, 2026
 
 Isolated from main `993679c`. [Change contract](../changes/subtask-inline-focus-2026-11-13.md). Candidate adds one-shot selected-row focus, reveal and scroll after successful visible child creation. Automated full tests/release, independent review, hosted CI and native keyboard/scroll/interruption checks pending. No screenshot or parity completion claim.
+
+## Tasks row tag menu — November 13, 2026
+
+[Bounded contract](../changes/task-row-tags-2026-11-13.md), based on main `7148337`. Candidate adds functional reachability for tag assignment from row context menu, not observed submenu geometry parity. 819 XCTest +38 Swift Testing, release build/strict signature and independent source review passed. Native target/checkmark/filtered disappearance/locked cases and exact-head CI pending; no screenshot.
