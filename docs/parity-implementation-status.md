@@ -186,4 +186,4 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 
 ## Minimum-height Calendar outline follow-up (draft)
 
-A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-11-12.md) passed isolated dark rendering. Final-source tests/review and native interaction verification remain pending. This does not close full Calendar parity or PR65 focus gaps.
+A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-11-12.md) passed isolated dark rendering. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark-theme interaction is explicitly deferred per the user's November 13 light-only direction. This does not close full Calendar parity or PR65 focus gaps.
