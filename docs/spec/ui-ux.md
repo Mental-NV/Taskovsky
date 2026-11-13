@@ -1,5 +1,7 @@
 # macOS UI and interaction specification
 
+**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](../changes/light-theme-priority-2026-11-13.md).
+
 <a id="ux-001"></a>
 
 ## UX-001 — Authority, scope, and evidence
@@ -248,7 +250,7 @@ The first reminder appears in an 11-point row with `bell`, day/time, optional to
 
 Tags are 11-point `#name` colored capsules with horizontal 8/vertical 5 padding and color 0.08 background. Clicking removes an unlocked tag. A 12-point `number` button opens a 300-wide/padding-24 tag picker, native checkboxes, recursive hierarchy, new-tag field, and Create & add. Recursive leading padding is `depth × 16` at each nested view. These are fixed horizontal stacks, not a documented wrapping layout.
 
-The progress bar sits under the schedule header and shows the whole-number percentage. With a checklist it follows the checked items. For an editable task without a checklist, click the bar to open a slider and one-point stepper with Cancel and Done. Escape discards the draft. [Progress behavior](../changes/task-progress-2026-11-10.md).
+The progress surface is the thin separator under the schedule header, not a permanent row. Its percentage appears on hover, keyboard focus or while its editor is open. Zero progress leaves only the separator visible; nonzero progress paints an accent segment. [Contextual detail controls](../changes/mac-detail-contextual-controls-2026-11-13.md). With a checklist it follows the checked items. For an editable task without a checklist, click the bar to open a slider and one-point stepper with Cancel and Done. Escape discards the draft. [Progress behavior](../changes/task-progress-2026-11-10.md).
 
 Checklist and subtasks are distinct:
 
@@ -275,7 +277,7 @@ Rendering tokens:
 - Code blocks use the monospaced font, local code wash and 10-point inset. Read Description offers one Copy Code Block button per visible block, in document order.
 - List first/wrapped lines reserve at least 24 points; decimal runs use the widest 13-point number label plus four points of trailing clearance, rounded upward, on every item in the run. The presentation-only gutter recomputes after render/edit/Undo and shrinks with the run. Bullet/checklist geometry is unchanged. Quote indent is 16 with a two-point bar. Bullets/numbers/checks/quote gutters are drawn decorations, not literal prefixes stored in body text. Numbering restarts after a nonnumbered paragraph. Horizontal rules are marked empty paragraphs with paragraph spacing 6 before and after. Click a checkbox in the first-line gutter to toggle that item through the editor’s Undo history. The checklist menu offers explicit checked and unchecked actions for keyboard use. [Checkbox verification](verification.md#rich-checklist-toggle).
 
-Toolbar horizontally scrolls, hides indicators, uses spacing 2/vertical padding 2. Standard tool glyphs are 13 in 26 × 24 frames, radius 5 active background at `accentColor` 0.16; active foreground accent, inactive secondary. Dividers are 16 high. Heading is 12 semibold. Disabled toolbar opacity is 0.5, although locked detail omits the toolbar entirely.
+The formatting toolbar is collapsed by default and toggled by the labeled `textformat` footer button. When expanded it sits above the footer, outside the detail ScrollView. Task selection changes and locked detail collapse it. Editor-owned ⌘B/⌘I/⌘U work without the toolbar. Toolbar horizontally scrolls, hides indicators, uses spacing 2/vertical padding 2. Standard tool glyphs are 13 in 26 × 24 frames, radius 5 active background at `accentColor` 0.16; active foreground accent, inactive secondary. Dividers are 16 high. Heading is 12 semibold. Disabled toolbar opacity is 0.5, although locked detail omits the toolbar entirely.
 
 Ordered tools: `bold` (⌘B), `italic` (⌘I), `underline` (⌘U), `strikethrough`; heading None/H1…H6; `link`; `highlighter` with a separate Highlight Colors menu; `chevron.left.forwardslash.chevron.right` (inline code); `curlybraces` (Code Block); `text.quote`; `list.bullet`; `list.number`; `checklist` menu (Checklist / Mark Checked / Mark Unchecked); `eraser` (clear formatting); `minus` (horizontal rule). Link popover is width 300/padding 14/spacing 10; URL field width 260; Remove when applicable, Cancel, Apply disabled for empty trimmed URL.
 
@@ -331,7 +333,9 @@ Results are grouped Tasks (first five), Lists/Tags/Filters (first eight each). T
 
 Up/Down move a bounded selection and scroll it into view. Return opens selection; without selection it opens full results. View more also opens full results. Recent-term selection fills the query. The footer says “Press Return to see all results.” Closing dismisses; full search close routes to Inbox.
 
-Full Search replaces center content and hides the docked sidebar. Selected results open detail without removing query/results. It has padding 28; 20-bold heading or editable rounded search field (max 350); close, pencil and Save as Filter (disabled for empty trimmed query). Criteria row scrolls horizontally, spacing 18: dates, lists including Inbox, tags with Any/All/No Tags/Any Tag, task/note kinds, status. Custom range adds From/To enabled date bounds and an explanatory prompt if neither is set. Results use vertical padding 20/spacing 4. “No results found” has top padding 50. It uses saved-filter eligibility, unlike the quick dialog's broader nondeleted task lookup.
+Full Search replaces center content and hides the docked sidebar. Selected results open detail without removing query/results. It has padding 28; 20-bold heading or editable rounded search field (max 350); close, pencil and Save as Filter (disabled for empty trimmed query). Criteria row scrolls horizontally, spacing 18: dates, lists including Inbox, tags with Any/All/No Tags/Any Tag, task/note kinds, status. Custom opens a staged Due from/Due to popover. Confirm requires at least one bound and atomically applies the draft; Cancel/Escape/outside dismissal discards. An applied Custom range can be reopened or explicitly removed without changing other date rules. See [SEARCH-DATE-001](../changes/search-staged-custom-range-2026-11-13.md). The isolated [keyboard-access follow-up](../changes/search-date-keyboard-access-2026-11-13.md) uses native form controls and an explicit local key-view loop; native acceptance remains separate. Results use vertical padding 20/spacing 4. “No results found” has top padding 50. It uses saved-filter eligibility, unlike the quick dialog's broader nondeleted task lookup.
+
+Full-search Tags now uses a staged 280pt popover with a maximum 340pt scroll region. All clears IDs; No Tags/Any Tag and Any selected/All selected preserve the existing matching policy and inactive IDs. OK/Return applies, Cancel/Escape/outside dismissal discards. Tab/Shift-Tab and Space follow the Lists picker convention. These are Taskovsky presentation rules; TickTick multi-tag matching remains unverified. See [SEARCH-TAGS-001](../changes/search-staged-tags-2026-11-13.md).
 
 Filter editor: width 520/padding 24/spacing 16, title 18 bold, name field, Normal/Advanced segments. Normal grouped form is height 300: keyword, multi-list/tag/priority/date/type, status, inclusive custom range. Missing referenced lists/tags stay selected as Unavailable rather than being silently removed. Saving a name-only edit must not broaden dead-reference intent.
 
@@ -413,7 +417,7 @@ These are **not** a conformance claim. Review/validation gaps to carry into late
 2. Many controls have help text but not explicit labels/selected/value traits. Verify VoiceOver announcements for status, tags, heading/checklist mode, template icons, and nested structures. SF-symbol fallback names are not guaranteed to be meaningful spoken names.
 3. Sidebar focus effects are explicitly disabled. Verify visible keyboard focus and predictable focus restoration after dismissing sheets, changing detail presentation, or navigating parent/child tasks.
 4. Fixed typography, one-line clipped titles, narrow cards, fixed dialog widths/heights, horizontal tag stacks, and recursively accumulated indentation need large-text, long-name, localization, and RTL checks. No Dynamic Type implementation is established by this macOS source.
-5. Literal pale/gray text, color-coded priorities and tags, completion fill/white ticks, and overlays need measured light/dark/Increase Contrast checks. No numeric contrast compliance is claimed.
+5. Literal pale/gray text, color-coded priorities and tags, completion fill/white ticks, and overlays need measured light-appearance and Increase Contrast checks for the active milestone. Dark-appearance checks are deferred by the November 13 scope decision. No numeric contrast compliance is claimed.
 6. Toast timing/announcements and error banners need screen-reader and slow-interaction checks. The source uses a five-second timer; there is no documented persistent action history or adjustable timeout UI.
 7. Custom drawing of rich list markers/quotes/rules does not itself prove accessible list structure. Inspect native text selection, IME, keyboard, dictation, pasted Unicode, and VoiceOver navigation separately.
 8. Explicit animations respect Reduce Motion where coded, but native popover/sheet/hover behavior remains OS-controlled. Do not infer reduced motion coverage from one environment flag.
@@ -484,11 +488,11 @@ Sources: [TaskCalendarWorkspace](../../Sources/Taskovsky/TaskCalendarWorkspace.s
 
 In the Mac List Colors sheet, a named-list swatch opens a palette and hex entry. Apply saves the shared list color for Tasks and Calendar. A row with a saved Calendar override instead offers **Use List Color**. **Save Calendar Changes** and **Cancel Calendar Changes** apply to staged Calendar overrides. A shared color already saved with Apply remains saved when closing the sheet. [Shared Mac list colors](../changes/mac-calendar-shared-list-color-2026-11-12.md).
 
-**State coverage.** Check empty ranges and Arrange, no selected filters, dense overlaps/overflow, completed/Won't Do visibility, notes, current checklist completion and read-only forecasts, truncated recurrence notice, invalid ranges, Cancel/dismissal, unchanged Save, point-to-range conversion, stale Undo, and both compact overlays. Repeat keyboard, VoiceOver, dark/high-contrast, narrow/large-text and interrupted gesture checks rather than extrapolating from one screenshot.
+**State coverage.** Check empty ranges and Arrange, no selected filters, dense overlaps/overflow, completed/Won't Do visibility, notes, current checklist completion and read-only forecasts, truncated recurrence notice, invalid ranges, Cancel/dismissal, unchanged Save, point-to-range conversion, stale Undo, and both compact overlays. Repeat keyboard, VoiceOver, light-theme/high-contrast, narrow/large-text and interrupted gesture checks rather than extrapolating from one screenshot. Dark-theme parity and native interaction checks are deferred for this milestone.
 
 **Local visual follow-up.** The approved [CAL-VIS-001 change](../changes/calendar-visual-parity-2026-11-08.md) implements the geometry above on an uncommitted working tree based on `f85e2f6`. The [dated comparison](../calendar-visual-parity-audit-2026-11-08.md) and [verification record](verification.md#calendar-visual-follow-up) distinguish matched light-appearance captures, debug sizing checks and signed-release behavior from remaining functional/visual gaps. This is closer visual alignment, not a pixel-perfect or complete-parity claim. Historical evidence below remains historical.
 
-**Latest local follow-up.** [CAL-FILTER-001](../changes/calendar-filters-2026-11-09.md) and [CAL-DISPLAY-002](../changes/calendar-documented-navigation-zones-2026-11-09.md) correct source selection, Year navigation and four-zone capacity. The [dated evidence comparison](../tasks-calendar-comparison-2026-11-09.md) and [verification](verification.md#calendar-source-follow-up) record 485 tests, final signed release, seven-view scope, compact source controls/four rulers, persistence and empty/stale recovery. Historical statements below retain their original scope; current dark/contrast/reduced-motion/VoiceOver and later-column DST checks remain open.
+**Latest local follow-up.** [CAL-FILTER-001](../changes/calendar-filters-2026-11-09.md) and [CAL-DISPLAY-002](../changes/calendar-documented-navigation-zones-2026-11-09.md) correct source selection, Year navigation and four-zone capacity. The [dated evidence comparison](../tasks-calendar-comparison-2026-11-09.md) and [verification](verification.md#calendar-source-follow-up) record 485 tests, final signed release, seven-view scope, compact source controls/four rulers, persistence and empty/stale recovery. Historical statements below retain their original scope; contrast/reduced-motion/VoiceOver and later-column DST checks remain open; Dark-theme verification is deferred by the November 13 scope decision.
 
 The recurring Calendar Schedule editor offers Skip this occurrence when the shared series rules yield a next date. The staged view has Keep editing, Cancel and Save. Save advances the open task and offers schedule Undo. Timeline uses the same editor. [Skip occurrence verification](verification.md#calendar-skip-occurrence).
 
@@ -512,3 +516,18 @@ Mac completion sound/success feedback and trash/restore feedback follow accepted
 ### Schedule save failure
 
 Mac schedule OK and Clear keep the popover and all staged fields on rejection, displaying an inline red 11-point message above the footer. Successful acknowledgement dismisses it. Cancel/Escape remains deliberate discard. A stale task requires reopening; failure never silently rebases the opening snapshot. [Contract](../changes/schedule-editor-persistence-2026-11-12.md).
+
+### Mac temporary feedback lifetime
+
+Calendar, Tasks Timeline and grouped Board success/Undo feedback, Summary save acknowledgment and description-reader copied label expire after five seconds. Repeated events restart the interval; stale timers cannot dismiss newer feedback. Errors remain actionable until dismissal/replacement. This uses Taskovsky's established completion-toast duration, not a measured TickTick timing. See [lifetime change](../changes/mac-feedback-lifetime-2026-11-13.md).
+
+## Pending minimum-height timed card correction
+
+The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark interaction remains unverified and deferred per the user's November 13 light-only direction. Other compact cards are unchanged.
+
+### Mac full Search list selector
+
+The [staged list tree](../changes/search-list-tree-2026-11-13.md) replaces the flat
+immediate All Lists menu. Folder rows disclose children and report mixed explicit
+selection. Only OK changes active results; Cancel/dismissal discards the draft.
+Empty selection remains All. Geometry is a Taskovsky choice, not exact TickTick parity.

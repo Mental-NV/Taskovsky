@@ -69,6 +69,7 @@ let package = Package(
         .target(name: "TaskovskyClipboard", dependencies: ["TaskovskyDomain"]),
         .target(name: "TaskovskyCore", dependencies: ["TaskovskyDomain", "TaskovskyWorkspace"], exclude: domainSources),
         .executableTarget(name: "Taskovsky", dependencies: ["TaskovskyCore", "TaskovskyClipboard"]),
+        .testTarget(name: "TaskovskyMacTests", dependencies: ["Taskovsky"]),
         .testTarget(name: "TaskovskyCoreTests", dependencies: ["TaskovskyCore", "TaskovskyClipboard"]),
         .testTarget(name: "TaskovskyDomainTests", dependencies: ["TaskovskyDomain"]),
         .testTarget(name: "TaskovskyWorkspaceTests", dependencies: ["TaskovskyDomain", "TaskovskyWorkspace"])

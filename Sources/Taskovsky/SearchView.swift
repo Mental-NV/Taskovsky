@@ -104,6 +104,9 @@ struct SearchPane: View {
     @State private var customTo = Date()
     @State private var hasCustomTo = false
     @State private var saveFilter = false
+    @State private var pickingLists = false
+    @State private var pickingTags = false
+    @State private var pickingCustomDates = false
     init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onComplete: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
         self.onClose = onClose; self.onComplete = onComplete
         self.store = store; self.initialQuery = initialQuery; self.onSelectTask = onSelectTask; self.onSelectList = onSelectList; self.onSelectFilter = onSelectFilter; self.onSelectTag = onSelectTag
@@ -132,13 +135,18 @@ struct SearchPane: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
                     dateMenu
-                    multiMenu(listIDs.isEmpty ? "All Lists" : "Lists (\(listIDs.count))", entries: [(TaskFilter.inboxListID, "Inbox")] + store.data.lists.map { ($0.id, $0.name) }, selection: $listIDs)
+                    Button { pickingLists = true } label: { menuLabel(listIDs.isEmpty ? "All Lists" : "Lists (\(listIDs.count))") }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $pickingLists, arrowEdge: .bottom) {
+                            SearchListPicker(lists: store.data.lists, folders: store.data.folders, selection: listIDs,
+                                onApply: { listIDs = $0; pickingLists = false },
+                                onCancel: { pickingLists = false })
+                        }
                     tagMenu
                     kindMenu
                     valueMenu(statusLabel, options: [("All Status", .all), ("Uncompleted", .active), ("Completed", .completed), ("Won't Do", .wontDo)], selection: $status)
                 }
             }.padding(.bottom, 16)
-            if dateRules.contains(.custom) { customRangeRow.padding(.bottom, 12) }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
@@ -162,24 +170,33 @@ struct SearchPane: View {
     private var dateMenu: some View {
         Menu {
             ForEach(FilterDateRule.allCases, id: \.self) { rule in
-                Button { toggle(rule, in: $dateRules) } label: {
+                Button { if rule == .custom { pickingCustomDates = true } else { toggle(rule, in: $dateRules) } } label: {
                     if dateRules.contains(rule) { Label(rule.label, systemImage: "checkmark") } else { Text(rule.label) }
                 }
             }
-        } label: { menuLabel(dateRules.isEmpty ? "All Dates" : dateRules.count == 1 ? dateRules.first!.label : "Dates (\(dateRules.count))") }
-    }
-    private var tagMenu: some View {
-        Menu {
-            Picker("Match", selection: $tagMode) { ForEach(FilterTagMode.allCases, id: \.self) { Text($0.label).tag($0) } }
-            if tagMode == .any || tagMode == .all {
+            if dateRules.contains(.custom) {
                 Divider()
-                ForEach(store.data.tags) { tag in
-                    Button { toggle(tag.id, in: $tagIDs) } label: {
-                        if tagIDs.contains(tag.id) { Label(tag.name, systemImage: "checkmark") } else { Text(tag.name) }
-                    }
-                }
+                Button("Remove Custom Range") { dateRules.remove(.custom) }
             }
-        } label: { menuLabel(tagLabel) }
+        } label: { menuLabel(dateRules.isEmpty ? "All Dates" : dateRules.count == 1 ? dateRules.first!.label : "Dates (\(dateRules.count))") }
+            .popover(isPresented: $pickingCustomDates, arrowEdge: .bottom) {
+                SearchCustomDatePicker(from: customFrom, hasFrom: hasCustomFrom, to: customTo, hasTo: hasCustomTo,
+                    onApply: { draft in
+                        customFrom = draft.from; hasCustomFrom = draft.hasFrom
+                        customTo = draft.to; hasCustomTo = draft.hasTo
+                        dateRules.insert(.custom); pickingCustomDates = false
+                    }, onCancel: { pickingCustomDates = false })
+            }
+    }
+
+    private var tagMenu: some View {
+        Button { pickingTags = true } label: { menuLabel(tagLabel) }
+            .buttonStyle(.plain)
+            .popover(isPresented: $pickingTags, arrowEdge: .bottom) {
+                SearchTagPicker(tags: store.data.tags, ids: tagIDs, mode: tagMode,
+                    onApply: { tagIDs = $0.ids; tagMode = $0.mode; pickingTags = false },
+                    onCancel: { pickingTags = false })
+            }
     }
     private var tagLabel: String {
         switch tagMode {
@@ -199,13 +216,6 @@ struct SearchPane: View {
             }
         } label: { menuLabel(kinds.isEmpty ? "All Types" : kinds.count == 2 ? "All Types" : kinds.contains(.task) ? "Tasks" : "Notes") }
     }
-    private var customRangeRow: some View {
-        HStack(spacing: 16) {
-            HStack { Toggle("From", isOn: $hasCustomFrom); DatePicker("", selection: $customFrom, displayedComponents: .date).labelsHidden().disabled(!hasCustomFrom) }
-            HStack { Toggle("To", isOn: $hasCustomTo); DatePicker("", selection: $customTo, displayedComponents: .date).labelsHidden().disabled(!hasCustomTo) }
-            if !hasCustomFrom, !hasCustomTo { Text("Pick at least one bound.").font(.caption).foregroundStyle(.secondary) }
-        }.font(.system(size: 13))
-    }
     private func toggle<T: Hashable>(_ value: T, in binding: Binding<Set<T>>) {
         if binding.wrappedValue.contains(value) { binding.wrappedValue.remove(value) } else { binding.wrappedValue.insert(value) }
     }
@@ -214,14 +224,7 @@ struct SearchPane: View {
     private func valueMenu<T: Equatable>(_ label: String, options: [(String, T)], selection: Binding<T>) -> some View {
         Menu { ForEach(Array(options.enumerated()), id: \.offset) { _, option in Button { selection.wrappedValue = option.1 } label: { if selection.wrappedValue == option.1 { Label(option.0, systemImage: "checkmark") } else { Text(option.0) } } } } label: { menuLabel(label) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
     }
-    private func multiMenu(_ label: String, entries: [(UUID, String)], selection: Binding<Set<UUID>>) -> some View {
-        Menu {
-            Button("All") { selection.wrappedValue.removeAll() }
-            ForEach(entries, id: \.0) { id, name in
-                Button { if selection.wrappedValue.contains(id) { selection.wrappedValue.remove(id) } else { selection.wrappedValue.insert(id) } } label: { if selection.wrappedValue.contains(id) { Label(name, systemImage: "checkmark") } else { Text(name) } }
-            }
-        } label: { menuLabel(label) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
-    }
+
 }
 
 struct SearchDialog: View {

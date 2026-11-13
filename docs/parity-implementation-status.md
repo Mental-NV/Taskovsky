@@ -1,5 +1,7 @@
 # TickTick feature parity tracker
 
+**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](changes/light-theme-priority-2026-11-13.md).
+
 This is the **canonical progress tracker** for Taskovsky's feature comparison with TickTick. It is separate from the [Taskovsky business specification](spec/business.md), [UI/UX specification](spec/ui-ux.md), and [TickTick research notes](ticktick-spec/README.md). Use it to decide what exists, what differs, what still needs evidence, and what belongs to a later implementation task.
 
 For current integrated code, use the [current baseline index](current-baseline.md) and latest source. The following November 8 snapshot and display follow-up are historical; later feature rows/verification records include merged Mac and iPhone implementation. This correction is not a new full parity audit.
@@ -183,3 +185,34 @@ A [pure local reminder planning foundation](changes/local-reminder-plan-2026-11-
 ### Persistence follow-up: Mac schedule writes
 
 [CAL-SAVE-017](changes/calendar-lossless-save-2026-11-12.md) addresses reproduced local data preservation defects, not a new TickTick parity claim. Calendar commands/Undo and explicit Schedule Save/Clear preserve unrelated raw data and refuse stale independent-store baselines. Hosted verification passed as recorded in the [ledger](spec/verification.md#calendar-lossless-save); iPhone views and scheduling policy are unchanged.
+
+## Minimum-height Calendar outline follow-up (draft)
+
+A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-11-12.md) passed isolated dark rendering. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark-theme interaction is explicitly deferred per the user's November 13 light-only direction. This does not close full Calendar parity or PR65 focus gaps.
+
+## Mac contextual detail controls — November 13
+
+The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.
+
+### Feedback lifetime correction — November 13
+
+Mac Calendar/Timeline/grouped Board schedule success no longer remains indefinitely; Summary saved and reader copied acknowledgment share the same bounded lifetime. Actionable errors remain persistent. This is a Taskovsky usability correction with automated tests, not proof of TickTick's exact timeout. See [audit and evidence](changes/mac-feedback-lifetime-2026-11-13.md).
+
+### iPhone feedback lifetime correction — November 13, 2026
+
+The [temporary feedback change](changes/phone-feedback-lifetime-2026-11-13.md) covers iPhone Calendar/Tasks scheduling, lifecycle, capture and batch successes with identity-safe expiry; errors remain actionable. Timing is a Taskovsky policy, not measured TickTick parity. Verification is recorded separately.
+
+### Full Search list tree — local November 13 follow-up
+
+The Mac All Lists selector has a staged folder/list draft with OK/Cancel and mixed
+folder indicators, based on retained reference observation. [Verification/limits](changes/search-list-tree-2026-11-13.md).
+Native AX lifecycle/keyboard/scrolling verification passed; published as PR #74; hosted
+Mac compiler correction pending. This is not a full Search or exact visual parity claim.
+
+### Full Search staged tags follow-up
+
+[SEARCH-TAGS-001](changes/search-staged-tags-2026-11-13.md) closes the source-level immediate tag-menu gap for TT-023/TT-024 with a disposable OK/Cancel draft. Existing matching policies stay unchanged. Native interaction, final CI and actual visual parity are separate acceptance gates; implementation is not yet merged.
+
+### Full Search staged custom-date follow-up
+
+[SEARCH-DATE-001](changes/search-staged-custom-range-2026-11-13.md) replaces immediate inline bound edits with a cancelable popover and disabled empty Confirm, following the retained reference interaction. Existing inclusive matcher and date-rule combinations are preserved, not claimed reference-equivalent. Native/CI gates remain pending; not yet merged.

@@ -8,6 +8,10 @@ Record the base commit, branch and clean/dirty state. Read the relevant business
 
 For a documentation alignment task, read code to establish current behavior. For a future feature, keep the current baseline distinct from the requested outcome. A source defect belongs in the deviation ledger, not in an silently rewritten requirement.
 
+## Current appearance priority
+
+For the current Tasks/Calendar milestone, use the [November 13 light-theme scope decision](../changes/light-theme-priority-2026-11-13.md). Dark-mode parity and native Dark-mode QA are deferred. Preserve existing appearance support and historical evidence; do not mark deferred cases passed or use this scope change to waive affected light-theme, behavior, accessibility, review or automated-test gates.
+
 ## 2 Define one bounded change
 
 Copy the [change template](change-template.md) into `docs/changes/<short-feature-name>.md` when work is requested. Assign a stable change ID and link affected `BUS`, `UX`, component and parity IDs. The proposal must state:

@@ -5516,6 +5516,27 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(card.exists)
     }
 
+    @MainActor func testTimelineSuccessFeedbackExpiresWithoutUndoingSchedule() {
+        let app = launch(qaCase: "all-day-spans")
+        goTo("Work", in: app)
+        app.segmentedControls["listViewMode"].buttons["Timeline"].tap()
+        let move = app.buttons["Move Three-day workshop"]
+        XCTAssertTrue(move.waitForExistence(timeout: 5))
+        let before = move.frame.minX
+        let grip = move.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        grip.press(forDuration: 0.06, thenDragTo: grip.withOffset(CGVector(dx: 36, dy: 0)))
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        XCTAssertTrue(app.buttons["undoCalendarSchedule"].exists)
+        attach(app, "Phone schedule feedback before automatic dismissal")
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: notice)
+        XCTAssertEqual(XCTWaiter.wait(for: [gone], timeout: 9), .completed)
+        XCTAssertFalse(app.buttons["undoCalendarSchedule"].exists)
+        XCTAssertEqual(move.frame.minX, before + 36, accuracy: 3)
+        attach(app, "Phone schedule feedback dismissed; schedule retained")
+    }
+
     @MainActor func testTimelineMovesResizesAndCapturesOnTheAxis() {
         let app = launch(qaCase: "all-day-spans")
         goTo("Work", in: app)
