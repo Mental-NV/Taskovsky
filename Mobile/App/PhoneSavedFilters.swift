@@ -216,7 +216,27 @@ struct PhoneNormalFilterFields: View {
                 choices("Priority", values: $draft.priorities, options: TaskPriority.allCases.map { ($0, $0.phoneLabel) })
             }
             choices("Type", values: $draft.kinds, options: [(.task, "Tasks"), (.note, "Notes")])
-            choices("Dates", values: $draft.dateRules, options: FilterDateRule.allCases.map { ($0, $0.label) })
+            dateChoices
+        }
+    }
+
+    private var dateChoices: some View {
+        NavigationLink {
+            List(FilterDateRule.allCases, id: \.self) { rule in
+                let selected = rule == .all ? draft.dateRules.isEmpty || draft.dateRules.contains(.all) : draft.dateRules.contains(rule)
+                Button {
+                    draft.dateRules = DateRuleSelection.togglingArray(rule, in: draft.dateRules)
+                } label: {
+                    HStack {
+                        Text(rule.label)
+                        Spacer()
+                        if selected { Image(systemName: "checkmark") }
+                    }.frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("dateRule-" + rule.rawValue)
+            }.navigationTitle("Dates")
+        } label: {
+            LabeledContent("Dates", value: draft.dateRules.isEmpty || draft.dateRules.contains(.all) ? "Any" : "\(draft.dateRules.count) selected")
         }
     }
 
