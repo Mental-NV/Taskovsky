@@ -275,6 +275,7 @@ struct WorkspaceView: View {
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var inlineTaskRenames: Set<UUID> = []
     @State private var requestedTaskRename: UUID?
+    @State private var rowScheduleID: UUID?
     @State private var collapsed: Set<String> = []
     @State private var editor: EntityEditor?
     @State private var sectionEditor: TaskList?
@@ -646,6 +647,7 @@ struct WorkspaceView: View {
             }
         }
         .onChange(of: destination) { _, _ in
+            rowScheduleID = nil
             requestedTaskRename = nil
             sectionCaptureID = nil
             if let task = selectedTask, !destination.includes(task, data: store.data) { detailState.clear() }
@@ -1681,6 +1683,11 @@ struct WorkspaceView: View {
             Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
             taskSectionMoveMenu(task)
             TaskRowTagMenu(store: store, taskID: task.id)
+            if TaskRowScheduleTarget.resolve(task.id, in: store.data) != nil {
+                Button("Schedule…") {
+                    rowScheduleID = TaskRowScheduleTarget.resolve(task.id, in: store.data)?.id
+                }
+            }
             if CalendarScheduling.canSkipCurrentOccurrence(task, in: store.data.tasks, calendar: store.settings.calendar) {
                 Button("Skip this occurrence…") { occurrenceSkip = TaskOccurrenceSkipRequest(task) }
             }
@@ -1974,6 +1981,7 @@ private extension WorkspaceView {
             .modifier(TaskRowDragDrop(id: task.id, title: task.title, active: interactive, onReorder: { ids, target, after in _ = acceptTaskReorder(ids, before: target, after: after, group: groupIDs) }))
             .environment(\.showsTaskCountdown, showsTaskCountdown && canShowTaskCountdown)
             .contextMenu { taskMenu(task) }
+            .modifier(TaskRowSchedulePresentation(store: store, taskID: task.id, requestedID: $rowScheduleID))
     }
     /// Validates and commits an in-group task reorder. Non-None sorts are
     /// rejected without mutation and surface the sorted-mode message once per

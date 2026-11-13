@@ -232,3 +232,7 @@ The [Mac inline-focus candidate](changes/subtask-inline-focus-2026-11-13.md) add
 ### Tasks row tag assignment
 
 The [row Tags menu](changes/task-row-tags-2026-11-13.md) closes functional reachability for assigning existing tags without a detail-panel detour. TickTick submenu geometry/contents remain unobserved; native interaction acceptance is separate from the passed policy tests.
+
+### Tasks row scheduling reachability
+
+The [Schedule… row entry point](changes/task-row-schedule-2026-11-13.md) reuses the existing editor for active tasks. It is a functional approximation of observed row date access, not a copy of unverified TickTick shortcut icons. Native acceptance remains separate from schedule-domain coverage.

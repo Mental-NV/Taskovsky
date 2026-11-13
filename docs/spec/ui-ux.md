@@ -560,3 +560,7 @@ Trash/archived detail tag chips remain visible but disabled, with read-only labe
 ### Row tag assignment follow-up
 
 Active Tasks list-row menus now include Tags choices using existing tag definitions and parent-qualified labels. Checked choices assign/remove only the context-clicked record; retained unknown IDs and unrelated fields remain. Trash/archived menus do not expose assignment. [Contract and evidence limits](../changes/task-row-tags-2026-11-13.md).
+
+### Row scheduling entry point
+
+Active task-row context menus include Schedule…, opening the shared staged editor anchored to that row without selecting it or depending on the detail-pane mode. Notes/history/Trash/archived rows omit this new action. [Functional approximation and acceptance limits](../changes/task-row-schedule-2026-11-13.md).
