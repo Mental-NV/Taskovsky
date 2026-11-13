@@ -72,10 +72,17 @@ struct SearchListPicker: View {
     }
     private var tree: SearchListTree { SearchListTree(lists: lists, folders: folders) }
     private var focusOrder: [SearchListFocus] {
-        [.all, .list(TaskFilter.inboxListID)] + tree.leading.map { .list($0.id) }
-        + tree.groups.flatMap { group in
-            [.folder(group.id)] + (expanded.contains(group.id) ? group.lists.map { .list($0.id) } : [])
-        } + tree.trailing.map { .list($0.id) } + [.cancel, .apply]
+        var order: [SearchListFocus] = [.all, .list(TaskFilter.inboxListID)]
+        for list in tree.leading { order.append(.list(list.id)) }
+        for group in tree.groups {
+            order.append(.folder(group.id))
+            if expanded.contains(group.id) {
+                for list in group.lists { order.append(.list(list.id)) }
+            }
+        }
+        for list in tree.trailing { order.append(.list(list.id)) }
+        order.append(contentsOf: [.cancel, .apply])
+        return order
     }
     private func advanceFocus(backwards: Bool) {
         focused = SearchListKeyboard.next(focused, in: focusOrder, backwards: backwards)
@@ -127,28 +134,40 @@ struct SearchListPicker: View {
             .onKeyPress(.escape) { onCancel(); return .handled }
     }
     private func folder(_ group: SearchListTree.Group) -> some View {
-        let isExpanded = expanded.contains(group.id)
-        let mark = draft.mark(for: group.lists.map(\.id))
-        return VStack(alignment: .leading, spacing: 2) {
-            Button {
-                focused = .folder(group.id); keyboardFocused = true
-                if isExpanded { expanded.remove(group.id) } else { expanded.insert(group.id) }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right").font(.system(size: 9)).frame(width: 14)
-                    Image(systemName: "folder").foregroundStyle(.secondary).frame(width: 16)
-                    Text(group.folder.name).lineLimit(2)
-                    Spacer(minLength: 4)
-                    Image(systemName: mark == .mixed ? "minus" : "checkmark").opacity(mark == .none ? 0 : 1)
-                }.font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 6).contentShape(Rectangle())
-            }.id(SearchListFocus.folder(group.id)).buttonStyle(.plain).background(focused == SearchListFocus.folder(group.id) ? Color.primary.opacity(0.07) : .clear)
-                .accessibilityLabel(group.folder.name + " folder")
-                .accessibilityValue((isExpanded ? "Expanded" : "Collapsed") + ", " + mark.rawValue + " explicit selection")
-                .help("Expand or collapse folder")
-            if isExpanded {
-                ForEach(group.lists) { list in leaf(list.id, name: list.name, symbol: list.symbol).padding(.leading, 22) }
+        VStack(alignment: .leading, spacing: 2) {
+            folderButton(group)
+            if expanded.contains(group.id) {
+                ForEach(group.lists) { list in
+                    leaf(list.id, name: list.name, symbol: list.symbol).padding(.leading, 22)
+                }
             }
         }
+    }
+    private func folderButton(_ group: SearchListTree.Group) -> some View {
+        let isExpanded = expanded.contains(group.id)
+        let mark = draft.mark(for: group.lists.map(\.id))
+        let target = SearchListFocus.folder(group.id)
+        return Button {
+            focused = target; keyboardFocused = true
+            if isExpanded { expanded.remove(group.id) } else { expanded.insert(group.id) }
+        } label: {
+            folderLabel(group.folder.name, isExpanded: isExpanded, mark: mark)
+        }
+        .id(target)
+        .buttonStyle(.plain)
+        .background(focused == target ? Color.primary.opacity(0.07) : Color.clear)
+        .accessibilityLabel(group.folder.name + " folder")
+        .accessibilityValue((isExpanded ? "Expanded" : "Collapsed") + ", " + mark.rawValue + " explicit selection")
+        .help("Expand or collapse folder")
+    }
+    private func folderLabel(_ name: String, isExpanded: Bool, mark: SearchListSelectionDraft.Mark) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: isExpanded ? "chevron.down" : "chevron.right").font(.system(size: 9)).frame(width: 14)
+            Image(systemName: "folder").foregroundStyle(.secondary).frame(width: 16)
+            Text(name).lineLimit(2)
+            Spacer(minLength: 4)
+            Image(systemName: mark == .mixed ? "minus" : "checkmark").opacity(mark == .none ? 0 : 1)
+        }.font(.system(size: 13)).padding(.horizontal, 10).padding(.vertical, 6).contentShape(Rectangle())
     }
     private func leaf(_ id: UUID, name: String, symbol: String?) -> some View {
         Button { focused = .list(id); keyboardFocused = true; draft.toggle(id) } label: { row(name, selected: draft.ids.contains(id), symbol: symbol) }

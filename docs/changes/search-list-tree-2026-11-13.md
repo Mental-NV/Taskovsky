@@ -1,6 +1,6 @@
 # Mac Search list selector — staged hierarchy
 
-Status: implemented and bounded native keyboard/lifecycle QA passed; publication/hosted CI pending. Scope authorized by the
+Status: implemented and bounded native keyboard/lifecycle QA passed; published as [PR #74](https://github.com/Mental-NV/Taskovsky/pull/74); hosted CI correction in progress. Scope authorized by the
 November 13 request to implement the macro-area Tasks/Calendar light-theme parity plan.
 
 ## Outcome and evidence
@@ -33,7 +33,10 @@ This is a bounded observed-pattern improvement, not exact parity certification.
   animation or system setting changes.
 - Search query/results and Save as Filter continue to use committed state only.
 
-## Verification
+## Historical verification checkpoints
+
+The following pending states describe earlier checkpoints; see passing acceptance
+recheck and hosted validation below for the current state.
 
 Five focused state/tree tests passed: isolation/cancel, empty-All behavior,
 parent marks, stale-ID preservation and stable root/folder/archive projection.
@@ -50,7 +53,7 @@ Codex stopped. Save as Filter list-ID transfer was source-reviewed but not prove
 through native AX. Screen capture remains denied; no visual screenshot, exact-fit,
 full keyboard accessibility or exact TickTick parity claim is made. Dark deferred.
 
-### Subsequent native result and source-only back-tab correction
+### Historical native result and source-only back-tab correction
 
 The completed native session for `d6702bc` verified forward Tab/Space, pointer
 selection followed by Space, Return applying only the picker, Escape discarding,
@@ -84,3 +87,13 @@ verified; Codex stopped. No screenshot was available and denied capture was not
 retried. This supersedes the pending keyboard/test gates above, not the retained
 visual/exact-reference or live VoiceOver limitations. Hosted exact-head CI is
 still required before merge.
+
+
+### Hosted compiler compatibility
+
+Initial hosted run `43407801209` passed iPhone compilation but failed Mac debug
+and release compilation under Xcode 26.3: type-check timeouts in focus-order
+concatenation and the folder view expression. This was a real compile failure,
+not a flaky-test retry. The equivalent correction uses explicitly typed append
+loops and separate folder button/label helpers, preserving hierarchy, IDs,
+actions and layout. Fresh local and exact-head hosted validation are required.
