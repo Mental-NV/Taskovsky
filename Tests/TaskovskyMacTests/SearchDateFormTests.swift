@@ -4,6 +4,25 @@ import AppKit
 
 @MainActor
 final class SearchDateFormTests: XCTestCase {
+    func testNativeControlsFitFixedPopoverContentBounds() {
+        let form = SearchDateFormView(frame: NSRect(x: 0, y: 0, width: 320, height: 174))
+        for enabled in [false, true] {
+            form.update(SearchCustomDateDraft(from: .now, hasFrom: enabled, to: .now, hasTo: enabled))
+            form.layoutSubtreeIfNeeded()
+            let controls: [NSView] = [form.fromToggle, form.fromDate, form.toToggle, form.toDate, form.cancel, form.confirm]
+            let frames = controls.map { $0.convert($0.bounds, to: form) }
+            for frame in frames {
+                XCTAssertGreaterThan(frame.width, 0)
+                XCTAssertGreaterThan(frame.height, 0)
+                XCTAssertTrue(form.bounds.contains(frame), "Control outside form: \(frame)")
+            }
+            for i in frames.indices {
+                for j in frames.indices where j > i {
+                    XCTAssertFalse(frames[i].intersects(frames[j]), "Controls overlap: \(i), \(j)")
+                }
+            }
+        }
+    }
     func testEmptyFormKeyLoopExcludesDisabledControls() {
         let form = SearchDateFormView()
         form.update(SearchCustomDateDraft(from: .distantPast, hasFrom: false, to: .distantFuture, hasTo: false))
