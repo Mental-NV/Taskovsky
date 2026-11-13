@@ -121,7 +121,7 @@ struct ScheduleEditor: View {
             row("Time", symbol: "clock", value: hasTime ? format(date, dateStyle: .none, timeStyle: .short) : "None", row: .time)
             if expanded == .time {
                 HStack {
-                    Button(hasTime ? "Remove time" : "Add time") { hasTime.toggle(); applyReminderDefault() }.buttonStyle(.borderless)
+                    Button(hasTime ? "Remove time" : "Add time") { if hasTime { hasTime = false } else if !activateUndatedTime() { hasTime = true }; applyReminderDefault() }.buttonStyle(.borderless)
                     Spacer()
                     if hasTime { DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute).labelsHidden().fixedSize() }
                 }.font(.system(size: 11)).padding(.horizontal, 8)
@@ -282,13 +282,17 @@ struct ScheduleEditor: View {
         if repeatDraft.repeatRule == .weekly { let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone; formatter.setLocalizedDateFormatFromTemplate("EEEE"); return "Weekly on " + formatter.string(from: date) }
         return repeatDraft.repeatRule.label
     }
+    @discardableResult
+    private func activateUndatedTime() -> Bool {
+        guard let seed = ScheduleTimeActivation.seed(hasDate: hasDate, now: Date(), calendar: calendar) else { return false }
+        date = seed; hasDate = true; hasTime = true; hasDuration = false
+        applyReminderDefault()
+        return true
+    }
     private func row(_ title: String, symbol: String, value: String, row: Row) -> some View {
         Button {
-            if row == .time, let seed = ScheduleTimeActivation.seed(hasDate: hasDate, now: Date(), calendar: calendar) {
-                // Opening Time is itself an explicit date choice on an undated task.
-                date = seed; hasDate = true; hasTime = true; hasDuration = false
+            if row == .time && activateUndatedTime() {
                 expanded = .time
-                applyReminderDefault()
             } else {
                 expanded = expanded == row ? nil : row
             }
