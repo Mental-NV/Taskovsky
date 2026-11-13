@@ -1963,6 +1963,8 @@ See [MOB-FEEDBACK-001](../changes/phone-feedback-lifetime-2026-11-13.md). On Nov
 
 ### Mac Search staged list tree — November 13
 
-[Change record](../changes/search-list-tree-2026-11-13.md). Focused state/tree tests
-pass; native presentation lifecycle, full suite and release remain pending. No
-screen capture or exact visual-parity claim. Matching and archive rules are unchanged.
+[Change record](../changes/search-list-tree-2026-11-13.md). Seven focused state/tree/key tests and full 782 XCTest + 38 Swift Testing tests
+passed at source `bbe60b9`; signed release and independent review passed. Native
+AX lifecycle, forward/reverse keyboard routing and 24-list scrolling passed. QA
+restored and Codex stopped. No screenshot, live VoiceOver or exact visual-parity
+claim. Matching/archive rules unchanged. Hosted exact-head CI remains required.

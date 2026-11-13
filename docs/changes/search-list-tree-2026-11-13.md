@@ -1,6 +1,6 @@
 # Mac Search list selector — staged hierarchy
 
-Status: implemented locally; native verification pending. Scope authorized by the
+Status: implemented and bounded native keyboard/lifecycle QA passed; publication/hosted CI pending. Scope authorized by the
 November 13 request to implement the macro-area Tasks/Calendar light-theme parity plan.
 
 ## Outcome and evidence
@@ -67,3 +67,20 @@ property. These new tests and this correction have **not been compiled or run**:
 heavy validation is paused while the Mac has about 9.6 GiB free. Native reverse
 navigation, offscreen reachability and exact-head validation remain acceptance
 gates; this is not ready to merge.
+
+
+### Passing acceptance recheck
+
+At source `bbe60b9`, 782 XCTest and 38 Swift Testing tests passed and the
+release/signature build passed. Independent source review found no blocker.
+Native AX-only session `01a1d457-b7ae-7310-81bf-612a1c86f891` passed reverse
+Tab from All to OK then Cancel (activation verified); Return on Cancel discarded
+a changed Inbox draft. Forward Tab/Space, Work pointer-to-keyboard activation,
+Return applying only the picker, Escape and folder Space disclosure passed.
+With 24 additional disposable fixture lists, Tab reached the last and Space
+selected it; the AX scrollbar moved from 0 to 0.99. AX OK and Cancel passed.
+Original bundle, workspace, settings and preference files were restored and
+verified; Codex stopped. No screenshot was available and denied capture was not
+retried. This supersedes the pending keyboard/test gates above, not the retained
+visual/exact-reference or live VoiceOver limitations. Hosted exact-head CI is
+still required before merge.

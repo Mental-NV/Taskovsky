@@ -206,4 +206,5 @@ The [temporary feedback change](changes/phone-feedback-lifetime-2026-11-13.md) c
 
 The Mac All Lists selector has a staged folder/list draft with OK/Cancel and mixed
 folder indicators, based on retained reference observation. [Verification/limits](changes/search-list-tree-2026-11-13.md).
-Native lifecycle verification and publication are pending; this is not a full Search parity claim.
+Native AX lifecycle/keyboard/scrolling verification passed; publication and hosted
+CI pending. This is not a full Search or exact visual parity claim.
