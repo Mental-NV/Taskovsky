@@ -52,3 +52,11 @@ If the available sheet/window cannot contain both panes without clipping existin
 ## Work completed for this checkpoint
 
 Read-only inspection confirmed the reference evidence and source gap. Searched current UI spec and list-related change records; no implemented live-preview contract was found. Created this plan in an isolated checkout. No application source, user data, original worktree, QA app, system settings or remote repository changed. No tests/builds were run because this checkpoint changes documentation only.
+
+## Local candidate (not ready to merge)
+
+A presentation-only candidate now exists on this isolated branch. The existing form and submit implementation are retained; list sheets try a 360-point form plus a 280-point preview, with the unchanged form as the horizontal `ViewThatFits` fallback. The preview uses intrinsic vertical size, not an infinite height request. These are Taskovsky candidate dimensions, not measured TickTick dimensions. Actual sheet proposal/fallback and native focus still require permitted native verification.
+
+List and Board samples respond to draft name/icon/color/type/view. Board headings derive from `BoardProjection.Column`; notes appear only in Open, and task terminal states use matching glyphs. Timeline displays an explicit preview-unavailable explanation. Samples are decorative and combined into one accessibility summary. They do not save or instantiate a store. The preview has no animation, focus or gestures.
+
+Independent review found and corrected initially misleading Board sample labels and note placement. Review also verified the original form and submit were unchanged except moving the existing tint and onAppear focus modifier to the wrapper. Native focus and dismissal remain unverified. Tests, release build and final owned rendering results will be recorded separately when available; do not infer completion from this candidate.
