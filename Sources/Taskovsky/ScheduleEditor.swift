@@ -57,6 +57,7 @@ struct ScheduleEditor: View {
     }
     /// The staged range end, which IS the due date while duration is on.
     private var effectiveDate: Date { hasDuration ? durationEnd : date }
+    private var effectiveHasTime: Bool { hasDate && staged().effectiveHasTime }
     /// The draft as a value, so day/time/zone decisions run through the
     /// tested `ScheduleDraft` helper instead of ad-hoc state math.
     private func staged() -> ScheduleDraft {
@@ -118,14 +119,14 @@ struct ScheduleEditor: View {
             }.buttonStyle(.plain).foregroundStyle(accent)
             CalendarGrid(date: dueBinding, calendar: calendar, showWeekNumbers: settings.showWeekNumbers, hasSelection: hasDate, isOccurrence: isOccurrence) { hasDate = true }
             Divider()
-            row("Time", symbol: "clock", value: hasTime ? format(date, dateStyle: .none, timeStyle: .short) : "None", row: .time)
+            row("Time", symbol: "clock", value: effectiveHasTime ? format(effectiveDate, dateStyle: .none, timeStyle: .short) : "None", row: .time)
             if expanded == .time {
                 HStack {
-                    Button(hasTime ? "Remove time" : "Add time") { if hasTime { hasTime = false } else if !activateUndatedTime() { hasTime = true }; applyReminderDefault() }.buttonStyle(.borderless)
+                    Button(effectiveHasTime ? "Remove time" : "Add time", action: toggleTime).buttonStyle(.borderless)
                     Spacer()
-                    if hasTime { DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute).labelsHidden().fixedSize() }
+                    if effectiveHasTime { DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute).labelsHidden().fixedSize() }
                 }.font(.system(size: 11)).padding(.horizontal, 8)
-                if settings.enableTimeZone && hasTime {
+                if settings.enableTimeZone && effectiveHasTime {
                     Picker("Time Zone", selection: $zoneSelection.identifier) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) } }.font(.system(size: 11))
                 }
             }
@@ -282,6 +283,15 @@ struct ScheduleEditor: View {
         if repeatDraft.repeatRule == .weekly { let formatter = DateFormatter(); formatter.calendar = calendar; formatter.timeZone = calendar.timeZone; formatter.setLocalizedDateFormatFromTemplate("EEEE"); return "Weekly on " + formatter.string(from: date) }
         return repeatDraft.repeatRule.label
     }
+    private func toggleTime() {
+        if activateUndatedTime() { return }
+        if hasDuration {
+            durationAllDayBinding.wrappedValue = effectiveHasTime
+        } else {
+            hasTime.toggle()
+            applyReminderDefault()
+        }
+    }
     @discardableResult
     private func activateUndatedTime() -> Bool {
         guard let seed = ScheduleTimeActivation.seed(hasDate: hasDate, now: Date(), calendar: calendar) else { return false }
@@ -339,10 +349,12 @@ struct ScheduleEditor: View {
             writeBack(draft)
         } else {
             var draft = staged()
+            let retainedTime = draft.effectiveHasTime
             draft.removeDuration()
             // removeDuration keeps the end as the due date; duration states
             // below are now unused until re-enabled.
             date = draft.due
+            hasTime = retainedTime
             hasDuration = false
         }
         applyReminderDefault()
