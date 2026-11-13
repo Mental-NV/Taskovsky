@@ -201,3 +201,9 @@ Mac Calendar/Timeline/grouped Board schedule success no longer remains indefinit
 ### iPhone feedback lifetime correction — November 13, 2026
 
 The [temporary feedback change](changes/phone-feedback-lifetime-2026-11-13.md) covers iPhone Calendar/Tasks scheduling, lifecycle, capture and batch successes with identity-safe expiry; errors remain actionable. Timing is a Taskovsky policy, not measured TickTick parity. Verification is recorded separately.
+
+### Full Search list tree — local November 13 follow-up
+
+The Mac All Lists selector has a staged folder/list draft with OK/Cancel and mixed
+folder indicators, based on retained reference observation. [Verification/limits](changes/search-list-tree-2026-11-13.md).
+Native lifecycle verification and publication are pending; this is not a full Search parity claim.

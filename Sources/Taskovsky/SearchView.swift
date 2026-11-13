@@ -104,6 +104,7 @@ struct SearchPane: View {
     @State private var customTo = Date()
     @State private var hasCustomTo = false
     @State private var saveFilter = false
+    @State private var pickingLists = false
     init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onComplete: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
         self.onClose = onClose; self.onComplete = onComplete
         self.store = store; self.initialQuery = initialQuery; self.onSelectTask = onSelectTask; self.onSelectList = onSelectList; self.onSelectFilter = onSelectFilter; self.onSelectTag = onSelectTag
@@ -132,7 +133,13 @@ struct SearchPane: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
                     dateMenu
-                    multiMenu(listIDs.isEmpty ? "All Lists" : "Lists (\(listIDs.count))", entries: [(TaskFilter.inboxListID, "Inbox")] + store.data.lists.map { ($0.id, $0.name) }, selection: $listIDs)
+                    Button { pickingLists = true } label: { menuLabel(listIDs.isEmpty ? "All Lists" : "Lists (\(listIDs.count))") }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $pickingLists, arrowEdge: .bottom) {
+                            SearchListPicker(lists: store.data.lists, folders: store.data.folders, selection: listIDs,
+                                onApply: { listIDs = $0; pickingLists = false },
+                                onCancel: { pickingLists = false })
+                        }
                     tagMenu
                     kindMenu
                     valueMenu(statusLabel, options: [("All Status", .all), ("Uncompleted", .active), ("Completed", .completed), ("Won't Do", .wontDo)], selection: $status)
@@ -214,14 +221,7 @@ struct SearchPane: View {
     private func valueMenu<T: Equatable>(_ label: String, options: [(String, T)], selection: Binding<T>) -> some View {
         Menu { ForEach(Array(options.enumerated()), id: \.offset) { _, option in Button { selection.wrappedValue = option.1 } label: { if selection.wrappedValue == option.1 { Label(option.0, systemImage: "checkmark") } else { Text(option.0) } } } } label: { menuLabel(label) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
     }
-    private func multiMenu(_ label: String, entries: [(UUID, String)], selection: Binding<Set<UUID>>) -> some View {
-        Menu {
-            Button("All") { selection.wrappedValue.removeAll() }
-            ForEach(entries, id: \.0) { id, name in
-                Button { if selection.wrappedValue.contains(id) { selection.wrappedValue.remove(id) } else { selection.wrappedValue.insert(id) } } label: { if selection.wrappedValue.contains(id) { Label(name, systemImage: "checkmark") } else { Text(name) } }
-            }
-        } label: { menuLabel(label) }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize()
-    }
+
 }
 
 struct SearchDialog: View {

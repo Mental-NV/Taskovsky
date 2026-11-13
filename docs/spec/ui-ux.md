@@ -522,3 +522,10 @@ Calendar, Tasks Timeline and grouped Board success/Undo feedback, Summary save a
 ## Pending minimum-height timed card correction
 
 The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark interaction remains unverified and deferred per the user's November 13 light-only direction. Other compact cards are unchanged.
+
+### Mac full Search list selector
+
+The [staged list tree](../changes/search-list-tree-2026-11-13.md) replaces the flat
+immediate All Lists menu. Folder rows disclose children and report mixed explicit
+selection. Only OK changes active results; Cancel/dismissal discards the draft.
+Empty selection remains All. Geometry is a Taskovsky choice, not exact TickTick parity.
