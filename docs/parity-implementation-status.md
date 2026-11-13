@@ -212,3 +212,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### Full Search staged tags follow-up
 
 [SEARCH-TAGS-001](changes/search-staged-tags-2026-11-13.md) closes the source-level immediate tag-menu gap for TT-023/TT-024 with a disposable OK/Cancel draft. Existing matching policies stay unchanged. Native interaction, final CI and actual visual parity are separate acceptance gates; implementation is not yet merged.
+
+### Full Search staged custom-date follow-up
+
+[SEARCH-DATE-001](changes/search-staged-custom-range-2026-11-13.md) replaces immediate inline bound edits with a cancelable popover and disabled empty Confirm, following the retained reference interaction. Existing inclusive matcher and date-rule combinations are preserved, not claimed reference-equivalent. Native/CI gates remain pending; not yet merged.

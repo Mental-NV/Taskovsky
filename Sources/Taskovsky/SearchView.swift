@@ -106,6 +106,7 @@ struct SearchPane: View {
     @State private var saveFilter = false
     @State private var pickingLists = false
     @State private var pickingTags = false
+    @State private var pickingCustomDates = false
     init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onComplete: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
         self.onClose = onClose; self.onComplete = onComplete
         self.store = store; self.initialQuery = initialQuery; self.onSelectTask = onSelectTask; self.onSelectList = onSelectList; self.onSelectFilter = onSelectFilter; self.onSelectTag = onSelectTag
@@ -146,7 +147,6 @@ struct SearchPane: View {
                     valueMenu(statusLabel, options: [("All Status", .all), ("Uncompleted", .active), ("Completed", .completed), ("Won't Do", .wontDo)], selection: $status)
                 }
             }.padding(.bottom, 16)
-            if dateRules.contains(.custom) { customRangeRow.padding(.bottom, 12) }
             Divider()
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
@@ -170,12 +170,25 @@ struct SearchPane: View {
     private var dateMenu: some View {
         Menu {
             ForEach(FilterDateRule.allCases, id: \.self) { rule in
-                Button { toggle(rule, in: $dateRules) } label: {
+                Button { if rule == .custom { pickingCustomDates = true } else { toggle(rule, in: $dateRules) } } label: {
                     if dateRules.contains(rule) { Label(rule.label, systemImage: "checkmark") } else { Text(rule.label) }
                 }
             }
+            if dateRules.contains(.custom) {
+                Divider()
+                Button("Remove Custom Range") { dateRules.remove(.custom) }
+            }
         } label: { menuLabel(dateRules.isEmpty ? "All Dates" : dateRules.count == 1 ? dateRules.first!.label : "Dates (\(dateRules.count))") }
+            .popover(isPresented: $pickingCustomDates, arrowEdge: .bottom) {
+                SearchCustomDatePicker(from: customFrom, hasFrom: hasCustomFrom, to: customTo, hasTo: hasCustomTo,
+                    onApply: { draft in
+                        customFrom = draft.from; hasCustomFrom = draft.hasFrom
+                        customTo = draft.to; hasCustomTo = draft.hasTo
+                        dateRules.insert(.custom); pickingCustomDates = false
+                    }, onCancel: { pickingCustomDates = false })
+            }
     }
+
     private var tagMenu: some View {
         Button { pickingTags = true } label: { menuLabel(tagLabel) }
             .buttonStyle(.plain)
@@ -202,13 +215,6 @@ struct SearchPane: View {
                 if kinds.contains(.note) { Label("Notes", systemImage: "checkmark") } else { Text("Notes") }
             }
         } label: { menuLabel(kinds.isEmpty ? "All Types" : kinds.count == 2 ? "All Types" : kinds.contains(.task) ? "Tasks" : "Notes") }
-    }
-    private var customRangeRow: some View {
-        HStack(spacing: 16) {
-            HStack { Toggle("From", isOn: $hasCustomFrom); DatePicker("", selection: $customFrom, displayedComponents: .date).labelsHidden().disabled(!hasCustomFrom) }
-            HStack { Toggle("To", isOn: $hasCustomTo); DatePicker("", selection: $customTo, displayedComponents: .date).labelsHidden().disabled(!hasCustomTo) }
-            if !hasCustomFrom, !hasCustomTo { Text("Pick at least one bound.").font(.caption).foregroundStyle(.secondary) }
-        }.font(.system(size: 13))
     }
     private func toggle<T: Hashable>(_ value: T, in binding: Binding<Set<T>>) {
         if binding.wrappedValue.contains(value) { binding.wrappedValue.remove(value) } else { binding.wrappedValue.insert(value) }
