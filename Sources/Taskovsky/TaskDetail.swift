@@ -19,6 +19,23 @@ final class DetailDrafts: ObservableObject {
     }
 }
 
+/// Presentation-only state: revealing tools never writes the task document.
+struct DetailFormattingPresentation {
+    private(set) var documentID: UUID?
+    private(set) var isExpanded = false
+
+    mutating func toggle(for id: UUID) {
+        isExpanded = documentID == id ? !isExpanded : true
+        documentID = id
+    }
+
+    func isVisible(for id: UUID, locked: Bool) -> Bool {
+        !locked && documentID == id && isExpanded
+    }
+
+    mutating func reset() { documentID = nil; isExpanded = false }
+}
+
 struct TaskDetail: View {
     @ObservedObject var store: TaskStore
     @ObservedObject var drafts: DetailDrafts
@@ -52,6 +69,8 @@ struct TaskDetail: View {
     private var showTemplates: Binding<Bool> { drafts.flag(id, \.shownTemplates) }
     @StateObject private var richController = RichBodyController()
     @State private var occurrenceSkip: TaskOccurrenceSkipRequest?
+    @State private var formatting = DetailFormattingPresentation()
+    private var showFormatting: Bool { formatting.isVisible(for: id, locked: locked) }
     @State private var bodyFocused = false
     @State private var bodyHeight: CGFloat = 0
     @FocusState private var stepFocused: Bool
@@ -77,9 +96,9 @@ struct TaskDetail: View {
             detailHeader
             if task.kind == .task {
                 TaskProgressControl(store: store, task: task, locked: locked)
-                    .padding(.horizontal, compact ? 16 : 24).padding(.bottom, 8)
+            } else {
+                Divider()
             }
-            Divider()
             detailStatusBanner
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -96,9 +115,15 @@ struct TaskDetail: View {
                     Spacer(minLength: 40)
                 }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 24)
             }
+            if showFormatting && !locked {
+                RichBodyToolbar(controller: richController, disabled: false)
+                    .padding(.horizontal, 16).padding(.vertical, 8)
+            }
             Divider()
             detailFooter
         }
+        .onChange(of: id) { _, _ in formatting.reset() }
+        .onChange(of: locked) { _, locked in if locked { formatting.reset() } }
         .taskOccurrenceSkipPrompt($occurrenceSkip, store: store, actions: actions)
     }
 
@@ -160,8 +185,8 @@ struct TaskDetail: View {
 
     @ViewBuilder
     private var richBodySection: some View {
-        // Native rich-text body: toolbar plus an auto-growing AppKit
-        // editor. The outer detail ScrollView scrolls; the editor
+        // Native rich-text body with an optional toolbar above the footer
+        // and an auto-growing AppKit editor. The outer detail ScrollView scrolls; the editor
         // reports its content height so docked, drawer, and pop-up
         // layouts all size it without an inner scroller.
         let preview = task.richBody.flatMap { rich in
@@ -173,9 +198,6 @@ struct TaskDetail: View {
                 .sheet(isPresented: $showDescriptionReader) {
                     RichBodyReader(documentID: task.id, preview: preview)
                 }
-        }
-        if !locked {
-            RichBodyToolbar(controller: richController, disabled: false)
         }
         ZStack(alignment: .topLeading) {
             RichBodyEditor(
@@ -288,6 +310,19 @@ struct TaskDetail: View {
                 ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var updated = task; updated.listID = list.id; store.updateTask(updated) } }
             } label: { HoverIcon { Label(store.data.lists.first { $0.id == task.listID }?.name ?? "Inbox", systemImage: "tray").font(.system(size: 12)).foregroundStyle(.secondary).padding(4) } }.menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().disabled(locked).help("Move to list")
             Spacer()
+            if !locked {
+                Button { formatting.toggle(for: id) } label: {
+                    Image(systemName: "textformat")
+                        .font(.system(size: 14)).frame(width: 28, height: 28)
+                        .foregroundStyle(showFormatting ? accent : Color.secondary)
+                        .background(showFormatting ? accent.opacity(0.12) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 5))
+                }
+                .buttonStyle(.plain)
+                .help(showFormatting ? "Hide formatting" : "Show formatting")
+                .accessibilityLabel(showFormatting ? "Hide formatting" : "Show formatting")
+                .accessibilityValue(showFormatting ? "Expanded" : "Collapsed")
+            }
             Menu {
                 Text("Created " + task.createdAt.formatted(date: .abbreviated, time: .shortened))
                 if !locked {
