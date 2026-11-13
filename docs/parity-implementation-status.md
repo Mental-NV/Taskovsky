@@ -193,3 +193,7 @@ A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-
 ## Mac contextual detail controls — November 13
 
 The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.
+
+## Organization dialog preview — November 13
+
+The P-ORG slice of [UI-MAP-001](changes/ui-macro-parity-plan-2026-11-13.md) adds an illustrative Mac List/Board preview to Add/Edit List, matching the observed two-pane interaction pattern in [the reference](ticktick-spec/lists-and-tags.md). Source exists on this feature branch; exact geometry and actual sheet focus/Save/Cancel still require the checks in [LIST-VIS-001](changes/mac-list-editor-preview-2026-11-13.md). Timeline preview, Tag/Folder layout and iPhone are not changed. This is not a whole-dialog pixel-equivalence claim.

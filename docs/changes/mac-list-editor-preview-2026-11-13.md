@@ -1,6 +1,8 @@
 # LIST-VIS-001 — Mac List editor live preview
 
-Status: **Proposed bounded presentation change; not implemented or natively verified.**
+Status: **In implementation: existing candidate integrated onto main `3c2db92`; native acceptance pending.**
+
+The user requested macro-area parity planning and implementation on November 13. This is the first P-ORG slice in [UI-MAP-001](ui-macro-parity-plan-2026-11-13.md), after finishing in-flight feedback fixes. The paragraphs below retain the original candidate history. Light theme is the active gate; historical Dark probe results are supplemental, not a requirement.
 
 ## Evidence and outcome
 
@@ -18,11 +20,11 @@ Related contracts: [macOS UI](../spec/ui-ux.md), [business rules](../spec/busine
 - Add a side-by-side, non-interactive preview for the existing List and Board choices. Do not add a new view mode, field, color, task or action.
 - Keep Timeline selection available. Its preview must be explicitly described as Taskovsky's existing Timeline, not a recovered TickTick design. An initial bounded implementation may show an honest explanatory placeholder for Timeline instead of inventing a reference layout.
 - No persistence, schema, store command, Save/Cancel, navigation or validation changes. No use of real task titles or other personal data in sample content.
-- No auto-publication or merge of the denied Calendar outline stack. No capture, system settings, signing or notification changes.
+- No unrelated Calendar, storage or notification work. No denied capture retry or system settings changes. Preserve the stable QA launcher/signing contract.
 
 ## Presentation contract for a candidate
 
-Retain all form controls, order, bindings, symbols, colors and existing name focus. Keep the form's existing 360-point content width and 28-point padding. A trailing preview is an additional pane, not a narrowing of the existing form. Choose its bounded width using an owned layout probe before implementation acceptance; record it as a Taskovsky design value, **not a measured TickTick constant**. Keep buttons in the existing form so Return/Escape and tab order are unchanged.
+Retain all form controls, order, bindings, symbols, colors and existing name focus. Keep the form's existing 360-point overall width, including its 28-point padding. A trailing preview is an additional pane, not a narrowing of the existing form. Choose its bounded width using an owned layout probe before implementation acceptance; record it as a Taskovsky design value, **not a measured TickTick constant**. Keep buttons in the existing form so Return/Escape and tab order are unchanged.
 
 Use existing semantic backgrounds and label colors for both appearances. A subtle separator distinguishes the preview, whose sample header reflects the current draft name (fallback `List preview`), selected icon and list color. List preview uses static sample task rows; Board uses static sample columns/cards. Use existing supported row/card typography and color tokens rather than introducing a new design system. Do not instantiate an observed TaskStore or reuse interactive rows requiring real data; a small pure presentation component is sufficient.
 
@@ -67,3 +69,9 @@ Independent review found and corrected initially misleading Board sample labels 
 - Owned standalone offscreen probe rendered the exact preview view source in 24 combinations: List/Board/Timeline × Task/Note × light/dark × empty/long draft name, each in a 280 × 480 container. All produced correctly sized images. The probe supplies small matching type declarations and the existing symbol view, not a complete EntitySheet or application. Inspected light/dark Board samples; shortened only illustrative card labels after initial samples unnecessarily truncated them. No screen capture or live application was involved.
 - Independent source review confirmed unchanged form and submit implementation and no preview persistence/gesture/notification actions. Initial Board label/note-placement findings were fixed; no further concrete source defect reported. Native sheet sizing, fallback focus, keyboard, Save/Cancel and interaction remain unverified.
 - Final `./scripts/build-app.sh` passed; `codesign --verify --deep --strict build/Taskovsky.app` passed. The app was not launched. No native interaction/CI or merge success is claimed. Original checkout remains clean and unchanged. No branch or PR was published.
+
+## Current integration — November 13
+
+Reused the preserved candidate without overwriting it; integrated onto `3c2db92` plus the merged UI macro map. Source review found no blocking defect and confirmed unchanged form/submit/Tag behavior. Two new hosted Mac tests render List/Board/Timeline task/note, short/long-name variants, bound the preview pane, retain the original Tag width and ensure rendering never invokes Save. These tests do not certify real sheet proposal/fallback or interactive focus.
+
+The full Mac suite passed **771 XCTest plus 38 Swift Testing**. Release build and native AX-only sheet acceptance are pending at this checkpoint. Historical 24 owned renders above remain bounded supplemental evidence; no new production screenshot or exact pixel parity is claimed.
