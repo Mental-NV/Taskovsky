@@ -1968,3 +1968,7 @@ passed at source `bbe60b9`; signed release and independent review passed. Native
 AX lifecycle, forward/reverse keyboard routing and 24-list scrolling passed. QA
 restored and Codex stopped. No screenshot, live VoiceOver or exact visual-parity
 claim. Matching/archive rules unchanged. Hosted exact-head CI remains required.
+
+## Full Search staged tag selection — November 13, 2026
+
+Source `1a2a73f`, isolated `/private/tmp/TaskovskySearchTags`, base main `c5979c1`: [SEARCH-TAGS-001](../changes/search-staged-tags-2026-11-13.md). Full `swift test --disable-sandbox` passed 786 XCTest and 38 Swift Testing cases. `scripts/build-app.sh` release and strict signature verification passed. Independent source review found no actionable defect; native keyboard, dismissal/reopen and scroll QA are running separately. Hosted CI not yet run. No actual screenshot is available; prior screen capture denial remains respected. These results establish code/tests, not exact rendered parity or reference multi-tag matching semantics.

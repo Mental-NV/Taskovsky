@@ -105,6 +105,7 @@ struct SearchPane: View {
     @State private var hasCustomTo = false
     @State private var saveFilter = false
     @State private var pickingLists = false
+    @State private var pickingTags = false
     init(store: TaskStore, initialQuery: String, onSelectTask: @escaping (UUID) -> Void, onSelectList: @escaping (UUID) -> Void, onSelectFilter: @escaping (UUID) -> Void, onSelectTag: @escaping (UUID) -> Void, onComplete: @escaping (UUID) -> Void, onClose: @escaping () -> Void = {}) {
         self.onClose = onClose; self.onComplete = onComplete
         self.store = store; self.initialQuery = initialQuery; self.onSelectTask = onSelectTask; self.onSelectList = onSelectList; self.onSelectFilter = onSelectFilter; self.onSelectTag = onSelectTag
@@ -176,17 +177,13 @@ struct SearchPane: View {
         } label: { menuLabel(dateRules.isEmpty ? "All Dates" : dateRules.count == 1 ? dateRules.first!.label : "Dates (\(dateRules.count))") }
     }
     private var tagMenu: some View {
-        Menu {
-            Picker("Match", selection: $tagMode) { ForEach(FilterTagMode.allCases, id: \.self) { Text($0.label).tag($0) } }
-            if tagMode == .any || tagMode == .all {
-                Divider()
-                ForEach(store.data.tags) { tag in
-                    Button { toggle(tag.id, in: $tagIDs) } label: {
-                        if tagIDs.contains(tag.id) { Label(tag.name, systemImage: "checkmark") } else { Text(tag.name) }
-                    }
-                }
+        Button { pickingTags = true } label: { menuLabel(tagLabel) }
+            .buttonStyle(.plain)
+            .popover(isPresented: $pickingTags, arrowEdge: .bottom) {
+                SearchTagPicker(tags: store.data.tags, ids: tagIDs, mode: tagMode,
+                    onApply: { tagIDs = $0.ids; tagMode = $0.mode; pickingTags = false },
+                    onCancel: { pickingTags = false })
             }
-        } label: { menuLabel(tagLabel) }
     }
     private var tagLabel: String {
         switch tagMode {
