@@ -16,9 +16,25 @@ final class SearchDateFormTests: XCTestCase {
                 XCTAssertGreaterThan(frame.height, 0)
                 XCTAssertTrue(form.bounds.contains(frame), "Control outside form: \(frame)")
             }
-            for i in frames.indices {
-                for j in frames.indices where j > i {
-                    XCTAssertFalse(frames[i].intersects(frames[j]), "Controls overlap: \(i), \(j); frames=\(frames[i]),\(frames[j]); alignment=\(controls[i].alignmentRect(forFrame: controls[i].frame)),\(controls[j].alignmentRect(forFrame: controls[j].frame)); insets=\(controls[i].alignmentRectInsets),\(controls[j].alignmentRectInsets)")
+            // Auto Layout uses alignment rectangles, not decorative button
+            // frame margins (which overlap on macOS 15 rounded buttons).
+            let alignment = controls.map { control in
+                control.superview!.convert(control.alignmentRect(forFrame: control.frame), to: form)
+            }
+            for i in alignment.indices {
+                for j in alignment.indices where j > i {
+                    XCTAssertFalse(alignment[i].intersects(alignment[j]), "Alignment overlap: \(i), \(j)")
+                }
+            }
+            if enabled {
+                for index in [4, 5] {
+                    let rect = alignment[index].insetBy(dx: 1, dy: 1)
+                    for x in [rect.minX, rect.midX, rect.maxX] {
+                        let point = NSPoint(x: x, y: rect.midY)
+                        let hit = form.hitTest(point)
+                        XCTAssertTrue(hit === controls[index] || hit?.isDescendant(of: controls[index]) == true,
+                                      "Wrong footer hit at \(point): \(String(describing: hit))")
+                    }
                 }
             }
         }
