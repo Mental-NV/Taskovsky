@@ -902,3 +902,7 @@ A [fake-only phone coordinator](../changes/iphone-reminder-coordinator-2026-11-1
 ## Temporary success feedback lifetime
 
 Capture, batch, lifecycle and schedule successes now have independent five-second presentation lifetimes (fifteen seconds when VoiceOver is running at emission). Repeated identical actions restart their own window; associated Undo expires with the success, without reverting data. Actionable errors and recovery warnings remain persistent. See [MOB-FEEDBACK-001](../changes/phone-feedback-lifetime-2026-11-13.md) for scope and validation limits.
+
+### Date-filter reset follow-up (November 13)
+
+[Mobile date selection correction](../changes/mobile-date-all-selection-2026-11-13.md) makes Any date an explicit reset in Search and Normal filter drafts. Specific date selections remove the unrestricted sentinel, keeping other specific rules. Legacy saved values remain unchanged until a date action. This does not change the shared matcher or Advanced filters.

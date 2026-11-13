@@ -170,8 +170,10 @@ struct SearchPane: View {
     private var dateMenu: some View {
         Menu {
             ForEach(FilterDateRule.allCases, id: \.self) { rule in
-                Button { if rule == .custom { pickingCustomDates = true } else { toggle(rule, in: $dateRules) } } label: {
-                    if dateRules.contains(rule) { Label(rule.label, systemImage: "checkmark") } else { Text(rule.label) }
+                Button { if rule == .custom { pickingCustomDates = true } else { dateRules = DateRuleSelection.toggling(rule, in: dateRules) } } label: {
+                    if rule == .all {
+                        if dateRules.isEmpty { Label("All Dates", systemImage: "checkmark") } else { Text("All Dates") }
+                    } else if dateRules.contains(rule) { Label(SearchWeekRange.label(for: rule, now: .now, calendar: store.settings.calendar), systemImage: "checkmark") } else { Text(SearchWeekRange.label(for: rule, now: .now, calendar: store.settings.calendar)) }
                 }
             }
             if dateRules.contains(.custom) {
@@ -184,7 +186,7 @@ struct SearchPane: View {
                     onApply: { draft in
                         customFrom = draft.from; hasCustomFrom = draft.hasFrom
                         customTo = draft.to; hasCustomTo = draft.hasTo
-                        dateRules.insert(.custom); pickingCustomDates = false
+                        dateRules = DateRuleSelection.applyingCustom(to: dateRules); pickingCustomDates = false
                     }, onCancel: { pickingCustomDates = false })
             }
     }

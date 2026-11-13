@@ -92,13 +92,27 @@ struct FilterEditorView: View {
                         }
                     } label: { selectionLabel("Tags", count: tagMode == .any || tagMode == .all ? tagIDs.count : 1, suffix: tagMode.label) }
                     Menu {
+                        Button { priorities.removeAll() } label: {
+                            if priorities.isEmpty { Label("All", systemImage: "checkmark") } else { Text("All") }
+                        }
+                        Divider()
                         ForEach(TaskPriority.allCases, id: \.self) { priority in Toggle(priority.label, isOn: membership(priority, in: $priorities)) }
                     } label: { selectionLabel("Priority", count: priorities.count) }
                     Menu {
-                        ForEach(FilterDateRule.allCases, id: \.self) { rule in Toggle(rule.label, isOn: membership(rule, in: $dateRules)) }
+                        ForEach(FilterDateRule.allCases, id: \.self) { rule in
+                            Button { dateRules = DateRuleSelection.toggling(rule, in: dateRules) } label: {
+                                if rule == .all ? (dateRules.isEmpty || dateRules.contains(.all)) : dateRules.contains(rule) {
+                                    Label(rule.label, systemImage: "checkmark")
+                                } else { Text(rule.label) }
+                            }
+                        }
                     } label: { selectionLabel("Date", count: dateRules.count) }
                     if dateRules.contains(.custom) { customRangeRow }
                     Menu {
+                        Button { kinds.removeAll() } label: {
+                            if kinds.isEmpty { Label("All", systemImage: "checkmark") } else { Text("All") }
+                        }
+                        Divider()
                         Toggle("Tasks", isOn: membership(.task, in: $kinds))
                         Toggle("Notes", isOn: membership(.note, in: $kinds))
                     } label: { selectionLabel("Type", count: kinds.count) }

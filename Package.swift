@@ -25,6 +25,7 @@ let domainSources = [
     "ScheduleDraft.swift",
     "TaskScheduleEdit.swift",
     "FilterRuleEdit.swift",
+    "DateRuleSelection.swift",
     "SavedFilterChange.swift",
     "BoardProjection.swift",
     "SummaryReport.swift",

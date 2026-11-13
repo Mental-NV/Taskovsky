@@ -220,3 +220,27 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### Timed Calendar adaptive completion candidate
 
 Existing PR65 is reconciled with current main; [CAL-MAC-NARROW-01](changes/calendar-narrow-card-affordance-2026-11-12.md) adds bounded width-sensitive completion-checkbox hiding while preserving merged fill/outline and gesture geometry. This remains a candidate pending renewed native/CI gates; exact reference cutoff and pixel parity unverified.
+
+### Full Search week captions
+
+[SEARCH-WEEK-001](changes/search-week-range-captions-2026-11-13.md) adds observed date-range context to existing This/Next/Last Week menu choices. Calendar rules, match/selection semantics and other choices stay unchanged; not whole-menu/pixel parity. Native/CI acceptance pending.
+
+### Full Search All Dates reset correction
+
+[SEARCH-DATE-003](changes/search-all-dates-reset-2026-11-13.md) fixes the unrestricted date sentinel coexisting with specific choices and neutralizing them. Search All Dates is now a true reset; source-backed correction, not a claim of reference combination semantics. Native/CI gates pending.
+
+### TT-005 bounded creation-focus follow-up
+
+The [Mac inline-focus candidate](changes/subtask-inline-focus-2026-11-13.md) addresses the row-menu creation-to-edit gap only for a child included in the current list projection. Automatic next-child chaining and blank-title cleanup are not implemented; existing child creation semantics remain. Native acceptance and final checks are pending.
+
+### Tasks row tag assignment
+
+The [row Tags menu](changes/task-row-tags-2026-11-13.md) closes functional reachability for assigning existing tags without a detail-panel detour. TickTick submenu geometry/contents remain unobserved; native interaction acceptance is separate from the passed policy tests.
+
+### Tasks row scheduling reachability
+
+The [Schedule… row entry point](changes/task-row-schedule-2026-11-13.md) reuses the existing editor for active tasks. It is a functional approximation of observed row date access, not a copy of unverified TickTick shortcut icons. Native acceptance remains separate from schedule-domain coverage.
+
+## Task-row conversion checkpoint
+
+Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](changes/task-row-conversion-2026-11-13.md).

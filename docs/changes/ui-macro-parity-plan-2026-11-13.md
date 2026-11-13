@@ -14,7 +14,31 @@ Baseline inspected: main `3c2db92` (PR66 resize fill, PR67 minimum Outline corre
 - Existing TickTick screenshots may be scaled/lossy. Do not turn raster coordinates into point/font/color constants without calibration. Do not invent cutoff, animation or gesture timing.
 - Prior screen-capture denial remains separate from Dark deferral. Do not retry or bypass it. Accessibility inspection can prove named controls/actions but not rendered placement or pixels.
 
-## Macro-area inventory
+## Current checkpoint — November 13, after PR86
+
+Verified main is `d476267bdffb550de338b08f1b167d78a9949522`. The original inventory/order below records the starting point and must not be read as a list of still-missing implementations. This update is documentation only, not a new visual comparison or native acceptance pass.
+
+| Area | Integrated change | Remaining gate / next action |
+| --- | --- | --- |
+| F Feedback | PR71/72 bounded iPhone/Mac success-message lifetimes merged. | Preserve persistent errors and Undo behavior; no new feedback defect established here. |
+| P-SEARCH / T-M | PR74 hierarchical staged Lists; PR75 staged Tags; PR76/77 custom-date draft and keyboard loop; PR78 week-range captions; PR79 Search All reset; PR82 Normal Date reset; PR83 Priority/Type All resets merged. | Do not implement these again. Functional/native receipts apply only to their recorded states, not whole-panel visual parity. Matched reference geometry remains unverified. |
+| P-SCH | PR81 undated Time entry and PR85 coherent Time/Duration state merged. | Latest TickTick AX observation found Time/Reminder/Repeat labels but could not identify Date/Duration/All Day. Those reference transitions remain unknown; no guessed layout or behavior changes. |
+| T-R / T-M locked state | PR84 disables embedded checklist edits in Trash; PR86 exposes locked tag chips as read-only. | PR80 observation did not establish reference empty-checklist/subtask entry controls. Do not hide those sections based on AX absence. |
+| P-ORG | PR73 List/Board live preview remains draft at `ccbeeb5`. | Actual sheet visual fit remains unverified. Current mergeability check is false; integrate current main and rerun checks only when resuming its acceptance, not as a substitute for it. |
+| C-M compact cards | PR66/67 fill and minimum Outline corrections merged; PR65 adaptive checkbox remains draft at `19f805f`. | Option/focus and actual drag/resize gates remain open. Current branch conflicts with main. Recheck source/base, review and exact-head tests after integration; do not erase outstanding native gates. Local hit/glyph candidates are not merged. |
+| iPhone Search / filters | PR87 draft at `68f89ee` corrects Any date neutralizing specific rules. Source review, 812 XCTest +38 Swift Testing, Mac release/signature and exact-head hosted CI passed. | Computer Use could not open Simulator interface. No candidate app was installed/launched and no QA fixture created; Codex stopped. Touch/checkmarks/Done/Cancel/reopen remain unverified. Green compilation is not native interaction acceptance. |
+| T-L / C-L shell and rows | Existing hierarchy/source-filter implementations remain. | No measured global row/pane geometry defect established. Need supported matched evidence before spacing/token changes. |
+
+### Updated work order
+
+1. Finish the existing PR87 native interaction gate through a supported route when available, without retrying denied capture or changing settings. Keep the draft meanwhile.
+2. Resume PR73 and PR65 only with their specific missing acceptance capability; recheck current head/base/conflicts then. Do not accumulate more variants behind the same gate.
+3. For new Tasks/Calendar work, prioritize an independently reproducible visible behavior defect or an explicit reference observation. Record evidence before implementation. Do not replace missing evidence with speculative hiding, arbitrary dimensions or new unrelated features.
+4. When supported capture becomes available, do the macro-area matched comparison (Tasks left/middle/right, Calendar left/main, dialogs), not merely isolated control screenshots. Retain the per-area matrix below and show the actual post-change screenshot per completed UI PR, or state the limitation.
+
+Dark, description recovery PR61, local-file persistence polishing and real-notification authorization remain deferred. No scope expansion or global parity percentage follows from the merged PR count.
+
+## Original macro-area inventory (historical starting point)
 
 | Area | Comparison breakdown | Current source / evidence | Next gap or measurement |
 | --- | --- | --- | --- |
@@ -29,7 +53,7 @@ Baseline inspected: main `3c2db92` (PR66 resize fill, PR67 minimum Outline corre
 | **P-CAL Calendar popovers** | View options, sources/colors, Arrange, Jump to Date, overflow/day preview, context menus | `CalendarPanels.swift`, `CalendarTimeZoneSettings.swift`, `CalendarViews.swift` | Compare shared padding/title/action anatomy and clipping; don't let one popover's matching geometry stand for all. |
 | **F Feedback and menus** | Success/Undo messages, errors, tooltips, context menus, focus rings | `TaskActionCenter.swift` and feature-local feedback | Current user-reported sticky Schedule updated issue and analogous Mac/iPhone successes are an active separate workstream. Errors must not silently vanish; expiry must not corrupt Undo history. |
 
-## Priority and execution order
+## Original priority and execution order (historical)
 
 Order reflects evidence confidence, affected screen area and existing implementation readiness, not a fabricated severity score.
 
@@ -54,6 +78,6 @@ User explicitly requested screenshots as deliverables. For each UI PR: one real 
 
 If capture remains blocked, say so with the verified implementation result; do not fabricate a screenshot or retry denied permissions. A merged source update is not evidence the user's already-running process loaded it; verify build identity or explain restart requirement.
 
-## This checkpoint
+## Original checkpoint
 
 Read source and retained reference documents at `3c2db92`; no fresh TickTick visual inspection or whole-screen measurement. Macro breakdown and priority are evidence-based planning. Active feedback worker owns toast fixes. First new implementation is the existing List preview candidate; native screenshot availability remains an explicit limitation. No overall parity percentage claimed.
