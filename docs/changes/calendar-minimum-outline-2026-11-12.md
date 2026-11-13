@@ -1,6 +1,6 @@
 # Minimum-height timed Calendar outline
 
-Status: implemented locally; draft, native interaction and final review gates pending. Stacked on PR66 source `b8c0d5e`, not a replacement for or authorization to merge PR66.
+Status: published in PR67, stacked on PR66 source `b8c0d5e`; light-theme interaction and independent source review passed. Final exact-head checks are required. On November 13 the user explicitly deferred Dark-theme work and directed completion of the white/light-theme UI.
 
 ## Observed defect and scope
 
@@ -16,7 +16,7 @@ The renderer used exact production column/card sources, a test-only entry point,
 
 Clean-source native `swift test --disable-sandbox` passed: 766 XCTest cases (134 Domain, 104 Workspace, 528 Core) and 38 Swift Testing cases. Independent source review found no actionable defect and confirmed non-timed layout, gestures, scheduling and accessibility declarations are unchanged. Release build passed; the produced app passed `codesign --verify --deep --strict`.
 
-Remaining gates: targeted native title/context/accessibility and move/resize checks on minimum-height cards. Production-app Dark interaction remains unverified. No claim of full Calendar parity or completion of PR65 focus testing.
+Subsequent native light QA sampled 15-minute task/note Filled/Outline cards at narrow/wide widths, controls, resize/move/Undo, context and accessibility. A matched parent comparison confirmed narrow title mouse-click misses were pre-existing, not introduced by this correction. QA bundle, fixture and preferences were restored and scoped Codex stopped. Production-app Dark interaction remains unverified and is explicitly deferred by the user's November 13 light-only direction, not a current merge gate. No claim of full Calendar parity or completion of PR65 focus testing. Native light evidence does not certify every narrow-title interaction; that separate limitation remains open.
 
 ## Retained render receipt
 
@@ -29,3 +29,7 @@ Probe source differs from the clean candidate only by explanatory comments and l
 - Candidate measurements.tsv: `7c97dade60a6386acf03f5ca971600f7bde4f3b33f43d221021226f68556b70f`
 
 These receipts identify preserved local artifacts, not a portable automated test in CI.
+
+## Hosted verification and scope
+
+Exact source head `7769514` passed hosted run `43374899581`: macOS Swift tests, release build, signature and archive checks, plus iPhone Simulator compile-only. This documentation update requires its own final checks. The user has delegated review/merge and asked to finish PR66 and its dependent correction under the light-only scope. Dark interaction must be verified when Dark work resumes; no OS appearance, capture permission or notification setting is changed for this scope decision.
