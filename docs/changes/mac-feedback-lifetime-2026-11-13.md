@@ -1,6 +1,6 @@
 # Mac temporary feedback lifetime
 
-Status: implemented locally; publication awaiting explicit approval. Requested November 13 after the user observed “Schedule updated” remaining indefinitely and requested an audit of similar messages.
+Status: implemented and published as draft PR #72; hosted checks and final review pending. Requested November 13 after the user observed “Schedule updated” remaining indefinitely and requested an audit of similar messages.
 
 ## Intended delta
 
@@ -21,4 +21,4 @@ Mac Summary “Saved as note” and read-description “Copied” acknowledgment
 
 ## Verification
 
-Regression tests cover automatic expiry, repeated identical messages, stale timer rejection, persistent error replacement, dismissal and independent surfaces. Final full Mac suite passed 775 XCTest and 38 Swift Testing cases; final signed release build passed. Independent source review passed after correcting a compile error. Scoped AX-only native Calendar QA passed: two identical saves 2.74 seconds apart; second notice still present 5.32 seconds after the first save and absent by 5.50 seconds after its own save. Undo restored the original 10:00–10:45 schedule and its new feedback expired; Dismiss cleared feedback/Undo; navigation away/back did not revive it. Timeline and Board were not sampled natively. QA bundle, fixture and preferences were restored byte-for-byte and Codex stopped. Publication was blocked by approval review; no commit or push occurred. No native pointer or screen-capture result claimed. Dark parity remains deferred per current milestone.
+Regression tests cover automatic expiry, repeated identical messages, stale timer rejection, persistent error replacement, dismissal and independent surfaces. Final full Mac suite passed 775 XCTest and 38 Swift Testing cases; final signed release build passed. Independent source review passed after correcting a compile error. Scoped AX-only native Calendar QA passed: two identical saves 2.74 seconds apart; second notice still present 5.32 seconds after the first save and absent by 5.50 seconds after its own save. Undo restored the original 10:00–10:45 schedule and its new feedback expired; Dismiss cleared feedback/Undo; navigation away/back did not revive it. Timeline and Board were not sampled natively. QA bundle, fixture and preferences were restored byte-for-byte and Codex stopped. After explicit user approval, the fix was committed and published as draft PR #72. No native pointer or screen-capture result claimed. Dark parity remains deferred per current milestone.
