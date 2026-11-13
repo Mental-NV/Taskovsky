@@ -1,5 +1,7 @@
 # Taskovsky documentation
 
+**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](changes/light-theme-priority-2026-11-13.md).
+
 Taskovsky uses separate documents for product behavior, platform UI, implementation architecture, and TickTick comparison. Begin here before asking an agent to implement a feature.
 
 ## Current baseline and authority
