@@ -18,7 +18,7 @@ final class SearchDateFormTests: XCTestCase {
             }
             for i in frames.indices {
                 for j in frames.indices where j > i {
-                    XCTAssertFalse(frames[i].intersects(frames[j]), "Controls overlap: \(i), \(j)")
+                    XCTAssertFalse(frames[i].intersects(frames[j]), "Controls overlap: \(i), \(j); frames=\(frames[i]),\(frames[j]); alignment=\(controls[i].alignmentRect(forFrame: controls[i].frame)),\(controls[j].alignmentRect(forFrame: controls[j].frame)); insets=\(controls[i].alignmentRectInsets),\(controls[j].alignmentRectInsets)")
                 }
             }
         }
