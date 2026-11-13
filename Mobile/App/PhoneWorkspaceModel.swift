@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
@@ -45,6 +46,40 @@ enum PhoneTaskSort: Hashable {
 
 enum PhoneScheduleSurface: Hashable { case tasks, calendar }
 
+/// Presentation-only lifetimes. Each emission (including identical text) gets a
+/// fresh identity; a cancelled or late expiry cannot remove newer feedback.
+@MainActor
+final class PhoneFeedbackLifetime {
+    enum Channel: Hashable { case creation, lifecycle, batch, schedule(PhoneScheduleSurface) }
+    typealias Sleep = (Duration) async throws -> Void
+    private let sleep: Sleep
+    private var tickets: [Channel: UUID] = [:]
+    private var tasks: [Channel: Task<Void, Never>] = [:]
+
+    init(sleep: @escaping Sleep = { try await Task.sleep(for: $0) }) { self.sleep = sleep }
+
+    func replace(_ channel: Channel, duration: Duration = .seconds(5), expire: @escaping @MainActor () -> Void) {
+        cancel(channel)
+        let ticket = UUID()
+        tickets[channel] = ticket
+        let sleep = self.sleep
+        tasks[channel] = Task { [weak self] in
+            do { try await sleep(duration) } catch { return }
+            guard let self, self.tickets[channel] == ticket else { return }
+            self.tickets[channel] = nil
+            self.tasks[channel] = nil
+            expire()
+        }
+    }
+
+    func cancel(_ channel: Channel) {
+        tickets[channel] = nil
+        tasks.removeValue(forKey: channel)?.cancel()
+    }
+
+    deinit { for task in tasks.values { task.cancel() } }
+}
+
 @MainActor
 final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var document: WorkspaceDocument?
@@ -67,6 +102,8 @@ final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var createdTaskID: UUID?
     @Published private(set) var creationNotice: String?
     @Published private(set) var lifecycleNotice: String?
+    @Published private(set) var batchNotice: String?
+    private let feedbackLifetime: PhoneFeedbackLifetime
     private struct ScheduleFeedback {
         let message: String
         let undo: WorkspaceCalendarUndo?
@@ -92,7 +129,8 @@ final class PhoneWorkspaceModel: ObservableObject {
     let directory: URL?
     let isQA: Bool
 
-    init(arguments: [String] = ProcessInfo.processInfo.arguments) {
+    init(arguments: [String] = ProcessInfo.processInfo.arguments, feedbackLifetime: PhoneFeedbackLifetime? = nil) {
+        self.feedbackLifetime = feedbackLifetime ?? PhoneFeedbackLifetime()
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             .appendingPathComponent("TaskovskyMobile", isDirectory: true)
         let flags = arguments.indices.filter { arguments[$0] == "--qa-session" }
@@ -823,7 +861,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         switch await repository.create(batch, expected: expected) {
         case .created(let saved, _), .alreadyCreated(let saved, _):
             document = saved
-            creationNotice = batch.tasks.count == 1 ? "Task added" : "Added \(batch.tasks.count) tasks"
+            showCreationNotice(batch.tasks.count == 1 ? "Task added" : "Added \(batch.tasks.count) tasks")
             return .saved
         case .notSaved(let latest):
             document = latest
@@ -976,6 +1014,45 @@ final class PhoneWorkspaceModel: ObservableObject {
         }
     }
 
+    private var successFeedbackDuration: Duration {
+        // Keep an extended opportunity to discover/read feedback with VoiceOver.
+        UIAccessibility.isVoiceOverRunning ? .seconds(15) : .seconds(5)
+    }
+
+    func showCreationNotice(_ message: String) {
+        creationNotice = message
+        feedbackLifetime.replace(.creation, duration: successFeedbackDuration) { [weak self] in self?.creationNotice = nil }
+    }
+
+    func showBatchNotice(_ message: String) {
+        batchNotice = message
+        feedbackLifetime.replace(.batch, duration: successFeedbackDuration) { [weak self] in self?.batchNotice = nil }
+    }
+
+    func clearBatchNotice() {
+        feedbackLifetime.cancel(.batch)
+        batchNotice = nil
+    }
+
+    private func showLifecycleError(_ message: String) {
+        feedbackLifetime.cancel(.lifecycle)
+        lifecycleNotice = message
+    }
+
+    private func expireLifecycleNotice() {
+        feedbackLifetime.replace(.lifecycle, duration: successFeedbackDuration) { [weak self] in
+            self?.lifecycleNotice = nil
+            self?.lifecycleUndo = nil
+        }
+    }
+
+    private func showScheduleNotice(_ message: String, undo: WorkspaceCalendarUndo?, in surface: PhoneScheduleSurface) {
+        scheduleFeedback[surface] = ScheduleFeedback(message: message, undo: undo)
+        feedbackLifetime.replace(.schedule(surface), duration: successFeedbackDuration) { [weak self] in
+            self?.scheduleFeedback[surface] = nil
+        }
+    }
+
     func scheduleNotice(in surface: PhoneScheduleSurface) -> String? {
         scheduleFeedback[surface]?.message
     }
@@ -1000,6 +1077,7 @@ final class PhoneWorkspaceModel: ObservableObject {
     }
 
     private func showScheduleError(_ message: String, in surface: PhoneScheduleSurface) {
+        feedbackLifetime.cancel(.schedule(surface))
         scheduleFeedback[surface] = ScheduleFeedback(message: message, undo: scheduleFeedback[surface]?.undo)
     }
 
@@ -1013,7 +1091,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         case .saved(let saved, let undo):
             document = saved
             if let feedback {
-                scheduleFeedback[feedback.surface] = ScheduleFeedback(message: feedback.message, undo: undo)
+                showScheduleNotice(feedback.message, undo: undo, in: feedback.surface)
             }
             return nil
         case .unchanged(let current):
@@ -1088,26 +1166,27 @@ final class PhoneWorkspaceModel: ObservableObject {
             creationNotice = nil
             lifecycleUndo = undo
             lifecycleNotice = message
+            expireLifecycleNotice()
             return true
         case .unchanged(let current):
             document = current
             return true
         case .refused(.stale):
             lifecycleUndo = nil
-            lifecycleNotice = "The workspace changed. Review the current task and try again."
+            showLifecycleError("The workspace changed. Review the current task and try again.")
             if let repository, let latest = try? await repository.load() { document = latest }
         case .refused(.compatibility):
-            lifecycleNotice = "This workspace contains data this build cannot safely rewrite."
+            showLifecycleError("This workspace contains data this build cannot safely rewrite.")
         case .refused(.task(.invalidDestination)):
-            lifecycleNotice = "Choose Inbox or an active list."
+            showLifecycleError("Choose Inbox or an active list.")
         case .refused(.task(.invalidParent)):
-            lifecycleNotice = "Choose a parent task outside this task’s own subtree."
+            showLifecycleError("Choose a parent task outside this task’s own subtree.")
         case .refused(.task(.invalidChild)):
-            lifecycleNotice = "Could not add this subtask. Check the title and current task."
+            showLifecycleError("Could not add this subtask. Check the title and current task.")
         case .refused(.task):
-            lifecycleNotice = "This action is unavailable for the current task."
+            showLifecycleError("This action is unavailable for the current task.")
         case .persistenceFailed:
-            lifecycleNotice = "Could not confirm the change. Review the workspace before retrying."
+            showLifecycleError("Could not confirm the change. Review the workspace before retrying.")
             if let repository, let latest = try? await repository.load() { document = latest }
         }
         return false
@@ -1352,7 +1431,7 @@ final class PhoneWorkspaceModel: ObservableObject {
             self.document = saved
             let cleanup = await captures.close(id: value.id)
             captureDraft = nil; captureRecoveryStatus = ""; captureIsComposing = false
-            createdTaskID = id; creationNotice = saved.snapshot.workspace.tasks.first(where: { $0.id == id })?.kind == .note ? "Note added" : "Task added"
+            createdTaskID = id; showCreationNotice(saved.snapshot.workspace.tasks.first(where: { $0.id == id })?.kind == .note ? "Note added" : "Task added")
             if cleanup != .saved { await readCaptureRecovery(); captureError = "Saved, but the recovery copy could not be cleared." }
         case .notSaved(let latest):
             self.document = latest; value.confirmedNotSaved(); captureDraft = value
