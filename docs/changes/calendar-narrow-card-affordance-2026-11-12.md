@@ -77,3 +77,7 @@ Eight pure-policy tests cover boundaries, grip, repeated widening, preferences/O
 Focused verification record: [narrow-card evidence](../verification/calendar-narrow-card-2026-11-12.md). The historical verification ledger is unchanged.
 
 The broad current UI contract and parity tracker remain unchanged in this draft because replacing their historical snapshots was blocked by publication review. Integrate the verified delta into those documents through an approved scoped edit before treating the feature as merged/current.
+
+## November 13 integration checkpoint (supersedes current-gate wording above)
+
+Reconciled existing PR65 with main `b054f8c` in isolated checkout, source `45728f9`. Both adaptive available width and merged full-height/Outline rendering are retained; no resize/move geometry changed. Earlier cloud-only/pending records are historical. Current user direction defers Dark parity; light-theme acceptance only, preserving semantic colors. Broad documentation edits are now user-preapproved, so canonical scope is updated narrowly rather than replacing historical records. Independent source review found no actionable defect. Full Mac tests/release and renewed scoped AX native QA are running; actual focus/Option and visual acceptance remain open. The budget is still explicitly approximate, not an observed TickTick point cutoff. Do not merge until the bounded acceptance evidence is reviewed.

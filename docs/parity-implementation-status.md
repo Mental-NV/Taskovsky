@@ -216,3 +216,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 ### Full Search staged custom-date follow-up
 
 [SEARCH-DATE-001](changes/search-staged-custom-range-2026-11-13.md) replaces immediate inline bound edits with a cancelable popover and disabled empty Confirm, following the retained reference interaction. Existing inclusive matcher and date-rule combinations are preserved, not claimed reference-equivalent. Native/CI gates remain pending; not yet merged.
+
+### Timed Calendar adaptive completion candidate
+
+Existing PR65 is reconciled with current main; [CAL-MAC-NARROW-01](changes/calendar-narrow-card-affordance-2026-11-12.md) adds bounded width-sensitive completion-checkbox hiding while preserving merged fill/outline and gesture geometry. This remains a candidate pending renewed native/CI gates; exact reference cutoff and pixel parity unverified.
