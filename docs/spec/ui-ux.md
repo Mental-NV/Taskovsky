@@ -564,3 +564,7 @@ Active Tasks list-row menus now include Tags choices using existing tag definiti
 ### Row scheduling entry point
 
 Active task-row context menus include Schedule…, opening the shared staged editor anchored to that row without selecting it or depending on the detail-pane mode. Notes/history/Trash/archived rows omit this new action. [Functional approximation and acceptance limits](../changes/task-row-schedule-2026-11-13.md).
+
+## Task-row conversion
+
+Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](../changes/task-row-conversion-2026-11-13.md).

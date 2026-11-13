@@ -236,3 +236,7 @@ The [row Tags menu](changes/task-row-tags-2026-11-13.md) closes functional reach
 ### Tasks row scheduling reachability
 
 The [Schedule… row entry point](changes/task-row-schedule-2026-11-13.md) reuses the existing editor for active tasks. It is a functional approximation of observed row date access, not a copy of unverified TickTick shortcut icons. Native acceptance remains separate from schedule-domain coverage.
+
+## Task-row conversion checkpoint
+
+Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](changes/task-row-conversion-2026-11-13.md).
