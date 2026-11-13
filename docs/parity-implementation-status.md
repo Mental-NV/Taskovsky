@@ -194,6 +194,10 @@ A bounded [timed-card outline correction](changes/calendar-minimum-outline-2026-
 
 The [contextual-controls change](changes/mac-detail-contextual-controls-2026-11-13.md) replaces always-visible detail chrome with a progress separator and a collapsed footer formatting toolbar. Source implementation is not a full native/reference parity claim. Public reference images and bounded installed-app accessibility were inspected; exact visual persistence and native interaction gates remain in the change record. iPhone is unchanged.
 
+## Organization dialog preview — November 13
+
+The P-ORG slice of [UI-MAP-001](changes/ui-macro-parity-plan-2026-11-13.md) adds an illustrative Mac List/Board preview to Add/Edit List, matching the observed two-pane interaction pattern in [the reference](ticktick-spec/lists-and-tags.md). Source is published in draft PR #73; bounded native focus/Save/Cancel checks passed, while exact geometry and visible fallback remain unverified as recorded in [LIST-VIS-001](changes/mac-list-editor-preview-2026-11-13.md). Timeline preview, Tag/Folder layout and iPhone are not changed. This is not a whole-dialog pixel-equivalence claim.
+
 ### Feedback lifetime correction — November 13
 
 Mac Calendar/Timeline/grouped Board schedule success no longer remains indefinitely; Summary saved and reader copied acknowledgment share the same bounded lifetime. Actionable errors remain persistent. This is a Taskovsky usability correction with automated tests, not proof of TickTick's exact timeout. See [audit and evidence](changes/mac-feedback-lifetime-2026-11-13.md).
