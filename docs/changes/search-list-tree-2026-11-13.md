@@ -26,14 +26,44 @@ This is a bounded observed-pattern improvement, not exact parity certification.
 - Use a 280-point popover, at most 340-point scrolling list, 13-point type, 22-point
   child indentation, existing list symbols, standard accent and secondary colors.
   These are Taskovsky layout choices, not measured reference constants.
-- Standard focusable buttons and selected/expanded accessibility values. Return
-  commits via OK; Escape cancels. No animation or system setting changes.
+- Individually accessible buttons retain selected/expanded values. A picker-owned
+  keyboard surface navigates the visible hierarchy with Tab/Shift-Tab, scrolls
+  the active row into view, and activates it with Space. Return commits except
+  on Cancel; Escape cancels. Native keyboard acceptance remains pending. No
+  animation or system setting changes.
 - Search query/results and Save as Filter continue to use committed state only.
 
 ## Verification
 
 Five focused state/tree tests passed: isolation/cancel, empty-All behavior,
 parent marks, stale-ID preservation and stable root/folder/archive projection.
-Independent source review found no blocking issue. Full suite/release and native
-reopen/OK/Cancel/Escape/outside behavior are pending. Screen capture remains denied;
-no visual screenshot, exact-fit or full accessibility claim is made. Dark deferred.
+At source `d6702bc`, 780 XCTest and 38 Swift Testing tests and signed release
+build passed; independent source review found no blocker.
+
+The first native AX session at `31c71cc` verified staged changes, folder disclosure,
+mixed indicators, Inbox/archive/long-name access, OK, Cancel, Escape, outside
+dismissal and reopen. It also found a keyboard focus defect. The first correction
+`96a95c1` still failed native Return/Tab handling, so it was not published.
+The revised root-owned keyboard surface at `d6702bc` requires a new native check.
+Original QA bundle, fixture and preferences were restored after each session;
+Codex stopped. Save as Filter list-ID transfer was source-reviewed but not proved
+through native AX. Screen capture remains denied; no visual screenshot, exact-fit,
+full keyboard accessibility or exact TickTick parity claim is made. Dark deferred.
+
+### Subsequent native result and source-only back-tab correction
+
+The completed native session for `d6702bc` verified forward Tab/Space, pointer
+selection followed by Space, Return applying only the picker, Escape discarding,
+and folder Space disclosure. Individual AX buttons remained available.
+Reverse Shift-Tab failed: it could leave the active row unchanged and then apply
+instead of reaching Cancel. Offscreen scrolling was not verified. QA bundle,
+fixture and all three preference backups were independently checked restored.
+
+The next source-only correction decodes both Tab with Shift and AppKit's
+`NSBackTabCharacter` (U+0019), and extracts wrapping traversal for unit testing.
+Two tests cover decoding/ignored keys and reverse wrapping through OK/Cancel.
+SDK declarations confirm the used general key-handler overload and character
+property. These new tests and this correction have **not been compiled or run**:
+heavy validation is paused while the Mac has about 9.6 GiB free. Native reverse
+navigation, offscreen reachability and exact-head validation remain acceptance
+gates; this is not ready to merge.

@@ -40,6 +40,21 @@ enum SearchListFocus: Hashable {
     case all, list(UUID), folder(UUID), cancel, apply
 }
 
+/// AppKit may deliver Shift-Tab as the back-tab character rather than Tab
+/// with a modifier. Keep event decoding and wrapping testable without a window.
+enum SearchListKeyboard {
+    static func backwards(character: Character, shift: Bool) -> Bool? {
+        if character == "\u{19}" { return true }
+        if character == "\t" { return shift }
+        return nil
+    }
+    static func next(_ focused: SearchListFocus?, in order: [SearchListFocus], backwards: Bool) -> SearchListFocus? {
+        guard !order.isEmpty else { return nil }
+        let index = focused.flatMap { order.firstIndex(of: $0) } ?? (backwards ? 0 : -1)
+        return order[(index + (backwards ? -1 : 1) + order.count) % order.count]
+    }
+}
+
 struct SearchListPicker: View {
     let lists: [TaskList]
     let folders: [ListFolder]
@@ -63,9 +78,7 @@ struct SearchListPicker: View {
         } + tree.trailing.map { .list($0.id) } + [.cancel, .apply]
     }
     private func advanceFocus(backwards: Bool) {
-        let order = focusOrder
-        let index = focused.flatMap { order.firstIndex(of: $0) } ?? (backwards ? 0 : -1)
-        focused = order[(index + (backwards ? -1 : 1) + order.count) % order.count]
+        focused = SearchListKeyboard.next(focused, in: focusOrder, backwards: backwards)
     }
     private func activateFocused() {
         switch focused {
@@ -105,7 +118,11 @@ struct SearchListPicker: View {
             .focusable().focusEffectDisabled().focused($keyboardFocused)
             .onAppear { DispatchQueue.main.async { keyboardFocused = true } }
             .onKeyPress(.space) { activateFocused(); return .handled }
-            .onKeyPress(keys: [.tab], phases: .down) { press in advanceFocus(backwards: press.modifiers.contains(.shift)); return .handled }
+            .onKeyPress(phases: .down) { press in
+                guard let backwards = SearchListKeyboard.backwards(character: press.key.character, shift: press.modifiers.contains(.shift)) else { return .ignored }
+                advanceFocus(backwards: backwards)
+                return .handled
+            }
             .onKeyPress(.return) { if focused == .cancel { onCancel() } else { onApply(draft.ids) }; return .handled }
             .onKeyPress(.escape) { onCancel(); return .handled }
     }

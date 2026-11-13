@@ -3,6 +3,26 @@ import TaskovskyCore
 @testable import Taskovsky
 
 final class SearchListPickerTests: XCTestCase {
+    func testTabAndNativeBackTabDecodeWithoutConsumingOtherKeys() {
+        XCTAssertEqual(SearchListKeyboard.backwards(character: "\t", shift: false), false)
+        XCTAssertEqual(SearchListKeyboard.backwards(character: "\t", shift: true), true)
+        XCTAssertEqual(SearchListKeyboard.backwards(character: "\u{19}", shift: false), true)
+        XCTAssertEqual(SearchListKeyboard.backwards(character: "\u{19}", shift: true), true)
+        for character in [Character(" "), Character("\r"), Character("\u{1b}"), Character("a")] {
+            XCTAssertNil(SearchListKeyboard.backwards(character: character, shift: false))
+        }
+    }
+    func testReverseTabWrapsToOKThenCancelAndForwardReturnsToFirstRow() {
+        let inbox = SearchListFocus.list(TaskFilter.inboxListID)
+        let order: [SearchListFocus] = [.all, inbox, .cancel, .apply]
+        XCTAssertEqual(SearchListKeyboard.next(.all, in: order, backwards: true), .apply)
+        XCTAssertEqual(SearchListKeyboard.next(.apply, in: order, backwards: true), .cancel)
+        XCTAssertEqual(SearchListKeyboard.next(.cancel, in: order, backwards: false), .apply)
+        XCTAssertEqual(SearchListKeyboard.next(.apply, in: order, backwards: false), .all)
+        XCTAssertEqual(SearchListKeyboard.next(nil, in: order, backwards: true), .apply)
+        XCTAssertEqual(SearchListKeyboard.next(nil, in: order, backwards: false), .all)
+        XCTAssertNil(SearchListKeyboard.next(.all, in: [], backwards: true))
+    }
     func testDraftIsIsolatedUntilAppliedAndCancelDoesNotMutateCommittedSelection() {
         let a = UUID(), b = UUID()
         let committed: Set<UUID> = [a]
