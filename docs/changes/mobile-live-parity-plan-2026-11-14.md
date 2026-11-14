@@ -1,5 +1,10 @@
 # Mobile Tasks and Calendar: live parity plan
 
+## Current delivery priority: core features first
+
+User direction (November 14, 2026): defer accessibility-specific layouts and layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
+
+
 Status: **Observed gaps and proposed implementation queue, not completed parity.**
 
 The user requested an overall near-pixel-perfect mobile Tasks/Calendar comparison and prioritized implementation plan. This November 14 audit complements the [macro work map](ui-macro-parity-plan-2026-11-13.md) and [iPhone specification](../spec/iphone.md). Light theme only; preserve existing dark support. Sync, local-file recovery polishing, real notification authorization and external integrations remain deferred.

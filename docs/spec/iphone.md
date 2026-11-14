@@ -1,5 +1,10 @@
 # Taskovsky iPhone product and implementation specification
 
+## Current delivery priority: core features first
+
+User direction (November 14, 2026): defer accessibility-specific layouts and layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
+
+
 **Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](../changes/light-theme-priority-2026-11-13.md).
 
 **Status:** Early pre-alpha specification, version 0.5, 8 November 2026. User decisions incorporated; partial implementation follow-up recorded below. The separate iPhone target and many local workflows are now merged; full parity and acceptance remain incomplete. See the [current integration baseline](../current-baseline.md).
