@@ -2,7 +2,7 @@
 
 ## Current delivery priority: core features first
 
-User direction (November 14, 2026): defer accessibility-specific layouts and layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
+User direction (November 14, 2026): defer accessibility-specific layouts and accessibility-layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
 
 
 Status: **Observed gaps and proposed implementation queue, not completed parity.**
