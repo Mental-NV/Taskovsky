@@ -275,3 +275,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone Calendar header candidate: leading mode chooser and Filter View Range first in overflow follow observed C01/C02/C04 hierarchy. Existing Jump to Date remains; no reference overview/pixel parity claim. Verification pending; see `docs/changes/mobile-calendar-header-2026-11-14.md`.
 
 - iPhone Schedule Date grid candidate: visible month picker for non-Duration schedules over unchanged staged behavior. Duration and existing nested controls preserved; no exact Date/Duration-tab/popup parity. Full suite/release, independent review, five native Simulator tests and source-head CI passed; final exact-head CI remains required. See `docs/changes/mobile-schedule-date-grid-2026-11-14.md`.
+
+- iPhone Arrange right-side container candidate follows observed panel/dismissal direction; existing control placement retained. Six native drag/Undo/recurrence/dismissal/resize tests, full suite/release/review and source CI passed; final receipt-head CI remains required. See `docs/changes/mobile-arrange-side-panel-2026-11-14.md`.

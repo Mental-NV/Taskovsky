@@ -2470,6 +2470,24 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["calendarEditDone"].waitForExistence(timeout: 5))
     }
 
+    @MainActor func testCalendarArrangeSidePanelDismissesWithoutOpeningTask() {
+        let app = launch(qaCase: "arrange")
+        app.buttons["Calendar"].tap()
+        openArrange(app)
+        let panel = app.descendants(matching: .any)["calendarArrangePanel"].firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(panel.frame.minX, app.frame.width * 0.2)
+        XCTAssertLessThan(panel.frame.width, app.frame.width * 0.8)
+        attach(app, "Calendar Arrange right panel")
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.65)).tap()
+        waitGone(app.buttons["arrangeDone"])
+        XCTAssertFalse(app.buttons["taskDetailDone"].exists)
+        XCTAssertFalse(app.buttons["captureCancel"].exists)
+        openArrange(app)
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
+    }
+
     @MainActor func testCalendarArrangeScopesAndSchedulesTheFocusedDay() {
         let app = launch(qaCase: "arrange")
         app.buttons["Calendar"].tap()
@@ -2530,8 +2548,8 @@ extension ReadOnlyNavigationTests {
         guard day.waitForExistence(timeout: 5) else { return XCTFail("The target day is unavailable.") }
         let origin = app.coordinate(withNormalizedOffset: .zero)
         let header = day.frame
-        let allDay = origin.withOffset(CGVector(dx: header.midX, dy: header.maxY + 12))
-        let timed = origin.withOffset(CGVector(dx: header.midX, dy: header.maxY + 65))
+        let allDay = origin.withOffset(CGVector(dx: app.frame.width * 0.2, dy: header.maxY + 12))
+        let timed = origin.withOffset(CGVector(dx: app.frame.width * 0.2, dy: header.maxY + 65))
         let actions = app.buttons["Calendar actions"].frame
         let outside = origin.withOffset(CGVector(dx: actions.midX, dy: actions.midY))
         openArrange(app)
@@ -2575,17 +2593,17 @@ extension ReadOnlyNavigationTests {
         let app = launch(qaCase: "arrange")
         app.buttons["Calendar"].tap()
         let grip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000003"].firstMatch
-        for (mode, number) in [("Month", 3), ("Multi-Week", 10)] {
+        for (mode, number) in [("Month", 2), ("Multi-Week", 9)] {
             app.buttons["Calendar view"].tap()
             app.buttons[mode].tap()
             openArrange(app)
             let day = app.staticTexts["calendarMonthDay-2026-11-\(number)"]
             guard day.waitForExistence(timeout: 5) else { return XCTFail("The target date is unavailable in \(mode).") }
             let targetFrame = day.frame
-            let sheetGrabber = app.buttons["Sheet Grabber"]
-            XCTAssertLessThan(targetFrame.midY, sheetGrabber.frame.minY)
+            let panel = app.descendants(matching: .any)["calendarArrangePanel"].firstMatch
+            XCTAssertLessThan(targetFrame.minX + 8, panel.frame.minX)
             let target = app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: targetFrame.midX, dy: targetFrame.midY))
+                .withOffset(CGVector(dx: targetFrame.minX + 8, dy: targetFrame.midY))
             guard grip.waitForExistence(timeout: 5), grip.isHittable else { return XCTFail("The Arrange grip is unavailable.") }
             grip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
                 .press(forDuration: 0.6, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 0.25)
@@ -2612,7 +2630,7 @@ extension ReadOnlyNavigationTests {
         let day = app.buttons["calendarDay-2026-11-10"]
         guard day.waitForExistence(timeout: 5) else { return XCTFail("The target day is unavailable.") }
         let target = app.coordinate(withNormalizedOffset: .zero)
-            .withOffset(CGVector(dx: day.frame.midX, dy: day.frame.maxY + 12))
+            .withOffset(CGVector(dx: app.frame.width * 0.2, dy: day.frame.maxY + 12))
         openArrange(app)
         app.switches["arrangeOverdue"].coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
         let grip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000004"].firstMatch
@@ -2638,6 +2656,15 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(notice.waitForExistence(timeout: 5))
         XCTAssertEqual(notice.label, "This occurrence updated")
         XCTAssertFalse(grip.exists)
+        app.buttons["undoCalendarSchedule"].tap()
+        XCTAssertTrue(grip.waitForExistence(timeout: 5))
+        drag()
+        XCTAssertTrue(app.buttons["Series"].waitForExistence(timeout: 5))
+        app.buttons["Series"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", "Schedule updated"), object: notice)], timeout: 5), .completed)
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
     }
 
     @MainActor func testCalendarCardStagedRemovalAndScopedUndo() {
@@ -2936,6 +2963,9 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar"].tap()
         app.buttons["Calendar view"].tap()
         app.buttons["Day"].tap()
+        openArrange(app)
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
         let handle = app.buttons["calendarResizeHandle-00000000-0000-0000-0000-000000000002"]
         // A card can report a hittable sliver beneath the floating tab bar.
         // Bring the handle and the complete drag into the timeline viewport.

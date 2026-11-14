@@ -947,3 +947,7 @@ Calendar uses its existing mode chooser at the leading edge, month Jump to Date 
 ### Schedule Date grid
 
 For a schedule without Duration, Date uses a visible graphical month picker over the existing staged date binding and schedule-zone calendar. Outer Cancel discards selection; Done saves through the existing schedule transaction. Duration keeps its existing compact Date/Start/End flow. This is a core presentation slice, not reference Date/Duration tabs or exact popup geometry.
+
+### Calendar Arrange panel
+
+Arrange Tasks is a trailing panel over Calendar rather than a bottom sheet. Exposed grid taps dismiss without opening/editing tasks; existing drag/drop, Undo and recurring-scope rules remain required. Existing grouping/filter controls and nested editors are retained. Panel width is approximate, and reference grouping/Filter placement is not completed by this container slice.

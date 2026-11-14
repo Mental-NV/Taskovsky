@@ -2056,3 +2056,7 @@ Run `testCalendarHeaderModeAndOverflowPlacement`, `testCalendarFilterReset` and 
 ### iPhone schedule month grid
 
 Run `testScheduleDateGridSelectsDayAndOuterCancelDiscards`, `testScheduleCalendarDateEditSurvivesRelaunch` and `testScheduleNestedAndOuterCancelLeaveAnUntouchedTask` in owned Simulator. Verify actual grid day selection, outer Cancel and saved/relaunched schedule; inspect screenshots for normal layout and retained reachable Time/Duration controls. Existing domain/timezone tests and exact CI remain gates.
+
+### iPhone Arrange side panel
+
+Run the five `testCalendarArrange...` native tests covering side-panel dismissal, scoped scheduling, hour/all-day drag/Undo, both date grids and recurring scope. Adapt targets to an exposed first-column location, never bypass drag validation. Check nested editor Cancel/return and root recurrence dialog while panel remains open; inspect screenshot. Test original workspace/fixtures are untouched.
