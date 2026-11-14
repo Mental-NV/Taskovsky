@@ -53,6 +53,7 @@ struct MobileRootView: View {
     @State private var destination: TaskDestination = .today
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
+    @State private var boardGroupings: [TaskDestination: ScopedBoardGrouping] = [:]
     @State private var capturePresented = false
     @State private var drawer = false
     @State private var manageLists = false
@@ -215,14 +216,16 @@ struct MobileRootView: View {
                         Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary)
                         if section == .tasks {
                             let showsSort = showsTaskSort(in: snapshot.workspace)
-                            if showsSort { taskSortMenu }
-                            if destination != .trash && (showsSort || TaskTextBatch.isAvailable(in: destination, workspace: snapshot.workspace)) {
+                            if showsSort && !supportsScopedViewMenu(snapshot.workspace) { taskSortMenu }
+                            if destination != .trash && (showsSort || supportsScopedViewMenu(snapshot.workspace) || TaskTextBatch.isAvailable(in: destination, workspace: snapshot.workspace)) {
                                 taskActions(snapshot.workspace, showsSelection: showsSort)
                             }
                         }
                     }
                 }.padding(.horizontal, 16)
-                Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
+                if model.isQA || section != .tasks {
+                    Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
+                }
                 if model.recoveredDraft != nil || model.activeDraft != nil {
                     Button(model.activeDraft != nil ? "Continue your edit" : "Resume saved edit", action: resumeEdit).frame(minHeight: 44)
                 }
@@ -398,6 +401,7 @@ struct MobileRootView: View {
         let selected = model.taskSort == choice
         return Button {
             showTaskSort = false
+            showTaskActions = false
             taskOrderNotice = nil
             taskListDragSession = UUID()
             model.setTaskSort(choice)
@@ -410,12 +414,63 @@ struct MobileRootView: View {
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    private func supportsScopedViewMenu(_ data: WorkspaceData) -> Bool {
+        if case .list = destination { return false }
+        return TaskTimelineScope(destination: destination, data: data) != nil || ScopedBoardProjection.supports(destination, in: data)
+    }
+
+    private var scopedBoardGrouping: Binding<ScopedBoardGrouping> {
+        Binding(get: { boardGroupings[destination] ?? ScopedBoardProjection.defaultGrouping(for: destination) },
+                set: { boardGroupings[destination] = $0; showTaskActions = false })
+    }
+
+    private func scopedViewMenu(_ data: WorkspaceData) -> some View {
+        Menu {
+            Picker("Tasks view", selection: Binding(get: { alternateModes[destination] ?? .list }, set: { mode in
+                alternateModes[destination] = mode == .list ? nil : mode
+                showTaskActions = false
+            })) {
+                Text("List View").tag(TaskListViewMode.list)
+                if ScopedBoardProjection.supports(destination, in: data) { Text("Kanban View").tag(TaskListViewMode.board) }
+                if TaskTimelineScope(destination: destination, data: data) != nil { Text("Timeline View").tag(TaskListViewMode.timeline) }
+            }
+        } label: {
+            Label("View", systemImage: "rectangle.split.3x1").frame(minHeight: 44)
+        }.accessibilityIdentifier("taskDestinationViewMode")
+    }
+
     private func taskActions(_ data: WorkspaceData, showsSelection: Bool) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
         return circle("Tasks actions", symbol: "ellipsis") { showTaskActions = true }
             .accessibilityIdentifier("taskListActions")
+            .accessibilityValue(supportsScopedViewMenu(data) ? (alternateModes[destination] == .board ? "Kanban View" : alternateModes[destination] == .timeline ? "Timeline View" : "List View") : "")
             .popover(isPresented: $showTaskActions, arrowEdge: .top) {
                 VStack(alignment: .leading, spacing: 0) {
+                    if supportsScopedViewMenu(data) {
+                        scopedViewMenu(data)
+                        if alternateModes[destination] == .board {
+                            Menu {
+                                Picker("Group board by", selection: scopedBoardGrouping) {
+                                    ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
+                                }
+                            } label: {
+                                Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
+                            }.accessibilityIdentifier("scopedBoardGrouping")
+                        } else if showsSelection {
+                            Menu {
+                                taskSortChoice(nil)
+                                ForEach(PhoneTaskSort.choices, id: \.self) { taskSortChoice($0) }
+                                if destination.supportsTaskDateGrouping {
+                                    Divider()
+                                    groupingChoice(.creationDate)
+                                    groupingChoice(.dueDate)
+                                }
+                            } label: {
+                                Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
+                            }.accessibilityIdentifier("taskGroupAndSort")
+                        }
+                        Divider()
+                    }
                     if showsSelection {
                         Button {
                             guard let document = model.document else { return }
@@ -471,6 +526,7 @@ struct MobileRootView: View {
         let selected = model.taskGrouping == grouping
         return Button {
             showTaskSort = false
+            showTaskActions = false
             taskOrderNotice = nil
             taskListDragSession = UUID()
             model.setTaskGrouping(selected ? .standard : grouping)
@@ -511,20 +567,11 @@ struct MobileRootView: View {
                 taskDestinationRows(data)
             }
         } else if scope != nil || ScopedBoardProjection.supports(destination, in: data) {
-            let supportsBoard = ScopedBoardProjection.supports(destination, in: data)
-            Picker("Tasks view", selection: Binding(get: { alternateModes[destination] ?? .list }, set: { mode in
-                alternateModes[destination] = mode == .list ? nil : mode
-            })) {
-                Text("List").tag(TaskListViewMode.list)
-                if supportsBoard { Text("Board").tag(TaskListViewMode.board) }
-                if scope != nil { Text("Timeline").tag(TaskListViewMode.timeline) }
-            }.pickerStyle(.segmented).padding(.horizontal, 16)
-                .accessibilityIdentifier("taskDestinationViewMode")
             switch alternateModes[destination] {
             case .timeline:
                 if let scope { taskTimeline(scope, data: data) }
             case .board:
-                PhoneScopedTaskBoard(model: model, destination: destination, data: data,
+                PhoneScopedTaskBoard(model: model, destination: destination, data: data, grouping: scopedBoardGrouping,
                                      open: { selectedTask = PhoneTaskRoute(id: $0) },
                                      schedule: scheduleFromScopedBoard).id(destination)
             default:

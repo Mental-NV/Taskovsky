@@ -203,20 +203,20 @@ struct PhoneScopedTaskBoard: View {
     let data: WorkspaceData
     let open: (UUID) -> Void
     let schedule: (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool
-    @State private var grouping: ScopedBoardGrouping
+    @Binding var grouping: ScopedBoardGrouping
     @State private var selected: ScopedBoardColumn.ID?
     @State private var targeted: ScopedBoardColumn.ID?
     @State private var dragSession = UUID()
     @State private var choosingTask: (id: UUID, revision: WorkspaceRevision)?
 
-    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData,
+    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData, grouping: Binding<ScopedBoardGrouping>,
          open: @escaping (UUID) -> Void, schedule: @escaping (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool) {
         self.model = model
         self.destination = destination
         self.data = data
         self.open = open
         self.schedule = schedule
-        _grouping = State(initialValue: ScopedBoardProjection.defaultGrouping(for: destination))
+        _grouping = grouping
     }
 
     private func projection(in workspace: WorkspaceData) -> ScopedBoardProjection {
@@ -228,9 +228,6 @@ struct PhoneScopedTaskBoard: View {
         let board = projection(in: data)
         let visible = board.columns.contains(where: { $0.id == selected }) ? selected : board.columns.first?.id
         VStack(spacing: 8) {
-            Picker("Group board by", selection: $grouping) {
-                ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
-            }.pickerStyle(.segmented).accessibilityIdentifier("scopedBoardGrouping").padding(.horizontal, 16)
             PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {

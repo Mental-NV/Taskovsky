@@ -2014,3 +2014,6 @@ Isolated from main `993679c`. [Change contract](../changes/subtask-inline-focus-
 ## Task-row conversion verification
 
 Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](../changes/task-row-conversion-2026-11-13.md).
+
+### Mobile Tasks menu-first candidate
+Base `ef25cb6`; iPhone Simulator generic build-for-testing passed after final test/accessibility edits. Independent rereview accepted the correction; shared/Mac regression suite running. Native tests compiled, not executed. No native interaction or visual acceptance claimed. See [scope](../changes/mobile-tasks-view-menu-2026-11-14.md).
