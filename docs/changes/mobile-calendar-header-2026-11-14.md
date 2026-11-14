@@ -9,3 +9,7 @@ This is partial structural parity only. The reference trailing calendar overview
 ## Acceptance
 
 Full tests, release/signature, independent review, native header/menu geometry, filter Cancel/save/reopen/reset and distant-date jump are required. Inspect actual light-theme screenshots. Original worktrees and user QA device remain untouched. Exact hosted CI must pass before merge; no calibrated pixel or physical-device parity claim.
+
+### Native acceptance receipt
+
+Source f3a9b06: 826 XCTest +38 Swift Testing, release/strict signature and independent review passed. Three owned iPhone Simulator tests passed: header/control geometry and overflow sequence; filter Cancel/save/relaunch/All reset; distant-date jump and mode retention. Actual light-theme header/menu screenshots were inspected with no observed overlap. Result `/private/tmp/TaskovskyCalendarHeaderNative.xcresult`; header image `/private/tmp/TaskovskyCalendarHeaderScreens/D60994DF-11F0-452C-B5A7-35B9BCC69DC0.png`, menu image `F05A9F9E-C60D-4BB9-BFA2-26F93418A8A1.png` in the same directory. These are local neutral QA locators, not portable assets. Owned Simulator shut down, user QA untouched. Hosted exact-head CI remains required; no complete or pixel-perfect Calendar claim.
