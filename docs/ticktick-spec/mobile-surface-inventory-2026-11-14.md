@@ -8,7 +8,7 @@ Visible labels are evidence, not authorization to implement external services or
 
 I mapped **46 TickTick iPhone surface states** through iPhone Mirroring: 15 in Calendar, 14 in the task detail and scheduling flow, and 17 in Tasks and organization. Three states are carried forward from the immediately preceding live pass: **Duration**, the **Time** wheel, and the Tasks **View** submenu. The IDs below are stable references. The time ranges identify screenshots in the inspection trace and use the mirrored phone’s clock.
 
-TickTick returned to **Today → Group & Sort**, with **Priority** grouping and **Tag** sorting selected. Calendar stayed in **Week**. I cancelled the schedule and creation drafts without submitting them. No repository files were changed, and Computer Use has stopped.
+TickTick returned to **Today → Group & Sort**, with **Priority** grouping and **Tag** sorting selected. Calendar stayed in **Week**. I cancelled the schedule and creation drafts without submitting them. The live inspection changed no repository files, and Computer Use stopped before this documentation update.
 
 ### Calendar
 
@@ -25,7 +25,7 @@ TickTick returned to **Today → Group & Sort**, with **Priority** grouping and 
 | C09 | C07 → an existing QA list’s swatch → **Color Pick** | **Recommend → Macaron → Morandi → Rococo → Classic → Memphis → Custom**. The current green swatch was outlined. Back retained the original color. |
 | C10 | C06 → **Style** → pushed page | **Item Style** shows previews for **Modern ✓** and **Classic**, then **Show Item Icons**. **Heatmap** shows previews for **Hide** and **Show ✓**. Back returned to View Options. |
 | C11 | C10 → **Show Item Icons** → pushed page | **Task → Calendar → Note → Focus Record**, all on. The page says the task checkbox hides when space is limited. That behavior was not exercised. Back returned to Style. |
-| C12 | C06 → **Additional Time Zone** → **Time Zone Settings** | **Additional Time Zone** on, **Current Time Zone** showing Moscow GMT+3, and **Add Time Zone**. Back returned to View Options. |
+| C12 | C06 → **Additional Time Zone** → **Time Zone Settings** | **Additional Time Zone** on, **Current Time Zone** showing the configured zone (personal value omitted), and **Add Time Zone**. Back returned to View Options. |
 | C13 | C04 → **Arrange Tasks** → right-side panel | **List ✓ → Tag → Priority** above grouped cards. The panel leaves a strip of Week visible. Header **…** and footer **Filter** open separate surfaces. Tapping the exposed grid closed the panel. |
 | C14 | C13 → **…** → anchored menu | **Undated Task ✓ → Overdue Task → Show Notes ✓ → Show Task Hierarchy ✓**. Tapping the panel header outside the menu dismissed it. |
 | C15 | C13 → **Filter** → centered dialog | **All ✓ → Inbox → lists and nested folder contents**, with **Cancel** and **Done**. Cancel returned to Arrange. This dialog is separate from C05’s tall sheet. |
