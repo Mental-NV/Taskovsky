@@ -4,6 +4,10 @@
 
 Taskovsky uses separate documents for product behavior, platform UI, implementation architecture, and TickTick comparison. Begin here before asking an agent to implement a feature.
 
+## Mobile live parity plan
+
+See the [November 14 live mobile Tasks/Calendar audit and implementation queue](changes/mobile-live-parity-plan-2026-11-14.md) for observed gaps, screenshot provenance, open measurements and acceptance gates. This is a plan, not a full-parity claim.
+
 ## Current baseline and authority
 
 Use the [current integration baseline](current-baseline.md) and latest source before planning work. Main now contains both the native Mac app and a separate iPhone target; the phone is not merely proposed. The latest checked integration is `dc6c7ab` (November 12, 2026). This pointer does not certify full parity or all manual acceptance cases.
