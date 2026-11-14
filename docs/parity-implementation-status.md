@@ -243,3 +243,6 @@ Active task rows expose Convert to Note using the existing detail conversion pol
 
 ### November 14 mobile Tasks menu candidate
 [Menu-first controls](changes/mobile-tasks-view-menu-2026-11-14.md): implemented locally, native verification pending. User screenshots establish control placement; card/group visual parity remains open.
+
+### Mobile Board card density
+[Compact title/date captions](changes/mobile-compact-board-cards-2026-11-14.md) implemented, verification pending. Grouping and date/color fidelity remain open.

@@ -476,15 +476,24 @@ struct PhoneTaskRowOrderDrop: ViewModifier {
 }
 
 private struct PhoneBoardTaskTitle: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let task: TaskItem
     let open: (UUID) -> Void
 
     var body: some View {
         Button { open(task.id) } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(task.title).font(.body)
-                if let due = task.dueDate {
-                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption).foregroundStyle(.secondary)
+            Group {
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(task.title).font(.body)
+                        dueCaption
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Text(task.title).font(.body).lineLimit(1).truncationMode(.tail)
+                        Spacer(minLength: 0)
+                        dueCaption.fixedSize(horizontal: true, vertical: false)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
@@ -493,5 +502,12 @@ private struct PhoneBoardTaskTitle: View {
         .buttonStyle(.plain)
         .accessibilityLabel(task.title)
         .accessibilityIdentifier("boardCard-" + task.id.uuidString)
+    }
+
+    @ViewBuilder private var dueCaption: some View {
+        if let due = task.dueDate {
+            Text(due.formatted(.dateTime.month(.abbreviated).day()))
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 }

@@ -909,3 +909,6 @@ Capture, batch, lifecycle and schedule successes now have independent five-secon
 
 ## Mobile Tasks menu-first follow-up
 Smart-destination view/group controls are relocated by [MOB-VIEW-MENU](../changes/mobile-tasks-view-menu-2026-11-14.md), verification pending. Concrete-list modes and larger Kanban layout remain unchanged.
+
+## Compact Kanban captions
+[Compact Board title/date layout](../changes/mobile-compact-board-cards-2026-11-14.md) preserves existing actions and date labels; accessibility text sizes keep stacked wrapping. Verification pending.

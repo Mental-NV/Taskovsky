@@ -5800,6 +5800,43 @@ extension ReadOnlyNavigationTests {
         choice.tap()
     }
 
+    @MainActor func testCompactBoardCardLayoutEvidence() {
+        let app = launch(qaCase: "timeline")
+        goTo("Open Launch projects", in: app)
+        selectScopedView("Kanban View", in: app)
+        let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertEqual(card.label, "Prepare the weekly plan")
+        XCTAssertGreaterThanOrEqual(card.frame.height, 44)
+        XCTAssertLessThanOrEqual(card.frame.height, 48)
+        attach(app, "Compact Kanban card with trailing date")
+        card.tap()
+        XCTAssertTrue(app.buttons["taskDetailDone"].waitForExistence(timeout: 5))
+        app.buttons["taskDetailDone"].tap()
+
+        app.terminate()
+        let originalArguments = app.launchArguments
+        app.launchArguments = originalArguments + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Open Launch projects", in: app)
+        selectScopedView("Kanban View", in: app)
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertEqual(card.label, "Prepare the weekly plan")
+        XCTAssertGreaterThanOrEqual(card.frame.height, 44)
+        attach(app, "Kanban card largest standard text size")
+        app.terminate()
+        app.launchArguments = originalArguments + ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Open Launch projects", in: app)
+        selectScopedView("Kanban View", in: app)
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        XCTAssertEqual(card.label, "Prepare the weekly plan")
+        XCTAssertGreaterThan(card.frame.height, 48)
+        attach(app, "Kanban card accessibility text fallback")
+    }
+
     @MainActor func testTodayViewMenuEvidence() {
         let app = launch()
         XCTAssertFalse(app.segmentedControls["taskDestinationViewMode"].exists)
