@@ -5707,7 +5707,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertLessThan(review.frame.midY, plan.frame.midY)
         attach(app, "Timeline section headings and scheduled tasks")
         goTo("Work and Personal", in: app)
-        app.segmentedControls["taskDestinationViewMode"].buttons["Timeline"].tap()
+        selectScopedView("Timeline View", in: app)
         XCTAssertTrue(app.staticTexts["Work · Build"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Work · Review"].exists)
         XCTAssertTrue(app.staticTexts["Personal"].exists)
@@ -5762,14 +5762,14 @@ extension ReadOnlyNavigationTests {
         goTo("Personal", in: app)
         XCTAssertTrue(listMode.buttons["List"].isSelected)
         goTo("Open Launch projects", in: app)
-        app.segmentedControls["taskDestinationViewMode"].buttons["Timeline"].tap()
+        selectScopedView("Timeline View", in: app)
         XCTAssertTrue(workRange.waitForExistence(timeout: 5))
         XCTAssertTrue(undated.exists)
         XCTAssertFalse(personal.exists)
         XCTAssertFalse(archived.exists)
 
         goTo("Work and Personal", in: app)
-        app.segmentedControls["taskDestinationViewMode"].buttons["Timeline"].tap()
+        selectScopedView("Timeline View", in: app)
         XCTAssertTrue(personal.waitForExistence(timeout: 5))
         XCTAssertTrue(workRange.exists)
         XCTAssertFalse(archived.exists)
@@ -5782,13 +5782,60 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(undated.waitForExistence(timeout: 5))
     }
 
+    @MainActor private func selectScopedView(_ name: String, in app: XCUIApplication) {
+        app.buttons["taskListActions"].tap()
+        app.buttons["taskDestinationViewMode"].tap()
+        let choice = app.buttons[name]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        choice.tap()
+        XCTAssertEqual(app.buttons["taskListActions"].value as? String, name)
+        XCTAssertFalse(app.segmentedControls["taskDestinationViewMode"].exists)
+    }
+
+    @MainActor private func selectScopedGrouping(_ name: String, in app: XCUIApplication) {
+        app.buttons["taskListActions"].tap()
+        app.buttons["scopedBoardGrouping"].tap()
+        let choice = app.buttons[name]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        choice.tap()
+    }
+
+    @MainActor func testTodayViewMenuEvidence() {
+        let app = launch()
+        XCTAssertFalse(app.segmentedControls["taskDestinationViewMode"].exists)
+        app.buttons["taskListActions"].tap()
+        app.buttons["taskDestinationViewMode"].tap()
+        XCTAssertTrue(app.buttons["List View"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Kanban View"].exists)
+        attach(app, "Today View submenu")
+        app.buttons["Kanban View"].tap()
+        XCTAssertEqual(app.buttons["taskListActions"].value as? String, "Kanban View")
+        attach(app, "Today Kanban without permanent mode controls")
+        app.buttons["taskListActions"].tap()
+        app.buttons["scopedBoardGrouping"].tap()
+        XCTAssertTrue(app.buttons["Date"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["List"].exists)
+        attach(app, "Today Group and Sort submenu")
+        app.buttons["Date"].tap()
+        selectScopedView("List View", in: app)
+    }
+
+    @MainActor func testScopedViewMenuCanReturnToList() {
+        let app = launch(qaCase: "timeline")
+        goTo("Open Launch projects", in: app)
+        selectScopedView("Kanban View", in: app)
+        selectScopedGrouping("Date", in: app)
+        selectScopedView("List View", in: app)
+        XCTAssertFalse(app.buttons["scopedBoardColumn-0"].exists)
+        selectScopedView("Kanban View", in: app)
+        XCTAssertTrue(app.buttons["scopedBoardColumn-0"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testScopedBoardMovesDateAndUndoesRange() {
         let app = launch(qaCase: "all-day-spans")
         goTo("Next 7 Days", in: app)
-        app.segmentedControls["taskDestinationViewMode"].buttons["Board"].tap()
-        let grouping = app.segmentedControls["scopedBoardGrouping"]
-        XCTAssertTrue(grouping.waitForExistence(timeout: 5))
-        XCTAssertTrue(grouping.buttons["Date"].isSelected)
+        selectScopedView("Kanban View", in: app)
+        XCTAssertFalse(app.segmentedControls["scopedBoardGrouping"].exists)
         let original = app.buttons["scopedBoardColumn-2"]
         let next = app.buttons["scopedBoardColumn-3"]
         XCTAssertTrue(original.waitForExistence(timeout: 5))
@@ -5813,23 +5860,20 @@ extension ReadOnlyNavigationTests {
 
     @MainActor func testScopedBoardFolderAndTagListMove() {
         let app = launch(qaCase: "timeline")
-        let mode = app.segmentedControls["taskDestinationViewMode"]
         let work = app.buttons["scopedBoardColumn-0"]
         let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
         goTo("Open Launch projects", in: app)
-        mode.buttons["Board"].tap()
+        selectScopedView("Kanban View", in: app)
         XCTAssertTrue(work.waitForExistence(timeout: 5))
         XCTAssertEqual(work.label, "Work")
         XCTAssertFalse(app.buttons["scopedBoardColumn-1"].exists)
         XCTAssertTrue(card.waitForExistence(timeout: 5))
-        let grouping = app.segmentedControls["scopedBoardGrouping"]
-        grouping.buttons["Date"].tap()
-        XCTAssertTrue(grouping.buttons["Date"].isSelected)
-        grouping.buttons["List"].tap()
+        selectScopedGrouping("Date", in: app)
+        selectScopedGrouping("List", in: app)
         XCTAssertTrue(card.waitForExistence(timeout: 5))
 
         goTo("drawerTag-00000000-0000-0000-0000-000000000200", in: app)
-        mode.buttons["Board"].tap()
+        selectScopedView("Kanban View", in: app)
         let workTab = app.buttons["scopedBoardColumn-1"]
         let personal = app.buttons["scopedBoardColumn-2"]
         XCTAssertTrue(workTab.waitForExistence(timeout: 5))
@@ -5842,14 +5886,14 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(personal.isSelected)
         attach(app, "Tag Board with the card in its new list")
         goTo("Open Launch projects", in: app)
-        XCTAssertTrue(mode.buttons["Board"].isSelected)
+        XCTAssertEqual(app.buttons["taskListActions"].value as? String, "Kanban View")
         XCTAssertFalse(card.exists)
     }
 
     @MainActor func testScopedBoardDragsTagCardAcrossLists() {
         let app = launch(qaCase: "timeline")
         goTo("drawerTag-00000000-0000-0000-0000-000000000200", in: app)
-        app.segmentedControls["taskDestinationViewMode"].buttons["Board"].tap()
+        selectScopedView("Kanban View", in: app)
         let work = app.buttons["scopedBoardColumn-1"]
         XCTAssertTrue(work.waitForExistence(timeout: 5))
         work.tap()

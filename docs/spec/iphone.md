@@ -906,3 +906,6 @@ Capture, batch, lifecycle and schedule successes now have independent five-secon
 ### Date-filter reset follow-up (November 13)
 
 [Mobile date selection correction](../changes/mobile-date-all-selection-2026-11-13.md) makes Any date an explicit reset in Search and Normal filter drafts. Specific date selections remove the unrestricted sentinel, keeping other specific rules. Legacy saved values remain unchanged until a date action. This does not change the shared matcher or Advanced filters.
+
+## Mobile Tasks menu-first follow-up
+Smart-destination view/group controls are relocated by [MOB-VIEW-MENU](../changes/mobile-tasks-view-menu-2026-11-14.md), verification pending. Concrete-list modes and larger Kanban layout remain unchanged.

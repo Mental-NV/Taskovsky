@@ -240,3 +240,6 @@ The [Schedule… row entry point](changes/task-row-schedule-2026-11-13.md) reuse
 ## Task-row conversion checkpoint
 
 Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](changes/task-row-conversion-2026-11-13.md).
+
+### November 14 mobile Tasks menu candidate
+[Menu-first controls](changes/mobile-tasks-view-menu-2026-11-14.md): implemented locally, native verification pending. User screenshots establish control placement; card/group visual parity remains open.
