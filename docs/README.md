@@ -30,6 +30,8 @@ The isolated mobile follow-up is based on merged PR #4 at `6ee96ee`, with the ve
 
 Use the [macro-area UI parity map](changes/ui-macro-parity-plan-2026-11-13.md) for the light-theme Tasks/Calendar comparison, priority queue and per-PR screenshot delivery contract. It distinguishes implemented, observed and unverified states rather than claiming full parity.
 
+The requested [iPhone Sort & Group sheet plan](changes/mobile-sort-group-sheet-plan-2026-11-14.md) records the November 14 supplied reference, independent grouping/sorting controls and unresolved interaction semantics. It is planned work, not an implemented sheet.
+
 ## Read by purpose
 
 | Purpose | Canonical document | Status |
