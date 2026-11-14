@@ -2048,3 +2048,7 @@ Base `9783fa7`; isolated checkout. [Bounded contract](../changes/mobile-contextu
 ### iPhone compact Tasks rows
 
 Run `testCompactListDatesRemainAccessibleAndOpenDetail`, `testListDatesReflowAtAccessibilityTextSize`, and `testTaskRowSwipesStageScheduleAndApplyPriorityAndMove` in an owned QA Simulator. Inspect attached normal and accessibility screenshots: trailing date/title fit, no overlap, readable stacked reflow, date accessibility value and >=44-point title target. Preserve Search metadata, countdown target, hierarchy/disclosure and existing gestures; do not infer pixel parity or VoiceOver traversal from automated results.
+
+### iPhone Calendar header
+
+Run `testCalendarHeaderModeAndOverflowPlacement`, `testCalendarFilterReset` and `testCalendarJumpToDistantDateCancelAndKeepMode` in owned Simulator. Verify mode/month/overflow horizontal order, first three overflow items, Tasks drawer restoration, filter Cancel/save/relaunch/reset and date-jump retention. Capture real header/menu screenshots; the reference Week overview remains separate.

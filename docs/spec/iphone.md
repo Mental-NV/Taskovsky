@@ -934,3 +934,7 @@ The bounded [left-drawer shell](../changes/mobile-tasks-drawer-shell-2026-11-14.
 ### Compact Tasks list rows
 
 At standard Dynamic Type sizes, ordinary Tasks rows put their existing date caption trailing the title rather than below it. Titles retain up to two lines, the row keeps a 44-point minimum title target, and hierarchy, disclosure, completion, swipe and reorder controls are unchanged. Nested rows, accessibility text sizes and Search context retain stacked dates; the countdown switch remains a separate existing target. Due-date values are exposed to accessibility for both ordinary and date-grouped rows. This follows the observed compact/trailing-date direction, not calibrated TickTick geometry or complete row parity.
+
+### Calendar header hierarchy
+
+Calendar uses its existing mode chooser at the leading edge, month Jump to Date centrally and overflow at the trailing edge. Overflow begins Filter View Range, View Options, Arrange Tasks; existing Postpone Tasks remains. Tasks/Search still expose their workspace drawer. Reference Week overview and exact pixel matching are not implemented by this header-only change.
