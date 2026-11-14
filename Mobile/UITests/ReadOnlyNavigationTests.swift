@@ -1561,6 +1561,45 @@ final class ReadOnlyNavigationTests: XCTestCase {
         }
     }
 
+    @MainActor func testSortGroupSheetDismissalAndLargeText() {
+        let app = launch(qaCase: "task-sort")
+        func openSheet() {
+            app.buttons["taskListActions"].tap()
+            app.buttons["taskGroupAndSort"].tap()
+            XCTAssertTrue(app.buttons["sortCreated"].waitForExistence(timeout: 5))
+        }
+        openSheet()
+        attach(app, "Sort Group supported pills light theme")
+        let sheet = app.scrollViews["taskSortGroupSheet"]
+        XCTAssertTrue(sheet.exists)
+        sheet.swipeDown()
+        waitGone(app.buttons["sortCreated"])
+        openSheet()
+        XCTAssertTrue(app.buttons["groupDefault"].isSelected)
+        sheet.swipeDown()
+        waitGone(app.buttons["sortCreated"])
+        app.terminate()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openSheet()
+        XCTAssertTrue(app.buttons["groupDefault"].isHittable)
+        let priority = app.buttons["sortPriority"]
+        for _ in 0..<5 where !priority.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(priority.isHittable)
+        XCTAssertGreaterThanOrEqual(priority.frame.height, 44)
+        attach(app, "Sort Group largest text scrollable options")
+        priority.tap()
+        waitGone(priority)
+        openSheet()
+        let restore = app.buttons["restoreDefaultTaskSort"]
+        for _ in 0..<5 where !restore.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(restore.isHittable)
+        attach(app, "Sort Group largest text reachable restore")
+        restore.tap()
+        waitGone(restore)
+    }
+
     @MainActor func testTodaySortGroupSheetIndependentChoices() {
         let app = launch(qaCase: "task-sort")
         func openSheet() {

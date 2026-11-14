@@ -1263,7 +1263,7 @@ private struct PhoneSortGroupSheet: View {
             Text(title).font(.subheadline).multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 6)
                 .foregroundStyle(selected ? Color.white : Color.secondary)
-                .background(selected ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground),
+                .background(selected ? Color.accentColor : Color(uiColor: .secondarySystemBackground),
                             in: Capsule())
                 .contentShape(Capsule())
         }.buttonStyle(.plain)
