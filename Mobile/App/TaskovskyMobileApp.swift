@@ -165,7 +165,8 @@ struct MobileRootView: View {
             PhoneStyle.page.ignoresSafeArea()
             VStack(spacing: 12) {
                 HStack {
-                    circle("Open navigation", symbol: "line.3.horizontal") { drawer = true }
+                    if section == .calendar { calendarModeChooser }
+                    else { circle("Open navigation", symbol: "line.3.horizontal") { drawer = true } }
                     Spacer()
                     if section == .calendar {
                         Button {
@@ -183,23 +184,12 @@ struct MobileRootView: View {
                                                                             calendar: calendar, timeZone: calendar.timeZone)))
                         .accessibilityIdentifier("calendarJumpToDate")
                         Spacer()
-                        Button { viewPicker = true } label: {
-                            Image(systemName: "calendar").frame(width: 44, height: 44)
-                        }.accessibilityLabel("Calendar view")
-                            .popover(isPresented: $viewPicker, arrowEdge: .top) {
-                                VStack(spacing: 0) {
-                                    ForEach(TaskCalendarMode.allCases, id: \.self) { mode in
-                                        Button { viewPicker = false; selectCalendarMode(mode, at: focus) } label: {
-                                            HStack { Text(mode.title); Spacer(); if options.mode == mode { Image(systemName: "checkmark") } }
-                                                .frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-                                        }.buttonStyle(.plain)
-                                    }
-                                }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
-                            }
-                        circle("Calendar filters", symbol: "line.3.horizontal.decrease") { openCalendarPreferences(.filters) }
                         circle("Calendar actions", symbol: "ellipsis") { showCalendarActions = true }
                             .popover(isPresented: $showCalendarActions, arrowEdge: .top) {
                                 VStack(spacing: 0) {
+                                    calendarAction("Filter View Range", symbol: "line.3.horizontal.decrease") {
+                                        openCalendarPreferences(.filters)
+                                    }
                                     calendarAction("View Options", symbol: "slider.horizontal.3") {
                                         openCalendarPreferences(.display)
                                     }
@@ -1222,6 +1212,22 @@ struct MobileRootView: View {
         guard let document = model.document else { return }
         calendarPreferenceRoute = PhoneCalendarPreferenceRoute(kind: kind, options: document.snapshot.settings.calendarOptions,
                                                                expected: document.revision)
+    }
+
+    private var calendarModeChooser: some View {
+                        Button { viewPicker = true } label: {
+                            Image(systemName: "calendar").frame(width: 44, height: 44)
+                        }.accessibilityLabel("Calendar view")
+                            .popover(isPresented: $viewPicker, arrowEdge: .top) {
+                                VStack(spacing: 0) {
+                                    ForEach(TaskCalendarMode.allCases, id: \.self) { mode in
+                                        Button { viewPicker = false; selectCalendarMode(mode, at: focus) } label: {
+                                            HStack { Text(mode.title); Spacer(); if options.mode == mode { Image(systemName: "checkmark") } }
+                                                .frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
+                                        }.buttonStyle(.plain)
+                                    }
+                                }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
+                            }
     }
 
     private func calendarAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {

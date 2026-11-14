@@ -271,3 +271,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 [Ordinary zero-progress row](changes/mobile-contextual-progress-2026-11-14.md) is locally hidden with editing retained. Local tests/review/native checks and screenshots passed; exact-head CI pending. Mobile detail layout, descriptions and exact TickTick progress rules remain open.
 
 - iPhone Tasks row density candidate: existing dates trail standard-size list titles, while nested/accessibility/Search stay stacked and countdown remains separate. Native four-test QA, full tests/release/signature and independent review passed; hosted exact-head CI remains required. Observed direction only, not calibrated row parity. See `docs/changes/mobile-list-row-density-2026-11-14.md`.
+
+- iPhone Calendar header candidate: leading mode chooser and Filter View Range first in overflow follow observed C01/C02/C04 hierarchy. Existing Jump to Date remains; no reference overview/pixel parity claim. Verification pending; see `docs/changes/mobile-calendar-header-2026-11-14.md`.

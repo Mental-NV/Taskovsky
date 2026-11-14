@@ -273,11 +273,40 @@ final class ReadOnlyNavigationTests: XCTestCase {
         reveal(showMore, in: app)
         XCTAssertFalse(future.exists)
     }
+    @MainActor func testCalendarHeaderModeAndOverflowPlacement() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        let mode = app.buttons["Calendar view"]
+        let month = app.buttons["calendarJumpToDate"]
+        let actions = app.buttons["Calendar actions"]
+        XCTAssertTrue(mode.waitForExistence(timeout: 5))
+        XCTAssertLessThan(mode.frame.maxX, month.frame.minX)
+        XCTAssertLessThan(month.frame.maxX, actions.frame.minX)
+        XCTAssertFalse(app.buttons["Open navigation"].exists)
+        attach(app, "Calendar leading mode and month header")
+        mode.tap()
+        XCTAssertTrue(app.buttons["Week"].waitForExistence(timeout: 5))
+        attach(app, "Calendar mode menu")
+        app.buttons["Week"].tap()
+        actions.tap()
+        let filter = app.buttons["Filter View Range"]
+        XCTAssertTrue(filter.waitForExistence(timeout: 5))
+        XCTAssertLessThan(filter.frame.minY, app.buttons["View Options"].frame.minY)
+        XCTAssertLessThan(app.buttons["View Options"].frame.minY, app.buttons["Arrange Tasks"].frame.minY)
+        attach(app, "Calendar overflow filter hierarchy")
+        filter.tap()
+        XCTAssertTrue(app.buttons["calendarPreferencesCancel"].waitForExistence(timeout: 5))
+        app.buttons["calendarPreferencesCancel"].tap()
+        app.buttons["Tasks"].tap()
+        XCTAssertTrue(app.buttons["Open navigation"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testCalendarFilterReset() {
         let app = launch()
         app.buttons["Calendar"].tap()
         let task = app.buttons["Review the project outline"]
-        app.buttons["Calendar filters"].tap()
+        app.buttons["Calendar actions"].tap()
+        app.buttons["Filter View Range"].tap()
         let work = app.buttons["Work"]
         XCTAssertTrue(work.waitForExistence(timeout: 3))
         work.tap()
@@ -285,7 +314,8 @@ final class ReadOnlyNavigationTests: XCTestCase {
         app.buttons["calendarPreferencesCancel"].tap()
         XCTAssertTrue(task.waitForExistence(timeout: 5))
 
-        app.buttons["Calendar filters"].tap()
+        app.buttons["Calendar actions"].tap()
+        app.buttons["Filter View Range"].tap()
         XCTAssertTrue(work.waitForExistence(timeout: 3))
         app.buttons["Show only Work"].tap()
         XCTAssertEqual(work.value as? String, "Selected")
@@ -297,7 +327,8 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         app.buttons["Calendar"].tap()
         XCTAssertFalse(task.exists)
-        app.buttons["Calendar filters"].tap()
+        app.buttons["Calendar actions"].tap()
+        app.buttons["Filter View Range"].tap()
         XCTAssertTrue(work.waitForExistence(timeout: 3))
         XCTAssertEqual(work.value as? String, "Selected")
         app.buttons["All"].tap()
