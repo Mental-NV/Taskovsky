@@ -2040,3 +2040,7 @@ Priority board update: bounded native tests and actual Simulator images passed f
 ## Mobile Tasks drawer shell
 
 Base `7a05e615`; isolated checkout. Final independent source review found no blocking defect; 826 XCTest +38 Swift Testing, release/signature and three owned native drawer regressions passed. Normal/largest-text screenshots inspected; bounded fit passed. Actual VoiceOver traversal, Reduce Motion setting, landscape and exact pixel parity remain unverified. Hosted exact-head CI pending. [Scope and limits](../changes/mobile-tasks-drawer-shell-2026-11-14.md).
+
+## Mobile contextual progress
+
+Base `9783fa7`; isolated checkout. [Bounded contract](../changes/mobile-contextual-progress-2026-11-14.md). Independent review, 826 XCTest +38 Swift Testing, release/signature and two owned native tests passed: Set Progress/Cancel/save/relaunch/reset/checklist and styled-description protection. Actual zero/nonzero screenshots inspected; exact-head CI pending. VoiceOver invocation and complete visual parity remain unverified.

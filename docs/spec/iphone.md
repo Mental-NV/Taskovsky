@@ -926,3 +926,7 @@ Priority board update: bounded native tests and actual Simulator images passed f
 ## November 14 Tasks drawer shell follow-up
 
 The bounded [left-drawer shell](../changes/mobile-tasks-drawer-shell-2026-11-14.md) replaces the phone navigation large sheet with an indigo leading overlay and dimmed dismissible backdrop. Existing destinations and management routes remain; full drawer hierarchy/token matching is not complete. See its record for passed bounded native/visual checks and remaining accessibility/viewport limits; do not treat this structural change as exact parity.
+
+## November 14 contextual task progress
+
+[Bounded iPhone progress presentation](../changes/mobile-contextual-progress-2026-11-14.md): ordinary checklist-free zero-progress tasks omit the idle row; checklist/nonzero summaries remain. The existing checkbox Set Progress route remains and has a named accessibility action. Description/formatting routes and data semantics are unchanged. Bounded native verification passed; this does not establish the complete reference visibility rule.

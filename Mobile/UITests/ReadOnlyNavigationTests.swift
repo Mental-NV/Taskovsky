@@ -4067,16 +4067,22 @@ extension ReadOnlyNavigationTests {
         let detailDone = app.buttons["taskDetailDone"]
 
         manualTask.tap()
-        XCTAssertTrue(edit.waitForExistence(timeout: 5))
-        XCTAssertEqual(edit.value as? String, "0%")
-        edit.tap()
+        XCTAssertTrue(app.buttons["editSchedule"].waitForExistence(timeout: 5))
+        XCTAssertFalse(edit.exists)
+        attach(app, "Ordinary task without idle zero progress")
+        let detailCompletion = app.scrollViews.containing(.button, identifier: "editSchedule")
+            .buttons["lifecycleToggle-00000000-0000-0000-0000-000000000002"].firstMatch
+        detailCompletion.press(forDuration: 0.75)
+        let detailProgressMenu = app.buttons["Set Progress"]
+        XCTAssertTrue(detailProgressMenu.waitForExistence(timeout: 5))
+        detailProgressMenu.tap()
         XCTAssertTrue(slider.waitForExistence(timeout: 5))
         slider.adjust(toNormalizedSliderPosition: 0.5)
         XCTAssertNotEqual(draftValue.label, "0%")
         app.buttons["taskMetadataCancel"].tap()
         app.buttons["Discard Changes"].tap()
         waitGone(slider)
-        XCTAssertEqual(edit.value as? String, "0%")
+        XCTAssertFalse(edit.exists)
         detailDone.tap()
 
         let completion = app.buttons["lifecycleToggle-00000000-0000-0000-0000-000000000002"]
@@ -4107,6 +4113,17 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(edit.waitForExistence(timeout: 5))
         XCTAssertEqual(edit.value as? String, "100%")
         attach(app, "Manual task progress after relaunch")
+        edit.tap()
+        XCTAssertTrue(slider.waitForExistence(timeout: 5))
+        slider.adjust(toNormalizedSliderPosition: 0)
+        XCTAssertEqual(draftValue.label, "0%")
+        done.tap()
+        waitGone(slider)
+        XCTAssertFalse(edit.exists)
+        detailDone.tap()
+        manualTask.tap()
+        XCTAssertTrue(app.buttons["editSchedule"].waitForExistence(timeout: 5))
+        XCTAssertFalse(edit.exists)
         detailDone.tap()
 
         checklistTask.tap()

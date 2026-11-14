@@ -95,7 +95,10 @@ struct PhoneTaskSheet: View {
                             .disabled(!writable)
                             .accessibilityIdentifier("editSchedule")
                             .accessibilityHint("Edit task schedule")
-                            progressRow(task)
+                            // Keep ordinary zero-progress details quiet; checklist and nonzero progress remain visible.
+                            if !task.checklist.isEmpty || task.progressPercent > 0 {
+                                progressRow(task)
+                            }
                         }
                         description(task)
                         Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
@@ -286,6 +289,14 @@ struct PhoneCompletionButton: View {
                 .disabled(!model.canBeginEditing)
                 .accessibilityLabel((isHistory ? "Reopen " : "Complete ") + task.title)
                 .accessibilityIdentifier((isSubtaskRow ? "subtaskToggle-" : "lifecycleToggle-") + task.id.uuidString)
+                .accessibilityHint(task.canEditManualProgress ? "Touch and hold to set progress" : "")
+                .accessibilityActions {
+                    if task.canEditManualProgress, let revision {
+                        Button("Set Progress") {
+                            progressRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .progress)
+                        }
+                    }
+                }
                 .contextMenu {
                     if task.canEditManualProgress, let revision {
                         Button("Set Progress", systemImage: "chart.bar") {
