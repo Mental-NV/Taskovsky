@@ -2026,3 +2026,6 @@ PR93 follow-up: five scoped native Simulator tests passed on source `056e50a`; n
 Base b8fa66b, presentation-only candidate. Verification pending; see [contract](../changes/mobile-compact-board-cards-2026-11-14.md).
 
 Compact Board follow-up: six isolated native tests passed on d535fab, including standard/largest-standard/accessibility text, opening, scoped drag, note refusal, completion/Undo, archived state and per-list mode. Three simulator screenshots inspected; full-app accessibility and smaller widths remain open.
+
+## Supported mobile Sort & Group sheet
+Cloud implementation and adapted native tests only; source review, exact-head CI and native acceptance remain required. See [scope and gates](../changes/mobile-sort-group-supported-sheet-2026-11-14.md). No screenshot/runtime pass claimed.

@@ -912,3 +912,6 @@ Smart-destination view/group controls are relocated by [MOB-VIEW-MENU](../change
 
 ## Compact Kanban captions
 [Compact Board title/date layout](../changes/mobile-compact-board-cards-2026-11-14.md) preserves existing actions and date labels; accessibility text sizes keep stacked wrapping. Verification pending.
+
+## Supported Sort & Group sheet slice
+[Initial sheet implementation](../changes/mobile-sort-group-supported-sheet-2026-11-14.md) exposes only existing functional List choices, with independent axes and real default-sort reset. In implementation/unverified; full six-choice reference grids and Board sheet remain pending.
