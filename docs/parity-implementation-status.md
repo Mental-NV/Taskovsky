@@ -256,3 +256,7 @@ Supported sheet update: bounded native behavior/light and largest-text screensho
 Initial checkpoint, in implementation/unverified: [Priority grouping](changes/mobile-priority-board-2026-11-14.md) supplies an opt-in display partition, not the full Sort & Group sheet or tag semantics.
 
 Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
+
+### Mobile Tasks drawer shell, November 14
+
+Leading-panel/backdrop shell implementation replaces the large navigation sheet, preserving existing destinations and managers. [Bounded record](changes/mobile-tasks-drawer-shell-2026-11-14.md): local tests/review/native interactions and sampled screenshots passed, exact-head CI pending; menu hierarchy and calibrated pixel matching remain open.
