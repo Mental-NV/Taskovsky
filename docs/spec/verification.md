@@ -2017,3 +2017,5 @@ Active task rows expose Convert to Note using the existing detail conversion pol
 
 ### Mobile Tasks menu-first candidate
 Base `ef25cb6`; iPhone Simulator generic build-for-testing passed after final test/accessibility edits. Independent rereview accepted the correction; `swift test --disable-sandbox` passed: 824 XCTest and 38 Swift Testing tests. Native tests compiled, not executed. No native interaction or visual acceptance claimed. See [scope](../changes/mobile-tasks-view-menu-2026-11-14.md).
+
+PR93 follow-up: five scoped native Simulator tests passed on source `056e50a`; native menu/checkmark screenshots inspected, original user QA device unchanged and disposable device shut down. Larger text/VoiceOver/physical-device checks remain open. See the feature receipt for the UIKit nested-menu warning.

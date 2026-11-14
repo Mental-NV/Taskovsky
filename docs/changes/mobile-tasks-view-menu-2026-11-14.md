@@ -1,6 +1,6 @@
 # Mobile Tasks menu-first layout
 
-Status: Implemented, verification pending. Base: `ef25cb6`.
+Status: Implemented; bounded native acceptance passed, exact-head hosted CI pending. Base: `ef25cb6`.
 
 ## Evidence and scope
 The owner's six supplied November 14 screenshots show Taskovsky's permanent List/Board and Date/List controls, and TickTick's overflow View submenu with List View/Kanban View and a separate Group & Sort entry. The first two images have empty Taskovsky data; the reference images have populated TickTick data. This does not establish a filtering or sync defect.
@@ -19,3 +19,10 @@ Verify Today and folder/tag/filter paths: open/close overflow, current checkmark
 
 ## Evidence
 Generic iPhone Simulator build-for-testing passed after the final accessibility correction. Independent review found one concrete-list accessibility announcement defect; it was corrected and rereviewed. Existing native tests were migrated and a return-to-List case added, but not executed. `swift test --disable-sandbox` passed: 824 XCTest cases (134+55+107+528) and 38 Swift Testing tests. No installed app, interactive/native visual pass, screenshot, CI pass or complete List/Kanban parity is claimed. Dark theme is deferred per current scope.
+
+### Native acceptance on November 14
+Source `056e50a` (unchanged in subsequent test/docs commits), iPhone 13 Pro disposable Simulator, iOS 26.3.1: five scoped XCTest UI cases passed: Today View and Group & Sort menus; List/Kanban return; Date move and Undo; folder/tag list movement; Timeline section/list headings. Fresh QA UUID per case; existing user QA device/app/data untouched, owned test device shut down afterward.
+
+Simulator app screenshots inspected: List View checkmark and both mode choices visible; Date/List checkmark visible; permanent segmented controls absent from Today Kanban. Screenshots use neutral QA fixtures and retained QA banner, not normal-user data. Native menu styling is an approximation; broader Kanban structure remains open. VoiceOver traversal, larger Dynamic Type, all locales, and physical-device behavior were not manually verified.
+
+Xcode emitted a UIKit `_UIReparentingView` hierarchy warning while presenting nested menus; all five tests completed successfully without blocked touch/navigation. Keep this diagnostic visible for follow-up; no visual equivalence claim or assertion that the warning is harmless in every environment.

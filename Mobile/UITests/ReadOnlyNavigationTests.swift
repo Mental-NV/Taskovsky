@@ -5800,6 +5800,26 @@ extension ReadOnlyNavigationTests {
         choice.tap()
     }
 
+    @MainActor func testTodayViewMenuEvidence() {
+        let app = launch()
+        XCTAssertFalse(app.segmentedControls["taskDestinationViewMode"].exists)
+        app.buttons["taskListActions"].tap()
+        app.buttons["taskDestinationViewMode"].tap()
+        XCTAssertTrue(app.buttons["List View"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Kanban View"].exists)
+        attach(app, "Today View submenu")
+        app.buttons["Kanban View"].tap()
+        XCTAssertEqual(app.buttons["taskListActions"].value as? String, "Kanban View")
+        attach(app, "Today Kanban without permanent mode controls")
+        app.buttons["taskListActions"].tap()
+        app.buttons["scopedBoardGrouping"].tap()
+        XCTAssertTrue(app.buttons["Date"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["List"].exists)
+        attach(app, "Today Group and Sort submenu")
+        app.buttons["Date"].tap()
+        selectScopedView("List View", in: app)
+    }
+
     @MainActor func testScopedViewMenuCanReturnToList() {
         let app = launch(qaCase: "timeline")
         goTo("Open Launch projects", in: app)
