@@ -246,3 +246,6 @@ Active task rows expose Convert to Note using the existing detail conversion pol
 
 ### Mobile Board card density
 [Compact title/date captions](changes/mobile-compact-board-cards-2026-11-14.md) implemented, verification pending. Grouping and date/color fidelity remain open.
+
+## Mobile Priority board slice
+In implementation/unverified: [Priority grouping](changes/mobile-priority-board-2026-11-14.md) supplies an opt-in display partition, not the full Sort & Group sheet or tag semantics.

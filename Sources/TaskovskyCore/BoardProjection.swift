@@ -204,3 +204,24 @@ public struct ScopedBoardProjection: Sendable {
         return columns
     }
 }
+
+/// Read-only priority partition for a scoped board. It intentionally exposes no move operation.
+/// Uses existing Taskovsky priority rank, not an inferred reference-app ordering contract.
+public struct PriorityBoardProjection: Sendable {
+    public struct Column: Identifiable, Sendable {
+        public let id: TaskPriority
+        public let tasks: [TaskItem]
+        public var title: String { id == .none ? "No Priority" : id.rawValue.capitalized + " Priority" }
+    }
+    public let columns: [Column]
+
+    public init(destination: TaskDestination, in data: WorkspaceData, now: Date, calendar: Calendar) {
+        guard ScopedBoardProjection.supports(destination, in: data) else { columns = []; return }
+        let tasks = destination.matchingTasks(in: data, now: now, calendar: calendar)
+            .filter { !SmartListEligibility.isArchived($0, lists: data.lists) }
+        let groups = Dictionary(grouping: tasks, by: \.priority)
+        columns = TaskPriority.allCases.sorted { $0.rank < $1.rank }.compactMap { priority in
+            groups[priority].map { Column(id: priority, tasks: $0) }
+        }
+    }
+}

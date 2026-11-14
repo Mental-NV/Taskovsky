@@ -912,3 +912,6 @@ Smart-destination view/group controls are relocated by [MOB-VIEW-MENU](../change
 
 ## Compact Kanban captions
 [Compact Board title/date layout](../changes/mobile-compact-board-cards-2026-11-14.md) preserves existing actions and date labels; accessibility text sizes keep stacked wrapping. Verification pending.
+
+## Priority board grouping implementation
+The bounded [Priority board slice](../changes/mobile-priority-board-2026-11-14.md) is in implementation, not verified. Mobile-only display grouping; no new priority drag mutation or Mac behavior.
