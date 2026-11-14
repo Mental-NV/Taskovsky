@@ -18,6 +18,8 @@ This bounded iPhone change relocates existing smart-destination view and board g
 Verify Today and folder/tag/filter paths: open/close overflow, current checkmark, List → Kanban → List, Date/List grouping, destination roundtrip, Timeline where supported, batch actions, sorting, small-screen and Dynamic Type layout, VoiceOver, interruption and no unexpected workspace changes. Use isolated QA fixture only. Preserve existing concrete-list UI.
 
 ## Evidence
+
+**Pre-native checkpoint (superseded by the native acceptance record below):**
 Generic iPhone Simulator build-for-testing passed after the final accessibility correction. Independent review found one concrete-list accessibility announcement defect; it was corrected and rereviewed. Existing native tests were migrated and a return-to-List case added, but not executed. `swift test --disable-sandbox` passed: 824 XCTest cases (134+55+107+528) and 38 Swift Testing tests. No installed app, interactive/native visual pass, screenshot, CI pass or complete List/Kanban parity is claimed. Dark theme is deferred per current scope.
 
 ### Native acceptance on November 14
