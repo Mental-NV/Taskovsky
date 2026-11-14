@@ -6,7 +6,7 @@ The owner's mobile TickTick screenshots show title and date in one compact card 
 
 Existing date text, time-zone semantics, colors, completion, opening, move menus and drag targets remain unchanged across scoped, status and section boards. This is not full Kanban parity: grouping, section hierarchy, date/time/color matching and extra move affordances remain open. No business/persistence behavior changes.
 
-Acceptance: verify standard and accessibility text layouts, long titles, dated/undated tasks/notes, open/completion/move/Undo, no overlap or lost actions. Use disposable simulator fixtures; no desktop capture or system-settings changes. Independent review, compile, native tests and hosted CI pending.
+Acceptance: verify standard and accessibility text layouts, long titles, dated/undated tasks/notes, open/completion/move/Undo, no overlap or lost actions. Use disposable simulator fixtures; no desktop capture or system-settings changes. Original verification plan: independent review, compile, native tests and hosted CI. Current results are recorded below.
 
 **Initial checkpoint, before expanded run:** isolated iPhone13Pro/iOS26.3.1 native test passed: standard card retains 44pt open target and full accessibility title; opening detail works; largest accessibility size expands stacked title/date. Expanded standard-size/drag/note/status/Undo regression run pending. Independent source review found no confirmed regression; broader native matrix remains required before merge.
 
