@@ -5881,6 +5881,49 @@ extension ReadOnlyNavigationTests {
         choice.tap()
     }
 
+    @MainActor func testPriorityBoardEmptyState() {
+        let app = launch(qaCase: "capture-empty")
+        selectScopedView("Kanban View", in: app)
+        selectScopedGrouping("Priority", in: app)
+        XCTAssertTrue(app.staticTexts["No tasks"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["scopedBoardColumn-0"].exists)
+        attach(app, "Empty Priority board")
+        selectScopedGrouping("Date", in: app)
+        XCTAssertTrue(app.buttons["scopedBoardColumn-0"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testPriorityBoardDisplayAndLastLaneRemoval() {
+        let app = launch(qaCase: "timeline")
+        goTo("Open Launch projects", in: app)
+        selectScopedView("Kanban View", in: app)
+        selectScopedGrouping("Priority", in: app)
+        let lane = app.buttons["scopedBoardColumn-0"]
+        XCTAssertTrue(lane.waitForExistence(timeout: 5))
+        XCTAssertEqual(lane.label, "No Priority")
+        let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(card.exists)
+        XCTAssertFalse(app.buttons["Move Prepare the weekly plan"].exists)
+        XCTAssertFalse(app.otherElements["Drag Prepare the weekly plan"].exists)
+        attach(app, "Priority board display-only lane")
+        card.tap()
+        openTaskMetadata("editTaskPriority", in: app)
+        app.buttons["taskPriority-high"].tap()
+        waitGone(app.buttons["taskMetadataCancel"])
+        app.buttons["taskDetailDone"].tap()
+        XCTAssertEqual(lane.label, "High Priority")
+        lane.tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        openTaskMetadata("editTaskPriority", in: app)
+        app.buttons["taskPriority-none"].tap()
+        waitGone(app.buttons["taskMetadataCancel"])
+        app.buttons["taskDetailDone"].tap()
+        XCTAssertEqual(lane.label, "No Priority")
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        selectScopedGrouping("List", in: app)
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+    }
+
     @MainActor func testCompactBoardCardLayoutEvidence() {
         let app = launch(qaCase: "timeline")
         goTo("Open Launch projects", in: app)

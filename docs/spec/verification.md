@@ -2031,3 +2031,8 @@ Compact Board follow-up: six isolated native tests passed on d535fab, including 
 Initial checkpoint: cloud implementation and adapted native tests only; source review, exact-head CI and native acceptance remain required. See [scope and gates](../changes/mobile-sort-group-supported-sheet-2026-11-14.md). No screenshot/runtime pass claimed.
 
 Supported sheet update: bounded native behavior/light and largest-text screenshot checks passed for source40759b8; final test/docs-head CI pending. See mobile-sort-group-supported-sheet-2026-11-14.md for exact runs and remaining limitations.
+
+## Mobile Priority board grouping
+Initial checkpoint, in implementation; [contract and required gates](../changes/mobile-priority-board-2026-11-14.md). At that checkpoint: cloud source work only, native/CI evidence pending.
+
+Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
