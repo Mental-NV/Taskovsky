@@ -743,6 +743,7 @@ struct MobileRootView: View {
                         PhoneCompletionButton(model: model, task: task, lists: lists)
                         let switchesDate = searchQuery == nil && model.taskCountdownEnabled &&
                             TaskDueCountdown.label(for: task, now: model.now, calendar: calendar) != nil
+                        let compactDate = !dynamicTypeSize.isAccessibilitySize && searchQuery == nil && row.depth == 0
                         let titleButton = Button {
                             if let searchQuery { model.rememberSearch(searchQuery) }
                             revealedTaskSwipe = nil
@@ -755,19 +756,23 @@ struct MobileRootView: View {
                                     if let searchQuery {
                                         PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
                                     }
-                                    if !switchesDate, let due {
+                                    if !switchesDate, let due, !compactDate {
                                         taskDateText(due, displayCalendar: displayCalendar)
                                     }
                                 }
                                 Spacer(minLength: 0)
+                                if !switchesDate, let due, compactDate {
+                                    taskDateText(due, displayCalendar: displayCalendar)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                }
                                 if task.richBody != nil {
                                     Image(systemName: "textformat").font(.caption).foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(minHeight: switchesDate ? 24 : 48).padding(.trailing, 18).padding(.vertical, 3)
+                            .frame(minHeight: switchesDate ? 24 : compactDate ? 44 : 48).padding(.trailing, 18).padding(.vertical, 3)
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityLabel(task.title)
-                            .accessibilityValue(displayCalendar.flatMap { display in due.map { taskDateCaption($0, displayCalendar: display) } } ?? "")
+                            .accessibilityValue(due.map { taskDateCaption($0, displayCalendar: displayCalendar) } ?? "")
                             .background {
                                 if !actions.0.isEmpty || !actions.1.isEmpty { gesture }
                             }

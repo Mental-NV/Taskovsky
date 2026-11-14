@@ -2044,3 +2044,7 @@ Base `7a05e615`; isolated checkout. Final independent source review found no blo
 ## Mobile contextual progress
 
 Base `9783fa7`; isolated checkout. [Bounded contract](../changes/mobile-contextual-progress-2026-11-14.md). Independent review, 826 XCTest +38 Swift Testing, release/signature and two owned native tests passed: Set Progress/Cancel/save/relaunch/reset/checklist and styled-description protection. Actual zero/nonzero screenshots inspected; exact-head CI pending. VoiceOver invocation and complete visual parity remain unverified.
+
+### iPhone compact Tasks rows
+
+Run `testCompactListDatesRemainAccessibleAndOpenDetail`, `testListDatesReflowAtAccessibilityTextSize`, and `testTaskRowSwipesStageScheduleAndApplyPriorityAndMove` in an owned QA Simulator. Inspect attached normal and accessibility screenshots: trailing date/title fit, no overlap, readable stacked reflow, date accessibility value and >=44-point title target. Preserve Search metadata, countdown target, hierarchy/disclosure and existing gestures; do not infer pixel parity or VoiceOver traversal from automated results.

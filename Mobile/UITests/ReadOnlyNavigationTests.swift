@@ -11,6 +11,45 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         return app
     }
+    @MainActor func testCompactListDatesRemainAccessibleAndOpenDetail() {
+        let app = launch()
+        let task = app.buttons["Review the project outline"]
+        XCTAssertTrue(task.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(task.frame.height, 44)
+        XCTAssertFalse((task.value as? String ?? "").isEmpty)
+        attach(app, "Compact Tasks rows with trailing dates")
+        task.tap()
+        XCTAssertTrue(app.buttons["editTitle"].waitForExistence(timeout: 5))
+        app.buttons["taskDetailDone"].tap()
+        XCTAssertTrue(task.waitForExistence(timeout: 5))
+        let input = openTitle(app)
+        let suffix = " with a deliberately long descriptive title to verify trailing date fit"
+        input.typeText(suffix)
+        app.buttons["fieldEditorDone"].tap()
+        waitGone(input)
+        app.buttons["taskDetailDone"].tap()
+        let longTask = app.buttons["Review the project outline" + suffix]
+        XCTAssertTrue(longTask.waitForExistence(timeout: 5))
+        XCTAssertFalse((longTask.value as? String ?? "").isEmpty)
+        attach(app, "Compact Tasks long title retains date")
+    }
+
+    @MainActor func testListDatesReflowAtAccessibilityTextSize() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--qa-session", UUID().uuidString,
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        let task = app.buttons["Review the project outline"]
+        reveal(task, in: app)
+        XCTAssertGreaterThanOrEqual(task.frame.height, 44)
+        XCTAssertFalse((task.value as? String ?? "").isEmpty)
+        attach(app, "Tasks rows accessibility stacked dates")
+        task.tap()
+        XCTAssertTrue(app.buttons["editTitle"].waitForExistence(timeout: 5))
+        app.buttons["taskDetailDone"].tap()
+    }
+
     @MainActor func testDrawerShellBackdropAndDestination() {
         let app = launch()
         func verifyCaptureRestored() {
