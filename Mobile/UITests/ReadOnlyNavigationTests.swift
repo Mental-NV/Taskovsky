@@ -5800,6 +5800,17 @@ extension ReadOnlyNavigationTests {
         choice.tap()
     }
 
+    @MainActor func testPriorityBoardEmptyState() {
+        let app = launch(qaCase: "capture-empty")
+        selectScopedView("Kanban View", in: app)
+        selectScopedGrouping("Priority", in: app)
+        XCTAssertTrue(app.staticTexts["No tasks"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["scopedBoardColumn-0"].exists)
+        attach(app, "Empty Priority board")
+        selectScopedGrouping("Date", in: app)
+        XCTAssertTrue(app.buttons["scopedBoardColumn-0"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testPriorityBoardDisplayAndLastLaneRemoval() {
         let app = launch(qaCase: "timeline")
         goTo("Open Launch projects", in: app)

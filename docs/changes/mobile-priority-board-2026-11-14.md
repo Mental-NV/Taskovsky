@@ -1,6 +1,6 @@
 # Mobile Priority board grouping
 
-Status: In implementation, unverified. Implements a bounded backing capability for [the Sort & Group plan](mobile-sort-group-sheet-plan-2026-11-14.md), not that sheet or full reference parity.
+Status: Implemented; bounded native checks passed, final exact-head CI pending. Implements a bounded backing capability for [the Sort & Group plan](mobile-sort-group-sheet-plan-2026-11-14.md), not that sheet or full reference parity.
 
 The supplied mobile screenshot exposes Priority grouping independently from sorting. Add an opt-in Priority choice to the existing iPhone scoped Kanban grouping menu. Do not change defaults, Mac controls, concrete-list status/section boards or data. Use the existing destination membership/archive rules. Show populated priority lanes ordered by existing Taskovsky priority rank; preserve incoming task order within a lane. Label no-priority records “No Priority”. These ordering/empty-lane choices are explicit Taskovsky policies, not inferred TickTick behavior.
 
@@ -9,3 +9,6 @@ Priority lanes are display-only: no drag grips, drop targets/highlights or Move 
 Non-goals: tag subdivisions, tag sorting, new persistence, mutation/Undo commands, full Sort & Group sheet, new Mac grouping, inferred reference priorities/directions.
 
 Verification required before merge: domain partition/scope/order/empty/notes tests; iPhone compile; independent review; native menu/selection/empty/current-lane-removal/completion/open and Date/List drag/Undo regressions; actual light-theme screenshot. Cloud has no Swift/Xcode runtime; no tests or native acceptance claimed yet.
+
+
+Native receipt: production source `657c022`, iPhone13Pro/iOS26.3.1 owned disposable simulator. Four UI tests passed (107.296 seconds): priority edit/last-lane removal and opening, completely-empty Priority state and return to Date, existing cross-list drag, date range move and Undo. Two actual XCTest screenshots inspected: populated No Priority cards have no move/grip affordances; empty message is visible and unclipped. This verifies sampled behavior, not all widths/text sizes/VoiceOver or full reference grouping parity. An inherited UIKit nested-menu `_UIReparentingView` warning remains recorded; no assertion failures. First command used an incorrect test-target label and stopped before build/tests; corrected scheme target `MobileNavigation` completed successfully. Added only a separately reviewed empty-state test after the published source. User QA device/app/data untouched; owned device verified Shutdown after the run. No desktop capture or system settings changes.

@@ -249,3 +249,5 @@ Active task rows expose Convert to Note using the existing detail conversion pol
 
 ## Mobile Priority board slice
 In implementation/unverified: [Priority grouping](changes/mobile-priority-board-2026-11-14.md) supplies an opt-in display partition, not the full Sort & Group sheet or tag semantics.
+
+Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.

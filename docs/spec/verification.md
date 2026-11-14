@@ -2029,3 +2029,5 @@ Compact Board follow-up: six isolated native tests passed on d535fab, including 
 
 ## Mobile Priority board grouping
 In implementation; [contract and required gates](../changes/mobile-priority-board-2026-11-14.md). Cloud source work only, native/CI evidence pending.
+
+Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.

@@ -915,3 +915,5 @@ Smart-destination view/group controls are relocated by [MOB-VIEW-MENU](../change
 
 ## Priority board grouping implementation
 The bounded [Priority board slice](../changes/mobile-priority-board-2026-11-14.md) is in implementation, not verified. Mobile-only display grouping; no new priority drag mutation or Mac behavior.
+
+Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
