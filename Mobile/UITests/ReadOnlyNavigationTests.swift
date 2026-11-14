@@ -11,6 +11,79 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         return app
     }
+    @MainActor func testDrawerShellBackdropAndDestination() {
+        let app = launch()
+        func verifyCaptureRestored() {
+            let capture = app.buttons["openCapture"]
+            XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "isHittable == true"), object: capture)], timeout: 5), .completed)
+            capture.tap()
+            let cancel = app.buttons["captureCancel"]
+            XCTAssertTrue(cancel.waitForExistence(timeout: 5))
+            cancel.tap()
+            waitGone(cancel)
+        }
+        verifyCaptureRestored()
+        for _ in 0..<2 {
+            app.buttons["Open navigation"].tap()
+            let backdrop = app.buttons["drawerBackdrop"]
+            XCTAssertTrue(backdrop.waitForExistence(timeout: 5))
+            let today = app.buttons["smartDrawer-today"]
+            XCTAssertTrue(today.isHittable)
+            XCTAssertLessThan(today.frame.maxX, app.frame.width * 0.9)
+            XCTAssertFalse(app.buttons["openCapture"].isEnabled)
+            attach(app, "Tasks left drawer")
+            backdrop.coordinate(withNormalizedOffset: CGVector(dx: 0.97, dy: 0.5)).tap()
+            waitGone(backdrop)
+            verifyCaptureRestored()
+        }
+        app.buttons["Open navigation"].tap()
+        app.buttons["smartDrawer-inbox"].tap()
+        waitGone(app.buttons["drawerBackdrop"])
+        XCTAssertTrue(app.staticTexts["Inbox"].firstMatch.waitForExistence(timeout: 5))
+        verifyCaptureRestored()
+        app.buttons["Open navigation"].tap()
+        app.buttons["drawerDone"].tap()
+        waitGone(app.buttons["drawerBackdrop"])
+        verifyCaptureRestored()
+    }
+
+    @MainActor func testDrawerNestedManagerReturnsToDrawer() {
+        let app = launch(qaCase: "organization")
+        openOrganization(app)
+        app.buttons["organizationManagerDone"].tap()
+        XCTAssertTrue(app.buttons["drawerDone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["drawerBackdrop"].exists)
+        app.buttons["drawerDone"].tap()
+        XCTAssertTrue(app.buttons["openCapture"].waitForExistence(timeout: 5))
+        openOrganization(app)
+        app.buttons["organizationManagerDone"].tap()
+        app.buttons["smartDrawer-today"].tap()
+        waitGone(app.buttons["drawerBackdrop"])
+    }
+
+    @MainActor func testDrawerLargeTextCanDismissAndNavigate() {
+        let app = XCUIApplication()
+        app.launchArguments = ["--qa-session", UUID().uuidString,
+                               "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Open navigation"].tap()
+        XCTAssertTrue(app.buttons["drawerBackdrop"].waitForExistence(timeout: 5))
+        attach(app, "Tasks drawer accessibility text")
+        app.buttons["Navigation utilities"].tap()
+        app.buttons["manageTags"].tap()
+        app.buttons["tagManagerDone"].tap()
+        XCTAssertTrue(app.buttons["drawerDone"].waitForExistence(timeout: 5))
+        app.buttons["drawerDone"].tap()
+        waitGone(app.buttons["drawerBackdrop"])
+        app.buttons["Open navigation"].tap()
+        let today = app.buttons["smartDrawer-today"]
+        reveal(today, in: app)
+        today.tap()
+        XCTAssertTrue(app.buttons["openCapture"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testStyledDescriptionIsProtected() {
         let app = launch()
         attach(app, "Tasks")

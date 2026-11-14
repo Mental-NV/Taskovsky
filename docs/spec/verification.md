@@ -2036,3 +2036,7 @@ Supported sheet update: bounded native behavior/light and largest-text screensho
 Initial checkpoint, in implementation; [contract and required gates](../changes/mobile-priority-board-2026-11-14.md). At that checkpoint: cloud source work only, native/CI evidence pending.
 
 Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
+
+## Mobile Tasks drawer shell
+
+Base `7a05e615`; isolated checkout. Final independent source review found no blocking defect; 826 XCTest +38 Swift Testing, release/signature and three owned native drawer regressions passed. Normal/largest-text screenshots inspected; bounded fit passed. Actual VoiceOver traversal, Reduce Motion setting, landscape and exact pixel parity remain unverified. Hosted exact-head CI pending. [Scope and limits](../changes/mobile-tasks-drawer-shell-2026-11-14.md).

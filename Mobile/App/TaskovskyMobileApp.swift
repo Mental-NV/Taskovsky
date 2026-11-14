@@ -48,6 +48,8 @@ enum PhoneStyle {
 struct MobileRootView: View {
     @StateObject private var model = PhoneWorkspaceModel()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var initialized = false
     @State private var section: PhoneSection = .tasks
     @State private var destination: TaskDestination = .today
@@ -299,9 +301,30 @@ struct MobileRootView: View {
                 .overlay(Capsule().stroke(.primary.opacity(0.10), lineWidth: 0.5))
                 .padding(.horizontal, 20).padding(.bottom, 8)
         }.tint(PhoneStyle.accent)
-        .sheet(isPresented: $drawer) {
-            navigation(model.document?.snapshot ?? snapshot).presentationDetents([.large])
+        .disabled(drawer)
+        .overlay {
+            if drawer {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Button { drawer = false } label: {
+                            Color.black.opacity(0.28).ignoresSafeArea()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Close navigation")
+                        .accessibilityIdentifier("drawerBackdrop")
+                        navigation(model.document?.snapshot ?? snapshot)
+                            // R08 calibration is approximate, not a measured live-device threshold.
+                            .frame(width: min(geometry.size.width * 0.873, 440))
+                            .background(PhoneStyle.indigo.ignoresSafeArea())
+                            .accessibilityIdentifier("tasksDrawer")
+                            .accessibilityAddTraits(.isModal)
+                            .accessibilityAction(.escape) { drawer = false }
+                            .transition(.move(edge: .leading))
+                    }
+                }
+            }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: drawer)
         .onChange(of: visibility, initial: true) { prior, current in
             if !current.shows(destination), prior.shows(destination) || destination.smartKey != nil {
                 destination = current.fallback
@@ -888,8 +911,8 @@ struct MobileRootView: View {
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Taskovsky").font(.largeTitle.bold()).padding(.vertical, 20)
-                    Text("Local preview").font(.caption).opacity(0.7)
+                    Text("Taskovsky").font(.title3.bold()).padding(.vertical, 12)
+                        .accessibilityAddTraits(.isHeader)
                     ForEach(visibility.top, id: \.self) { item in navRow(item, data: data) }
                     organizationNavigation(data: data)
                     if visibility.filters {
@@ -911,32 +934,19 @@ struct MobileRootView: View {
                         Label("Manage Templates", systemImage: "doc.on.doc")
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("manageTemplates")
-                    Text("Create tasks or notes locally. Styled descriptions are protected. Further settings are still in development.")
-                        .font(.footnote).opacity(0.8).padding(.top, 24)
                 }.padding(20)
             }.background(PhoneStyle.indigo).foregroundStyle(.white)
+                .toolbarBackground(PhoneStyle.indigo, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarLeading) {
-                        Button {
-                            guard let document = model.document else { return }
-                            localSettingsRequest = PhoneLocalSettingsRequest(settings: document.snapshot.settings,
-                                                                             revision: document.revision,
-                                                                             taskCountdownEnabled: model.taskCountdownEnabled)
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }.tint(.white).accessibilityLabel("Settings").accessibilityIdentifier("openLocalSettings")
-                        Button {
-                            guard let document = model.document else { return }
-                            smartListRequest = PhoneSmartListRequest(settings: document.snapshot.settings, revision: document.revision)
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                        }.tint(.white).accessibilityLabel("Smart Lists").accessibilityIdentifier("openSmartLists")
-                        Button { manageFilters = true } label: {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                        }.tint(.white).accessibilityLabel("Manage Filters").accessibilityIdentifier("manageFilters")
-                        Button { manageTags = true } label: {
-                            Image(systemName: "tag")
-                        }.tint(.white).accessibilityLabel("Manage Tags").accessibilityIdentifier("manageTags")
+                        if dynamicTypeSize.isAccessibilitySize {
+                            Menu { drawerUtilityButtons } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }.tint(.white).accessibilityLabel("Navigation utilities")
+                        } else {
+                            drawerUtilityButtons.labelStyle(.iconOnly)
+                        }
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { drawer = false }.tint(.white).accessibilityIdentifier("drawerDone")
@@ -949,6 +959,29 @@ struct MobileRootView: View {
         .sheet(isPresented: $manageTags) { PhoneTagManagement(model: model) }
         .sheet(isPresented: $manageTemplates) { PhoneTemplateManager(model: model) }
         .sheet(item: $localSettingsRequest) { request in PhoneLocalSettings(model: model, request: request) }
+    }
+
+    @ViewBuilder private var drawerUtilityButtons: some View {
+        Button {
+            guard let document = model.document else { return }
+            localSettingsRequest = PhoneLocalSettingsRequest(settings: document.snapshot.settings,
+                                                             revision: document.revision,
+                                                             taskCountdownEnabled: model.taskCountdownEnabled)
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+        }.tint(.white).accessibilityLabel("Settings").accessibilityIdentifier("openLocalSettings")
+        Button {
+            guard let document = model.document else { return }
+            smartListRequest = PhoneSmartListRequest(settings: document.snapshot.settings, revision: document.revision)
+        } label: {
+            Label("Smart Lists", systemImage: "slider.horizontal.3")
+        }.tint(.white).accessibilityLabel("Smart Lists").accessibilityIdentifier("openSmartLists")
+        Button { manageFilters = true } label: {
+            Label("Manage Filters", systemImage: "line.3.horizontal.decrease.circle")
+        }.tint(.white).accessibilityLabel("Manage Filters").accessibilityIdentifier("manageFilters")
+        Button { manageTags = true } label: {
+            Label("Manage Tags", systemImage: "tag")
+        }.tint(.white).accessibilityLabel("Manage Tags").accessibilityIdentifier("manageTags")
     }
 
     @ViewBuilder private func organizationNavigation(data: WorkspaceData) -> some View {
@@ -1038,21 +1071,28 @@ struct MobileRootView: View {
         let identifier: String
         if case .tag(let id) = item { identifier = (shortcut ? "pinnedTag-" : "drawerTag-") + id.uuidString }
         else { identifier = item.smartKey.map { "smartDrawer-" + $0.rawValue } ?? "" }
+        let rowLayout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout())
         return Button { destination = item; section = .tasks; drawer = false } label: {
-            HStack {
-                if case .list(let id) = item, let list = data.lists.first(where: { $0.id == id }) {
-                    PhoneListIcon(symbol: list.symbol, fallback: list.kind == .note ? "doc.text" : "list.bullet")
-                        .foregroundStyle(list.phoneListColor).accessibilityHidden(true)
+            rowLayout {
+                HStack {
+                    if case .list(let id) = item, let list = data.lists.first(where: { $0.id == id }) {
+                        PhoneListIcon(symbol: list.symbol, fallback: list.kind == .note ? "doc.text" : "list.bullet")
+                            .foregroundStyle(list.phoneListColor).accessibilityHidden(true)
+                    }
+                    if case .tag(let id) = item, let tag = data.tags.first(where: { $0.id == id }) {
+                        Image(systemName: "tag").foregroundStyle(PhoneEntityColor.read(tag.color)).accessibilityHidden(true)
+                    }
+                    Text(label)
                 }
-                if case .tag(let id) = item, let tag = data.tags.first(where: { $0.id == id }) {
-                    Image(systemName: "tag").foregroundStyle(PhoneEntityColor.read(tag.color)).accessibilityHidden(true)
-                }
-                Text(label)
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                 Text("\(count)").opacity(0.65)
             }
-                .padding(.horizontal, 12).frame(minHeight: 44).background(destination == item ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).frame(minHeight: 44)
+            .background(destination == item ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel(shortcut ? "Pinned " + label : label)
             .accessibilityValue(String(count))
             .accessibilityIdentifier(identifier)

@@ -922,3 +922,7 @@ Supported sheet update: bounded native behavior/light and largest-text screensho
 The bounded [Priority board slice](../changes/mobile-priority-board-2026-11-14.md) was initially in implementation, not verified; see the native update below. Mobile-only display grouping; no new priority drag mutation or Mac behavior.
 
 Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
+
+## November 14 Tasks drawer shell follow-up
+
+The bounded [left-drawer shell](../changes/mobile-tasks-drawer-shell-2026-11-14.md) replaces the phone navigation large sheet with an indigo leading overlay and dimmed dismissible backdrop. Existing destinations and management routes remain; full drawer hierarchy/token matching is not complete. See its record for passed bounded native/visual checks and remaining accessibility/viewport limits; do not treat this structural change as exact parity.
