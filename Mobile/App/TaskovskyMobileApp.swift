@@ -53,7 +53,7 @@ struct MobileRootView: View {
     @State private var destination: TaskDestination = .today
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
-    @State private var boardGroupings: [TaskDestination: ScopedBoardGrouping] = [:]
+    @State private var boardGroupings: [TaskDestination: PhoneScopedBoardGrouping] = [:]
     @State private var capturePresented = false
     @State private var drawer = false
     @State private var manageLists = false
@@ -419,8 +419,8 @@ struct MobileRootView: View {
         return TaskTimelineScope(destination: destination, data: data) != nil || ScopedBoardProjection.supports(destination, in: data)
     }
 
-    private var scopedBoardGrouping: Binding<ScopedBoardGrouping> {
-        Binding(get: { boardGroupings[destination] ?? ScopedBoardProjection.defaultGrouping(for: destination) },
+    private var scopedBoardGrouping: Binding<PhoneScopedBoardGrouping> {
+        Binding(get: { boardGroupings[destination] ?? PhoneScopedBoardGrouping.defaultGrouping(for: destination) },
                 set: { boardGroupings[destination] = $0; showTaskActions = false })
     }
 
@@ -451,7 +451,7 @@ struct MobileRootView: View {
                         if alternateModes[destination] == .board {
                             Menu {
                                 Picker("Group board by", selection: scopedBoardGrouping) {
-                                    ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
+                                    ForEach(PhoneScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
                                 }
                             } label: {
                                 Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)

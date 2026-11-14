@@ -1,0 +1,14 @@
+# Mobile Priority board grouping
+
+Status: Implemented; bounded native checks passed, final exact-head CI pending. Implements a bounded backing capability for [the Sort & Group plan](mobile-sort-group-sheet-plan-2026-11-14.md), not that sheet or full reference parity.
+
+The supplied mobile screenshot exposes Priority grouping independently from sorting. Add an opt-in Priority choice to the existing iPhone scoped Kanban grouping menu. Do not change defaults, Mac controls, concrete-list status/section boards or data. Use the existing destination membership/archive rules. Show populated priority lanes ordered by existing Taskovsky priority rank; preserve incoming task order within a lane. Label no-priority records “No Priority”. These ordering/empty-lane choices are explicit Taskovsky policies, not inferred TickTick behavior.
+
+Priority lanes are display-only: no drag grips, drop targets/highlights or Move actions implying priority edits. Opening, completion and existing task-detail priority editing remain available. Changing a task's priority reprojects it; a removed selected lane falls back to the first populated lane. Empty destinations show a truthful empty state. Selection remains session-per-destination like existing grouping. Existing Date/List operations delegate unchanged to their shared projection.
+
+Non-goals: tag subdivisions, tag sorting, new persistence, mutation/Undo commands, full Sort & Group sheet, new Mac grouping, inferred reference priorities/directions.
+
+Original verification plan: domain partition/scope/order/empty/notes tests; iPhone compile; independent review; native menu/selection/empty/current-lane-removal/completion/open and Date/List drag/Undo regressions; actual light-theme screenshot. At the initial cloud checkpoint Swift/Xcode were unavailable; native tests had not yet run. The receipt below supersedes that checkpoint.
+
+
+Native receipt: production source `657c022`, iPhone13Pro/iOS26.3.1 owned disposable simulator. Four UI tests passed (107.296 seconds): priority edit/last-lane removal and opening, completely-empty Priority state and return to Date, existing cross-list drag, date range move and Undo. Two actual XCTest screenshots inspected: populated No Priority cards have no move/grip affordances; empty message is visible and unclipped. This verifies sampled behavior, not all widths/text sizes/VoiceOver or full reference grouping parity. An inherited UIKit nested-menu `_UIReparentingView` warning remains recorded; no assertion failures. First command used an incorrect test-target label and stopped before build/tests; corrected scheme target `MobileNavigation` completed successfully. Added only a separately reviewed empty-state test after the published source. User QA device/app/data untouched; owned device verified Shutdown after the run. No desktop capture or system settings changes.

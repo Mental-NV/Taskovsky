@@ -183,6 +183,38 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(movedTimed.scheduledDuration?.start, expectedDue.addingTimeInterval(-3_600))
     }
 
+    func testPriorityBoardPartitionsOnceInExistingRankAndKeepsNotes() {
+        let low = TaskItem(title: "Low", priority: .low)
+        let first = TaskItem(title: "First", priority: .high)
+        let second = TaskItem(title: "Second", priority: .high)
+        let medium = TaskItem(title: "Medium", priority: .medium)
+        var note = TaskItem(title: "Note")
+        note.kind = .note
+        let tasks = [low, first, note, second, medium]
+        let data = WorkspaceData(tasks: tasks)
+        let board = PriorityBoardProjection(destination: .all, in: data, now: now, calendar: calendar)
+        XCTAssertEqual(board.columns.map(\.id), [.high, .medium, .low, .none])
+        XCTAssertEqual(board.columns.map(\.title), ["High Priority", "Medium Priority", "Low Priority", "No Priority"])
+        XCTAssertEqual(board.columns[0].tasks.map(\.id), [first.id, second.id])
+        let projected = board.columns.flatMap(\.tasks).map(\.id)
+        XCTAssertEqual(Set(projected), Set(tasks.map(\.id)))
+        XCTAssertEqual(projected.count, tasks.count)
+    }
+
+    func testPriorityBoardRetainsScopeAndArchiveRulesAndHasNoEmptyLanes() {
+        let tag = TaskTag(name: "Scope", color: "#334455")
+        let archived = TaskList(name: "Archived", color: "#334455", isArchived: true)
+        let included = TaskItem(title: "Included", tagIDs: [tag.id], priority: .medium)
+        let excluded = TaskItem(title: "Other", priority: .high)
+        let old = TaskItem(title: "Archived", listID: archived.id, tagIDs: [tag.id], priority: .high)
+        let data = WorkspaceData(tasks: [included, excluded, old], lists: [archived], tags: [tag])
+        let board = PriorityBoardProjection(destination: .tag(tag.id), in: data, now: now, calendar: calendar)
+        XCTAssertEqual(board.columns.map(\.id), [.medium])
+        XCTAssertEqual(board.columns.flatMap(\.tasks).map(\.id), [included.id])
+        XCTAssertTrue(PriorityBoardProjection(destination: .all, in: WorkspaceData(), now: now, calendar: calendar).columns.isEmpty)
+        XCTAssertTrue(PriorityBoardProjection(destination: .list(archived.id), in: data, now: now, calendar: calendar).columns.isEmpty)
+    }
+
     func testScopedBoardFolderAndTagListMovesStayWithinAvailableColumns() {
         let folder = ListFolder(name: "Projects")
         let tag = TaskTag(name: "Design", color: "#334455")
