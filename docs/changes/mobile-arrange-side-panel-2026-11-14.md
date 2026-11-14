@@ -13,3 +13,9 @@ No full-screen hit-testable backdrop and no disabled Calendar wrapper: exposed d
 ## Acceptance gates
 
 Full suite, release/signature, independent source review and exact CI; owned native side-panel geometry/dismissal without task creation/opening, nested edit/Cancel, actual hour/all-day/Month/Multi-Week drops, Undo, recurring-drop Cancel/occurrence/series. Inspect real normal light-theme screenshots. Existing accessibility support retained, no accessibility-layout polish. Do not merge if drag/drop or scope presentation regresses. Original user worktrees, fixtures and devices preserved. No full Calendar or pixel-perfect claim.
+
+## Native acceptance receipt
+
+Source 5861107: full 826 XCTest + 38 Swift Testing, release/strict signature and independent review passed. Six final owned Simulator tests passed: panel geometry/exposed-grid dismissal without opening/creating; scoped scheduling and nested return; actual all-day/timed drops and Undo; Month/Multi-Week drops and Undo; recurring drop Cancel/occurrence/Undo/Series; timed resize after panel close. Initial Day/recurring test coordinates incorrectly used centered header-label AX bounds, placing targets under the panel; corrected exposed-column targets passed. No failed gate was waived.
+
+Inspected actual normal light-theme images: right panel and exposed first Calendar column visible, existing controls readable; inner controls intentionally remain a parity gap. Results `/private/tmp/TaskovskyArrangePanelFinal.xcresult`; screenshot `/private/tmp/TaskovskyArrangePanelScreens/246FA111-AE42-434E-9532-6E30AADBE016.png`. These are local neutral QA evidence locators, not portable assets. Owned Simulator shut down, user QA untouched, reference Codex stopped/restored. Source CI 43652402598 passed; final receipt head still requires exact hosted CI. Reference drag behavior and pixel-perfect geometry remain unverified.

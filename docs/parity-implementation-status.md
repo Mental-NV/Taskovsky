@@ -276,4 +276,4 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 
 - iPhone Schedule Date grid candidate: visible month picker for non-Duration schedules over unchanged staged behavior. Duration and existing nested controls preserved; no exact Date/Duration-tab/popup parity. Full suite/release, independent review, five native Simulator tests and source-head CI passed; final exact-head CI remains required. See `docs/changes/mobile-schedule-date-grid-2026-11-14.md`.
 
-- iPhone Arrange right-side container candidate follows observed panel/dismissal direction; existing control placement retained. Native drag/Undo/recurrence and exact CI pending. See `docs/changes/mobile-arrange-side-panel-2026-11-14.md`.
+- iPhone Arrange right-side container candidate follows observed panel/dismissal direction; existing control placement retained. Six native drag/Undo/recurrence/dismissal/resize tests, full suite/release/review and source CI passed; final receipt-head CI remains required. See `docs/changes/mobile-arrange-side-panel-2026-11-14.md`.
