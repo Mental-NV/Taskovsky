@@ -77,6 +77,7 @@ struct MobileRootView: View {
     @State private var viewPicker = false
     @State private var jumpDatePresented = false
     @State private var showTaskSort = false
+    @State private var openSortAfterActions = false
     @State private var showTaskActions = false
     @State private var showTextBatch = false
     @State private var batchRequest: PhoneBatchRequest?
@@ -326,6 +327,13 @@ struct MobileRootView: View {
             case .move(let request): PhoneTaskMoveSheet(model: model, request: request)
             }
         }
+        .sheet(isPresented: $showTaskSort) {
+            PhoneSortGroupSheet(sort: model.taskSort, grouping: model.taskGrouping,
+                                allowsGrouping: destination.supportsTaskDateGrouping,
+                                selectSort: applyTaskSort, selectGroup: applyTaskGrouping)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
+        }
         .sheet(isPresented: $showTextBatch) { textBatchSheet.presentationDetents([.large]) }
         .sheet(item: $batchRequest) { request in taskBatchSheet(request).presentationDetents([.large]) }
         .onChange(of: destination) { _, _ in
@@ -384,34 +392,21 @@ struct MobileRootView: View {
         }.accessibilityLabel("Sort tasks")
             .accessibilityValue(model.taskSort?.title ?? "Default Order")
             .accessibilityIdentifier("taskSortMenu")
-            .popover(isPresented: $showTaskSort, arrowEdge: .top) {
-                VStack(spacing: 0) {
-                    taskSortChoice(nil)
-                    ForEach(PhoneTaskSort.choices, id: \.self) { taskSortChoice($0) }
-                    if destination.supportsTaskDateGrouping {
-                        Divider()
-                        groupingChoice(.creationDate)
-                        groupingChoice(.dueDate)
-                    }
-                }.padding(8).frame(width: 245).presentationCompactAdaptation(.popover)
-            }
+
     }
 
-    private func taskSortChoice(_ choice: PhoneTaskSort?) -> some View {
-        let selected = model.taskSort == choice
-        return Button {
-            showTaskSort = false
-            showTaskActions = false
-            taskOrderNotice = nil
-            taskListDragSession = UUID()
-            model.setTaskSort(choice)
-        } label: {
-            HStack {
-                Text(choice?.title ?? "Default Order")
-                Spacer()
-                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
-            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+    private func applyTaskSort(_ choice: PhoneTaskSort?) {
+        showTaskSort = false
+        taskOrderNotice = nil
+        taskListDragSession = UUID()
+        model.setTaskSort(choice)
+    }
+
+    private func applyTaskGrouping(_ choice: TaskListGrouping) {
+        showTaskSort = false
+        taskOrderNotice = nil
+        taskListDragSession = UUID()
+        model.setTaskGrouping(choice)
     }
 
     private func supportsScopedViewMenu(_ data: WorkspaceData) -> Bool {
@@ -457,14 +452,9 @@ struct MobileRootView: View {
                                 Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
                             }.accessibilityIdentifier("scopedBoardGrouping")
                         } else if showsSelection {
-                            Menu {
-                                taskSortChoice(nil)
-                                ForEach(PhoneTaskSort.choices, id: \.self) { taskSortChoice($0) }
-                                if destination.supportsTaskDateGrouping {
-                                    Divider()
-                                    groupingChoice(.creationDate)
-                                    groupingChoice(.dueDate)
-                                }
+                            Button {
+                                openSortAfterActions = true
+                                showTaskActions = false
                             } label: {
                                 Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
                             }.accessibilityIdentifier("taskGroupAndSort")
@@ -496,6 +486,12 @@ struct MobileRootView: View {
                     }
                 }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 6)
                     .presentationCompactAdaptation(.popover)
+                    .onDisappear {
+                        if openSortAfterActions {
+                            openSortAfterActions = false
+                            showTaskSort = true
+                        }
+                    }
             }
     }
 
@@ -520,23 +516,6 @@ struct MobileRootView: View {
             if error == nil { model.showBatchNotice(edit.action.kind.completionMessage) }
             return error
         }
-    }
-
-    private func groupingChoice(_ grouping: TaskListGrouping) -> some View {
-        let selected = model.taskGrouping == grouping
-        return Button {
-            showTaskSort = false
-            showTaskActions = false
-            taskOrderNotice = nil
-            taskListDragSession = UUID()
-            model.setTaskGrouping(selected ? .standard : grouping)
-        } label: {
-            HStack {
-                Text(grouping.title)
-                Spacer()
-                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
-            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     private func taskDestinationRows(_ data: WorkspaceData) -> some View {
@@ -1209,5 +1188,86 @@ struct MobileRootView: View {
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .padding(.horizontal, 12).contentShape(Rectangle())
         }.buttonStyle(.plain)
+    }
+}
+
+/// Supported List controls only. Additional reference criteria await their own contracts.
+private struct PhoneSortGroupSheet: View {
+    @Environment(\.dynamicTypeSize) private var textSize
+    let sort: PhoneTaskSort?
+    let grouping: TaskListGrouping
+    let allowsGrouping: Bool
+    let selectSort: (PhoneTaskSort?) -> Void
+    let selectGroup: (TaskListGrouping) -> Void
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: textSize.isAccessibilitySize ? 1 : 3)
+    }
+    private var ascending: Bool {
+        sort?.timestamp == .createdOldest || sort?.timestamp == .modifiedOldest
+    }
+    private var created: Bool { sort?.timestamp == .createdNewest || sort?.timestamp == .createdOldest }
+    private var modified: Bool { sort?.timestamp == .modifiedNewest || sort?.timestamp == .modifiedOldest }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                if allowsGrouping {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Group by").foregroundStyle(.secondary)
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            pill("Default Groups", selected: grouping == .standard, id: "groupDefault") { selectGroup(.standard) }
+                            pill("Date", selected: grouping == .dueDate, id: "groupDate") { selectGroup(.dueDate) }
+                            pill("Created Time", selected: grouping == .creationDate, id: "groupCreated") { selectGroup(.creationDate) }
+                        }
+                    }
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Sort by").foregroundStyle(.secondary)
+                        Spacer()
+                        if sort?.timestamp != nil {
+                            Button {
+                                selectSort(.timestamp(created ? (ascending ? .createdNewest : .createdOldest)
+                                                            : (ascending ? .modifiedNewest : .modifiedOldest)))
+                            } label: {
+                                Label(ascending ? "Ascending" : "Descending", systemImage: ascending ? "arrow.up" : "arrow.down")
+                                    .font(.subheadline).frame(minHeight: 44)
+                            }.accessibilityIdentifier("sortDirection")
+                        } else {
+                            Text(sort == .priority ? "High to low" : "Default Order").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        pill("Created Time", selected: created, id: "sortCreated") {
+                            selectSort(.timestamp(ascending ? .createdOldest : .createdNewest))
+                        }
+                        pill("Modified Time", selected: modified, id: "sortModified") {
+                            selectSort(.timestamp(ascending ? .modifiedOldest : .modifiedNewest))
+                        }
+                        pill("Priority", selected: sort == .priority, id: "sortPriority") { selectSort(.priority) }
+                    }
+                }
+                Button { selectSort(nil) } label: {
+                    Label("Restore default sorting", systemImage: "arrow.uturn.backward")
+                        .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
+                }.disabled(sort == nil).accessibilityIdentifier("restoreDefaultTaskSort")
+            }.padding(20)
+        }
+        .background(Color(uiColor: .systemBackground))
+        .accessibilityIdentifier("taskSortGroupSheet")
+    }
+
+    private func pill(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 6)
+                .foregroundStyle(selected ? Color.white : Color.secondary)
+                .background(selected ? Color.accentColor : Color(uiColor: .secondarySystemBackground),
+                            in: Capsule())
+                .contentShape(Capsule())
+        }.buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityIdentifier(id)
     }
 }

@@ -247,6 +247,11 @@ Active task rows expose Convert to Note using the existing detail conversion pol
 ### Mobile Board card density
 [Compact title/date captions](changes/mobile-compact-board-cards-2026-11-14.md) implemented, verification pending. Grouping and date/color fidelity remain open.
 
+## Supported mobile Sort & Group sheet
+[Bounded supported-choice sheet](changes/mobile-sort-group-supported-sheet-2026-11-14.md): initially in implementation/unverified. Dedicated grids and timestamp direction; no inert missing choices, no claimed full screenshot parity.
+
+Supported sheet update: bounded native behavior/light and largest-text screenshot checks passed for source40759b8; final test/docs-head CI pending. See mobile-sort-group-supported-sheet-2026-11-14.md for exact runs and remaining limitations.
+
 ## Mobile Priority board slice
 Initial checkpoint, in implementation/unverified: [Priority grouping](changes/mobile-priority-board-2026-11-14.md) supplies an opt-in display partition, not the full Sort & Group sheet or tag semantics.
 

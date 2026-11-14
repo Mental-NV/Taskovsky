@@ -1357,13 +1357,9 @@ final class ReadOnlyNavigationTests: XCTestCase {
         attach(app, "Manual task order in Work")
 
         let menu = app.buttons["taskSortMenu"]
-        menu.tap()
-        app.buttons["Created · Newest First"].tap()
-        waitGone(app.buttons["Created · Newest First"])
+        chooseTaskSort("Created · Newest First", in: app)
         XCTAssertFalse(grip.exists)
-        menu.tap()
-        app.buttons["Default Order"].tap()
-        waitGone(app.buttons["Default Order"])
+        chooseTaskSort("Default Order", in: app)
         XCTAssertLessThan(moving.frame.minY, first.frame.minY)
 
         app.terminate(); app.launch()
@@ -1402,12 +1398,9 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertLessThan(sectionHeader.frame.minY, otherSection.frame.minY)
 
         let menu = app.buttons["taskSortMenu"]
-        let group = app.buttons["Group by Created Date"]
-        menu.tap(); group.tap()
-        waitGone(group)
+        chooseTaskSort("Group by Created Date", in: app)
         XCTAssertFalse(grip.exists)
-        menu.tap(); group.tap()
-        waitGone(group)
+        chooseTaskSort("Group by Created Date", in: app)
         XCTAssertTrue(grip.waitForExistence(timeout: 5))
         XCTAssertLessThan(target.frame.minY, moving.frame.minY)
     }
@@ -1418,11 +1411,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let menu = app.buttons["taskSortMenu"]
         let old = "Review the project outline", newest = "Prepare the weekly plan", middle = "Review the draft"
         func choose(_ sort: String) {
-            menu.tap()
-            let choice = app.buttons[sort]
-            XCTAssertTrue(choice.waitForExistence(timeout: 5))
-            choice.tap()
-            waitGone(choice)
+            chooseTaskSort(sort, in: app)
         }
         func expect(_ titles: [String]) {
             let rows = (["Write meeting notes"] + titles).map { app.buttons[$0] }
@@ -1466,11 +1455,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let todayCaption = display.date(from: DateComponents(year: 2026, month: 11, day: 9))!.formatted(dateFormat)
         let tomorrowCaption = display.date(from: DateComponents(year: 2026, month: 11, day: 10))!.formatted(dateFormat)
         func choose(_ label: String) {
-            menu.tap()
-            let choice = app.buttons[label]
-            XCTAssertTrue(choice.waitForExistence(timeout: 5))
-            choice.tap()
-            waitGone(choice)
+            chooseTaskSort(label, in: app)
         }
         func expectOrder(_ elements: [XCUIElement]) {
             for element in elements { XCTAssertTrue(element.exists, element.debugDescription) }
@@ -1522,11 +1507,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let laterDay = app.staticTexts[calendar.date(from: DateComponents(year: 2026, month: 11, day: 8))!.formatted(format)]
 
         func choose(_ label: String) {
-            menu.tap()
-            let choice = app.buttons[label]
-            XCTAssertTrue(choice.waitForExistence(timeout: 5))
-            choice.tap()
-            waitGone(choice)
+            chooseTaskSort(label, in: app)
         }
         func expectOrder(_ elements: [XCUIElement]) {
             for element in elements { XCTAssertTrue(element.exists, element.debugDescription) }
@@ -1553,6 +1534,106 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertEqual(menu.value as? String, "Created · Oldest First")
         choose(groupChoice)
         expectOrder([pinned, earlierDay, earlier, laterDay, middle, newest])
+    }
+
+    @MainActor private func chooseTaskSort(_ choice: String, in app: XCUIApplication) {
+        let menu = app.buttons["taskSortMenu"]
+        menu.tap()
+        let id: String
+        switch choice {
+        case "Group by Created Date": id = "groupCreated"
+        case "Group by Due Date": id = "groupDate"
+        case "Default Order": id = "restoreDefaultTaskSort"
+        case "Priority": id = "sortPriority"
+        default: id = choice.hasPrefix("Created") ? "sortCreated" : "sortModified"
+        }
+        let button = app.buttons[id]
+        XCTAssertTrue(button.waitForExistence(timeout: 5))
+        if id.hasPrefix("group") && button.isSelected { app.buttons["groupDefault"].tap() }
+        else { button.tap() }
+        waitGone(app.buttons[id])
+        if choice.contains(" · "), menu.value as? String != choice {
+            menu.tap()
+            let direction = app.buttons["sortDirection"]
+            XCTAssertTrue(direction.waitForExistence(timeout: 5))
+            direction.tap()
+            waitGone(direction)
+        }
+    }
+
+    @MainActor func testSortGroupSheetDismissalAndLargeText() {
+        let app = launch(qaCase: "task-sort")
+        func openSheet() {
+            app.buttons["taskListActions"].tap()
+            app.buttons["taskGroupAndSort"].tap()
+            XCTAssertTrue(app.buttons["sortCreated"].waitForExistence(timeout: 5))
+        }
+        openSheet()
+        attach(app, "Sort Group supported pills light theme")
+        let sheet = app.scrollViews["taskSortGroupSheet"]
+        XCTAssertTrue(sheet.exists)
+        sheet.swipeDown()
+        waitGone(app.buttons["sortCreated"])
+        openSheet()
+        XCTAssertTrue(app.buttons["groupDefault"].isSelected)
+        sheet.swipeDown()
+        waitGone(app.buttons["sortCreated"])
+        app.terminate()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openSheet()
+        XCTAssertTrue(app.buttons["groupDefault"].isHittable)
+        let priority = app.buttons["sortPriority"]
+        for _ in 0..<5 where !priority.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(priority.isHittable)
+        XCTAssertGreaterThanOrEqual(priority.frame.height, 44)
+        attach(app, "Sort Group largest text scrollable options")
+        priority.tap()
+        waitGone(priority)
+        openSheet()
+        let restore = app.buttons["restoreDefaultTaskSort"]
+        for _ in 0..<5 where !restore.isHittable || restore.frame.maxY > app.frame.maxY - 30 { sheet.swipeUp() }
+        XCTAssertTrue(restore.isHittable)
+        XCTAssertLessThanOrEqual(restore.frame.maxY, app.frame.maxY - 30)
+        attach(app, "Sort Group largest text reachable restore")
+        restore.tap()
+        waitGone(restore)
+    }
+
+    @MainActor func testTodaySortGroupSheetIndependentChoices() {
+        let app = launch(qaCase: "task-sort")
+        func openSheet() {
+            app.buttons["taskListActions"].tap()
+            app.buttons["taskGroupAndSort"].tap()
+            XCTAssertTrue(app.buttons["sortCreated"].waitForExistence(timeout: 5))
+        }
+        openSheet()
+        XCTAssertTrue(app.buttons["groupDefault"].isSelected)
+        XCTAssertFalse(app.buttons["sortTag"].exists)
+        attach(app, "Supported Sort and Group sheet")
+        app.buttons["groupCreated"].tap()
+        waitGone(app.buttons["groupCreated"])
+        openSheet()
+        XCTAssertTrue(app.buttons["groupCreated"].isSelected)
+        app.buttons["sortCreated"].tap()
+        waitGone(app.buttons["sortCreated"])
+        openSheet()
+        XCTAssertTrue(app.buttons["groupCreated"].isSelected)
+        XCTAssertTrue(app.buttons["sortCreated"].isSelected)
+        app.buttons["sortDirection"].tap()
+        waitGone(app.buttons["sortDirection"])
+        openSheet()
+        XCTAssertTrue(app.buttons["groupCreated"].isSelected)
+        XCTAssertTrue(app.buttons["sortCreated"].isSelected)
+        XCTAssertTrue(app.buttons["sortDirection"].label.contains("Ascending"))
+        app.buttons["restoreDefaultTaskSort"].tap()
+        waitGone(app.buttons["restoreDefaultTaskSort"])
+        openSheet()
+        XCTAssertTrue(app.buttons["groupCreated"].isSelected)
+        XCTAssertFalse(app.buttons["sortCreated"].isSelected)
+        XCTAssertFalse(app.buttons["restoreDefaultTaskSort"].isEnabled)
+        attach(app, "Sort reset retains grouping")
     }
 
     @MainActor private func chooseLifecycleAction(_ name: String, in app: XCUIApplication) {
