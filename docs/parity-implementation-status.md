@@ -260,3 +260,7 @@ Priority board update: bounded native tests and actual Simulator images passed f
 ### Mobile Tasks drawer shell, November 14
 
 Leading-panel/backdrop shell implementation replaces the large navigation sheet, preserving existing destinations and managers. [Bounded record](changes/mobile-tasks-drawer-shell-2026-11-14.md): local tests/review/native interactions and sampled screenshots passed, exact-head CI pending; menu hierarchy and calibrated pixel matching remain open.
+
+### Mobile contextual progress
+
+[Ordinary zero-progress row](changes/mobile-contextual-progress-2026-11-14.md) is locally hidden with editing retained. Local tests/review/native checks and screenshots passed; exact-head CI pending. Mobile detail layout, descriptions and exact TickTick progress rules remain open.
