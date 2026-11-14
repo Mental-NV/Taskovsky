@@ -20,7 +20,7 @@ struct PhoneCalendarEditRequest: Identifiable {
 }
 
 struct PhoneCalendarArrangeSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
     @ObservedObject var model: PhoneWorkspaceModel
     let focus: Date
     let options: TaskCalendarOptions
@@ -38,9 +38,6 @@ struct PhoneCalendarArrangeSheet: View {
         .sheet(item: $request) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(item: $taskRoute) { PhoneTaskSheet(model: model, route: $0, close: { taskRoute = nil }) }
         .interactiveDismissDisabled(model.isBusy)
-        .presentationDetents(drag == nil ? [.large] : [.medium, .large])
-        .presentationContentInteraction(drag == nil ? .automatic : .scrolls)
-        .presentationBackgroundInteraction(drag == nil ? .disabled : .enabled(upThrough: .medium))
     }
 
     private func content(_ document: WorkspaceDocument) -> some View {
@@ -112,7 +109,7 @@ struct PhoneCalendarArrangeSheet: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }.disabled(model.isBusy).accessibilityIdentifier("arrangeDone")
+                Button("Done", action: close).disabled(model.isBusy).accessibilityIdentifier("arrangeDone")
             }
         }
     }

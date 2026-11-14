@@ -362,13 +362,26 @@ struct MobileRootView: View {
         .sheet(isPresented: $jumpDatePresented) {
             PhoneCalendarDateJump(date: focus, calendar: calendar) { date in focus = date }
         }
-        .sheet(isPresented: $showArrange) {
-            let allowsDrag = options.mode.isHourly || options.mode == .month || options.mode == .multiWeek
-            PhoneCalendarArrangeSheet(model: model, focus: focus, options: options,
-                                      drag: allowsDrag ? calendarDrag : nil)
-                .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, save: saveCalendarGesture))
+        .overlay(alignment: .trailing) {
+            if showArrange {
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        let allowsDrag = options.mode.isHourly || options.mode == .month || options.mode == .multiWeek
+                        PhoneCalendarArrangeSheet(close: { if !model.isBusy { showArrange = false } },
+                                                  model: model, focus: focus, options: options,
+                                                  drag: allowsDrag ? calendarDrag : nil)
+                            // Approximate observed viewport fraction; not calibrated reference geometry.
+                            .frame(width: min(geometry.size.width * 0.72, 420))
+                            .background(PhoneStyle.page)
+                            .shadow(color: .black.opacity(0.16), radius: 8, x: -3)
+                            .accessibilityIdentifier("calendarArrangePanel")
+                    }
+                }
+            }
         }
-        .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, enabled: !showArrange, save: saveCalendarGesture))
+        .onChange(of: section) { _, _ in showArrange = false }
+        .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, save: saveCalendarGesture))
         .sheet(item: $calendarEdit) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(isPresented: $capturePresented, onDismiss: {
             if model.captureDraft != nil { model.requestCloseCapture() }
@@ -1093,6 +1106,7 @@ struct MobileRootView: View {
             .accessibilityIdentifier(identifier)
     }
     private func calendarBody(data: WorkspaceData) -> some View {
+        let arranging = showArrange
         let revision = model.document?.revision
         let controls = PhoneCalendarControls(
             drag: { entry in
@@ -1100,12 +1114,14 @@ struct MobileRootView: View {
                 return calendarDrag(for: entry.taskID, revision: revision)
             },
             edit: { entry, mode in
+                guard !arranging else { showArrange = false; return }
                 guard entry.canSchedule, model.canBeginEditing, let document = model.document,
                       let task = document.snapshot.workspace.tasks.first(where: { $0.id == entry.taskID }) else { return }
                 calendarEdit = PhoneCalendarEditRequest(task: task, expected: document.revision, focus: focus,
                                                         hourly: options.mode.isHourly, calendar: calendar, mode: mode)
             },
             complete: model.canBeginEditing ? { entry in
+                guard !arranging else { showArrange = false; return }
                 changeCalendarCompletion(entry, expected: revision)
             } : nil,
             drop: acceptCalendarDrop,
@@ -1114,6 +1130,7 @@ struct MobileRootView: View {
             },
             saveFoldedHours: { cutoffs in saveCalendarFoldedHours(cutoffs, expected: revision) },
             createRange: model.canBeginCapture ? { dates in
+                guard !arranging else { showArrange = false; return }
                 Task {
                     await model.beginCapture(destination: .all, calendarDate: dates.upperBound, calendarRange: dates)
                     capturePresented = model.captureDraft != nil
@@ -1124,7 +1141,16 @@ struct MobileRootView: View {
             || capturePresented || model.captureDraft != nil || selectedTask != nil || batchRequest != nil
         return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
                                      options: options, monthInteractionActive: holdsMonthPosition, controls: controls,
-                                     select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }
+                                     select: { mode, date in
+                                         if arranging { showArrange = false }
+                                         else { selectCalendarMode(mode, at: date) }
+                                     }) { id in
+            if arranging { showArrange = false }
+            else { selectedTask = PhoneTaskRoute(id: id) }
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            if arranging && !model.isBusy { showArrange = false }
+        })
 
     }
 
@@ -1215,7 +1241,7 @@ struct MobileRootView: View {
     }
 
     private var calendarModeChooser: some View {
-                        Button { viewPicker = true } label: {
+                        Button { if showArrange { showArrange = false } else { viewPicker = true } } label: {
                             Image(systemName: "calendar").frame(width: 44, height: 44)
                         }.accessibilityLabel("Calendar view")
                             .popover(isPresented: $viewPicker, arrowEdge: .top) {
