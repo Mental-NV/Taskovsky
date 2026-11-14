@@ -2028,4 +2028,6 @@ Base b8fa66b, presentation-only candidate. Verification pending; see [contract](
 Compact Board follow-up: six isolated native tests passed on d535fab, including standard/largest-standard/accessibility text, opening, scoped drag, note refusal, completion/Undo, archived state and per-list mode. Three simulator screenshots inspected; full-app accessibility and smaller widths remain open.
 
 ## Supported mobile Sort & Group sheet
-Cloud implementation and adapted native tests only; source review, exact-head CI and native acceptance remain required. See [scope and gates](../changes/mobile-sort-group-supported-sheet-2026-11-14.md). No screenshot/runtime pass claimed.
+Initial checkpoint: cloud implementation and adapted native tests only; source review, exact-head CI and native acceptance remain required. See [scope and gates](../changes/mobile-sort-group-supported-sheet-2026-11-14.md). No screenshot/runtime pass claimed.
+
+Supported sheet update: bounded native behavior/light and largest-text screenshot checks passed for source40759b8; final test/docs-head CI pending. See mobile-sort-group-supported-sheet-2026-11-14.md for exact runs and remaining limitations.

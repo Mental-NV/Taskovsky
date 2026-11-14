@@ -1,6 +1,6 @@
 # Supported iPhone Sort & Group sheet
 
-Status: In implementation, unverified. Bounded first UI slice of [the screenshot plan](mobile-sort-group-sheet-plan-2026-11-14.md), based on merged plan `a7276b6`. Independent of Priority Board PR96.
+Status: Implemented; bounded native checks passed, final exact-head CI pending. Bounded first UI slice of [the screenshot plan](mobile-sort-group-sheet-plan-2026-11-14.md), based on merged plan `a7276b6`. Independent of Priority Board PR96.
 
 Replace List-mode nested sorting menus and the existing concrete-list Sort popover with a light bottom sheet. Use separate Group by / Sort by pill grids, blue selected treatment, a timestamp direction control and a real restore footer. At standard text size use three columns; accessibility categories use one column and scrolling. Minimum 44pt targets, selected accessibility traits, native sheet dismissal and medium/large detents. Geometry is a native approximation, not measured reference parity.
 
@@ -10,6 +10,12 @@ Preserve existing preference keys/scope, matching, pinning, finished groups, ord
 
 Opening from Tasks actions waits for that popover's content to disappear before presenting the sheet, avoiding simultaneous modal ownership. Native verification must confirm focus restoration, interruption, swipe/outside dismissal and repeated opening.
 
-Required before merge: independent source review; exact-head hosted tests/iPhone compile; native Today and concrete-list opening/dismissal, independent axes, direction, reset, relaunch, grouping/drag regression, small width/largest text and actual screenshot comparison. Cloud has no Swift/Xcode, so tests are added but no runtime/visual pass claimed.
+Original verification plan: independent source review; exact-head hosted tests/iPhone compile; native Today and concrete-list opening/dismissal, independent axes, direction, reset, relaunch, grouping/drag regression, small width/largest text and actual screenshot comparison. At the initial cloud checkpoint, Swift/Xcode were unavailable and runtime checks had not run. Current native evidence follows.
 
-Independent source review: no confirmed blocker. Verified timestamp mapping, sorting-only reset, explicit default groups, unchanged Board/preferences and adapted test intent. Native popover-to-sheet timing, repeated opening/focus, layout and runtime checks remain mandatory and unexecuted.
+Independent source review: no confirmed blocker. Verified timestamp mapping, sorting-only reset, explicit default groups, unchanged Board/preferences and adapted test intent. At that source-review checkpoint native checks were still pending.
+
+
+## Native receipt
+Production `cf53b42` passed five native iPhone13Pro/iOS26.3.1 cases (162.438s): Today popover-to-sheet handoff and repeated opening/independent axes/reset; timestamp ordering/relaunch; created/due grouping with priority sorting and relaunch; manual section drag and grouping disable/restore. Screenshot inspection exposed white-on-white unselected pills; reviewed source `40759b8` changes only that semantic fill to secondarySystemBackground. Corrected source passed Today axes/reset plus new swipe-dismiss/reopen and largest per-app text checks (50.126s). The extended largest-text case subsequently passed including full footer bounds, scrolling and actual Restore activation (35.095s). Normal and scrolled largest-text XCTest screenshots inspected: gray unselected pills visible, controls separated, full restore text reachable. User system text settings were not changed.
+
+This is bounded Simulator acceptance, not full VoiceOver/focus certification, physical-device acceptance, every device width/localization or the full six-choice reference menu. Existing option subset and immediate-apply/close policy remain explicit limitations. Test fixtures use fresh owned QA sessions; user QA app/device/data untouched, owned simulator verified Shutdown. No desktop capture, notification or system-settings changes. Final test/docs-head CI remains required.

@@ -1593,8 +1593,9 @@ final class ReadOnlyNavigationTests: XCTestCase {
         waitGone(priority)
         openSheet()
         let restore = app.buttons["restoreDefaultTaskSort"]
-        for _ in 0..<5 where !restore.isHittable { sheet.swipeUp() }
+        for _ in 0..<5 where !restore.isHittable || restore.frame.maxY > app.frame.maxY - 30 { sheet.swipeUp() }
         XCTAssertTrue(restore.isHittable)
+        XCTAssertLessThanOrEqual(restore.frame.maxY, app.frame.maxY - 30)
         attach(app, "Sort Group largest text reachable restore")
         restore.tap()
         waitGone(restore)
