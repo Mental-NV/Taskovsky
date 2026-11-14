@@ -2052,3 +2052,7 @@ Run `testCompactListDatesRemainAccessibleAndOpenDetail`, `testListDatesReflowAtA
 ### iPhone Calendar header
 
 Run `testCalendarHeaderModeAndOverflowPlacement`, `testCalendarFilterReset` and `testCalendarJumpToDistantDateCancelAndKeepMode` in owned Simulator. Verify mode/month/overflow horizontal order, first three overflow items, Tasks drawer restoration, filter Cancel/save/relaunch/reset and date-jump retention. Capture real header/menu screenshots; the reference Week overview remains separate.
+
+### iPhone schedule month grid
+
+Run `testScheduleDateGridSelectsDayAndOuterCancelDiscards`, `testScheduleCalendarDateEditSurvivesRelaunch` and `testScheduleNestedAndOuterCancelLeaveAnUntouchedTask` in owned Simulator. Verify actual grid day selection, outer Cancel and saved/relaunched schedule; inspect screenshots for normal layout and retained reachable Time/Duration controls. Existing domain/timezone tests and exact CI remain gates.

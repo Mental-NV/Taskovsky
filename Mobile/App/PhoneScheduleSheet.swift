@@ -170,7 +170,13 @@ struct PhoneScheduleSheet: View {
                         shortcut("Next week", offset: 7)
                     }.buttonStyle(.bordered)
                 }
-                DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
+                if edit.schedule.duration == nil {
+                    DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .accessibilityIdentifier("scheduleDateGrid")
+                } else {
+                    DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
+                }
                 Toggle("Time", isOn: Binding(get: { edit.schedule.effectiveHasTime }, set: { edit.setTime($0) }))
                     .accessibilityIdentifier("scheduleTime")
                 Toggle("Duration", isOn: Binding(get: { edit.schedule.duration != nil },

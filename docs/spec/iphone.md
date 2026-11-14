@@ -943,3 +943,7 @@ At standard Dynamic Type sizes, ordinary Tasks rows put their existing date capt
 ### Calendar header hierarchy
 
 Calendar uses its existing mode chooser at the leading edge, month Jump to Date centrally and overflow at the trailing edge. Overflow begins Filter View Range, View Options, Arrange Tasks; existing Postpone Tasks remains. Tasks/Search still expose their workspace drawer. Reference Week overview and exact pixel matching are not implemented by this header-only change.
+
+### Schedule Date grid
+
+For a schedule without Duration, Date uses a visible graphical month picker over the existing staged date binding and schedule-zone calendar. Outer Cancel discards selection; Done saves through the existing schedule transaction. Duration keeps its existing compact Date/Start/End flow. This is a core presentation slice, not reference Date/Duration tabs or exact popup geometry.

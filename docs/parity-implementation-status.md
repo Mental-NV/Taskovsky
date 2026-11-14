@@ -273,3 +273,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone Tasks row density candidate: existing dates trail standard-size list titles, while nested/accessibility/Search stay stacked and countdown remains separate. Native four-test QA, full tests/release/signature and independent review passed; hosted exact-head CI remains required. Observed direction only, not calibrated row parity. See `docs/changes/mobile-list-row-density-2026-11-14.md`.
 
 - iPhone Calendar header candidate: leading mode chooser and Filter View Range first in overflow follow observed C01/C02/C04 hierarchy. Existing Jump to Date remains; no reference overview/pixel parity claim. Verification pending; see `docs/changes/mobile-calendar-header-2026-11-14.md`.
+
+- iPhone Schedule Date grid candidate: visible month picker for non-Duration schedules over unchanged staged behavior. Duration and existing nested controls preserved; no exact Date/Duration-tab/popup parity. Native/review/CI pending; see `docs/changes/mobile-schedule-date-grid-2026-11-14.md`.

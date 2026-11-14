@@ -2161,6 +2161,33 @@ extension ReadOnlyNavigationTests {
         return original
     }
 
+    @MainActor func testScheduleDateGridSelectsDayAndOuterCancelDiscards() {
+        let app = launch(), task = "Review the project outline"
+        let original = openSchedule(app, task: task)
+        let grid = app.datePickers["scheduleDateGrid"]
+        XCTAssertTrue(grid.waitForExistence(timeout: 5))
+        attach(app, "Schedule visible month grid")
+        let day = grid.buttons.matching(NSPredicate(format: "label CONTAINS %@", "10"))
+        XCTAssertEqual(day.count, 1, app.debugDescription)
+        day.firstMatch.tap()
+        attach(app, "Schedule month grid staged day")
+        app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.buttons["editSchedule"].label, original)
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(grid.waitForExistence(timeout: 5))
+        day.firstMatch.tap()
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        let saved = app.buttons["editSchedule"].label
+        XCTAssertNotEqual(saved, original)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app)
+        XCTAssertEqual(openSchedule(app, task: task), saved)
+        app.buttons["scheduleCancel"].tap()
+    }
+
     @MainActor func testScheduleCalendarDateEditSurvivesRelaunch() {
         let app = launch(), task = "Review the project outline"
         app.buttons["Calendar"].tap()
