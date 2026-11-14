@@ -25,6 +25,10 @@ These existing Taskovsky Simulator images were shown in the same Codex chat. Pat
 
 Next visual acceptance must archive sanitized matched-state captures with device, logical viewport, capture scale, safe areas, text size, locale, timezone and source SHA. Current comparison is qualitative.
 
+## Expanded menu/dialog inventory
+
+The [46-state Tasks/Calendar inventory](../ticktick-spec/mobile-surface-inventory-2026-11-14.md) records entry paths, labels, presentation and dismissal, plus ten grouped unobserved branches. This expands the initial qualitative audit, not its pixel/behavior acceptance. Calendar has dedicated coverage; implementation begins with the confirmed drawer gap while further matched evidence is collected.
+
 ## Gap matrix
 
 | Area | Live reference observation | Taskovsky evidence / delta | Priority and boundary |
