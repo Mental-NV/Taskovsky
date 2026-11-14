@@ -2060,3 +2060,7 @@ Run `testScheduleDateGridSelectsDayAndOuterCancelDiscards`, `testScheduleCalenda
 ### iPhone Arrange side panel
 
 Run the five `testCalendarArrange...` native tests covering side-panel dismissal, scoped scheduling, hour/all-day drag/Undo, both date grids and recurring scope. Adapt targets to an exposed first-column location, never bypass drag validation. Check nested editor Cancel/return and root recurrence dialog while panel remains open; inspect screenshot. Test original workspace/fixtures are untouched.
+
+### iPhone explicit 3 Day
+
+Run `testCalendarThreeDayModePersistsAndPagesThreeDays` and `testCalendarThreeDaySaveFailureKeepsPriorView`, plus existing preference-save-failure coverage. Confirm three actual headers, three-day page step, relaunch and return to Week; failure keeps prior seven-day view and no saved change. Inspect actual screenshot before merge; no accessibility-layout polishing added.
