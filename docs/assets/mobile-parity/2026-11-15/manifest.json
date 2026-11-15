@@ -245,5 +245,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral project name, creation controls and no personal information",
     "historical": true
+  },
+  {
+    "state": "C05",
+    "file": "c05-source-hierarchy.png",
+    "sha256": "58c9e1053b6a5f1833061fb1a95b26d810f483377ebda967a22937befc854cc7",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "source_commit": "77d6801",
+    "receipt": "../../../changes/mobile-calendar-filter-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral calendar-filter-hierarchy sample lists/tags only; no personal profile content",
+    "historical": true
   }
 ]
