@@ -179,6 +179,14 @@ public struct TaskScheduleEdit: Sendable {
                                                 settings: settings, calendar: calendar)
     }
 
+    /// Freeze the staged defaults before adding a custom manual reminder.
+    public mutating func addManualReminder(_ date: Date, settings: AppSettings) {
+        if usesAutomaticReminders { manualReminders = automaticReminders(settings: settings) }
+        usesAutomaticReminders = false
+        if !manualReminders.contains(date) { manualReminders.append(date) }
+        manualReminders.sort()
+    }
+
     public func applying(to task: TaskItem, settings: AppSettings) throws -> TaskItem {
         guard task.id == taskID, CalendarScheduleSnapshot(task) == original else { throw TaskScheduleValidation.changedTask }
         if !hasDate {
@@ -253,5 +261,20 @@ public struct TaskScheduleEdit: Sendable {
         parts.second = time.second
         parts.nanosecond = time.nanosecond
         return calendar.date(from: parts) ?? date
+    }
+}
+
+/// Civil-day offset calculation for the all-day single-date Custom reminder UI.
+/// Nonexistent local times are rejected; repeated times use the first occurrence.
+public enum AllDayReminderOffset {
+    public static func date(due: Date, weeks: Bool, offset: Int, hour: Int, minute: Int, calendar: Calendar) -> Date? {
+        guard due.timeIntervalSinceReferenceDate.isFinite, (0...52).contains(offset),
+              (0...23).contains(hour), (0...59).contains(minute),
+              let day = calendar.date(byAdding: .day, value: -offset * (weeks ? 7 : 1), to: calendar.startOfDay(for: due)),
+              let candidate = calendar.nextDate(after: day.addingTimeInterval(-1),
+                  matching: DateComponents(hour: hour, minute: minute, second: 0),
+                  matchingPolicy: .strict, repeatedTimePolicy: .first, direction: .forward),
+              calendar.isDate(candidate, inSameDayAs: day) else { return nil }
+        return candidate
     }
 }

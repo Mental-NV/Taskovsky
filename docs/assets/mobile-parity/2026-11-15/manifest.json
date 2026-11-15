@@ -299,5 +299,32 @@
     "review": "Pixels inspected: neutral seeded fixture only; no personal account/task data. Three choices and checks visible; existing help truncates.",
     "source_commit": "cec8cf1",
     "historical": true
+  },
+  {
+    "state": "D11",
+    "file": "d11-custom-reminder.png",
+    "sha256": "caf375650a76a7bc897577f426ae6fc6b8c91bd824617943abb770360f4cbf8e",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-custom-reminder-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral fixture: Day/1/10:35, schedule-zone preview, Cancel/Add. No personal information.",
+    "source_commit": "4f43014",
+    "historical": true
+  },
+  {
+    "state": "D13",
+    "file": "d13-repeat-frequency.png",
+    "sha256": "173baf51359a415b2c1d7dd9f2cd004a3d2ae95271eda6cb7931f64daa501db2",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-repeat-frequency-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral3 Weeks/Mon/Wed recurrence settings, no personal data.",
+    "historical": true
   }
 ]

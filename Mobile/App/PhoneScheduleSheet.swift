@@ -66,6 +66,7 @@ struct PhoneScheduleSheet: View {
     @State private var showCustom = false
     @State private var showReplace = false
     @State private var showTimePopover = false
+    @State private var showCustomReminder = false
 
     private var settings: AppSettings { request.document.snapshot.settings }
     private var due: Date { edit.schedule.effectiveDue }
@@ -278,6 +279,15 @@ struct PhoneScheduleSheet: View {
                         .accessibilityIdentifier("scheduleEndReminderDate")
                 }
             }
+            if edit.schedule.duration == nil && !edit.schedule.effectiveHasTime {
+                Button("Custom") { showCustomReminder = true }
+                    .accessibilityIdentifier("scheduleCustomReminder")
+                    .popover(isPresented: $showCustomReminder) {
+                        PhoneAllDayReminderDialog(due: due, calendar: calendar, clock: { model.now }) { date in
+                            edit.addManualReminder(date, settings: settings)
+                        }.presentationCompactAdaptation(.popover)
+                    }
+            }
             Toggle("Use default reminders", isOn: $edit.usesAutomaticReminders)
                 .accessibilityIdentifier("scheduleAutomaticReminders")
             if edit.usesAutomaticReminders {
@@ -292,6 +302,8 @@ struct PhoneScheduleSheet: View {
                     DatePicker("Reminder \(index + 1)", selection: Binding(
                         get: { edit.manualReminders.indices.contains(index) ? edit.manualReminders[index] : due },
                         set: { if edit.manualReminders.indices.contains(index) { edit.manualReminders[index] = $0 } }))
+                        .accessibilityIdentifier("scheduleManualReminder-" + String(index))
+                        .accessibilityValue(edit.manualReminders[index].formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, calendar: calendar, timeZone: calendar.timeZone)))
                 }
                 .onDelete { edit.manualReminders.remove(atOffsets: $0) }
                 Button("Add reminder") {
@@ -443,6 +455,7 @@ private struct PhoneCustomRepeatSheet: View {
     @State private var pattern: Pattern
     @State private var monthDays: String
     @State private var dates: [Date]
+    @State private var exactIntervalText: String
 
     init(rule: CustomRecurrence, task: TaskItem, due: Date, timed: Bool,
          commit: @escaping (CustomRecurrence) -> Void) {
@@ -454,6 +467,7 @@ private struct PhoneCustomRepeatSheet: View {
         _pattern = State(initialValue: rule.specificDates?.isEmpty == false ? .dates : .cadence)
         _monthDays = State(initialValue: (rule.monthDays ?? []).map(String.init).joined(separator: ", "))
         _dates = State(initialValue: rule.specificDates ?? [])
+        _exactIntervalText = State(initialValue: String(rule.interval))
     }
 
     var body: some View {
@@ -507,6 +521,8 @@ private struct PhoneCustomRepeatSheet: View {
             guard !dates.isEmpty else { return nil }
             if dates != rule.specificDates { value.specificDates = dates }
         } else {
+            guard let interval = Int(exactIntervalText), (1...CustomRecurrence.maximumInterval).contains(interval) else { return nil }
+            value.interval = interval
             if value.specificDates?.isEmpty == false { value.specificDates = nil }
             if rule.unit == .months && monthPattern == .days {
                 guard let parsed = parseMonthDayList(monthDays) else { return nil }
@@ -524,27 +540,60 @@ private struct PhoneCustomRepeatSheet: View {
                              nominal: stagedNominal(draftDue: due, draftRule: candidate, task: task))
     }
 
+    // A huge wheel makes native accessibility snapshots unresponsive. Preserve the
+    // complete model range through Exact interval and include an existing large value.
+    private var intervalChoices: [Int] {
+        let common = Array(1...100)
+        return rule.interval > 100 ? common + [rule.interval] : common
+    }
+
     @ViewBuilder private var cadence: some View {
         Picker("Anchor", selection: $rule.anchor) {
             Text("By due dates").tag(RecurrenceAnchor.dueDate)
             Text("By completion date").tag(RecurrenceAnchor.completionDate)
         }
-        Picker("Unit", selection: Binding(get: { rule.unit }, set: setUnit)) {
-            ForEach(RecurrenceUnit.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Frequency").font(.subheadline).foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                Picker("Interval", selection: $rule.interval) {
+                    ForEach(intervalChoices, id: \.self) { Text(String($0)).tag($0) }
+                }.accessibilityIdentifier("customRepeatInterval")
+                Picker("Unit", selection: Binding(get: { rule.unit }, set: setUnit)) {
+                    ForEach(RecurrenceUnit.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                }.accessibilityIdentifier("customRepeatUnit")
+            }.pickerStyle(.wheel).frame(height: 150)
+                .onChange(of: rule.interval) { _, value in exactIntervalText = String(value) }
+            DisclosureGroup("Exact interval") {
+                TextField("1–\(CustomRecurrence.maximumInterval)", text: $exactIntervalText)
+                    .onChange(of: exactIntervalText) { _, value in
+                        if let interval = Int(value), (1...CustomRecurrence.maximumInterval).contains(interval) { rule.interval = interval }
+                    }
+                    .keyboardType(.numberPad).accessibilityIdentifier("customRepeatExactInterval")
+            }
+            Text(candidate?.shortLabel(calendar: calendar) ?? "Enter a valid repeat pattern.")
+                .font(.footnote).accessibilityIdentifier("customRepeatSummary")
         }
-        Stepper("Every \(rule.interval) \(rule.unit.rawValue)", value: $rule.interval, in: 1...CustomRecurrence.maximumInterval)
-            .accessibilityIdentifier("customRepeatInterval")
         switch rule.unit {
         case .days: EmptyView()
         case .weeks:
-            ForEach(1...7, id: \.self) { weekday in
-                Toggle(calendar.weekdaySymbols[weekday - 1], isOn: Binding(
-                    get: { rule.weekdays?.contains(weekday) == true },
-                    set: { selected in
+            HStack(spacing: 4) {
+                ForEach(0..<7, id: \.self) { offset in
+                    let weekday = ((calendar.firstWeekday - 1 + offset) % 7) + 1
+                    let selected = rule.weekdays?.contains(weekday) == true
+                    Button {
                         var weekdays = Set(rule.weekdays ?? [])
-                        if selected { weekdays.insert(weekday) } else { weekdays.remove(weekday) }
+                        if selected { weekdays.remove(weekday) } else { weekdays.insert(weekday) }
                         rule.weekdays = weekdays.sorted()
-                    }))
+                    } label: {
+                        Text(calendar.veryShortStandaloneWeekdaySymbols[weekday - 1])
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                            .background(selected ? Color.accentColor.opacity(0.16) : Color.secondary.opacity(0.08), in: Capsule())
+                    }.buttonStyle(.plain)
+                        .accessibilityLabel(calendar.weekdaySymbols[weekday - 1])
+                        .accessibilityValue(selected ? "Selected" : "Not selected")
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                        .accessibilityIdentifier("customRepeatWeekday-\(weekday)")
+                }
             }
         case .months:
             Picker("Monthly pattern", selection: Binding(get: { monthPattern }, set: setMonthPattern)) {
@@ -662,5 +711,56 @@ private struct PhoneCustomRepeatSheet: View {
                         in: 1...999_999)
             }
         }
+    }
+}
+
+
+private struct PhoneAllDayReminderDialog: View {
+    @Environment(\.dismiss) private var dismiss
+    let due: Date
+    let calendar: Calendar
+    let clock: () -> Date
+    @State private var expiredOnAdd = false
+    let add: (Date) -> Void
+    @State private var weeks = false
+    @State private var offset = 0
+    @State private var hour = 9
+    @State private var minute = 0
+    private var candidate: Date? {
+        AllDayReminderOffset.date(due: due, weeks: weeks, offset: offset, hour: hour, minute: minute, calendar: calendar)
+    }
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Custom Reminder").font(.headline)
+            Picker("Unit", selection: $weeks) { Text("Day").tag(false); Text("Week").tag(true) }
+                .pickerStyle(.segmented).accessibilityIdentifier("customReminderUnit")
+            HStack(spacing: 0) {
+                Picker("Offset", selection: $offset) { ForEach(0...52, id: \.self) { Text(String($0)).tag($0) } }
+                    .accessibilityIdentifier("customReminderOffset")
+                Picker("Hour", selection: $hour) { ForEach(0...23, id: \.self) { Text(String(format: "%02d", $0)).tag($0) } }
+                    .accessibilityIdentifier("customReminderHour")
+                Picker("Minute", selection: $minute) { ForEach(0...59, id: \.self) { Text(String(format: "%02d", $0)).tag($0) } }
+                    .accessibilityIdentifier("customReminderMinute")
+            }.pickerStyle(.wheel).frame(height: 150)
+            Text("Before the scheduled date · " + calendar.timeZone.identifier).font(.caption).foregroundStyle(.secondary)
+            if let candidate {
+                Text(candidate.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, calendar: calendar, timeZone: calendar.timeZone)))
+                    .font(.footnote).accessibilityIdentifier("customReminderPreview")
+                if candidate <= clock() || expiredOnAdd { Text("This reminder has expired.").foregroundStyle(.red).accessibilityIdentifier("customReminderExpired") }
+            } else {
+                Text("This time does not exist in the selected time zone.").foregroundStyle(.red)
+            }
+            HStack {
+                Button { dismiss() } label: { Text("Cancel").frame(minWidth: 44, minHeight: 44) }.accessibilityIdentifier("customReminderCancel")
+                Spacer()
+                Button {
+                    guard let candidate, candidate > clock() else { expiredOnAdd = true; return }
+                    add(candidate); dismiss()
+                } label: { Text("Add").frame(minWidth: 44, minHeight: 44) }
+                    .disabled(candidate == nil || candidate! <= clock())
+                    .accessibilityIdentifier("customReminderAdd")
+            }
+        }.padding(16).frame(width: 310)
+            .onChange(of: candidate) { _, _ in expiredOnAdd = false }
     }
 }

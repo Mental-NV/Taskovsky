@@ -2133,3 +2133,11 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## D05 detail Priority popup —2026-11-15
 
 [Receipt](../changes/mobile-detail-priority-popup-2026-11-15.md):844+38 tests/release/iPhone compile, independent review and native4/4 passed. Native result finalization delayed but exited0. Exact-head CI pending.
+
+## D11 all-day Custom Reminder — 2026-11-15
+
+[Receipt](../changes/mobile-custom-reminder-2026-11-15.md): 851+38 integrated package tests, release and iPhone build-for-testing passed. Final nondefault wheel native2/2 passed. Independent source/test/doc review clean; exact CI pending.
+
+## D13 Custom Repeat Frequency —2026-11-15
+
+[Receipt](../changes/mobile-repeat-frequency-2026-11-15.md):851 XCTest+38 Swift/release, final iPhone compile/native4/4 and independent source/test review passed. Exact-head CI pending. Full interval model preserved by bounded wheel plus validated numeric fallback.
