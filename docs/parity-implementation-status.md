@@ -283,3 +283,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone Arrange control hierarchy candidate moves grouping below title, source Filter to footer and overdue to overflow without changing domain semantics. Full suite/release/review and four native tests passed; exact-head CI pending; centered Filter hierarchy dialog still open. See `docs/changes/mobile-arrange-controls-2026-11-15.md`.
 
 - iPhone Day/Multi-Day viewport-fill candidate replaces fixed narrow columns with available width while preserving minimums and Week behavior. Full suite/release/review and five native tests passed; exact-head CI pending; header chrome and calibrated pixel parity still open. See `docs/changes/mobile-hourly-viewport-2026-11-15.md`.
+
+- Calendar hour-row chrome candidate relocates existing controls to an on-demand popover, preserving session behavior. Full suite/release/review and four native tests plus backdrop recheck passed; exact-head CI pending; this is not observed TickTick hour-menu parity. See `docs/changes/mobile-calendar-hours-popover-2026-11-15.md`.

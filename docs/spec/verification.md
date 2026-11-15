@@ -2070,3 +2070,6 @@ Verify top grouping and footer Filter remain visible/reachable; List/Tag/Priorit
 
 ### Hourly viewport width
 Verify three equal columns reach the viewport trailing edge and exceed the prior fixed-width layout, then paging/persistence, Day navigation, Week swipe and Day drag/Undo/resize regressions. Inspect actual screenshot rather than equating AX label widths with column widths. See `../changes/mobile-hourly-viewport-2026-11-15.md`.
+
+### Calendar hours popover
+Check no permanent hour row, accessible clock opening, counts, expansion/collapse, Done and reopened state, relaunch reset, hourly drag, Week swipe and 3Day geometry; inspect actual screenshots. See `../changes/mobile-calendar-hours-popover-2026-11-15.md`.
