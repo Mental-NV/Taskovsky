@@ -168,6 +168,6 @@ Historical [PR #102](https://github.com/Mental-NV/Taskovsky/pull/102) QA capture
 
 ### T17: Compact capture shell
 
-Native source checkpoint `a05e035`; [receipt](changes/mobile-compact-capture-2026-11-15.md). 1170 × 2532 pixels. Neutral fixture, real software keyboard. Not a matched reference capture or exact low-sheet geometry.
+[PR120](https://github.com/Mental-NV/Taskovsky/pull/120) native source checkpoint `a05e035`; [receipt](changes/mobile-compact-capture-2026-11-15.md). 1170 × 2532 pixels. Neutral fixture, real software keyboard. Not a matched reference capture or exact low-sheet geometry.
 
 [<img src="assets/mobile-parity/2026-11-15/t17-compact-capture.png" width="250" alt="Taskovsky compact composer">](assets/mobile-parity/2026-11-15/t17-compact-capture.png)

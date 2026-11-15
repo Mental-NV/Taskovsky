@@ -133,7 +133,7 @@
       1170,
       2532
     ],
-    "pull_request": null,
+    "pull_request": 120,
     "receipt": "../../../changes/mobile-compact-capture-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
