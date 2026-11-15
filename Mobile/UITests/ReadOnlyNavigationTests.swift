@@ -4205,16 +4205,14 @@ extension ReadOnlyNavigationTests {
     @MainActor func testCalendarSourceColorSavesAndResetCanBeCancelled() {
         let app = launch(qaCase: "calendar-options")
         app.buttons["Calendar"].tap()
-        let openColors = app.buttons["calendarSourceColors"]
-        let nav = app.navigationBars["Calendar List Colors"]
+        let nav = app.navigationBars["Color"]
         let reset = app.buttons["Use default color for Inbox"]
         let inboxColor = app.buttons["Inbox"]
         func listColors() {
             openCalendarViewOptions(app)
             app.buttons["calendarColorPage"].tap()
-            XCTAssertTrue(openColors.waitForExistence(timeout: 5))
-            openColors.tap()
             XCTAssertTrue(nav.waitForExistence(timeout: 5))
+            XCTAssertTrue(inboxColor.waitForExistence(timeout: 5))
         }
         func back(_ bar: XCUIElement) { bar.buttons.firstMatch.tap(); waitGone(bar) }
         func pick(_ button: XCUIElement, from original: String, to color: String) {
@@ -4253,22 +4251,51 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(reset.isEnabled)
         attach(app, "Saved Inbox Calendar color")
         reset.tap()
-        back(nav)
+        XCTAssertFalse(reset.isEnabled)
         app.buttons["calendarColor"].tap()
         app.buttons["Priority"].tap()
-        XCTAssertFalse(openColors.exists)
+        XCTAssertFalse(app.buttons["Inbox"].exists)
+        XCTAssertTrue(app.staticTexts["Priority uses its fixed Calendar colors. There is nothing to customize."].waitForExistence(timeout: 5))
         app.buttons["calendarColor"].tap()
         app.buttons["Tag"].tap()
-        openColors.tap()
-        let tags = app.navigationBars["Calendar Tag Colors"]
-        XCTAssertTrue(tags.waitForExistence(timeout: 5))
         let planning = app.buttons["Planning"]
+        XCTAssertTrue(planning.waitForExistence(timeout: 5))
         pick(planning, from: "E6A53A", to: "008122")
         XCTAssertTrue(app.buttons["Use default color for Planning"].isEnabled)
         attach(app, "Custom Calendar tag color")
-        back(tags)
+        back(nav)
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+    }
+
+    @MainActor func testCalendarColorPageShowsFolderHierarchyAndModeSwitch() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        app.buttons["calendarColorPage"].tap()
+        let nav = app.navigationBars["Color"]
+        XCTAssertTrue(nav.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["calendarColor"].value as? String, "List")
+        XCTAssertTrue(app.buttons["Inbox"].exists)
+        XCTAssertTrue(app.buttons["Personal"].exists)
+        XCTAssertTrue(app.buttons["Work"].exists)
+        XCTAssertTrue(app.staticTexts["Projects"].exists)
+        attach(app, "Calendar Color page with Inbox, lists and folder")
+        app.buttons["calendarColor"].tap()
+        app.buttons["Tag"].tap()
+        XCTAssertEqual(app.buttons["calendarColor"].value as? String, "Tag")
+        XCTAssertTrue(app.buttons["Planning"].waitForExistence(timeout: 5))
+        app.buttons["calendarColor"].tap()
+        app.buttons["Priority"].tap()
+        XCTAssertEqual(app.buttons["calendarColor"].value as? String, "Priority")
+        XCTAssertFalse(app.buttons["Inbox"].exists)
+        XCTAssertFalse(app.buttons["Planning"].exists)
+        XCTAssertTrue(app.staticTexts["Priority uses its fixed Calendar colors. There is nothing to customize."].exists)
+        nav.buttons.firstMatch.tap()
+        waitGone(nav)
+        calendarOptionsRoot(app)
+        app.buttons["calendarPreferencesCancel"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
     }
 

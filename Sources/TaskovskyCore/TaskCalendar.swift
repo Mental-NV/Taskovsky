@@ -22,7 +22,7 @@ public enum CalendarColorSource: Hashable, Sendable {
         }
     }
 
-    public struct Swatch: Identifiable, Sendable {
+    public struct Swatch: Identifiable, Equatable, Sendable {
         public let id: CalendarColorSource
         public let name: String
         public let defaultColor: String
@@ -39,6 +39,48 @@ public enum CalendarColorSource: Hashable, Sendable {
         case .priority:
             return []
         }
+    }
+
+    /// One Calendar color group for List mode. `placement` reuses the
+    /// organizer's domain ownership: above-folders lists, one group per
+    /// folder, then below-folders lists. Archived lists are excluded; their
+    /// stored overrides are preserved separately and never dropped here.
+    public struct ListColorSection: Equatable, Sendable {
+        public let placement: ListPlacement
+        public let folderName: String?
+        public let rows: [Swatch]
+    }
+
+    /// Inbox plus the active lists grouped by folder ownership. Every group
+    /// keeps workspace stored order and stable source IDs, so the Color page
+    /// can render a genuine hierarchy without guessing labels. Lists whose
+    /// folder is unknown fall to the below-folders group, matching the
+    /// Calendar filter fallback.
+    public static func listSections(in data: WorkspaceData) -> (inbox: Swatch, sections: [ListColorSection]) {
+        let inbox = Swatch(id: .inbox, name: "Inbox", defaultColor: "#7C6CF2")
+        let active = data.lists.filter { !$0.isArchived }
+        let known = Set(data.folders.map(\.id))
+        func swatch(_ list: TaskList) -> Swatch {
+            Swatch(id: .list(list.id), name: list.name, defaultColor: list.color)
+        }
+        var sections: [ListColorSection] = []
+        let above = active.filter { $0.folderID == nil && !$0.belowFolders }
+        if !above.isEmpty {
+            sections.append(ListColorSection(placement: .aboveFolders, folderName: nil, rows: above.map(swatch)))
+        }
+        for folder in data.folders {
+            let members = active.filter { $0.folderID == folder.id }
+            if !members.isEmpty {
+                sections.append(ListColorSection(placement: .folder(folder.id), folderName: folder.name, rows: members.map(swatch)))
+            }
+        }
+        let below = active.filter { list in
+            list.folderID == nil ? list.belowFolders : !known.contains(list.folderID!)
+        }
+        if !below.isEmpty {
+            sections.append(ListColorSection(placement: .belowFolders, folderName: nil, rows: below.map(swatch)))
+        }
+        return (inbox, sections)
     }
 
     public struct Overrides: Codable, Equatable, Sendable {
