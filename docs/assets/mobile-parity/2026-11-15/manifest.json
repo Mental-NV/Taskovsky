@@ -340,5 +340,17 @@
     "review": "Pixel inspected neutral menu with exact labels/current check; no personal task/account data.",
     "source_commit": "5d5af24",
     "historical": true
+  },
+  {
+    "state": "T13",
+    "file": "t13-normal-filter.png",
+    "sha256": "1cf1a5fa15622189efb4adf4b73088d46b94a9712d83ec63f485bb7b69f89e4c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-normal-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral filter draft. Primary criteria and keyword/type visible; More/Preview below viewport. No personal information."
   }
 ]

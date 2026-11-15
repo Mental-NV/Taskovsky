@@ -2145,3 +2145,11 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## D14 Repeat Type —2026-11-15
 
 [Receipt](../changes/mobile-repeat-type-2026-11-15.md):852 XCTest+38 Swift/release/iPhone compile and independent review passed. Four initial native cases passed; specificDates AX-value failure fixed and final focused native passed after supported owned-Simulator boot/nonparallel launch. Exact CI pending. Neutral menu capture linked in tracker.
+
+## PR #139 integration with Normal Filter — 2026-11-15
+
+Merged main `dd406ec53d546554b323d4ff009f4d4730502588` into Repeat Type head `651aa1c95218242b504d30c6d8dc5307128a0d3d` in an isolated Linux checkout. Both additive UI test extensions and the D14/T13 manifest records are preserved; production files retain their respective feature-parent contents. The tracker counts 26/46 screenshot states, with 20 remaining.
+
+Local checks passed: four Python compile-gate command-double tests (`python3 -m unittest discover -s scripts/tests -v`), diff whitespace checks, all 26 manifest SHA-256 hashes/PNG dimensions, receipt paths and supplied source-commit references, and preservation of both parent UI test inventories (228 unique test names). The existing D14/T13 PNGs were inspected again and contain neutral QA settings/content. No new capture or personal TickTick data was added.
+
+Swift tests, macOS release build and iPhone compilation were not run: Swift/Xcode are unavailable in this Linux environment. No Simulator or GUI session was used. Historical feature results above do not validate this integration head; fresh native QA, review and exact-head hosted CI remain required before readiness or merge.
