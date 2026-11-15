@@ -7131,7 +7131,11 @@ extension ReadOnlyNavigationTests {
             attach(app, "Add List selected " + mode)
             finishOrganizationEdit(app)
             app.buttons["organizationManagerDone"].tap()
-            goTo(title, in: app)
+            let destination = app.buttons[title]
+            XCTAssertTrue(destination.waitForExistence(timeout: 5))
+            reveal(destination, in: app); destination.tap()
+            waitGone(app.buttons["manageLists"])
+
             XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
             if mode == "board" {
                 XCTAssertTrue(app.buttons["boardColumn-open"].waitForExistence(timeout: 5))
