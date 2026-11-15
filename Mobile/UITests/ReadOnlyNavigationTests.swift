@@ -4283,6 +4283,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.staticTexts["Projects"].exists)
         attach(app, "Calendar Color page with Inbox, lists and folder")
         app.buttons["calendarColor"].tap()
+        attach(app, "Calendar Color By menu")
         app.buttons["calendarColorMode-tag"].tap()
         XCTAssertEqual(app.buttons["calendarColor"].value as? String, "Tag")
         XCTAssertTrue(app.buttons["Planning"].waitForExistence(timeout: 5))

@@ -76,10 +76,39 @@ Origin/main PR142 (Advanced filter draft preview and read-only examples) was
 merged additively underneath this work; its source, tests, docs, and asset
 changes are preserved and the C07 hunks are intact.
 
+## Native run (owned device only)
+
+- Device: the released owned simulator `B263E8E7-F1A5-4407-894D-23FC224B1013`
+  ("Taskovsky Menu QA 1114", iOS 26.3), already booted. No named/default or
+  personal device was used, and no other native work ran concurrently.
+- Command: `xcodebuild test` on `Mobile/TaskovskyMobile.xcodeproj`, scheme
+  `TaskovskyMobile`, destination pinned to the owned simulator ID,
+  `-parallel-testing-enabled NO -collect-test-diagnostics never
+  CODE_SIGNING_ALLOWED=NO`, with unique DerivedData, result bundle, and log
+  under `/private/tmp/TaskovskyCalendarColorNative/`. The run log is
+  `run.log`; the result bundle is `result.xcresult`.
+- Result: **3 tests, 0 failures** — `testCalendarSourceColorSavesAndResetCanBeCancelled`
+  (67.1s), `testCalendarColorPageShowsFolderHierarchyAndModeSwitch` (23.1s),
+  `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` (47.1s).
+- Menu AX finding: the `calendarColor` value assertions (`List`/`Tag`/`Priority`)
+  passed on device, so the Menu label value survives; the stable
+  `calendarColorMode-*` leaf IDs selected the modes. No selector or behavior
+  weakening was needed and none was made.
+- Attachments were exported from the saved xcresult (`attachments/`, with
+  `manifest.json` confirming device B263E8E7 and no failure association).
+  The neutral inline Color page (Color By List, Inbox/Personal swatches,
+  Projects folder with Work) and the open anchored menu (checked List, Tag,
+  Priority) were inspected at pixel level. Fixtures are neutral QA samples
+  only; no personal data and no TickTick imagery.
+
+Origin/main PR139 (Repeat Type menu) was merged as `d25580b`, preserving the
+C07 production code, Core tests, native tests, and this receipt alongside the
+PR139 source, tests, docs, and assets.
+
 ## Open items
 
-- Actual Simulator navigation of the new menu/rows, VoiceOver and reduced-motion
-  checks, and matched light-theme screenshots are pending (parent coordinate).
+- VoiceOver and reduced-motion checks, and matched light-theme screenshots
+  beyond the two inspected native attachments, remain pending (parent coordinate).
 - Tag/Priority reference layouts beyond C07/C08 remain unverified; Tag rows and
   the Priority note are truthful local behavior, not reference equivalence.
 - Exact-head hosted CI is still required before merge.
