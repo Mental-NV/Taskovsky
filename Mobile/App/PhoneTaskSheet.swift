@@ -14,6 +14,7 @@ struct PhoneTaskSheet: View {
     let close: () -> Void
     @State private var showActions = false
     @State private var scheduleRequest: PhoneScheduleRequest?
+    @State private var moveRequest: PhoneTaskMoveRequest?
     @State private var metadataRequest: PhoneTaskMetadataRequest?
     @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
     @State private var relatedTasks: [UUID] = []
@@ -65,8 +66,15 @@ struct PhoneTaskSheet: View {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
                             PhoneCompletionButton(model: model, task: task, lists: data.lists)
-                            Text(task.listID.flatMap { id in data.lists.first { $0.id == id }?.name } ?? "Inbox")
-                                .font(.subheadline).foregroundStyle(.secondary)
+                            Button {
+                                guard let document = model.document else { return }
+                                moveRequest = PhoneTaskMoveRequest(task: task, revision: document.revision)
+                            } label: {
+                                Label(task.listID.flatMap { id in data.lists.first { $0.id == id }?.name } ?? "Inbox", systemImage: "chevron.down")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }.buttonStyle(.plain).accessibilityIdentifier("taskMoveList")
+                                .accessibilityHint("Move to another list")
+                                .disabled(!model.canBeginEditing || TaskLifecycle.refusal(for: .move(nil), task: task, lists: data.lists) != nil)
                             if task.deletedAt != nil { Text("In Trash").font(.caption).foregroundStyle(.secondary) }
                             else if SmartListEligibility.isArchived(task, lists: data.lists) {
                                 Text("Archived").font(.caption).foregroundStyle(.secondary)
@@ -142,6 +150,9 @@ struct PhoneTaskSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done", action: close).disabled(model.isBusy).accessibilityIdentifier("taskDetailDone")
                 }
+            }
+            .sheet(item: $moveRequest) { request in
+                PhoneTaskMoveSheet(model: model, request: request)
             }
             .sheet(item: $metadataRequest) { request in
                 PhoneTaskMetadataSheet(model: model, request: request)
@@ -585,7 +596,8 @@ struct PhoneTaskMoveSheet: View {
             PhoneTaskMoveChoices(model: model, request: request) { dismiss() }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }.disabled(model.isBusy)
+                        Button { dismiss() } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("Close").accessibilityIdentifier("taskMoveClose").disabled(model.isBusy)
                     }
                 }
         }.interactiveDismissDisabled(model.isBusy)
@@ -596,23 +608,78 @@ private struct PhoneTaskMoveChoices: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let request: PhoneTaskMoveRequest
     let moved: () -> Void
+    @State private var search = ""
+    @State private var expanded = Set<UUID>()
+    @State private var addList: ListEditorRequest?
+    @State private var createdList = false
+
+    private func matches(_ value: String) -> Bool {
+        search.isEmpty || value.localizedStandardContains(search)
+    }
 
     var body: some View {
         List {
-            moveTarget("Inbox", id: nil)
-            ForEach((model.document?.snapshot.workspace.lists ?? []).filter { !$0.isArchived }) { list in
-                moveTarget(list.name, id: list.id)
+            if let data = model.document?.snapshot.workspace {
+                let active = data.lists.filter { !$0.isArchived }
+                let folderIDs = Set(data.folders.map(\.id))
+                if matches("Inbox") { moveTarget("Inbox", id: nil, symbol: "tray") }
+                ForEach(active.filter { $0.folderID == nil && !$0.belowFolders && matches($0.name) }) { list in listRow(list) }
+                ForEach(data.folders) { folder in
+                    let children = active.filter { $0.folderID == folder.id && (matches($0.name) || matches(folder.name)) }
+                    if !children.isEmpty {
+                        DisclosureGroup(isExpanded: Binding(get: { !search.isEmpty || expanded.contains(folder.id) }, set: { value in
+                            if value { expanded.insert(folder.id) } else { expanded.remove(folder.id) }
+                        })) {
+                            ForEach(children) { list in listRow(list) }
+                        } label: { Label(folder.name, systemImage: "folder") }
+                        .accessibilityIdentifier("taskMoveFolder-" + folder.id.uuidString)
+                    }
+                }
+                // Retain orphan-folder lists rather than silently hiding valid destinations.
+                ForEach(active.filter { list in
+                    (list.folderID == nil ? list.belowFolders : !folderIDs.contains(list.folderID!)) && matches(list.name)
+                }) { list in listRow(list) }
+                Section {
+                    Button("Add List", systemImage: "plus") {
+                        guard let document = model.document, document.revision == request.revision else { return }
+                        addList = ListEditorRequest(revision: request.revision, list: TaskList(name: "", color: "#4E64D8"), folder: nil, creating: true)
+                    }.disabled(!model.canBeginEditing || model.document?.revision != request.revision)
+                        .accessibilityIdentifier("taskMoveAddList")
+                } footer: {
+                    Text("Creating a list closes this chooser without moving the task. Reopen Move to to choose the new list.")
+                }
             }
             PhoneLifecycleFeedback(model: model)
-        }.navigationTitle("Move to List")
+        }
+        .searchable(text: $search, prompt: "Search")
+        .navigationTitle("Move to")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $addList, onDismiss: {
+            if createdList { moved() }
+        }) { editor in
+            PhoneListEditor(model: model, request: editor) { createdList = true }
+        }
     }
 
-    private func moveTarget(_ title: String, id: UUID?) -> some View {
-        Button(title) {
+    private func listRow(_ list: TaskList) -> some View {
+        moveTarget(list.name, id: list.id, symbol: list.symbol ?? (list.kind == .note ? "doc.text" : "list.bullet"))
+    }
+
+    private func moveTarget(_ title: String, id: UUID?, symbol: String) -> some View {
+        let selected = request.task.listID == id
+        return Button {
             Task {
                 if await model.performLifecycle(.move(id), taskID: request.task.id, expected: request.revision) { moved() }
             }
-        }.disabled(!model.canBeginEditing || request.task.listID == id)
+        } label: {
+            HStack {
+                Label { Text(title) } icon: { PhoneListIcon(symbol: symbol) }
+                Spacer()
+                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }
+        }.disabled(!model.canBeginEditing || selected)
+            .accessibilityValue(selected ? "Current list" : "")
+            .accessibilityIdentifier("taskMoveTarget-" + (id?.uuidString ?? "inbox"))
     }
 }
 
