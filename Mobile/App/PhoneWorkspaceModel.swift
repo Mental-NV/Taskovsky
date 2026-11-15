@@ -4,7 +4,7 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, arrangeOptions = "arrange-options", shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneTaskGrouping: String {
     case standard, creationDate, dueDate, priority, list, tag, ungrouped
@@ -358,6 +358,18 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[4].deletedAt = MobilePreviewFixture.now.addingTimeInterval(-3_600)
                 data.tasks[6].kind = .note
                 data.lists[1].isArchived = true
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .arrangeOptions {
+                var data = initial.workspace
+                guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[2].title = "Neutral undated task"
+                data.tasks[2].dueDate = nil
+                data.tasks[3].title = "Neutral overdue task"
+                data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
+                var note = data.tasks[2]
+                note.id = UUID(); note.title = "Neutral undated note"; note.kind = .note
+                data.tasks.append(note)
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && qaCase == .arrange {

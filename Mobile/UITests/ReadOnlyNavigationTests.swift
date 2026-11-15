@@ -3040,11 +3040,11 @@ extension ReadOnlyNavigationTests {
 
         app.buttons["arrangeOptions"].tap()
         let overdue = app.buttons["arrangeOverdue"]
-        XCTAssertEqual(overdue.label, "Include overdue")
+        XCTAssertEqual(overdue.label, "Overdue Task")
         overdue.tap()
         XCTAssertTrue(overdueTask.waitForExistence(timeout: 5))
         app.buttons["arrangeOptions"].tap()
-        XCTAssertEqual(app.buttons["arrangeOverdue"].label, "Hide overdue")
+        XCTAssertEqual(app.buttons["arrangeOverdue"].label, "Overdue Task")
         attach(app, "Arrange overdue selected")
         app.tap()
         app.buttons["arrangeList"].tap()
@@ -7417,5 +7417,35 @@ extension ReadOnlyNavigationTests {
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(app.staticTexts["calendarRuler-America/New_York"].waitForExistence(timeout: 5))
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testArrangeOptionsFilterUndatedNotesAndOverdueIndependently() {
+        let app = launch(qaCase: "arrange-options")
+        app.buttons["Calendar"].tap(); openArrange(app)
+        let task = app.buttons["Schedule Neutral undated task"]
+        let note = app.buttons["Schedule Neutral undated note"]
+        let overdue = app.buttons["Schedule Neutral overdue task"]
+        XCTAssertTrue(task.waitForExistence(timeout: 5)); XCTAssertTrue(note.exists); XCTAssertFalse(overdue.exists)
+        app.buttons["arrangeOptions"].tap()
+        XCTAssertEqual(app.buttons["arrangeUndated"].label, "Undated Task")
+        XCTAssertEqual(app.buttons["arrangeNotes"].label, "Show Notes")
+        attach(app, "Arrange options with undated tasks and notes")
+        app.buttons["arrangeNotes"].tap()
+        XCTAssertFalse(note.exists); XCTAssertTrue(task.exists)
+        app.buttons["arrangeOptions"].tap(); app.buttons["arrangeUndated"].tap()
+        XCTAssertFalse(task.exists); XCTAssertFalse(note.exists)
+        app.buttons["arrangeOptions"].tap(); app.buttons["arrangeOverdue"].tap()
+        XCTAssertTrue(overdue.waitForExistence(timeout: 5)); XCTAssertFalse(task.exists)
+        app.buttons["arrangeOptions"].tap(); app.buttons["arrangeUndated"].tap()
+        XCTAssertTrue(task.waitForExistence(timeout: 5)); XCTAssertFalse(note.exists); XCTAssertTrue(overdue.exists)
+        app.buttons["arrangeOptions"].tap(); app.buttons["arrangeNotes"].tap()
+        XCTAssertTrue(note.waitForExistence(timeout: 5)); XCTAssertTrue(task.exists)
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
+        openArrange(app)
+        XCTAssertTrue(task.waitForExistence(timeout: 5)); XCTAssertTrue(note.exists); XCTAssertFalse(overdue.exists)
     }
 }
