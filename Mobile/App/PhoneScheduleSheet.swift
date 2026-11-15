@@ -101,8 +101,24 @@ struct PhoneScheduleSheet: View {
                                     .font(.footnote).foregroundStyle(.secondary)
                             }
                         }
-                        reminderSection
-                        repeatSection
+                        Section {
+                            NavigationLink {
+                                Form { reminderSection }
+                                    .navigationTitle("Reminder").navigationBarTitleDisplayMode(.inline)
+                            } label: { LabeledContent("Reminder", value: reminderSummary) }
+                                .accessibilityIdentifier("scheduleReminderOptions").accessibilityValue(reminderSummary)
+                            NavigationLink {
+                                Form { repeatSection }
+                                    .navigationTitle("Repeat").navigationBarTitleDisplayMode(.inline)
+                            } label: { LabeledContent("Repeat", value: repeatSummary) }
+                                .accessibilityIdentifier("scheduleRepeatOptions").accessibilityValue(repeatSummary)
+                        }
+                        if canSkipOccurrence {
+                            Section {
+                                Button("Skip this occurrence") { skipOccurrence = true; error = nil }
+                                    .accessibilityIdentifier("scheduleSkipOccurrence")
+                            }
+                        }
                     }
                 }
             }
@@ -221,6 +237,19 @@ struct PhoneScheduleSheet: View {
         .accessibilityIdentifier("scheduleDay-\(offset)")
     }
 
+    private var reminderSummary: String {
+        var dates = edit.usesAutomaticReminders ? edit.automaticReminders(settings: settings) : edit.manualReminders
+        if edit.remindsAtEnd, let end = edit.timedDurationEnd { dates.append(end) }
+        let count = Set(dates).count
+        if count == 0 { return edit.usesAutomaticReminders ? "Default (none)" : "None" }
+        return edit.usesAutomaticReminders ? "Default · \(count)" : "\(count) reminder\(count == 1 ? "" : "s")"
+    }
+
+    private var repeatSummary: String {
+        if let custom = edit.customRule { return custom.isValid ? custom.shortLabel(calendar: calendar) : "Invalid custom repeat" }
+        return edit.repeatRule == .none ? "None" : edit.repeatRule.rawValue.capitalized
+    }
+
     private var reminderSection: some View {
         Section("Reminders") {
             if let end = edit.timedDurationEnd {
@@ -285,10 +314,6 @@ struct PhoneScheduleSheet: View {
                     }
                 }
                 Button("Custom repeat") { showCustom = true }.accessibilityIdentifier("scheduleCustom")
-            }
-            if canSkipOccurrence {
-                Button("Skip this occurrence") { skipOccurrence = true; error = nil }
-                    .accessibilityIdentifier("scheduleSkipOccurrence")
             }
         }
     }

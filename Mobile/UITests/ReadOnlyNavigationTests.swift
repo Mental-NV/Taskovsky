@@ -2525,9 +2525,27 @@ extension ReadOnlyNavigationTests {
         app.buttons["scheduleCancel"].tap()
     }
 
+    @MainActor private func openScheduleOptions(_ id: String, in app: XCUIApplication) {
+        let row = app.buttons[id]
+        reveal(row, in: app)
+        attach(app, "Schedule summary rows")
+        row.tap()
+        let title = id == "scheduleReminderOptions" ? "Reminder" : "Repeat"
+        XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 5))
+        attach(app, "Schedule " + title + " options")
+    }
+
+    @MainActor private func scheduleRoot(_ app: XCUIApplication) {
+        if !app.navigationBars["Schedule"].exists {
+            app.navigationBars.buttons.firstMatch.tap()
+        }
+        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testScheduleNestedAndOuterCancelLeaveAnUntouchedTask() {
         let app = launch(), task = "Prepare the weekly plan"
         let original = openSchedule(app, task: task)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
         let custom = app.buttons["scheduleCustom"]
         reveal(custom, in: app)
         custom.tap()
@@ -2536,10 +2554,12 @@ extension ReadOnlyNavigationTests {
         app.buttons["customRepeatCancel"].tap()
         waitGone(app.buttons["customRepeatDone"])
         XCTAssertFalse(app.staticTexts["scheduleCustomRule"].exists)
+        scheduleRoot(app)
         app.buttons["scheduleDone"].tap()
         waitGone(app.buttons["scheduleDone"])
         XCTAssertEqual(app.buttons["editSchedule"].label, original)
         app.buttons["editSchedule"].tap()
+        scheduleRoot(app)
         let remove = app.buttons["scheduleRemove"]
         reveal(remove, in: app)
         remove.tap()
@@ -2552,6 +2572,7 @@ extension ReadOnlyNavigationTests {
     @MainActor func testScheduleCreatesCustomRepeatAndStagesRemoval() {
         let app = launch(), task = "Review the project outline"
         _ = openSchedule(app, task: task)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
         let custom = app.buttons["scheduleCustom"]
         reveal(custom, in: app)
         custom.tap()
@@ -2563,15 +2584,20 @@ extension ReadOnlyNavigationTests {
         let rule = app.staticTexts["scheduleCustomRule"]
         reveal(rule, in: app)
         XCTAssertTrue(rule.exists)
+        scheduleRoot(app)
+        XCTAssertNotEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
         app.buttons["scheduleDone"].tap()
         waitGone(app.buttons["scheduleDone"])
         app.buttons["editSchedule"].tap()
+        openScheduleOptions("scheduleRepeatOptions", in: app)
         reveal(rule, in: app)
         XCTAssertTrue(rule.exists)
+        scheduleRoot(app)
         let remove = app.buttons["scheduleRemove"]
         reveal(remove, in: app, towardTop: true)
         remove.tap()
         XCTAssertTrue(app.buttons["scheduleAddDate"].waitForExistence(timeout: 5))
+        scheduleRoot(app)
         app.buttons["scheduleDone"].tap()
         waitGone(app.buttons["scheduleDone"])
         XCTAssertEqual(app.buttons["editSchedule"].label, "Schedule")
@@ -2591,6 +2617,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(choice.waitForExistence(timeout: 5))
         choice.tap()
         waitGone(search)
+        openScheduleOptions("scheduleReminderOptions", in: app)
         let automatic = app.switches["scheduleAutomaticReminders"]
         reveal(automatic, in: app)
         XCTAssertEqual(automatic.value as? String, "1")
@@ -2600,6 +2627,8 @@ extension ReadOnlyNavigationTests {
         reveal(add, in: app)
         add.tap()
         attach(app, "Timed range with a manual reminder")
+        scheduleRoot(app)
+        XCTAssertEqual(app.buttons["scheduleReminderOptions"].value as? String, "1 reminder")
         app.buttons["scheduleDone"].tap()
         waitGone(app.buttons["scheduleDone"])
         XCTAssertEqual(app.buttons["editSchedule"].label, original)
@@ -2611,6 +2640,7 @@ extension ReadOnlyNavigationTests {
         let toggle = app.switches["scheduleReminderAtEnd"]
         let caption = app.staticTexts["scheduleEndReminderDate"]
         func enable() {
+            openScheduleOptions("scheduleReminderOptions", in: app)
             reveal(toggle, in: app)
             XCTAssertEqual(toggle.value as? String, "0")
             toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
@@ -2618,25 +2648,32 @@ extension ReadOnlyNavigationTests {
             XCTAssertTrue(caption.exists)
         }
         enable()
+        scheduleRoot(app)
         app.buttons["scheduleCancel"].tap()
         waitGone(app.buttons["scheduleDone"])
         app.buttons["editSchedule"].tap()
         XCTAssertTrue(app.buttons["scheduleDone"].waitForExistence(timeout: 5))
         enable()
         attach(app, "Timed duration reminder at the end")
+        scheduleRoot(app)
         app.buttons["scheduleDone"].tap()
         waitGone(app.buttons["scheduleDone"])
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         _ = openSchedule(app, task: task)
+        openScheduleOptions("scheduleReminderOptions", in: app)
         reveal(toggle, in: app)
         XCTAssertEqual(toggle.value as? String, "1")
         XCTAssertTrue(caption.exists)
+        scheduleRoot(app)
         let type = app.segmentedControls["scheduleType"]
         reveal(type, in: app, towardTop: true)
         type.buttons["Date"].tap()
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        XCTAssertTrue(app.switches["scheduleAutomaticReminders"].waitForExistence(timeout: 5))
         XCTAssertFalse(toggle.exists)
+        scheduleRoot(app)
         app.buttons["scheduleCancel"].tap()
     }
 
@@ -2728,7 +2765,9 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         goTo("Inbox", in: app)
         XCTAssertEqual(openSchedule(app, task: title), advanced)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
         reveal(app.buttons["scheduleCustom"], in: app)
+        scheduleRoot(app)
         XCTAssertFalse(app.buttons["scheduleSkipOccurrence"].exists)
         cancel.tap()
         waitGone(done)
