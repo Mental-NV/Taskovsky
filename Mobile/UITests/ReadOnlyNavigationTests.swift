@@ -3551,6 +3551,76 @@ extension ReadOnlyNavigationTests {
         waitGone(app.buttons["arrangeDone"])
     }
 
+    @MainActor func testCalendarArrangeChildScheduleDonePersistsOnlyChild() {
+        let app = launch(qaCase: "arrange-hierarchy")
+        // Pre-state: the child is unscheduled, like its parent.
+        var row = app.buttons["Neutral arrange child one"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertEqual(app.buttons["editSchedule"].label, "Schedule")
+        app.buttons["taskDetailDone"].tap()
+        waitGone(app.buttons["editSchedule"])
+
+        app.buttons["Calendar"].tap()
+        openArrange(app)
+        XCTAssertTrue(app.staticTexts["Work · 4"].waitForExistence(timeout: 5))
+        app.buttons["Schedule Neutral arrange child one"].tap()
+        XCTAssertTrue(app.buttons["calendarEditDone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Neutral arrange child one"].exists)
+        app.buttons["calendarEditDone"].tap()
+        let notice = app.staticTexts["calendarScheduleNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertEqual(notice.label, "Schedule updated")
+        waitGone(app.buttons["Schedule Neutral arrange child one"])
+        XCTAssertTrue(app.staticTexts["Work · 3"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange parent"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange child two"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral orphan child"].exists)
+        attach(app, "Arrange child scheduled")
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
+
+        // Only the child's date changed: its detail now carries an actual
+        // schedule while the parent stays unscheduled.
+        app.buttons["Tasks"].tap()
+        row = app.buttons["Neutral arrange child one"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        let scheduled = app.buttons["editSchedule"].label
+        XCTAssertNotEqual(scheduled, "Schedule")
+        app.buttons["taskDetailDone"].tap()
+        waitGone(app.buttons["editSchedule"])
+        app.buttons["Neutral arrange parent"].tap()
+        XCTAssertEqual(app.buttons["editSchedule"].label, "Schedule")
+        app.buttons["taskDetailDone"].tap()
+
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        openArrange(app)
+        XCTAssertFalse(app.buttons["Schedule Neutral arrange child one"].exists)
+        XCTAssertTrue(app.staticTexts["Work · 3"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange parent"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange child two"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral orphan child"].exists)
+        attach(app, "Arrange child schedule persisted")
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
+
+        // The exact staged schedule survived relaunch; the parent is untouched.
+        app.buttons["Tasks"].tap()
+        row = app.buttons["Neutral arrange child one"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        row.tap()
+        XCTAssertEqual(app.buttons["editSchedule"].label, scheduled)
+        attach(app, "Child schedule persisted in detail")
+        app.buttons["taskDetailDone"].tap()
+        waitGone(app.buttons["editSchedule"])
+        app.buttons["Neutral arrange parent"].tap()
+        XCTAssertEqual(app.buttons["editSchedule"].label, "Schedule")
+        app.buttons["taskDetailDone"].tap()
+    }
+
     @MainActor func testCalendarArrangeDragSchedulesAndUndoes() {
         let app = launch(qaCase: "arrange")
         app.buttons["Calendar"].tap()
