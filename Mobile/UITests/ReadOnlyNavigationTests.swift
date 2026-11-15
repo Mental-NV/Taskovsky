@@ -1818,7 +1818,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
     }
 
     @MainActor func testOrganizationGroupsAndMetadataSortingComposeAndRestore() {
-        let app = launch(qaCase: "task-sort")
+        let app = launch(qaCase: "organization-sort")
         goTo("Work", in: app)
         chooseTaskSort("Group by Tag", in: app)
         XCTAssertTrue(app.staticTexts["Planning"].waitForExistence(timeout: 5))
