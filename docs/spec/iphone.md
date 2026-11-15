@@ -993,3 +993,7 @@ New ordinary capture starts with a title and direct date/priority/tag/list contr
 ### Empty description affordance
 
 An ordinary empty plain description uses one Add description menu exposing existing plain and formatted editing routes, without an idle No description row. Existing nonempty and rich-description presentation and write guards remain unchanged. This is compact empty-state presentation, not exact TickTick toolbar matching. [Scope](../changes/mobile-empty-description-2026-11-15.md).
+
+## Composer recovery success notice removal — 2026-11-15
+
+[Bounded user-requested change](../changes/mobile-capture-notice-2026-11-15.md): remove normal recovery-status area and gap; retain actual warnings and underlying draft recovery. Local full tests/release/review and bounded native checks passed; exact-head CI pending. No full parity claim.

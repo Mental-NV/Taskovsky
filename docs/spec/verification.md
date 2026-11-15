@@ -2100,3 +2100,7 @@ Initial native testing exposed competing navigation links in one Form row; expli
 ### Compact mobile empty description
 
 Candidate native checks cover plain editor Cancel/reopen/save/relaunch and formatted Cancel/discard, plus existing rich/unknown/malformed protections. Full 827 XCTest + 38 Swift Testing, release/signature, independent review and all five native cases passed; actual screenshot inspected and owned Simulator shut down. Exact-head CI pending. [Scope](../changes/mobile-empty-description-2026-11-15.md).
+
+## Composer recovery success notice removal — 2026-11-15
+
+[Bounded user-requested change](../changes/mobile-capture-notice-2026-11-15.md): remove normal recovery-status area and gap; retain actual warnings and underlying draft recovery. Local full tests/release/review and bounded native checks passed; exact-head CI pending. No full parity claim.
