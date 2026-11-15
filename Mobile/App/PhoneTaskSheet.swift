@@ -631,8 +631,10 @@ private struct PhoneTaskMoveChoices: View {
                             if value { expanded.insert(folder.id) } else { expanded.remove(folder.id) }
                         })) {
                             ForEach(children) { list in listRow(list) }
-                        } label: { Label(folder.name, systemImage: "folder") }
-                        .accessibilityIdentifier("taskMoveFolder-" + folder.id.uuidString)
+                        } label: {
+                            Label(folder.name, systemImage: "folder")
+                                .accessibilityIdentifier("taskMoveFolder-" + folder.id.uuidString)
+                        }
                     }
                 }
                 // Retain orphan-folder lists rather than silently hiding valid destinations.

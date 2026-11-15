@@ -2364,7 +2364,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         task.swipeLeft()
         XCTAssertTrue(move.waitForExistence(timeout: 5))
         move.tap()
-        let list = app.navigationBars["Move to List"]
+        let list = app.navigationBars["Move to"]
         XCTAssertTrue(list.waitForExistence(timeout: 5))
         app.buttons["Personal"].tap()
         waitGone(list)
@@ -6968,5 +6968,88 @@ extension ReadOnlyNavigationTests {
         app.buttons["Open navigation"].tap()
         app.buttons["manageTags"].tap()
         XCTAssertTrue(app.buttons["tagManagerDone"].waitForExistence(timeout: 5))
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor private func openMoveHierarchy(_ app: XCUIApplication) {
+        let task = app.buttons["Review the project outline"]
+        XCTAssertTrue(task.waitForExistence(timeout: 5)); task.tap()
+        XCTAssertTrue(app.buttons["taskMoveList"].waitForExistence(timeout: 5))
+        app.buttons["taskMoveList"].tap()
+        XCTAssertTrue(app.navigationBars["Move to"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testMoveHierarchySearchFolderCurrentAndClosePreserveTask() {
+        let app = launch(qaCase: "move-hierarchy")
+        openMoveHierarchy(app)
+        let folder = app.buttons["taskMoveFolder-00000000-0000-0000-0000-000000000700"]
+        let work = app.buttons["taskMoveTarget-00000000-0000-0000-0000-000000000100"]
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        XCTAssertFalse(work.exists)
+        folder.tap()
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertEqual(work.value as? String, "Current list")
+        XCTAssertFalse(work.isEnabled)
+        folder.tap(); XCTAssertFalse(work.exists)
+        let search = app.searchFields.firstMatch
+        if !search.isHittable { app.swipeDown() }
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Work")
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["taskMoveTarget-inbox"].exists)
+        attach(app, "Move to searched folder and current list")
+        app.buttons["taskMoveClose"].tap()
+        waitGone(app.navigationBars["Move to"])
+        XCTAssertTrue(app.buttons["taskMoveList"].label.contains("Work"))
+        app.buttons["taskDetailDone"].tap()
+        app.terminate(); app.launch()
+        openMoveHierarchy(app)
+        app.buttons["taskMoveFolder-00000000-0000-0000-0000-000000000700"].tap()
+        XCTAssertEqual(work.value as? String, "Current list")
+        app.buttons["taskMoveClose"].tap()
+    }
+
+    @MainActor func testMoveHierarchyActualMoveReopensWithNewCurrentDestination() {
+        let app = launch(qaCase: "move-hierarchy")
+        openMoveHierarchy(app)
+        let inbox = app.buttons["taskMoveTarget-inbox"]
+        XCTAssertTrue(inbox.isEnabled); inbox.tap()
+        waitGone(app.navigationBars["Move to"])
+        XCTAssertTrue(app.buttons["taskMoveList"].label.contains("Inbox"))
+        app.buttons["taskMoveList"].tap()
+        XCTAssertTrue(inbox.waitForExistence(timeout: 5))
+        XCTAssertEqual(inbox.value as? String, "Current list")
+        XCTAssertFalse(inbox.isEnabled)
+        app.buttons["taskMoveFolder-00000000-0000-0000-0000-000000000700"].tap()
+        let work = app.buttons["taskMoveTarget-00000000-0000-0000-0000-000000000100"]
+        XCTAssertTrue(work.isEnabled); work.tap()
+        waitGone(app.navigationBars["Move to"])
+        XCTAssertTrue(app.buttons["taskMoveList"].label.contains("Work"))
+    }
+
+    @MainActor func testMoveHierarchyAddListCancelAndCreateNeverImplicitlyMove() {
+        let app = launch(qaCase: "move-hierarchy")
+        openMoveHierarchy(app)
+        app.buttons["taskMoveAddList"].tap()
+        XCTAssertTrue(app.buttons["organizationCancel"].waitForExistence(timeout: 5))
+        app.buttons["organizationCancel"].tap()
+        waitGone(app.buttons["organizationCancel"])
+        XCTAssertTrue(app.navigationBars["Move to"].exists)
+        app.buttons["taskMoveClose"].tap()
+        XCTAssertTrue(app.buttons["taskMoveList"].label.contains("Work"))
+        app.buttons["taskMoveList"].tap()
+        app.buttons["taskMoveAddList"].tap()
+        editOrganizationName("Neutral destination", in: app)
+        app.buttons["organizationSave"].tap()
+        waitGone(app.buttons["organizationSave"])
+        waitGone(app.navigationBars["Move to"])
+        XCTAssertTrue(app.buttons["taskMoveList"].label.contains("Work"))
+        app.buttons["taskMoveList"].tap()
+        let target = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "taskMoveTarget-", "Neutral destination")).firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 5)); XCTAssertTrue(target.isEnabled)
+        attach(app, "New list available without implicit task movement")
+        target.tap(); waitGone(app.navigationBars["Move to"])
+        XCTAssertTrue(app.buttons["taskMoveList"].label.contains("Neutral destination"))
     }
 }
