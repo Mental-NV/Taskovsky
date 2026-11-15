@@ -2120,3 +2120,8 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## Real mobile organization grouping and sorting — 2026-11-15
 
 [Contract](../changes/mobile-group-sort-complete-2026-11-15.md) defines distinct List/Tag/None, metadata-aware Date/Tag sorting and unchanged compatibility/reset boundaries. Checks pending; exact unobserved reference semantics not claimed.
+
+
+## Mobile Calendar source layout — 2026-11-15
+
+[Live comparison and verification receipt](../changes/mobile-calendar-filter-layout-2026-11-15.md): compact source presentation with unchanged source-selection mutations and revision guards. Full838 XCTest+38 Swift tests, release/signature, five native cases and final inset case passed; independent review clean. Exact-head hosted CI pending. No calibrated pixel-perfect claim.

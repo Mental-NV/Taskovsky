@@ -18,6 +18,7 @@ struct PhoneCalendarPreferences: View {
     @State private var draft: TaskCalendarOptions
     @State private var tagsExpanded = true
     @State private var expandedFolders = Set<UUID>()
+    @State private var moreExpanded = false
     @State private var showZones = false
     @State private var error: String?
 
@@ -29,11 +30,16 @@ struct PhoneCalendarPreferences: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            Group {
                 switch route.kind {
-                case .display: display
+                case .display: Form { display }
                 case .filters:
-                    if let data = model.document?.snapshot.workspace { sources(data) }
+                    ScrollView {
+                        if let data = model.document?.snapshot.workspace {
+                            sources(data).padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 24)
+                        }
+                    }
+                    .background(Color(uiColor: .systemGroupedBackground))
                 }
             }
             .disabled(model.isBusy)
@@ -47,11 +53,21 @@ struct PhoneCalendarPreferences: View {
             .navigationTitle(route.kind == .filters ? "Filter View Range" : "Calendar View Options")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(model.isBusy).accessibilityIdentifier("calendarPreferencesCancel")
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { save() }.disabled(model.isBusy).accessibilityIdentifier("calendarPreferencesDone")
+                if route.kind == .filters {
+                    if #available(iOS 26.0, *) {
+                        ToolbarItem(placement: .cancellationAction) { filterCancel }.sharedBackgroundVisibility(.hidden)
+                        ToolbarItem(placement: .confirmationAction) { filterDone }.sharedBackgroundVisibility(.hidden)
+                    } else {
+                        ToolbarItem(placement: .cancellationAction) { filterCancel }
+                        ToolbarItem(placement: .confirmationAction) { filterDone }
+                    }
+                } else {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }.disabled(model.isBusy).accessibilityIdentifier("calendarPreferencesCancel")
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { save() }.disabled(model.isBusy).accessibilityIdentifier("calendarPreferencesDone")
+                    }
                 }
             }
         }
@@ -155,23 +171,31 @@ struct PhoneCalendarPreferences: View {
         }.disabled(!draft.showItemIcons)
     }
 
+    private var filterCancel: some View {
+        Button { dismiss() } label: { Image(systemName: "xmark").font(.system(size: 17, weight: .regular)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+            .buttonStyle(.plain).foregroundStyle(.secondary).frame(minWidth: 44, minHeight: 44)
+            .disabled(model.isBusy).accessibilityLabel("Cancel").accessibilityIdentifier("calendarPreferencesCancel")
+    }
+
+    private var filterDone: some View {
+        Button { save() } label: { Image(systemName: "checkmark.circle.fill").font(.system(size: 25, weight: .regular)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle()) }
+            .buttonStyle(.plain).foregroundStyle(Color.accentColor).frame(minWidth: 44, minHeight: 44)
+            .disabled(model.isBusy).accessibilityLabel("Done").accessibilityIdentifier("calendarPreferencesDone")
+    }
+
     @ViewBuilder private func sources(_ data: WorkspaceData) -> some View {
-        Section { source("All", mark: draft.isAllSources ? .on : .off) { draft.selectAllSources() } }
-        Section {
-            DisclosureGroup(isExpanded: $tagsExpanded) {
-                if !data.tags.isEmpty {
-                    source("Select all tags", mark: draft.tagSelectionState(in: data)) {
-                        draft.setTagsSelected(draft.tagSelectionState(in: data) != .on, data: data)
-                    }
-                }
+        VStack(spacing: 0) {
+            source("All", icon: "tray.full", mark: draft.isAllSources ? .on : .off) { draft.selectAllSources() }
+            disclosure("Tags", icon: "tag", expanded: tagsExpanded, identifier: "calendarFilterTags") { tagsExpanded.toggle() }
+            if tagsExpanded {
                 ForEach(data.tags) { tag in
                     let selected = draft.tagIDs.contains(tag.id)
-                    source(tag.name, mark: selected ? .on : .off) { draft.setTagSelected(tag.id, !selected, data: data) }
+                    source(tag.name, icon: "tag", indented: true, mark: selected ? .on : .off) {
+                        draft.setTagSelected(tag.id, !selected, data: data)
+                    }
                 }
-            } label: { Label("Tags", systemImage: "tag").accessibilityIdentifier("calendarFilterTags") }
-        }
-        Section {
-            source("Inbox", mark: draft.isInboxSelected ? .on : .off) {
+            }
+            source("Inbox", icon: "tray", mark: draft.isInboxSelected ? .on : .off) {
                 draft.setInboxSelected(!draft.isInboxSelected, data: data)
             }
             let active = data.lists.filter { !$0.isArchived }
@@ -180,42 +204,59 @@ struct PhoneCalendarPreferences: View {
             ForEach(data.folders) { folder in
                 let members = active.filter { $0.folderID == folder.id }
                 if !members.isEmpty {
-                    DisclosureGroup(isExpanded: Binding(get: { expandedFolders.contains(folder.id) }, set: { expanded in
-                        if expanded { expandedFolders.insert(folder.id) } else { expandedFolders.remove(folder.id) }
-                    })) {
-                        ForEach(members) { list in listSource(list, data: data) }
-                    } label: {
-                        Label(folder.name, systemImage: "folder").accessibilityIdentifier("calendarFilterFolder-" + folder.id.uuidString)
+                    let expanded = expandedFolders.contains(folder.id)
+                    disclosure(folder.name, icon: "folder", expanded: expanded, identifier: "calendarFilterFolder-" + folder.id.uuidString) {
+                        if expanded { expandedFolders.remove(folder.id) } else { expandedFolders.insert(folder.id) }
                     }
+                    if expanded { ForEach(members) { list in listSource(list, data: data, indented: true) } }
                 }
             }
             ForEach(active.filter { list in
                 list.folderID == nil ? list.belowFolders : !folderIDs.contains(list.folderID!)
             }) { list in listSource(list, data: data) }
-        }
-        Section {
-            source("Select all lists and Inbox", mark: draft.listSelectionState(in: data)) {
-                draft.setListsSelected(draft.listSelectionState(in: data) != .on, data: data)
+            // Keep Taskovsky's existing bulk actions reachable without inserting extra primary rows.
+            disclosure("More", icon: "ellipsis", expanded: moreExpanded, identifier: "calendarFilterMore") { moreExpanded.toggle() }
+            if moreExpanded {
+                if !data.tags.isEmpty {
+                    source("Select all tags", icon: "tag", mark: draft.tagSelectionState(in: data)) {
+                        draft.setTagsSelected(draft.tagSelectionState(in: data) != .on, data: data)
+                    }
+                }
+                source("Select all lists and Inbox", icon: "tray.full", mark: draft.listSelectionState(in: data)) {
+                    draft.setListsSelected(draft.listSelectionState(in: data) != .on, data: data)
+                }
             }
-        }
+        }.background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         if hasUnavailableSources(data) {
-            Section {
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Some saved Calendar sources are unavailable.")
                 Button("Clear unavailable sources") { draft.clearUnavailableSources(data: data) }
-            }
+            }.font(.footnote).padding(.top, 16)
         } else if !draft.isAllSources, draft.selectedListIDs(in: data).isEmpty, !draft.isInboxSelected, draft.tagIDs.isEmpty {
-            Section { Text("No Calendar sources are selected.") }
+            Text("No Calendar sources are selected.").font(.footnote).padding(.top, 16)
         }
     }
 
-    private func listSource(_ list: TaskList, data: WorkspaceData) -> some View {
-        HStack {
-            let selected = draft.selectedListIDs(in: data).contains(list.id)
-            source(list.name, mark: selected ? .on : .off) { draft.setListSelected(list.id, !selected, data: data) }
-            Button("Only") { draft.selectOnlyList(list.id) }
-                .buttonStyle(.borderless).frame(minWidth: 44, minHeight: 44)
-                .accessibilityLabel("Show only " + list.name)
-        }
+    private func disclosure(_ title: String, icon: String, expanded: Bool, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 16)).foregroundStyle(.secondary).frame(width: 20).accessibilityHidden(true)
+                Text(title).font(.body).foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: expanded ? "chevron.down" : "chevron.right")
+                    .font(.system(size: 11, weight: .semibold)).foregroundStyle(.tertiary).accessibilityHidden(true)
+            }.padding(.horizontal, 16).frame(minHeight: 50).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier(identifier)
+            .accessibilityValue(expanded ? "Expanded" : "Collapsed")
+    }
+
+    private func listSource(_ list: TaskList, data: WorkspaceData, indented: Bool = false) -> some View {
+        let selected = draft.selectedListIDs(in: data).contains(list.id)
+        return source(list.name, icon: "list.bullet", indented: indented, mark: selected ? .on : .off) {
+            draft.setListSelected(list.id, !selected, data: data)
+        }.contextMenu {
+            Button("Show only " + list.name) { draft.selectOnlyList(list.id) }
+        }.accessibilityAction(named: "Show only " + list.name) { draft.selectOnlyList(list.id) }
     }
 
     private func hasUnavailableSources(_ data: WorkspaceData) -> Bool {
@@ -224,13 +265,17 @@ struct PhoneCalendarPreferences: View {
         return !Set(draft.listIDs ?? []).isSubset(of: lists) || !Set(draft.tagIDs).isSubset(of: tags)
     }
 
-    private func source(_ name: String, mark: CalendarFilterMark, action: @escaping () -> Void) -> some View {
+    private func source(_ name: String, icon: String, indented: Bool = false, mark: CalendarFilterMark, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack {
-                Text(name)
-                Spacer()
-                Image(systemName: mark == .on ? "checkmark.square.fill" : mark == .mixed ? "minus.square.fill" : "square")
-            }.frame(minHeight: 44).contentShape(Rectangle())
+            HStack(spacing: 12) {
+                Image(systemName: icon).font(.system(size: 16)).foregroundStyle(.secondary).frame(width: 20).accessibilityHidden(true)
+                Text(name).font(.body).foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Image(systemName: mark == .mixed ? "minus" : "checkmark")
+                    .font(.system(size: 17, weight: .regular)).foregroundStyle(Color.accentColor)
+                    .opacity(mark == .off ? 0 : 1).accessibilityHidden(true)
+            }.padding(.leading, indented ? 36 : 16).padding(.trailing, 16)
+                .frame(minHeight: 50).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel(name)
             .accessibilityValue(mark == .on ? "Selected" : mark == .mixed ? "Partially selected" : "Not selected")
     }

@@ -465,6 +465,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         app.buttons["Filter View Range"].tap()
         let work = app.buttons["Work"]
         XCTAssertTrue(work.waitForExistence(timeout: 5))
+        reveal(work, in: app); work.press(forDuration: 1)
         let onlyWork = app.buttons["Show only Work"]
         reveal(onlyWork, in: app)
         XCTAssertTrue(onlyWork.isHittable)
@@ -575,6 +576,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         app.buttons["Calendar actions"].tap()
         app.buttons["Filter View Range"].tap()
         XCTAssertTrue(work.waitForExistence(timeout: 3))
+        reveal(work, in: app); work.press(forDuration: 1)
         let onlyWork = app.buttons["Show only Work"]
         reveal(onlyWork, in: app); onlyWork.tap()
         XCTAssertEqual(work.value as? String, "Selected")
@@ -7297,5 +7299,41 @@ extension ReadOnlyNavigationTests {
         app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
         waitGone(app.buttons["organizationSave"])
         XCTAssertFalse(app.buttons["Neutral project"].exists)
+    }
+}
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testCalendarCompactSourceLayoutAndSecondaryActions() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar actions"].tap()
+        app.buttons["Filter View Range"].tap()
+        let all = app.buttons["All"], inbox = app.buttons["Inbox"]
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        XCTAssertEqual(all.value as? String, "Selected")
+        XCTAssertGreaterThanOrEqual(all.frame.height, 44)
+        XCTAssertLessThanOrEqual(all.frame.height, 54)
+        XCTAssertLessThanOrEqual(inbox.frame.height, 54)
+        let folder = app.buttons["calendarFilterFolder-00000000-0000-0000-0000-000000000700"]
+        folder.tap()
+        let work = app.buttons["Work"]
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertTrue(work.isHittable)
+        attach(app, "Calendar compact source layout")
+        work.press(forDuration: 1)
+        let only = app.buttons["Show only Work"]
+        XCTAssertTrue(only.waitForExistence(timeout: 3)); only.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        app.buttons["calendarFilterMore"].tap()
+        let tags = app.buttons["Select all tags"]
+        reveal(tags, in: app); tags.tap()
+        XCTAssertEqual(app.buttons["Planning"].value as? String, "Selected")
+        let lists = app.buttons["Select all lists and Inbox"]
+        reveal(lists, in: app); lists.tap()
+        XCTAssertEqual(lists.value as? String, "Selected")
+        app.buttons["calendarPreferencesCancel"].tap()
+        app.buttons["Calendar actions"].tap(); app.buttons["Filter View Range"].tap()
+        XCTAssertEqual(app.buttons["All"].value as? String, "Selected")
+        app.buttons["calendarPreferencesCancel"].tap()
     }
 }
