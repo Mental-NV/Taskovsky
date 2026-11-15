@@ -25,3 +25,7 @@ Arrange sheet and a neutral `arrange-hierarchy` QA case. macOS Arrange is
 untouched. Recurring safety, revision checks, drag payloads and scheduling
 targets are unchanged. Priority/Tag flat rendering is a documented bound,
 not a reference claim.
+
+## Screenshot review limit
+
+The neutral expanded/collapsed captures were independently inspected. Narrow Arrange rows still wrap long titles heavily, with the parent disclosure consuming additional width. This is a remaining layout-density gap, not pixel parity. The real drag/Undo regression passed on unchanged production source after the four hierarchy/scope cases. Full final logs show 876 XCTest plus 38 Swift Testing cases (the initial summary counted four zero-test bundle reports as tests; corrected in the verification ledger).
