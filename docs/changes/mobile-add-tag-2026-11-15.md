@@ -13,4 +13,4 @@ Observed reference: Add Tag title, blank name, Color swatches, Parent Tag None a
 
 Palette is local to this phone editor, not shared with Calendar source-color work. Edit Tag keeps Done and existing merge/delete behavior. No reference-color or near-pixel claim. Existing accessibility selection semantics and 44-point targets are retained.
 
-Verification: full/release/iPhone compile and independent review pending; native palette/parent save/reload/cancel and nonpalette preservation pending. No personal data used.
+Verification: integrated main a875e05 with both additive test groups preserved and independently reviewed. Full 864 XCTest + 38 Swift tests, release and iPhone compile passed. Native 3/3 passed with exit 0 and completed parsed xcresult (no failures/skips/warnings): every swatch, parent/color save/relaunch/cancel, nonpalette color retained through unrelated pin save, and existing nested-tag creation/assignment. Actual neutral screenshot inspected; exact-head hosted CI pending. No personal data used.

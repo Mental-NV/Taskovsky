@@ -378,5 +378,17 @@
     "receipt": "../../../changes/mobile-advanced-filter-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected: neutral nested AND/OR with readable Keyword menus, Preview and Examples. No personal information."
+  },
+  {
+    "state": "T15",
+    "file": "t15-add-tag.png",
+    "sha256": "c9f2e9acc23cdf8efc7844fc472520ec8b276c53791ee0ebfa38aae1f4ecf255",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-add-tag-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral Add Tag: current pink swatch check, retained Custom Color, Parent Tag and confirmation. No personal information."
   }
 ]
