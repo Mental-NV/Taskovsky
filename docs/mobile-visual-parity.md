@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**16/46 states have an attached Taskovsky screenshot; 30/46 await one. 0/46 have a portable TickTick reference image attached here.** All eighteen assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**17/46 states have an attached Taskovsky screenshot; 29/46 await one. 0/46 have a portable TickTick reference image attached here.** All nineteen assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -38,7 +38,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | C02 | Calendar mode menu | Similar | Core chooser and 3 Day exist; naming and order still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | C03 | Week overview | Similar | Mini-month, seven tiles and Day/Back implemented; geometry remains approximate. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/c03-week-overview.png"><img src="assets/mobile-parity/2026-11-15/c03-week-overview.png" width="180" alt="Taskovsky C03 historical Simulator QA screenshot"></a><br>[PR #112](https://github.com/Mental-NV/Taskovsky/pull/112) · [Capture details](#evidence-c03)<br>Historical QA; not current-main capture. |
 | C04 | Calendar overflow menu | Partial | Core routes exist; subscriptions excluded and Share/Print deferred. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png"><img src="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png" width="180" alt="Taskovsky C04 historical Simulator QA screenshot"></a><br>[PR #103](https://github.com/Mental-NV/Taskovsky/pull/103) · [Capture details](#evidence-c04)<br>Historical QA; not current-main capture. |
-| C05 | Filter View Range | Partial | Source/tag filters exist; hierarchy, layout and option inventory differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| C05 | Filter View Range | Partial | Expanded Tags and folder/list hierarchy implemented; exact layout and unsupported reference source choices remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/c05-source-hierarchy.png" width="180" alt="Taskovsky Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-source-hierarchy.png)<br>[Receipt](changes/mobile-calendar-filter-hierarchy-2026-11-15.md) |
 | C06 | View Options | Partial | Nested Color/Style exist; remaining settings structure differs. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | C07 | Color settings | Partial | List/tag/priority/custom colors work; source lists use another level. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | C08 | Color By menu | Similar | List, Tag and Priority choices exist; matched visual acceptance pending. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
@@ -200,3 +200,11 @@ Source checkpoint `9459da6`; actual owned Simulator QA screenshot (1170×2532), 
 Actual 1170×2532 owned Simulator capture at checkpoint `9b8896b`, neutral project name, keyboard dismissed. Focused capture run 48511 passed; production source unchanged from tested creation candidate. List/Kanban/Timeline choices are backed by atomic initial mode creation. Color palette and matched reference layout remain partial, not pixel certification.
 
 [<img src="assets/mobile-parity/2026-11-15/t12-list-creation.png" width="250" alt="Taskovsky Simulator QA Add List">](assets/mobile-parity/2026-11-15/t12-list-creation.png)
+
+
+<a id="evidence-c05"></a>
+### C05 — Calendar source hierarchy
+
+Actual 1170×2532 owned Simulator capture, neutral calendar-filter-hierarchy fixture. Source `77d6801`, integrated checkpoint `024417d`. Expanded Tags and Projects folder show unchanged staged source selection semantics. Exact reference layout/options are not certified; lower bulk row extends below this viewport.
+
+[<img src="assets/mobile-parity/2026-11-15/c05-source-hierarchy.png" width="250" alt="Taskovsky Simulator QA Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-source-hierarchy.png)

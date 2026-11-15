@@ -466,6 +466,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let work = app.buttons["Work"]
         XCTAssertTrue(work.waitForExistence(timeout: 5))
         let onlyWork = app.buttons["Show only Work"]
+        reveal(onlyWork, in: app)
         XCTAssertTrue(onlyWork.isHittable)
         onlyWork.tap()
         XCTAssertEqual(work.value as? String, "Selected")
@@ -566,7 +567,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         app.buttons["Filter View Range"].tap()
         let work = app.buttons["Work"]
         XCTAssertTrue(work.waitForExistence(timeout: 3))
-        work.tap()
+        reveal(work, in: app); work.tap()
         XCTAssertEqual(work.value as? String, "Selected")
         app.buttons["calendarPreferencesCancel"].tap()
         XCTAssertTrue(task.waitForExistence(timeout: 5))
@@ -574,7 +575,8 @@ final class ReadOnlyNavigationTests: XCTestCase {
         app.buttons["Calendar actions"].tap()
         app.buttons["Filter View Range"].tap()
         XCTAssertTrue(work.waitForExistence(timeout: 3))
-        app.buttons["Show only Work"].tap()
+        let onlyWork = app.buttons["Show only Work"]
+        reveal(onlyWork, in: app); onlyWork.tap()
         XCTAssertEqual(work.value as? String, "Selected")
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
@@ -7117,6 +7119,71 @@ extension ReadOnlyNavigationTests {
 }
 
 extension ReadOnlyNavigationTests {
+    @MainActor private func openCalendarSourceHierarchy(_ app: XCUIApplication) {
+        app.buttons["Calendar actions"].tap()
+        app.buttons["Filter View Range"].tap()
+        XCTAssertTrue(app.navigationBars["Filter View Range"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testCalendarSourceFoldersExpandWithoutChangingSelectionAndCancel() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        openCalendarSourceHierarchy(app)
+        let all = app.buttons["All"], tags = app.buttons["calendarFilterTags"]
+        let folder = app.buttons["calendarFilterFolder-00000000-0000-0000-0000-000000000700"]
+        XCTAssertEqual(all.value as? String, "Selected")
+        XCTAssertTrue(app.buttons["Planning"].exists)
+        tags.tap(); XCTAssertFalse(app.buttons["Planning"].exists)
+        tags.tap(); XCTAssertTrue(app.buttons["Planning"].exists)
+        reveal(folder, in: app); folder.tap()
+        let work = app.buttons["Work"]
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertEqual(work.value as? String, "Not selected")
+        XCTAssertEqual(all.value as? String, "Selected")
+        attach(app, "Calendar filter expanded Tags and folder sources")
+        work.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        app.buttons["calendarPreferencesCancel"].tap()
+        openCalendarSourceHierarchy(app)
+        XCTAssertEqual(all.value as? String, "Selected")
+        app.buttons["calendarPreferencesDone"].tap()
+        openCalendarSourceHierarchy(app)
+        XCTAssertEqual(all.value as? String, "Selected")
+        app.buttons["calendarPreferencesCancel"].tap()
+    }
+
+    @MainActor func testCalendarSourceTagInboxUnionPersistsAndAllReset() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        openCalendarSourceHierarchy(app)
+        let planning = app.buttons["Planning"], inbox = app.buttons["Inbox"]
+        planning.tap()
+        XCTAssertEqual(planning.value as? String, "Selected")
+        XCTAssertEqual(inbox.value as? String, "Not selected")
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertFalse(app.buttons["Review the project outline"].exists)
+        XCTAssertTrue(app.buttons["Prepare the weekly plan"].waitForExistence(timeout: 5))
+        openCalendarSourceHierarchy(app)
+        inbox.tap()
+        XCTAssertEqual(planning.value as? String, "Selected")
+        XCTAssertEqual(inbox.value as? String, "Selected")
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(app.buttons["Review the project outline"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Prepare the weekly plan"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        openCalendarSourceHierarchy(app)
+        XCTAssertEqual(planning.value as? String, "Selected")
+        XCTAssertEqual(inbox.value as? String, "Selected")
+        app.buttons["All"].tap()
+        XCTAssertEqual(planning.value as? String, "Not selected")
+        XCTAssertEqual(inbox.value as? String, "Not selected")
+        app.buttons["calendarPreferencesDone"].tap()
+    }
+
     @MainActor func testListCreationSelectedViewModesPersistAfterRelaunch() {
         let app = launch()
         for (mode, title, expected) in [("list", "Neutral List", "List"), ("board", "Neutral Board", "Board"), ("timeline", "Neutral Timeline", "Timeline")] {
@@ -7176,6 +7243,37 @@ extension ReadOnlyNavigationTests {
 }
 
 extension ReadOnlyNavigationTests {
+    @MainActor func testCalendarNestedFolderListSelectionSavesResultsAndRelaunches() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        let inboxTask = app.buttons["Review the project outline"]
+        let workTask = app.buttons["Prepare the weekly plan"]
+        XCTAssertTrue(inboxTask.waitForExistence(timeout: 5))
+        openCalendarSourceHierarchy(app)
+        let folder = app.buttons["calendarFilterFolder-00000000-0000-0000-0000-000000000700"]
+        reveal(folder, in: app); folder.tap()
+        let work = app.buttons["Work"]
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        reveal(work, in: app); work.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["All"].value as? String, "Not selected")
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertFalse(inboxTask.exists)
+        XCTAssertTrue(workTask.waitForExistence(timeout: 5))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(workTask.waitForExistence(timeout: 5))
+        XCTAssertFalse(inboxTask.exists)
+        openCalendarSourceHierarchy(app)
+        reveal(folder, in: app); folder.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["Planning"].value as? String, "Not selected")
+        XCTAssertEqual(app.buttons["Inbox"].value as? String, "Not selected")
+        app.buttons["calendarPreferencesCancel"].tap()
+    }
+
     @MainActor func testListCreationPreviewScreenshotWithoutKeyboard() {
         let app = launch()
         openOrganization(app)

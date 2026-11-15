@@ -16,6 +16,8 @@ struct PhoneCalendarPreferences: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let route: PhoneCalendarPreferenceRoute
     @State private var draft: TaskCalendarOptions
+    @State private var tagsExpanded = true
+    @State private var expandedFolders = Set<UUID>()
     @State private var showZones = false
     @State private var error: String?
 
@@ -42,7 +44,7 @@ struct PhoneCalendarPreferences: View {
                         .accessibilityIdentifier("calendarPreferenceError")
                 }
             }
-            .navigationTitle(route.kind == .filters ? "Calendar filters" : "Calendar View Options")
+            .navigationTitle(route.kind == .filters ? "Filter View Range" : "Calendar View Options")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -155,34 +157,45 @@ struct PhoneCalendarPreferences: View {
 
     @ViewBuilder private func sources(_ data: WorkspaceData) -> some View {
         Section { source("All", mark: draft.isAllSources ? .on : .off) { draft.selectAllSources() } }
-        Section("Lists") {
-            source("Select all lists and Inbox", mark: draft.listSelectionState(in: data)) {
-                draft.setListsSelected(draft.listSelectionState(in: data) != .on, data: data)
-            }
+        Section {
+            DisclosureGroup(isExpanded: $tagsExpanded) {
+                if !data.tags.isEmpty {
+                    source("Select all tags", mark: draft.tagSelectionState(in: data)) {
+                        draft.setTagsSelected(draft.tagSelectionState(in: data) != .on, data: data)
+                    }
+                }
+                ForEach(data.tags) { tag in
+                    let selected = draft.tagIDs.contains(tag.id)
+                    source(tag.name, mark: selected ? .on : .off) { draft.setTagSelected(tag.id, !selected, data: data) }
+                }
+            } label: { Label("Tags", systemImage: "tag").accessibilityIdentifier("calendarFilterTags") }
+        }
+        Section {
             source("Inbox", mark: draft.isInboxSelected ? .on : .off) {
                 draft.setInboxSelected(!draft.isInboxSelected, data: data)
             }
-            ForEach(data.lists.filter { !$0.isArchived }) { list in
-                HStack {
-                    let selected = draft.selectedListIDs(in: data).contains(list.id)
-                    source(list.name, mark: selected ? .on : .off) {
-                        draft.setListSelected(list.id, !selected, data: data)
+            let active = data.lists.filter { !$0.isArchived }
+            let folderIDs = Set(data.folders.map(\.id))
+            ForEach(active.filter { $0.folderID == nil && !$0.belowFolders }) { list in listSource(list, data: data) }
+            ForEach(data.folders) { folder in
+                let members = active.filter { $0.folderID == folder.id }
+                if !members.isEmpty {
+                    DisclosureGroup(isExpanded: Binding(get: { expandedFolders.contains(folder.id) }, set: { expanded in
+                        if expanded { expandedFolders.insert(folder.id) } else { expandedFolders.remove(folder.id) }
+                    })) {
+                        ForEach(members) { list in listSource(list, data: data) }
+                    } label: {
+                        Label(folder.name, systemImage: "folder").accessibilityIdentifier("calendarFilterFolder-" + folder.id.uuidString)
                     }
-                    Button("Only") { draft.selectOnlyList(list.id) }
-                        .buttonStyle(.borderless).frame(minWidth: 44, minHeight: 44)
-                        .accessibilityLabel("Show only " + list.name)
                 }
             }
+            ForEach(active.filter { list in
+                list.folderID == nil ? list.belowFolders : !folderIDs.contains(list.folderID!)
+            }) { list in listSource(list, data: data) }
         }
-        Section("Tags") {
-            if !data.tags.isEmpty {
-                source("Select all tags", mark: draft.tagSelectionState(in: data)) {
-                    draft.setTagsSelected(draft.tagSelectionState(in: data) != .on, data: data)
-                }
-            }
-            ForEach(data.tags) { tag in
-                let selected = draft.tagIDs.contains(tag.id)
-                source(tag.name, mark: selected ? .on : .off) { draft.setTagSelected(tag.id, !selected, data: data) }
+        Section {
+            source("Select all lists and Inbox", mark: draft.listSelectionState(in: data)) {
+                draft.setListsSelected(draft.listSelectionState(in: data) != .on, data: data)
             }
         }
         if hasUnavailableSources(data) {
@@ -192,6 +205,16 @@ struct PhoneCalendarPreferences: View {
             }
         } else if !draft.isAllSources, draft.selectedListIDs(in: data).isEmpty, !draft.isInboxSelected, draft.tagIDs.isEmpty {
             Section { Text("No Calendar sources are selected.") }
+        }
+    }
+
+    private func listSource(_ list: TaskList, data: WorkspaceData) -> some View {
+        HStack {
+            let selected = draft.selectedListIDs(in: data).contains(list.id)
+            source(list.name, mark: selected ? .on : .off) { draft.setListSelected(list.id, !selected, data: data) }
+            Button("Only") { draft.selectOnlyList(list.id) }
+                .buttonStyle(.borderless).frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("Show only " + list.name)
         }
     }
 
