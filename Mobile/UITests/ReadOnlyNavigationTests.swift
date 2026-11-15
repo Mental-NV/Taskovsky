@@ -7709,3 +7709,99 @@ extension ReadOnlyNavigationTests {
         scheduleRoot(app); app.buttons["scheduleCancel"].tap()
     }
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testCustomRepeatFrequencyWheelsAndWeekdayChipsPersistAndCancel() {
+        let app = launch(), title = "Review the project outline"
+        _ = openSchedule(app, task: title)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        func openCustom() {
+            reveal(app.buttons["scheduleCustom"], in: app)
+            app.buttons["scheduleCustom"].tap()
+            XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        }
+        openCustom()
+        let wheels = app.pickerWheels
+        XCTAssertEqual(wheels.count, 2)
+        wheels.element(boundBy: 0).adjust(toPickerWheelValue: "3")
+        wheels.element(boundBy: 1).adjust(toPickerWheelValue: "Weeks")
+        XCTAssertEqual(wheels.element(boundBy: 0).value as? String, "3")
+        XCTAssertEqual(wheels.element(boundBy: 1).value as? String, "Weeks")
+        for day in 1...7 {
+            let chip = app.buttons["customRepeatWeekday-\(day)"]
+            XCTAssertTrue(chip.exists)
+            if chip.value as? String == "Selected" { chip.tap() }
+        }
+        XCTAssertFalse(app.buttons["customRepeatDone"].isEnabled)
+        app.buttons["customRepeatWeekday-2"].tap()
+        app.buttons["customRepeatWeekday-4"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].isEnabled)
+        let expected = app.staticTexts["customRepeatSummary"].label
+        attach(app, "Custom Repeat Frequency wheels and weekday chips")
+        app.buttons["customRepeatDone"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app); _ = openSchedule(app, task: title)
+        openScheduleOptions("scheduleRepeatOptions", in: app); openCustom()
+        XCTAssertEqual(app.staticTexts["customRepeatSummary"].label, expected)
+        XCTAssertEqual(wheels.element(boundBy: 0).value as? String, "3")
+        XCTAssertEqual(wheels.element(boundBy: 1).value as? String, "Weeks")
+        XCTAssertEqual(app.buttons["customRepeatWeekday-2"].value as? String, "Selected")
+        XCTAssertEqual(app.buttons["customRepeatWeekday-4"].value as? String, "Selected")
+        wheels.element(boundBy: 0).adjust(toPickerWheelValue: "4")
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        openCustom(); XCTAssertEqual(app.staticTexts["customRepeatSummary"].label, expected)
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testCustomRepeatFrequencyRetainsMonthlyPatternEditor() {
+        let app = launch(), title = "Review the project outline"
+        _ = openSchedule(app, task: title)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        app.pickerWheels.element(boundBy: 0).adjust(toPickerWheelValue: "2")
+        app.pickerWheels.element(boundBy: 1).adjust(toPickerWheelValue: "Months")
+        XCTAssertEqual(app.pickerWheels.element(boundBy: 0).value as? String, "2")
+        XCTAssertEqual(app.pickerWheels.element(boundBy: 1).value as? String, "Months")
+        let days = app.textFields["Days, e.g. 1, 15, 31"]
+        reveal(days, in: app); XCTAssertTrue(days.exists)
+        days.tap(); days.typeText("1, 15")
+        app.buttons["customRepeatDone"].tap(); waitGone(app.buttons["customRepeatDone"])
+        let summary = app.staticTexts["scheduleCustomRule"]
+        reveal(summary, in: app); let expected = summary.label
+        scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap(); openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        reveal(days, in: app); XCTAssertEqual(days.value as? String, "1, 15")
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        reveal(summary, in: app); XCTAssertEqual(summary.label, expected)
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+    }
+    @MainActor func testCustomRepeatExactIntervalPreservesFullModelRange() {
+        let app = launch(); _ = openSchedule(app, task: "Review the project outline")
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        app.buttons["Exact interval"].tap()
+        let field = app.textFields["customRepeatExactInterval"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5)); field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10))
+        XCTAssertFalse(app.buttons["customRepeatDone"].isEnabled)
+        field.typeText("0"); XCTAssertFalse(app.buttons["customRepeatDone"].isEnabled)
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10) + "10001")
+        XCTAssertFalse(app.buttons["customRepeatDone"].isEnabled)
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 10) + "10000")
+        XCTAssertTrue(app.buttons["customRepeatDone"].isEnabled)
+        app.buttons["customRepeatDone"].tap(); waitGone(app.buttons["customRepeatDone"])
+        app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.pickerWheels.element(boundBy: 0).value as? String, "10000")
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+    }
+
+}
