@@ -1,6 +1,6 @@
 # Mobile visual parity tracker
 
-Updated: **2026-11-15**. Assessment baseline: main `0cbe459` (includes PR115 and scope PR117; excludes pending PR116). **General similarity, not pixel certification.**
+Updated: **2026-11-15**. Assessment baseline: main `0cbe459` (includes PR115 and scope PR117; plus PR116 empty-description delta). **General similarity, not pixel certification.**
 
 This tracks all **46 original observed states**: 15 Calendar, 14 detail/scheduling, 17 Tasks. **10 broadly similar, 34 partial, 2 explicitly deferred.** None is certified pixel-perfect. A counterpart existing does not mean its layout or behavior is complete.
 
@@ -20,7 +20,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**8/46 states have an attached Taskovsky screenshot; 38/46 await one. 0/46 have a portable TickTick reference image attached here.** All eight assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**9/46 states have an attached Taskovsky screenshot; 37/46 await one. 0/46 have a portable TickTick reference image attached here.** All nine assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -50,7 +50,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 
 | ID | Form / state | General similarity | Biggest remaining gap | TickTick reference | Taskovsky screenshot |
 |---|---|---|---|---|---|
-| D01 | Task detail | Partial | Fields and contextual progress exist; description and metadata arrangement differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| D01 | Task detail | Partial | Empty plain descriptions use one Add description menu; metadata and populated detail layout still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/d01-empty-description.png" width="180" alt="Taskovsky neutral empty task detail">](#evidence-d01)<br>[PR116](https://github.com/Mental-NV/Taskovsky/pull/116) |
 | D02 | Actions sheet | Partial | Local actions exist; icon strip, order and external actions differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | D03 | Actions More | Partial | Actions/customization counterparts exist; inventory and nested structure differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | D04 | Tags picker | Partial | Search, selection and save exist; no separate assigned checked section. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
@@ -155,3 +155,11 @@ Historical [PR #102](https://github.com/Mental-NV/Taskovsky/pull/102) QA capture
 
 [<img src="assets/mobile-parity/2026-11-15/t01-today-list.png" width="250" alt="Taskovsky Simulator QA: Today / List">](assets/mobile-parity/2026-11-15/t01-today-list.png)
 
+
+<a id="evidence-d01"></a>
+
+### D01: Empty task description
+
+[PR116](https://github.com/Mental-NV/Taskovsky/pull/116) native source checkpoint `68e6b23`; [receipt](changes/mobile-empty-description-2026-11-15.md). 1170 × 2532 pixels, neutral created QA task. Not a matched TickTick capture.
+
+[<img src="assets/mobile-parity/2026-11-15/d01-empty-description.png" width="250" alt="Taskovsky empty task detail">](assets/mobile-parity/2026-11-15/d01-empty-description.png)
