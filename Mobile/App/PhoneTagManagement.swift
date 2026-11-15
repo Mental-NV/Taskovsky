@@ -19,7 +19,7 @@ struct PhoneTagManagement: View {
     var body: some View {
         NavigationStack {
             List {
-                Button("New Tag", systemImage: "tag") { open(TaskTag(name: "", color: "#4E64D8"), creating: true) }
+                Button("Add Tag", systemImage: "tag") { open(TaskTag(name: "", color: "#4E64D8"), creating: true) }
                     .disabled(reordering || !model.canBeginEditing).accessibilityIdentifier("newTag")
                 if let document = model.document {
                     let tags = document.snapshot.workspace.tags
@@ -126,6 +126,9 @@ private struct PhoneTagEditor: View {
         _draft = State(initialValue: request.tag)
     }
 
+    // Existing Taskovsky desktop palette; exact TickTick color values are unverified.
+    private static let tagPalette = ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"]
+
     private var tags: [TaskTag] { model.document?.snapshot.workspace.tags ?? [] }
     private var others: [TaskTag] { tags.filter { $0.id != draft.id } }
     private var changed: Bool { draft != request.tag || !RichBody.sameCodeUnits(draft.name, request.tag.name) }
@@ -146,9 +149,27 @@ private struct PhoneTagEditor: View {
                             }.buttonStyle(.plain).accessibilityLabel("Clear name").accessibilityIdentifier("tagClearName")
                         }
                     }
-                    ColorPicker("Color", selection: Binding(get: { PhoneEntityColor.read(draft.color) },
-                                                            set: { draft.color = PhoneEntityColor.encode($0) ?? draft.color }),
-                                supportsOpacity: false)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Color")
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 8)], spacing: 8) {
+                            ForEach(Self.tagPalette, id: \.self) { color in
+                                let selected = draft.color.caseInsensitiveCompare(color) == .orderedSame
+                                Button { draft.color = color } label: {
+                                    Circle().fill(PhoneEntityColor.read(color)).frame(width: 28, height: 28)
+                                        .overlay {
+                                            if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white) }
+                                        }
+                                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                    .accessibilityLabel("Color " + color)
+                                    .accessibilityAddTraits(selected ? .isSelected : [])
+                                    .accessibilityIdentifier("tagColor-" + color)
+                            }
+                        }
+                        ColorPicker("Custom Color", selection: Binding(get: { PhoneEntityColor.read(draft.color) },
+                            set: { draft.color = PhoneEntityColor.encode($0) ?? draft.color }), supportsOpacity: false)
+                            .accessibilityIdentifier("tagCustomColor").accessibilityValue(draft.color)
+                    }
                     NavigationLink {
                         PhoneParentTagPicker(selection: $draft.parentID, tags: tags, editingID: draft.id)
                     } label: {
@@ -177,7 +198,7 @@ private struct PhoneTagEditor: View {
             }
             .disabled(model.isBusy)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(request.creating ? "New Tag" : "Edit Tag")
+            .navigationTitle(request.creating ? "Add Tag" : "Edit Tag")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -185,7 +206,11 @@ private struct PhoneTagEditor: View {
                         .disabled(model.isBusy).accessibilityIdentifier("tagCancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { submit(.save(draft, creating: request.creating)) }
+                    Button { submit(.save(draft, creating: request.creating)) } label: {
+                        if request.creating {
+                            Image(systemName: "checkmark").frame(width: 44, height: 44).contentShape(Rectangle())
+                        } else { Text("Done") }
+                    }.accessibilityLabel(request.creating ? "Add Tag" : "Done")
                         .disabled(model.isBusy || TagOrganization.normalizedName(draft.name).isEmpty)
                         .accessibilityIdentifier("tagDone")
                 }
