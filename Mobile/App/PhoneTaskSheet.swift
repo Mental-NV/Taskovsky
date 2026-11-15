@@ -709,6 +709,7 @@ private struct PhoneTaskMoveChoices: View {
 
 private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
     case complete, reopen, wontDo, pin, move, duplicate, convert, trash, saveTemplate, applyTemplate
+    case addSubtask, linkParent, tags
 
     var id: Self { self }
     var title: String {
@@ -723,6 +724,9 @@ private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
         case .trash: "Move to Trash"
         case .saveTemplate: "Save as Template"
         case .applyTemplate: "Apply Template"
+        case .addSubtask: "Add Subtask"
+        case .linkParent: "Link Parent Task"
+        case .tags: "Tags"
         }
     }
 }
@@ -748,6 +752,9 @@ private struct PhoneTaskActions: View {
     @AppStorage private var layoutData: Data
     @Environment(\.dismiss) private var dismiss
     @State private var purge: PurgeRequest?
+    @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
+    @State private var tagsRequest: PhoneTaskMetadataRequest?
+    @State private var submitting = false
 
     init(model: PhoneWorkspaceModel, taskID: UUID, openDuplicate: @escaping (UUID) -> Void) {
         self.model = model
@@ -771,6 +778,11 @@ private struct PhoneTaskActions: View {
                 if let document = model.document,
                    let task = document.snapshot.workspace.tasks.first(where: { $0.id == taskID }) {
                     let layout = PhoneTaskActionLayout.decode(layoutData) ?? .init()
+                    if task.deletedAt == nil {
+                        Section {
+                            actionTiles(task: task, document: document)
+                        }
+                    }
                     Section(task.title) {
                         ForEach(layout.pinned) { row($0, task: task, document: document) }
                         action("Restore", .restore, task: task, document: document)
@@ -779,7 +791,7 @@ private struct PhoneTaskActions: View {
                                 purge = PurgeRequest(id: task.id, title: task.title, revision: document.revision)
                             }
                         }
-                    }.disabled(!model.canBeginEditing)
+                    }.disabled(!model.canBeginEditing || submitting)
                     if task.deletedAt == nil {
                         Section {
                             NavigationLink("More") { moreActions(task: task, document: document) }
@@ -793,9 +805,15 @@ private struct PhoneTaskActions: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.disabled(model.isBusy)
+                    Button("Done") { dismiss() }.disabled(model.isBusy || submitting)
                         .accessibilityIdentifier("taskActionsDone")
                 }
+            }
+            .sheet(item: $hierarchyRequest) { request in
+                PhoneTaskHierarchySheet(model: model, request: request)
+            }
+            .sheet(item: $tagsRequest) { request in
+                PhoneTaskMetadataSheet(model: model, request: request)
             }
             .alert(item: $purge) { request in
                 Alert(title: Text("Delete Forever?"),
@@ -806,6 +824,37 @@ private struct PhoneTaskActions: View {
             }
         }
         .interactiveDismissDisabled(model.isBusy)
+    }
+
+    /// D02 icon strip: supported lifecycle tiles only. Share and other external
+    /// routes are deferred and intentionally have no placeholder here.
+    private func actionTiles(task: TaskItem, document: WorkspaceDocument) -> some View {
+        HStack(spacing: 12) {
+            tile(task.isPinned ? "Unpin" : "Pin", systemImage: task.isPinned ? "pin.fill" : "pin",
+                 tint: .yellow, identifier: "taskActionTile-pin",
+                 command: .setPinned(!task.isPinned), task: task, document: document)
+            tile("Won't Do", systemImage: "moon", tint: .blue, identifier: "taskActionTile-wontDo",
+                 command: .wontDo, task: task, document: document)
+            tile("Delete", systemImage: "trash", tint: .red, identifier: "taskActionTile-trash",
+                 role: .destructive, command: .trash, task: task, document: document)
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canBeginEditing || submitting || model.isBusy)
+    }
+
+    private func tile(_ title: String, systemImage: String, tint: Color, identifier: String,
+                      role: ButtonRole? = nil, command: TaskLifecycleCommand,
+                      task: TaskItem, document: WorkspaceDocument) -> some View {
+        Group {
+            if TaskLifecycle.refusal(for: command, task: task, lists: document.snapshot.workspace.lists) == nil {
+                Button(title, systemImage: systemImage, role: role) { run(command, revision: document.revision) }
+                    .accessibilityIdentifier(identifier)
+                    .font(.subheadline)
+                    .foregroundStyle(tint)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+                    .contentShape(Rectangle())
+            }
+        }
     }
 
     private func moreActions(task: TaskItem, document: WorkspaceDocument) -> some View {
@@ -846,6 +895,22 @@ private struct PhoneTaskActions: View {
             let kind: TaskKind = task.kind == .task ? .note : .task
             action(kind == .note ? "Convert to Note" : "Convert to Task", .setKind(kind), task: task, document: document)
         case .trash: action(item.title, .trash, role: .destructive, task: task, document: document)
+        case .addSubtask:
+            if TaskLifecycle.refusal(for: .addSubtask(id: task.id, title: task.title),
+                                     task: task, lists: lists) == nil {
+                Button(item.title) { openHierarchy(.child, task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-addSubtask")
+            }
+        case .linkParent:
+            if TaskLifecycle.refusal(for: .setParent(nil), task: task, lists: lists) == nil {
+                Button(item.title) { openHierarchy(.parent, task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-linkParent")
+            }
+        case .tags:
+            if task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: lists) {
+                Button(item.title) { openTags(task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-tags")
+            }
         case .saveTemplate:
             if task.deletedAt == nil {
                 NavigationLink(item.title) {
@@ -870,12 +935,29 @@ private struct PhoneTaskActions: View {
     }
 
     private func run(_ command: TaskLifecycleCommand, revision: WorkspaceRevision) {
+        // Guard against accidental duplicate writes from repeated taps: the
+        // repository CAS refuses a retried revision, but a second Duplicate
+        // tap would mint a fresh copy ID, so only one command may be in flight.
+        guard !submitting, !model.isBusy else { return }
+        submitting = true
         Task {
-            if await model.performLifecycle(command, taskID: taskID, expected: revision) {
+            let finished = await model.performLifecycle(command, taskID: taskID, expected: revision)
+            submitting = false
+            if finished {
                 if case .duplicate(let copyID) = command { openDuplicate(copyID) }
                 dismiss()
             }
         }
+    }
+
+    private func openHierarchy(_ kind: PhoneTaskHierarchyRequest.Kind, task: TaskItem, revision: WorkspaceRevision) {
+        guard !submitting, !model.isBusy else { return }
+        hierarchyRequest = PhoneTaskHierarchyRequest(task: task, revision: revision, kind: kind)
+    }
+
+    private func openTags(task: TaskItem, revision: WorkspaceRevision) {
+        guard !submitting, !model.isBusy else { return }
+        tagsRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .tags)
     }
 }
 

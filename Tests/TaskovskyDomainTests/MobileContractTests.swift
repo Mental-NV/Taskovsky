@@ -2429,3 +2429,120 @@ extension MobileContractTests {
         XCTAssertEqual(CalendarEntryDetails(entry: missing, listNames: names, calendar: display).text, "All day · List unavailable")
     }
 }
+
+extension MobileContractTests {
+    /// D02 icon strip eligibility: Pin, Won't Do and Delete(Trash) follow the
+    /// shared lifecycle refusals across record states. Share has no command.
+    func testDetailActionStripEligibilityAcrossRecordStates() {
+        let lists: [TaskList] = []
+        let active = TaskItem(title: "Active")
+        XCTAssertNil(TaskLifecycle.refusal(for: .setPinned(true), task: active, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .wontDo, task: active, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .trash, task: active, lists: lists))
+
+        var completed = active
+        completed.completedAt = now
+        XCTAssertEqual(TaskLifecycle.refusal(for: .setPinned(true), task: completed, lists: lists), .wrongStatus)
+        XCTAssertNil(TaskLifecycle.refusal(for: .wontDo, task: completed, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .trash, task: completed, lists: lists))
+
+        let note = TaskItem(title: "Note", kind: .note)
+        // Pinning follows status, not kind: notes can pin, but cannot be
+        // marked Won't Do.
+        XCTAssertNil(TaskLifecycle.refusal(for: .setPinned(true), task: note, lists: lists))
+        XCTAssertEqual(TaskLifecycle.refusal(for: .wontDo, task: note, lists: lists), .wrongStatus)
+        XCTAssertNil(TaskLifecycle.refusal(for: .trash, task: note, lists: lists))
+
+        var trashed = active
+        trashed.deletedAt = now
+        for command in [TaskLifecycleCommand.setPinned(true), .wontDo, .trash] as [TaskLifecycleCommand] {
+            XCTAssertEqual(TaskLifecycle.refusal(for: command, task: trashed, lists: lists), .wrongStatus)
+        }
+        XCTAssertNil(TaskLifecycle.refusal(for: .restore, task: trashed, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .purge, task: trashed, lists: lists))
+
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let archived = TaskItem(title: "Archived", listID: archive.id)
+        for command in [TaskLifecycleCommand.setPinned(true), .wontDo, .trash] as [TaskLifecycleCommand] {
+            XCTAssertEqual(TaskLifecycle.refusal(for: command, task: archived, lists: [archive]), .archived)
+        }
+    }
+
+    /// D02 row eligibility: Add Subtask and Link Parent Task follow the shared
+    /// hierarchy refusals; notes, trashed and archived records are refused.
+    func testDetailHierarchyRowEligibilityAcrossRecordStates() {
+        let lists: [TaskList] = []
+        let active = TaskItem(title: "Active")
+        XCTAssertNil(TaskLifecycle.refusal(for: .addSubtask(id: UUID(), title: "Child"), task: active, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .setParent(nil), task: active, lists: lists))
+
+        let note = TaskItem(title: "Note", kind: .note)
+        XCTAssertEqual(TaskLifecycle.refusal(for: .addSubtask(id: UUID(), title: "Child"), task: note, lists: lists), .wrongStatus)
+        XCTAssertEqual(TaskLifecycle.refusal(for: .setParent(nil), task: note, lists: lists), .wrongStatus)
+
+        var trashed = active
+        trashed.deletedAt = now
+        XCTAssertEqual(TaskLifecycle.refusal(for: .addSubtask(id: UUID(), title: "Child"), task: trashed, lists: lists), .wrongStatus)
+
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let archived = TaskItem(title: "Archived", listID: archive.id)
+        XCTAssertEqual(TaskLifecycle.refusal(for: .setParent(nil), task: archived, lists: [archive]), .archived)
+    }
+
+    /// D02 Tags route: saving keeps every other field, an unchanged resubmit
+    /// is a no-op (Cancel/Done-without-changes writes nothing), unavailable
+    /// tags refuse, and reopening sees the saved selection.
+    func testDetailTagsSaveNoopAndReopen() throws {
+        let keep = TaskTag(name: "Keep", color: "#123456")
+        let added = TaskTag(name: "Added", color: "#123456")
+        let task = TaskItem(title: "Tagged", body: "Body", tagIDs: [keep.id], dueDate: now, priority: .high)
+        let saved = try XCTUnwrap(TaskMetadataChange.tags([keep.id, added.id])
+            .applying(to: task, availableTags: [keep, added]))
+        XCTAssertEqual(saved.tagIDs, [keep.id, added.id])
+        XCTAssertEqual(saved.title, task.title)
+        XCTAssertEqual(saved.body, task.body)
+        XCTAssertEqual(saved.dueDate, task.dueDate)
+        XCTAssertEqual(saved.priority, task.priority)
+        XCTAssertNil(try TaskMetadataChange.tags([keep.id, added.id]).applying(to: saved, availableTags: [keep, added]))
+        let reopened = try XCTUnwrap(TaskMetadataChange.tags([added.id])
+            .applying(to: saved, availableTags: [keep, added]))
+        XCTAssertEqual(reopened.tagIDs, [added.id])
+        XCTAssertEqual(reopened.title, task.title)
+        XCTAssertThrowsError(try TaskMetadataChange.tags([UUID()]).applying(to: saved, availableTags: [keep, added])) {
+            XCTAssertEqual($0 as? TaskMetadataValidation, .unavailableTag)
+        }
+        // Cancelling keeps the original record untouched.
+        XCTAssertEqual(task.tagIDs, [keep.id])
+    }
+
+    /// D02 Add Subtask target and return: the child inherits the parent list
+    /// and points back at it; notes, trashed and archived parents refuse.
+    func testDetailAddSubtaskTargetAndReturn() throws {
+        let work = TaskList(name: "Work", color: "#123456")
+        var data = WorkspaceData(tasks: [TaskItem(title: "Parent", listID: work.id)], lists: [work])
+        let parent = data.tasks[0]
+        let childID = UUID()
+        XCTAssertTrue(TaskHierarchy.addChild(id: childID, to: parent.id, title: " Child ",
+                                             in: &data, position: .top, now: now))
+        let child = try XCTUnwrap(data.tasks.first { $0.id == childID })
+        XCTAssertEqual(child.listID, work.id)
+        XCTAssertEqual(child.parentID, parent.id)
+        XCTAssertEqual(child.title, "Child")
+
+        var noteData = WorkspaceData(tasks: [TaskItem(title: "Note", kind: .note)])
+        XCTAssertFalse(TaskHierarchy.addChild(id: UUID(), to: noteData.tasks[0].id, title: "Child",
+                                              in: &noteData, position: .top, now: now))
+        var trashedData = WorkspaceData(tasks: [TaskItem(title: "Gone", deletedAt: now)])
+        XCTAssertFalse(TaskHierarchy.addChild(id: UUID(), to: trashedData.tasks[0].id, title: "Child",
+                                              in: &trashedData, position: .top, now: now))
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        var archivedData = WorkspaceData(tasks: [TaskItem(title: "Old", listID: archive.id)], lists: [archive])
+        XCTAssertFalse(TaskHierarchy.addChild(id: UUID(), to: archivedData.tasks[0].id, title: "Child",
+                                              in: &archivedData, position: .top, now: now))
+        XCTAssertFalse(TaskHierarchy.addChild(id: childID, to: parent.id, title: "Again",
+                                              in: &data, position: .top, now: now))
+    }
+}

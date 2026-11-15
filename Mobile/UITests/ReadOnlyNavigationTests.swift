@@ -2314,6 +2314,57 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.buttons["editTaskChecklist"].isEnabled)
     }
 
+    /// D02 detail actions (native slot): supported icon strip and real Tags,
+    /// Add Subtask and Link Parent Task routes with Cancel back-transitions.
+    /// Deferred Share/external rows must have no placeholder.
+    @MainActor func testDetailActionsStripAndSupportedRoutes() {
+        let app = launch()
+        let task = app.buttons["Review the project outline"]
+        XCTAssertTrue(task.waitForExistence(timeout: 8))
+        task.tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["taskActionTile-pin"].exists)
+        XCTAssertTrue(app.buttons["taskActionTile-wontDo"].exists)
+        XCTAssertTrue(app.buttons["taskActionTile-trash"].exists)
+        XCTAssertFalse(app.buttons["Share"].exists)
+        for identifier in ["taskActionRow-addSubtask", "taskActionRow-linkParent", "taskActionRow-tags"] {
+            let row = app.buttons[identifier]
+            reveal(row, in: app)
+            XCTAssertTrue(row.exists)
+        }
+        let tags = app.buttons["taskActionRow-tags"]
+        reveal(tags, in: app)
+        tags.tap()
+        XCTAssertTrue(app.buttons["taskMetadataCancel"].waitForExistence(timeout: 5))
+        app.buttons["taskMetadataCancel"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let add = app.buttons["taskActionRow-addSubtask"]
+        reveal(add, in: app)
+        add.tap()
+        XCTAssertTrue(app.buttons["taskHierarchyCancel"].waitForExistence(timeout: 5))
+        app.buttons["taskHierarchyCancel"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let link = app.buttons["taskActionRow-linkParent"]
+        reveal(link, in: app)
+        link.tap()
+        XCTAssertTrue(app.buttons["taskHierarchyCancel"].waitForExistence(timeout: 5))
+        app.buttons["taskHierarchyCancel"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let more = app.buttons["taskActionsMore"]
+        reveal(more, in: app)
+        more.tap()
+        app.buttons["editTaskActionLayout"].tap()
+        XCTAssertTrue(app.buttons["taskActionLayoutDone"].waitForExistence(timeout: 5))
+        for identifier in ["taskActionLayoutRow-addSubtask", "taskActionLayoutRow-linkParent", "taskActionLayoutRow-tags"] {
+            let row = app.staticTexts[identifier]
+            reveal(row, in: app)
+            XCTAssertTrue(row.exists)
+        }
+        app.buttons["taskActionLayoutCancel"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+    }
+
     @MainActor func testLifecycleCompletesRecurringTreeAndUndoFromRow() {
         let app = launch(qaCase: "lifecycle")
         let toggle = app.buttons["lifecycleToggle-00000000-0000-0000-0000-000000000001"]
