@@ -293,3 +293,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - Mobile Arrange Filter: [staged multi-source candidate](changes/mobile-arrange-filter-2026-11-15.md); reference selection/Cancel observed, native selection/folder/schedule checks passed; exact-head CI pending.
 
 - Mobile Schedule Date/Duration: [presentation candidate](changes/mobile-schedule-tabs-2026-11-15.md); existing conversion semantics retained, native checks passed; hosted exact-head CI pending.
+
+- Mobile Calendar View Options navigation candidate: Color and Style pushed pages, nested Show Item Icons, existing draft semantics and supported controls. Local/native/review validation passed; exact-head CI pending. Complete style parity not claimed. [Scope](changes/mobile-calendar-options-navigation-2026-11-15.md).

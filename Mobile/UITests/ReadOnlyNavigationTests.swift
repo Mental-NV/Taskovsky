@@ -3567,6 +3567,22 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["calendarPreferencesDone"].waitForExistence(timeout: 5))
     }
 
+    @MainActor private func calendarOptionsRoot(_ app: XCUIApplication) {
+        for _ in 0..<4 {
+            if app.navigationBars["Calendar View Options"].exists { return }
+            app.navigationBars.buttons.firstMatch.tap()
+        }
+        XCTAssertTrue(app.navigationBars["Calendar View Options"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor private func calendarIconOptions(_ app: XCUIApplication) {
+        app.buttons["calendarStylePage"].tap()
+        attach(app, "Calendar Style page")
+        app.buttons["calendarIconsPage"].tap()
+        XCTAssertTrue(app.switches["calendarIcons"].waitForExistence(timeout: 5))
+        attach(app, "Calendar item icons page")
+    }
+
     @MainActor func testCalendarSourceColorSavesAndResetCanBeCancelled() {
         let app = launch(qaCase: "calendar-options")
         app.buttons["Calendar"].tap()
@@ -3576,6 +3592,7 @@ extension ReadOnlyNavigationTests {
         let inboxColor = app.buttons["Inbox"]
         func listColors() {
             openCalendarViewOptions(app)
+            app.buttons["calendarColorPage"].tap()
             XCTAssertTrue(openColors.waitForExistence(timeout: 5))
             openColors.tap()
             XCTAssertTrue(nav.waitForExistence(timeout: 5))
@@ -3599,6 +3616,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(reset.isEnabled)
         XCTAssertEqual(inboxColor.value as? String, "#1C62AE")
         back(nav)
+        calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         app.terminate(); app.launch()
@@ -3609,6 +3627,7 @@ extension ReadOnlyNavigationTests {
         reset.tap()
         XCTAssertFalse(reset.isEnabled)
         back(nav)
+        calendarOptionsRoot(app)
         app.buttons["calendarPreferencesCancel"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         listColors()
@@ -3629,6 +3648,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["Use default color for Planning"].isEnabled)
         attach(app, "Custom Calendar tag color")
         back(tags)
+        calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
     }
@@ -4054,8 +4074,10 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(note.exists)
         attach(app, "Task and note icons shown")
         openCalendarViewOptions(app)
+        calendarIconOptions(app)
         setSwitch("calendarTaskIcons", to: false, app: app)
         XCTAssertEqual(app.switches["calendarNoteIcons"].value as? String, "1")
+        calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(task.exists && note.exists)
@@ -4066,18 +4088,22 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         app.buttons["Calendar"].tap()
         openCalendarViewOptions(app)
+        calendarIconOptions(app)
         XCTAssertEqual(app.switches["calendarTaskIcons"].value as? String, "0")
         XCTAssertEqual(app.switches["calendarNoteIcons"].value as? String, "1")
         setSwitch("calendarIcons", to: false, app: app)
         XCTAssertFalse(app.switches["calendarTaskIcons"].isEnabled)
         XCTAssertFalse(app.switches["calendarNoteIcons"].isEnabled)
+        calendarOptionsRoot(app)
         app.buttons["calendarPreferencesCancel"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
 
         openCalendarViewOptions(app)
+        calendarIconOptions(app)
         XCTAssertEqual(app.switches["calendarIcons"].value as? String, "1")
         setSwitch("calendarTaskIcons", to: true, app: app)
         setSwitch("calendarNoteIcons", to: false, app: app)
+        calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(task.exists && note.exists)
@@ -4137,7 +4163,9 @@ extension ReadOnlyNavigationTests {
         let app = launch(qaCase: "calendar-completion")
         app.buttons["Calendar"].tap()
         openCalendarViewOptions(app)
+        calendarIconOptions(app)
         setSwitch("calendarTaskIcons", to: false, app: app)
+        calendarOptionsRoot(app)
         setSwitch("calendarCompleted", to: false, app: app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
@@ -4156,6 +4184,8 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["Review the project outline"].exists)
 
         openCalendarViewOptions(app)
+        calendarIconOptions(app)
+        calendarOptionsRoot(app)
         setSwitch("calendarCompleted", to: true, app: app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
@@ -4270,13 +4300,18 @@ extension ReadOnlyNavigationTests {
         let completed = app.buttons["Arrange the studio"]
         XCTAssertTrue(completed.waitForExistence(timeout: 5))
         openCalendarViewOptions(app)
+        app.buttons["calendarColorPage"].tap()
         app.buttons["calendarColor"].tap()
         app.buttons["Priority"].tap()
+        calendarOptionsRoot(app)
+        app.buttons["calendarStylePage"].tap()
         app.buttons["calendarStyle"].tap()
         app.buttons["Outline"].tap()
         app.buttons["calendarYearStyle"].tap()
         app.buttons["Standard"].tap()
+        app.buttons["calendarIconsPage"].tap()
         setSwitch("calendarIcons", to: false, app: app)
+        calendarOptionsRoot(app)
         setSwitch("calendarCompleted", to: false, app: app)
         setSwitch("calendarChecklist", to: true, app: app)
         setSwitch("calendarRepeats", to: false, app: app)

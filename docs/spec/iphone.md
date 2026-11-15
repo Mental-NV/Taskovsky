@@ -979,3 +979,7 @@ See [staged multi-source Arrange Filter](../changes/mobile-arrange-filter-2026-1
 ### Schedule type presentation
 
 [Date/Duration segmented presentation](../changes/mobile-schedule-tabs-2026-11-15.md) uses existing conversion semantics, explicitly not the unverified reference timed default.
+
+### Calendar appearance navigation
+
+Calendar View Options groups appearance choices on Color and Style pushed pages. Style opens Show Item Icons for the existing global/task/note switches. All pages share the outer staged draft; Back retains it and outer Cancel/Done discard/save respectively. Existing Filled/Outline and Year style semantics remain unchanged, not asserted equivalent to TickTick styles. See [navigation change](../changes/mobile-calendar-options-navigation-2026-11-15.md).
