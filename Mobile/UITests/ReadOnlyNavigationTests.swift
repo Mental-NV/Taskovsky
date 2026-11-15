@@ -3971,7 +3971,10 @@ extension ReadOnlyNavigationTests {
         let app = launch(qaCase: "calendar-options")
         app.buttons["Calendar"].tap()
         openCalendarViewOptions(app)
+        openCalendarZoneSettings(app)
         setSwitch("calendarAdditionalZones", to: true, app: app)
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         let grid = app.scrollViews["calendarHourlyGrid"]
@@ -4628,7 +4631,10 @@ extension ReadOnlyNavigationTests {
         london.typeText("UK")
         app.buttons["calendarZonesDone"].tap()
         waitGone(london)
+        openCalendarZoneSettings(app)
         setSwitch("calendarAdditionalZones", to: true, app: app)
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         let ruler = app.staticTexts["calendarRuler-Europe/London"]
@@ -7335,5 +7341,81 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar actions"].tap(); app.buttons["Filter View Range"].tap()
         XCTAssertEqual(app.buttons["All"].value as? String, "Selected")
         app.buttons["calendarPreferencesCancel"].tap()
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor private func openCalendarZoneSettings(_ app: XCUIApplication) {
+        let entry = app.buttons["calendarZoneSettings"]
+        reveal(entry, in: app)
+        entry.tap()
+        XCTAssertTrue(app.switches["calendarAdditionalZones"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testCalendarZoneToggleChildCancelAndParentCancelAreStaged() {
+        let app = launch(qaCase: "calendar-options")
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        openCalendarZoneSettings(app)
+        let toggle = app.switches["calendarAdditionalZones"]
+        let original = toggle.value as? String
+        XCTAssertNotNil(original)
+        setSwitch("calendarAdditionalZones", to: original != "1", app: app)
+        XCTAssertTrue(app.descendants(matching: .any)["calendarCurrentZone"].firstMatch.exists)
+        attach(app, "Staged Additional Time Zone settings")
+        app.buttons["calendarZonesCancel"].tap()
+        waitGone(app.buttons["calendarZonesCancel"])
+        openCalendarZoneSettings(app)
+        XCTAssertEqual(toggle.value as? String, original)
+        setSwitch("calendarAdditionalZones", to: original != "1", app: app)
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
+        openCalendarZoneSettings(app)
+        XCTAssertEqual(toggle.value as? String, original == "1" ? "0" : "1")
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesCancel"])
+        openCalendarViewOptions(app)
+        openCalendarZoneSettings(app)
+        XCTAssertEqual(toggle.value as? String, original)
+        XCTAssertTrue(app.textFields["calendarZoneLabel-America/New_York"].exists)
+    }
+
+    @MainActor func testCalendarZoneOffRetainsConfigurationAndPersists() {
+        let app = launch(qaCase: "calendar-options")
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        openCalendarZoneSettings(app)
+        setSwitch("calendarAdditionalZones", to: true, app: app)
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(app.staticTexts["calendarRuler-America/New_York"].waitForExistence(timeout: 5))
+        openCalendarViewOptions(app)
+        openCalendarZoneSettings(app)
+        setSwitch("calendarAdditionalZones", to: false, app: app)
+        XCTAssertTrue(app.textFields["calendarZoneLabel-America/New_York"].exists)
+        XCTAssertTrue(app.buttons["calendarZoneAdd"].isEnabled)
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertFalse(app.staticTexts["calendarRuler-America/New_York"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        openCalendarZoneSettings(app)
+        XCTAssertEqual(app.switches["calendarAdditionalZones"].value as? String, "0")
+        XCTAssertTrue(app.textFields["calendarZoneLabel-America/New_York"].exists)
+        setSwitch("calendarAdditionalZones", to: true, app: app)
+        app.buttons["calendarZonesDone"].tap()
+        waitGone(app.buttons["calendarZonesDone"])
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(app.staticTexts["calendarRuler-America/New_York"].waitForExistence(timeout: 5))
     }
 }
