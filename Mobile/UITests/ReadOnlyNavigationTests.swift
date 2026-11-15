@@ -2363,6 +2363,10 @@ final class ReadOnlyNavigationTests: XCTestCase {
         }
         app.buttons["taskActionLayoutCancel"].tap()
         XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        // Back on Task Actions before counting: the More screen sits above
+        // the actions list, so label queries must run on this screen.
+        app.navigationBars["More"].buttons.firstMatch.tap()
+        waitGone(app.navigationBars["More"])
         // Each strip action appears exactly once: no duplicated default rows.
         for label in ["Pin", "Won't Do", "Move to Trash"] {
             XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", label)).count, 1, label)
