@@ -328,6 +328,20 @@
     "historical": true
   },
   {
+    "state": "D02",
+    "file": "d02-task-actions.png",
+    "sha256": "aebf208ccad354206dec9fa19e0248d9c0973765f86781c9f1d5e2c1deb5b9be",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-detail-actions-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral fixture task only (Review the project outline); custom Task Actions rows, no strip, no Share placeholder; no personal information.",
+    "source_commit": "fd962df",
+    "historical": true
+  },
+  {
     "state": "T13",
     "file": "t13-normal-filter.png",
     "sha256": "1cf1a5fa15622189efb4adf4b73088d46b94a9712d83ec63f485bb7b69f89e4c",

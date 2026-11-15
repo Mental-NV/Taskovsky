@@ -707,10 +707,13 @@ private struct PhoneTaskMoveChoices: View {
     }
 }
 
-private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
-    case complete, reopen, wontDo, pin, move, duplicate, convert, trash, saveTemplate, applyTemplate
+/// D02 actions use the shared layout policy so tests exercise the production
+/// strip/rows/customization rules. Raw values and the stored encoding live in
+/// the shared type; only presentation titles stay here.
+private typealias PhoneTaskAction = DetailAction
+private typealias PhoneTaskActionLayout = DetailActionLayout
 
-    var id: Self { self }
+extension DetailAction {
     var title: String {
         switch self {
         case .complete: "Complete"
@@ -723,21 +726,10 @@ private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
         case .trash: "Move to Trash"
         case .saveTemplate: "Save as Template"
         case .applyTemplate: "Apply Template"
+        case .addSubtask: "Add Subtask"
+        case .linkParent: "Link Parent Task"
+        case .tags: "Tags"
         }
-    }
-}
-
-private struct PhoneTaskActionLayout: Codable, Equatable {
-    var pinned = PhoneTaskAction.allCases
-    var more: [PhoneTaskAction] = []
-
-    static func decode(_ data: Data) -> Self? {
-        if data.isEmpty { return Self() }
-        guard var layout = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
-        var seen = Set<PhoneTaskAction>()
-        layout.pinned = layout.pinned.filter { seen.insert($0).inserted }
-        layout.more = (layout.more + PhoneTaskAction.allCases).filter { seen.insert($0).inserted }
-        return layout
     }
 }
 
@@ -748,6 +740,9 @@ private struct PhoneTaskActions: View {
     @AppStorage private var layoutData: Data
     @Environment(\.dismiss) private var dismiss
     @State private var purge: PurgeRequest?
+    @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
+    @State private var tagsRequest: PhoneTaskMetadataRequest?
+    @State private var submitting = false
 
     init(model: PhoneWorkspaceModel, taskID: UUID, openDuplicate: @escaping (UUID) -> Void) {
         self.model = model
@@ -771,15 +766,25 @@ private struct PhoneTaskActions: View {
                 if let document = model.document,
                    let task = document.snapshot.workspace.tasks.first(where: { $0.id == taskID }) {
                     let layout = PhoneTaskActionLayout.decode(layoutData) ?? .init()
+                    // The strip renders only for untouched or default layouts;
+                    // saved custom layouts keep their exact rows with no strip
+                    // and no forced migration, so a moved Pin/Won't Do/Delete
+                    // row never duplicates or disappears.
+                    let showingStrip = task.deletedAt == nil && PhoneTaskActionLayout.showsStrip(for: layoutData)
+                    if showingStrip {
+                        Section {
+                            actionTiles(task: task, document: document)
+                        }
+                    }
                     Section(task.title) {
-                        ForEach(layout.pinned) { row($0, task: task, document: document) }
+                        ForEach(layout.pinnedRows(showingStrip: showingStrip)) { row($0, task: task, document: document) }
                         action("Restore", .restore, task: task, document: document)
                         if TaskLifecycle.refusal(for: .purge, task: task, lists: document.snapshot.workspace.lists) == nil {
                             Button("Delete Forever", role: .destructive) {
                                 purge = PurgeRequest(id: task.id, title: task.title, revision: document.revision)
                             }
                         }
-                    }.disabled(!model.canBeginEditing)
+                    }.disabled(!model.canBeginEditing || submitting)
                     if task.deletedAt == nil {
                         Section {
                             NavigationLink("More") { moreActions(task: task, document: document) }
@@ -793,9 +798,15 @@ private struct PhoneTaskActions: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.disabled(model.isBusy)
+                    Button("Done") { dismiss() }.disabled(model.isBusy || submitting)
                         .accessibilityIdentifier("taskActionsDone")
                 }
+            }
+            .sheet(item: $hierarchyRequest) { request in
+                PhoneTaskHierarchySheet(model: model, request: request)
+            }
+            .sheet(item: $tagsRequest) { request in
+                PhoneTaskMetadataSheet(model: model, request: request)
             }
             .alert(item: $purge) { request in
                 Alert(title: Text("Delete Forever?"),
@@ -806,6 +817,37 @@ private struct PhoneTaskActions: View {
             }
         }
         .interactiveDismissDisabled(model.isBusy)
+    }
+
+    /// D02 icon strip: supported lifecycle tiles only. Share and other external
+    /// routes are deferred and intentionally have no placeholder here.
+    private func actionTiles(task: TaskItem, document: WorkspaceDocument) -> some View {
+        HStack(spacing: 12) {
+            tile(task.isPinned ? "Unpin" : "Pin", systemImage: task.isPinned ? "pin.fill" : "pin",
+                 tint: .yellow, identifier: "taskActionTile-pin",
+                 command: .setPinned(!task.isPinned), task: task, document: document)
+            tile("Won't Do", systemImage: "moon", tint: .blue, identifier: "taskActionTile-wontDo",
+                 command: .wontDo, task: task, document: document)
+            tile("Move to Trash", systemImage: "trash", tint: .red, identifier: "taskActionTile-trash",
+                 role: .destructive, command: .trash, task: task, document: document)
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canBeginEditing || submitting || model.isBusy)
+    }
+
+    private func tile(_ title: String, systemImage: String, tint: Color, identifier: String,
+                      role: ButtonRole? = nil, command: TaskLifecycleCommand,
+                      task: TaskItem, document: WorkspaceDocument) -> some View {
+        Group {
+            if TaskLifecycle.refusal(for: command, task: task, lists: document.snapshot.workspace.lists) == nil {
+                Button(title, systemImage: systemImage, role: role) { run(command, revision: document.revision) }
+                    .accessibilityIdentifier(identifier)
+                    .font(.subheadline)
+                    .foregroundStyle(tint)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+                    .contentShape(Rectangle())
+            }
+        }
     }
 
     private func moreActions(task: TaskItem, document: WorkspaceDocument) -> some View {
@@ -846,6 +888,22 @@ private struct PhoneTaskActions: View {
             let kind: TaskKind = task.kind == .task ? .note : .task
             action(kind == .note ? "Convert to Note" : "Convert to Task", .setKind(kind), task: task, document: document)
         case .trash: action(item.title, .trash, role: .destructive, task: task, document: document)
+        case .addSubtask:
+            if TaskLifecycle.refusal(for: .addSubtask(id: task.id, title: task.title),
+                                     task: task, lists: lists) == nil {
+                Button(item.title) { openHierarchy(.child, task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-addSubtask")
+            }
+        case .linkParent:
+            if TaskLifecycle.refusal(for: .setParent(nil), task: task, lists: lists) == nil {
+                Button(item.title) { openHierarchy(.parent, task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-linkParent")
+            }
+        case .tags:
+            if task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: lists) {
+                Button(item.title) { openTags(task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-tags")
+            }
         case .saveTemplate:
             if task.deletedAt == nil {
                 NavigationLink(item.title) {
@@ -870,12 +928,29 @@ private struct PhoneTaskActions: View {
     }
 
     private func run(_ command: TaskLifecycleCommand, revision: WorkspaceRevision) {
+        // Guard against accidental duplicate writes from repeated taps: the
+        // repository CAS refuses a retried revision, but a second Duplicate
+        // tap would mint a fresh copy ID, so only one command may be in flight.
+        guard !submitting, !model.isBusy else { return }
+        submitting = true
         Task {
-            if await model.performLifecycle(command, taskID: taskID, expected: revision) {
+            let finished = await model.performLifecycle(command, taskID: taskID, expected: revision)
+            submitting = false
+            if finished {
                 if case .duplicate(let copyID) = command { openDuplicate(copyID) }
                 dismiss()
             }
         }
+    }
+
+    private func openHierarchy(_ kind: PhoneTaskHierarchyRequest.Kind, task: TaskItem, revision: WorkspaceRevision) {
+        guard !submitting, !model.isBusy else { return }
+        hierarchyRequest = PhoneTaskHierarchyRequest(task: task, revision: revision, kind: kind)
+    }
+
+    private func openTags(task: TaskItem, revision: WorkspaceRevision) {
+        guard !submitting, !model.isBusy else { return }
+        tagsRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .tags)
     }
 }
 
@@ -960,8 +1035,7 @@ private struct PhoneTaskActionLayoutEditor: View {
     private func save() {
         guard data == originalData else { showSaveError = true; return }
         if draft != PhoneTaskActionLayout.decode(originalData) {
-            guard let encoded = try? JSONEncoder().encode(draft) else { showSaveError = true; return }
-            data = draft == .init() ? Data() : encoded
+            data = draft.encoded()
         }
         dismiss()
     }
