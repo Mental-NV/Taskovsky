@@ -301,3 +301,7 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - T17 compact capture candidate: core metadata routes and More-to-advanced form, same draft/title identity. Partial structural coverage; regression checks pending, exact low-sheet geometry/IME not certified. [Scope](changes/mobile-compact-capture-2026-11-15.md).
 
 - Mobile ordinary empty-description candidate replaces three idle rows with one Add description menu. Existing nonempty/rich/editor semantics preserved. Local/native/review passed; exact-head CI pending and exact footer parity not claimed. [Scope](changes/mobile-empty-description-2026-11-15.md).
+
+## Composer recovery notice
+
+[User-requested removal](changes/mobile-capture-notice-2026-11-15.md) hides normal recovery status/gap, not recovery storage; actual warnings remain. Local full tests/release/review and bounded native checks passed; exact-head CI pending.

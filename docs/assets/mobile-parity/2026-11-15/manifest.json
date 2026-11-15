@@ -138,5 +138,18 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
     "historical": true
+  },
+  {
+    "state": "T17",
+    "file": "t17-composer-without-recovery-notice.png",
+    "sha256": "8805c943a6ee6f115287227a014f6fef01966f84d1acf1f9de0bd7f82d0425aa",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-capture-notice-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: empty neutral fixture composer, no personal account/task data",
+    "historical": true
   }
 ]
