@@ -3,7 +3,7 @@
 ## Identity and decision
 
 - Change ID and title: D09 Time popup — Date-mode compact Time editor.
-- Status: In implementation.
+- Status: Locally verified; integration checks and hosted CI pending.
 - Owner or requesting instruction: iPhone D09 parity task, November 15, 2026.
 - Base commit and affected platforms: isolated checkout at `65ca076`; iPhone only (`Mobile/App/PhoneScheduleSheet.swift`, `Mobile/UITests/ReadOnlyNavigationTests.swift`, `Tests/TaskovskyDomainTests/ScheduleTimePopupTests.swift`).
 - Related business, UI, component, parity and deviation IDs: BUS-011, BUS-012, BUS-014; IOS-007; D09 row of `docs/ticktick-spec/mobile-surface-inventory-2026-11-14.md`; TT-012.
@@ -75,11 +75,11 @@ identical task. Duration `setDuration/setStart/setEnd` paths are untouched.
 - New `ScheduleTimePopupTests` (6 cases) exercise the production staging path: open default, close-retain/Cancel-discard, save/reopen/no-write, remove, wall-clock zone change, Duration conversions.
 - Updated 5 existing UI selectors from the `scheduleTime` switch to the button where Date mode is under test; Duration-mode switch assertions kept. Added `testScheduleTimePopupOpensStagesClosesAndOuterCancelDiscards` and `testScheduleTimeSaveReopenRemoveAndDurationUnchanged`; extended the skip-occurrence flow with a popup-staging helper.
 - `swift test --disable-sandbox` and `./scripts/build-app.sh`: see final report.
-- Native Simulator UI: NOT run (slot coordination required). iPhone build attempted only if practical; no personal screenshots.
+- Initial implementation checkpoint: native Simulator tests had not run. Subsequent native results are recorded below.
 
 ## Completion record
 
-Implementation complete in this checkout; verification pending native UI run and exact-head CI. No merge/push.
+Implementation and local native verification complete. Integration validation, independent final review and exact-head CI remain required.
 
 ## Final local verification
 

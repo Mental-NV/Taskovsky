@@ -73,8 +73,9 @@ struct PhoneCalendarPreferences: View {
         }
         .interactiveDismissDisabled(model.isBusy)
         .sheet(isPresented: $showZones) {
-            PhoneCalendarZoneSettings(zones: draft.additionalTimeZones, primary: model.calendar.timeZone) {
-                draft.additionalTimeZones = $0
+            PhoneCalendarZoneSettings(enabled: draft.showAdditionalTimeZones, zones: draft.additionalTimeZones, primary: model.calendar.timeZone) { enabled, zones in
+                draft.showAdditionalTimeZones = enabled
+                draft.additionalTimeZones = zones
             }
         }
     }
@@ -122,10 +123,8 @@ struct PhoneCalendarPreferences: View {
             }.pickerStyle(.navigationLink).accessibilityIdentifier("calendarAllDayRows")
         }
         Section {
-            Toggle("Additional Time Zones", isOn: $draft.showAdditionalTimeZones)
-                .accessibilityIdentifier("calendarAdditionalZones")
             Button { showZones = true } label: {
-                LabeledContent("Time Zone Settings", value: "\(draft.additionalTimeZones.count) configured")
+                LabeledContent("Additional Time Zone", value: draft.showAdditionalTimeZones ? "On" : "Off")
             }.accessibilityIdentifier("calendarZoneSettings")
         } header: { Text("Time Zone Rulers") } footer: { Text("Secondary rulers appear in Day, Week, and Multi-Day.") }
         Section {
@@ -321,9 +320,10 @@ private struct PhoneCalendarSourceColors: View {
 
 private struct PhoneCalendarZoneSettings: View {
     @Environment(\.dismiss) private var dismiss
+    @State var enabled: Bool
     @State var zones: [CalendarTimeZone]
     let primary: TimeZone
-    let save: ([CalendarTimeZone]) -> Void
+    let save: (Bool, [CalendarTimeZone]) -> Void
     @State private var picker: Choice?
 
     private struct Choice: Identifiable {
@@ -335,8 +335,11 @@ private struct PhoneCalendarZoneSettings: View {
         NavigationStack {
             List {
                 Section {
-                    Label(primary.identifier.replacingOccurrences(of: "_", with: " "), systemImage: "globe")
-                } header: { Text("Primary time zone") }
+                    Toggle("Additional Time Zone", isOn: $enabled)
+                        .accessibilityIdentifier("calendarAdditionalZones")
+                    LabeledContent("Current Time Zone", value: primary.identifier.replacingOccurrences(of: "_", with: " "))
+                        .accessibilityIdentifier("calendarCurrentZone")
+                }
                 Section {
                     ForEach($zones) { $zone in
                         VStack(alignment: .leading, spacing: 8) {
@@ -366,7 +369,7 @@ private struct PhoneCalendarZoneSettings: View {
                 ToolbarItemGroup(placement: .confirmationAction) {
                     EditButton()
                     Button("Done") {
-                        save(CalendarTimeZone.normalized(zones))
+                        save(enabled, CalendarTimeZone.normalized(zones))
                         dismiss()
                     }.accessibilityIdentifier("calendarZonesDone")
                 }
