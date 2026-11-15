@@ -400,7 +400,7 @@ struct MobileRootView: View {
         .sheet(isPresented: $capturePresented, onDismiss: {
             if model.captureDraft != nil { model.requestCloseCapture() }
             else if let id = model.createdTaskID { selectedTask = PhoneTaskRoute(id: id) }
-        }) { PhoneCaptureSheet(model: model).presentationDetents([.large]).presentationDragIndicator(.visible) }
+        }) { PhoneCaptureSheet(model: model).presentationDragIndicator(.visible) }
     }
     private func circle(_ name: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: 20)).frame(width: 44, height: 44).background(.regularMaterial, in: Circle()) }

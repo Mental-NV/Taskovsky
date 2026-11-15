@@ -983,3 +983,7 @@ See [staged multi-source Arrange Filter](../changes/mobile-arrange-filter-2026-1
 ### Calendar appearance navigation
 
 Calendar View Options groups appearance choices on Color and Style pushed pages. Style opens Show Item Icons for the existing global/task/note switches. All pages share the outer staged draft; Back retains it and outer Cancel/Done discard/save respectively. Existing Filled/Outline and Year style semantics remain unchanged, not asserted equivalent to TickTick styles. See [navigation change](../changes/mobile-calendar-options-navigation-2026-11-15.md).
+
+### Compact capture shell
+
+New ordinary capture starts with a title and direct date/priority/tag/list controls; More expands the existing advanced form. Prepared/template/range/nonempty-description drafts open expanded. One stable title input retains editing identity while metadata expands. Existing capture transaction, recovery, recognition and template behavior stays authoritative. This is structural coverage, not measured low-sheet/keyboard parity. [Scope](../changes/mobile-compact-capture-2026-11-15.md).

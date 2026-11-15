@@ -2092,3 +2092,7 @@ See [scope and pending gates](../changes/mobile-week-overview-2026-11-15.md). Si
 ### Mobile Calendar options navigation
 
 Color/Style/Show Item Icons hierarchy: full 827 XCTest + 38 Swift Testing, release/signature, three initial native save/relaunch/Cancel cases plus two final checklist/icons cases and independent review passed. Actual nested-page screenshots inspected; owned Simulator shut down. Exact-head CI remains pending. [Scope](../changes/mobile-calendar-options-navigation-2026-11-15.md).
+
+### Compact capture navigation
+
+Initial native testing exposed competing navigation links in one Form row; explicit route buttons corrected that defect. Corrected compact metadata/More/Cancel/direct save-relaunch and Calendar capture native checks passed, as did full 827 XCTest + 38 Swift Testing and release/signature. Source rereview clean. Range/recovery/template/note/retry native regression checks remain in progress; exact-head CI not yet run. [Scope](../changes/mobile-compact-capture-2026-11-15.md).
