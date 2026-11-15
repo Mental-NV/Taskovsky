@@ -5300,7 +5300,18 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(field.value as? String, name)
     }
 
+    @MainActor private func revealListCreationMore(_ app: XCUIApplication) {
+        guard app.navigationBars["Add List"].exists else { return }
+        // Edit List remains expanded; only creation has the More disclosure.
+        if !app.buttons["organizationPlacement"].exists {
+            let more = app.buttons["organizationMore"]
+            reveal(more, in: app)
+            XCTAssertTrue(more.waitForExistence(timeout: 5)); more.tap()
+        }
+    }
+
     @MainActor private func chooseListPlacement(_ name: String, in app: XCUIApplication) {
+        revealListCreationMore(app)
         let placement = app.buttons["organizationPlacement"]
         reveal(placement, in: app)
         placement.tap()
@@ -7040,6 +7051,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["taskMoveList"].tap()
         app.buttons["taskMoveAddList"].tap()
         editOrganizationName("Neutral destination", in: app)
+        XCTAssertEqual(app.buttons["organizationView-list"].value as? String, "Selected")
         app.buttons["organizationSave"].tap()
         waitGone(app.buttons["organizationSave"])
         waitGone(app.navigationBars["Move to"])
@@ -7107,7 +7119,7 @@ extension ReadOnlyNavigationTests {
 extension ReadOnlyNavigationTests {
     @MainActor func testListCreationSelectedViewModesPersistAfterRelaunch() {
         let app = launch()
-        for (mode, title, expected) in [("list", "Neutral List", "List View"), ("board", "Neutral Board", "Kanban View"), ("timeline", "Neutral Timeline", "Timeline View")] {
+        for (mode, title, expected) in [("list", "Neutral List", "List"), ("board", "Neutral Board", "Board"), ("timeline", "Neutral Timeline", "Timeline")] {
             openOrganization(app)
             app.buttons["organizationNewList"].tap()
             XCTAssertTrue(app.navigationBars["Add List"].waitForExistence(timeout: 5))
@@ -7120,11 +7132,11 @@ extension ReadOnlyNavigationTests {
             finishOrganizationEdit(app)
             app.buttons["organizationManagerDone"].tap()
             goTo(title, in: app)
-            XCTAssertEqual(app.buttons["taskListActions"].value as? String, expected)
+            XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
             app.terminate(); app.launch()
             XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
             goTo(title, in: app)
-            XCTAssertEqual(app.buttons["taskListActions"].value as? String, expected)
+            XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
         }
     }
 
@@ -7135,9 +7147,10 @@ extension ReadOnlyNavigationTests {
         editOrganizationName("Discarded Board", in: app)
         let board = app.buttons["organizationView-board"]
         reveal(board, in: app); board.tap()
-        let more = app.buttons["organizationMore"]
-        reveal(more, in: app); more.tap()
+        revealListCreationMore(app)
         XCTAssertTrue(app.buttons["organizationPlacement"].exists)
+        XCTAssertTrue(app.buttons["organizationIcon"].exists)
+        setSwitch("organizationPin", to: true, app: app)
         app.buttons["organizationCancel"].tap()
         app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
         waitGone(app.buttons["organizationSave"])
