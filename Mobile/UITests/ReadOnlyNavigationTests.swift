@@ -8412,3 +8412,77 @@ extension ReadOnlyNavigationTests {
         scheduleRoot(app); app.buttons["scheduleCancel"].tap()
     }
 }
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor private func toggleTaskDisplay(_ id: String, in app: XCUIApplication) {
+        app.buttons["taskListActions"].tap()
+        let control = app.buttons[id]
+        XCTAssertTrue(control.waitForExistence(timeout: 5)); control.tap()
+        waitGone(control)
+    }
+    @MainActor func testTaskDisplayCompletedInboxCollapseAndBatchScope() {
+        let app = launch(qaCase: "task-display")
+        goTo("Inbox", in: app)
+        let completed = app.buttons["Book time for a walk"]
+        let disclosure = app.buttons["taskCompletedDisclosure"]
+        XCTAssertTrue(disclosure.waitForExistence(timeout: 5))
+        XCTAssertEqual(disclosure.value as? String, "Expanded")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", completed.label)).count, 1)
+        disclosure.tap(); XCTAssertFalse(completed.exists)
+        app.buttons["taskListActions"].tap(); app.buttons["batchOpen"].tap()
+        XCTAssertTrue(app.navigationBars["Select Tasks"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["batchTask-00000000-0000-0000-0000-000000000007"].exists)
+        app.buttons["Cancel"].tap()
+        disclosure.tap(); XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        toggleTaskDisplay("taskDisplayCompleted", in: app)
+        XCTAssertFalse(completed.exists); XCTAssertFalse(disclosure.exists)
+        XCTAssertTrue(app.buttons["Review the project outline"].exists)
+        toggleTaskDisplay("taskDisplayCompleted", in: app)
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        attach(app, "Tasks Completed section")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Completed", in: app)
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+        app.buttons["taskListActions"].tap()
+        XCTAssertFalse(app.buttons["taskDisplayCompleted"].exists)
+    }
+    @MainActor func testTaskDisplaySectionListDetailsAndHistory() {
+        let app = launch(qaCase: "task-display")
+        goTo("Work", in: app)
+        let completed = app.buttons["Arrange the studio"]
+        XCTAssertTrue(app.buttons["taskCompletedDisclosure"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", completed.label)).count, 1)
+        toggleTaskDisplay("taskDisplayCompleted", in: app)
+        XCTAssertFalse(completed.exists)
+        XCTAssertTrue(app.buttons["Write meeting notes"].exists)
+        toggleTaskDisplay("taskDisplayDetails", in: app)
+        XCTAssertTrue((app.buttons["Prepare the weekly plan"].value as? String ?? "").contains("A neutral sample description."))
+        attach(app, "Tasks expanded details")
+        toggleTaskDisplay("taskDisplayDetails", in: app)
+        XCTAssertFalse((app.buttons["Prepare the weekly plan"].value as? String ?? "").contains("A neutral sample description."))
+        toggleTaskDisplay("taskDisplayCompleted", in: app)
+        XCTAssertTrue(completed.waitForExistence(timeout: 5))
+    }
+    @MainActor func testTaskDisplayKanbanDetailsPreservesOpeningAndMode() {
+        let app = launch(qaCase: "timeline")
+        goTo("Open Launch projects", in: app)
+        selectScopedView("Kanban View", in: app)
+        let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        let compact = card.frame.height
+        toggleTaskDisplay("taskDisplayDetails", in: app)
+        XCTAssertGreaterThan(card.frame.height, compact)
+        app.buttons["taskListActions"].tap()
+        XCTAssertFalse(app.buttons["taskDisplayCompleted"].exists)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.55)).tap()
+        waitGone(app.buttons["taskDisplayDetails"])
+        XCTAssertTrue((card.value as? String ?? "").contains("#Planning"))
+        attach(app, "Kanban expanded details")
+        card.tap(); XCTAssertTrue(app.buttons["taskDetailDone"].waitForExistence(timeout: 5))
+        app.buttons["taskDetailDone"].tap()
+        toggleTaskDisplay("taskDisplayDetails", in: app)
+        XCTAssertEqual(card.frame.height, compact, accuracy: 1)
+    }
+}

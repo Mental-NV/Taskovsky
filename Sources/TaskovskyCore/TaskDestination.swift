@@ -99,3 +99,17 @@ public enum TaskDestination: Hashable, Sendable {
         }
     }
 }
+
+/// Read-only presentation partition of an already destination-filtered task set.
+/// Never broadens scope or changes completion, pinning or stored task order.
+public struct TaskDisplayProjection {
+    public let ordinary: [TaskItem]
+    public let completed: [TaskItem]
+    public init(_ matched: [TaskItem], showCompleted: Bool) {
+        ordinary = matched.filter { $0.deletedAt != nil || $0.completedAt == nil }
+        completed = showCompleted ? matched.filter { $0.deletedAt == nil && $0.completedAt != nil } : []
+    }
+    public func visible(completedExpanded: Bool) -> [TaskItem] {
+        ordinary + (completedExpanded ? completed : [])
+    }
+}

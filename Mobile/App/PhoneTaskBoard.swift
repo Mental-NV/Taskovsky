@@ -524,13 +524,14 @@ struct PhoneTaskRowOrderDrop: ViewModifier {
 }
 
 private struct PhoneBoardTaskTitle: View {
+    @Environment(\.phoneTaskDetails) private var details
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let task: TaskItem
     let open: (UUID) -> Void
 
     var body: some View {
         Button { open(task.id) } label: {
-            Group {
+            VStack(alignment: .leading, spacing: 4) {
                 if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(task.title).font(.body)
@@ -543,6 +544,7 @@ private struct PhoneBoardTaskTitle: View {
                         dueCaption.fixedSize(horizontal: true, vertical: false)
                     }
                 }
+                if let details { PhoneTaskDetails(task: task, context: details) }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .padding(.trailing, 8).contentShape(Rectangle())
@@ -550,6 +552,7 @@ private struct PhoneBoardTaskTitle: View {
         .buttonStyle(.plain)
         .accessibilityLabel(task.title)
         .accessibilityIdentifier("boardCard-" + task.id.uuidString)
+        .accessibilityValue(details.map { PhoneTaskDetails.summary(task, context: $0) } ?? "")
     }
 
     @ViewBuilder private var dueCaption: some View {
@@ -557,5 +560,56 @@ private struct PhoneBoardTaskTitle: View {
             Text(due.formatted(.dateTime.month(.abbreviated).day()))
                 .font(.caption).foregroundStyle(.secondary)
         }
+    }
+}
+
+struct PhoneTaskDetailsContext {
+    let data: WorkspaceData
+    let calendar: Calendar
+}
+private struct PhoneTaskDetailsKey: EnvironmentKey {
+    static let defaultValue: PhoneTaskDetailsContext? = nil
+}
+extension EnvironmentValues {
+    var phoneTaskDetails: PhoneTaskDetailsContext? {
+        get { self[PhoneTaskDetailsKey.self] }
+        set { self[PhoneTaskDetailsKey.self] = newValue }
+    }
+}
+/// Presentation only: stored descriptions and metadata, never changes task state.
+struct PhoneTaskDetails: View {
+    static func summary(_ task: TaskItem, context: PhoneTaskDetailsContext) -> String {
+        var parts = [task.body]
+        if task.dueDate != nil { parts.append(PhoneScheduleRequest.summary(for: task, calendar: context.calendar)) }
+        parts += context.data.tags.filter { task.tagIDs.contains($0.id) }.map { "#" + $0.name }
+        if !task.effectiveReminderDates.isEmpty { parts.append("Reminder") }
+        if task.isRepeating { parts.append(task.repeatLabel(calendar: context.calendar)) }
+        if !task.checklist.isEmpty { parts.append("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)") }
+        if let list = context.data.lists.first(where: { $0.id == task.listID }) { parts.append(list.name) }
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+    let task: TaskItem
+    let context: PhoneTaskDetailsContext
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !task.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(task.body).lineLimit(2)
+            }
+            if task.dueDate != nil { Text(PhoneScheduleRequest.summary(for: task, calendar: context.calendar)) }
+            let tags = context.data.tags.filter { task.tagIDs.contains($0.id) }
+            if !tags.isEmpty {
+                Text(tags.map { "#" + $0.name }.joined(separator: "  "))
+            }
+            HStack(spacing: 8) {
+                if !task.effectiveReminderDates.isEmpty { Image(systemName: "bell").accessibilityLabel("Reminder") }
+                if task.isRepeating { Label(task.repeatLabel(calendar: context.calendar), systemImage: "repeat") }
+                if !task.checklist.isEmpty {
+                    Label("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)", systemImage: "checklist")
+                }
+                if let list = context.data.lists.first(where: { $0.id == task.listID }) { Text(list.name) }
+            }
+        }.font(.caption).foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("taskDisplayDetails-" + task.id.uuidString)
     }
 }
