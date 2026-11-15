@@ -124,5 +124,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
     "historical": true
+  },
+  {
+    "state": "T17",
+    "file": "t17-compact-capture.png",
+    "sha256": "8b441fcd14562f7cb7f77d851bdee19d69cf4bf93130be524fd5721cf30bbec5",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": null,
+    "receipt": "../../../changes/mobile-compact-capture-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
+    "historical": true
   }
 ]
