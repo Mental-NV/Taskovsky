@@ -7805,3 +7805,91 @@ extension ReadOnlyNavigationTests {
     }
 
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testNormalFilterConditionsPreviewPersistsAndCancelPreservesCriteria() {
+        let app = launch(), filterName = "Focused planning"
+        openFilterManagement(in: app); app.buttons["newSavedFilter"].tap()
+        let name = app.textFields["savedFilterName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText(filterName + "\n")
+        let ordered = ["List", "Tag", "Date", "Priority"].map { app.buttons["normalFilterCriterion-" + $0] }
+        for row in ordered { XCTAssertTrue(row.exists) }
+        for index in 0..<3 { XCTAssertLessThan(ordered[index].frame.minY, ordered[index + 1].frame.minY) }
+        func choose(_ criterion: String, _ option: String) {
+            let row = app.buttons["normalFilterCriterion-" + criterion]
+            reveal(row, in: app); row.tap()
+            XCTAssertTrue(app.navigationBars[criterion].waitForExistence(timeout: 5))
+            app.buttons[option].tap()
+            app.navigationBars[criterion].buttons.firstMatch.tap()
+        }
+        choose("List", "Work"); choose("Tag", "Planning")
+        app.buttons["normalFilterCriterion-Date"].tap()
+        app.buttons["dateRule-today"].tap(); app.navigationBars["Date"].buttons.firstMatch.tap()
+        choose("Priority", "None"); choose("Type", "Tasks")
+        let keyword = app.textFields["savedFilterKeyword"]
+        reveal(keyword, in: app); keyword.tap(); keyword.typeText("weekly")
+        app.swipeDown()
+        let preview = app.buttons["savedFilterPreview"]
+        reveal(preview, in: app); preview.tap()
+        XCTAssertTrue(app.navigationBars["Preview"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Prepare the weekly plan"].exists)
+        XCTAssertFalse(app.staticTexts["Review the project outline"].exists)
+        XCTAssertFalse(app.staticTexts["Write meeting notes"].exists)
+        app.navigationBars["Preview"].buttons.firstMatch.tap()
+        reveal(name, in: app, towardTop: true); attach(app, "Normal Filter conditions and real Preview")
+        app.buttons["savedFilterDone"].tap(); waitGone(app.buttons["savedFilterDone"])
+        app.terminate(); app.launch(); XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openFilterManagement(in: app); managedFilter(filterName, in: app).tap()
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        reveal(keyword, in: app); XCTAssertEqual(keyword.value as? String, "weekly")
+        let tag = app.buttons["normalFilterCriterion-Tag"]
+        reveal(tag, in: app, towardTop: true); tag.tap()
+        XCTAssertTrue(app.buttons["Planning"].isSelected)
+        app.buttons["savedFilterAll-Tag"].tap()
+        XCTAssertTrue(app.buttons["savedFilterAll-Tag"].isSelected)
+        XCTAssertFalse(app.buttons["Planning"].isSelected)
+        app.navigationBars["Tag"].buttons.firstMatch.tap()
+        app.buttons["savedFilterCancel"].tap(); app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["savedFilterDone"])
+        managedFilter(filterName, in: app).tap(); XCTAssertTrue(name.waitForExistence(timeout: 5))
+        reveal(tag, in: app); tag.tap(); XCTAssertTrue(app.buttons["Planning"].isSelected)
+        app.navigationBars["Tag"].buttons.firstMatch.tap()
+        reveal(preview, in: app); preview.tap()
+        XCTAssertTrue(app.staticTexts["Prepare the weekly plan"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Write meeting notes"].exists)
+        app.navigationBars["Preview"].buttons.firstMatch.tap()
+        app.buttons["savedFilterCancel"].tap(); waitGone(app.buttons["savedFilterDone"])
+    }
+}
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testNormalFilterTagAllResetsMoreModesAndPreviewPredicate() {
+        let app = launch(); openFilterManagement(in: app); app.buttons["newSavedFilter"].tap()
+        XCTAssertTrue(app.textFields["savedFilterName"].waitForExistence(timeout: 5))
+        let more = app.buttons["savedFilterMore"]
+        reveal(more, in: app); more.tap()
+        let matching = app.buttons.containing(.staticText, identifier: "Tag matching").firstMatch
+        for mode in ["No tags", "Any tag"] {
+            reveal(matching, in: app); matching.tap()
+            XCTAssertTrue(app.navigationBars["Tag matching"].waitForExistence(timeout: 5))
+            app.buttons[mode].tap(); app.navigationBars["Tag matching"].buttons.firstMatch.tap()
+            let tag = app.buttons["normalFilterCriterion-Tag"]
+            reveal(tag, in: app, towardTop: true); XCTAssertTrue(tag.label.contains(mode))
+            let preview = app.buttons["savedFilterPreview"]
+            reveal(preview, in: app); preview.tap()
+            XCTAssertTrue(app.navigationBars["Preview"].waitForExistence(timeout: 5))
+            XCTAssertEqual(app.staticTexts["Prepare the weekly plan"].exists, mode == "Any tag")
+            XCTAssertEqual(app.staticTexts["Review the project outline"].exists, mode == "No tags")
+            app.navigationBars["Preview"].buttons.firstMatch.tap()
+            reveal(tag, in: app, towardTop: true); tag.tap()
+            let all = app.buttons["savedFilterAll-Tag"]
+            XCTAssertFalse(all.isSelected); all.tap(); XCTAssertTrue(all.isSelected)
+            app.navigationBars["Tag"].buttons.firstMatch.tap()
+            reveal(preview, in: app); preview.tap()
+            XCTAssertTrue(app.staticTexts["Prepare the weekly plan"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["Review the project outline"].exists)
+            app.navigationBars["Preview"].buttons.firstMatch.tap()
+        }
+        app.buttons["savedFilterCancel"].tap(); waitGone(app.buttons["savedFilterDone"])
+    }
+}

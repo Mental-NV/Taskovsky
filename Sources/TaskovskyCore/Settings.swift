@@ -521,6 +521,12 @@ public struct TaskFilter: Codable, Identifiable, Equatable, Sendable {
         self.customDateFrom = customDateFrom; self.customDateTo = customDateTo
         self.isPinned = isPinned; self.ruleRoot = ruleRoot
     }
+    /// Explicit Normal-filter Tag All action, not normalization on opening.
+    public mutating func clearTagCriteria() { tagIDs = []; tagMode = .any }
+    public var hasUnrestrictedTagCriteria: Bool {
+        tagIDs.isEmpty && (tagMode == .any || tagMode == .all)
+    }
+
     private enum CodingKeys: String, CodingKey { case id, name, listIDs, tagIDs, priority, priorities, dateRule, dateRules, status, keyword, kinds, tagMode, customDateFrom, customDateTo, isPinned, ruleRoot }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
