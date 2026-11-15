@@ -258,8 +258,9 @@ private struct PhoneListEditor: View {
                     if request.creating {
                         creationFields
                         Section {
-                            DisclosureGroup("More", isExpanded: $showMore) { advancedListFields }
-                                .accessibilityIdentifier("organizationMore")
+                            DisclosureGroup(isExpanded: $showMore) { advancedListFields } label: {
+                                Text("More").accessibilityIdentifier("organizationMore")
+                            }
                         }
                     } else { listFields }
                 }
