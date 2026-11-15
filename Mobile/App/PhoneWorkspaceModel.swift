@@ -4,15 +4,18 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneTaskGrouping: String {
-    case standard, creationDate, dueDate, priority
+    case standard, creationDate, dueDate, priority, list, tag, ungrouped
     init(stored: String?, legacyCreated: Bool) {
         self = stored.flatMap(Self.init(rawValue:)) ?? (legacyCreated ? .creationDate : .standard)
     }
     var title: String {
         switch self {
+        case .list: "Group by List"
+        case .tag: "Group by Tag"
+        case .ungrouped: "No Groups"
         case .standard: "Default Groups"
         case .creationDate: "Group by Created Date"
         case .dueDate: "Group by Due Date"
@@ -22,12 +25,13 @@ enum PhoneTaskGrouping: String {
 }
 
 enum PhoneTaskSort: Hashable {
-    case priority, timestamp(TaskTimestampSort), title(TaskTitleSort)
+    case priority, timestamp(TaskTimestampSort), title(TaskTitleSort), metadata(TaskMetadataSort)
 
-    static let choices = [Self.priority] + TaskTimestampSort.allCases.map(Self.timestamp) + TaskTitleSort.allCases.map(Self.title)
+    static let choices = [Self.priority] + TaskTimestampSort.allCases.map(Self.timestamp) + TaskTitleSort.allCases.map(Self.title) + TaskMetadataSort.allCases.map(Self.metadata)
 
     init?(stored: String) {
         if stored == "Priority" { self = .priority }
+        else if let metadata = TaskMetadataSort(rawValue: stored) { self = .metadata(metadata) }
         else if let title = TaskTitleSort(rawValue: stored) { self = .title(title) }
         else if let timestamp = TaskTimestampSort(rawValue: stored) { self = .timestamp(timestamp) }
         else { return nil }
@@ -36,6 +40,7 @@ enum PhoneTaskSort: Hashable {
     var stored: String {
         switch self {
         case .priority: "Priority"
+        case .metadata(let sort): sort.rawValue
         case .title(let sort): sort.rawValue
         case .timestamp(let sort): sort.rawValue
         }
@@ -44,6 +49,7 @@ enum PhoneTaskSort: Hashable {
     var title: String {
         switch self {
         case .priority: "Priority"
+        case .metadata(let sort): sort.title
         case .title(let sort): sort == .ascending ? "Title · Ascending" : "Title · Descending"
         case .timestamp(let sort): sort.title
         }
@@ -54,9 +60,10 @@ enum PhoneTaskSort: Hashable {
         return nil
     }
 
-    func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
+    func precedes(_ lhs: TaskItem, _ rhs: TaskItem, in data: WorkspaceData, calendar: Calendar) -> Bool {
         switch self {
         case .priority: lhs.priority.rank < rhs.priority.rank
+        case .metadata(let sort): sort.precedes(lhs, rhs, in: data, calendar: calendar)
         case .title(let sort): sort.precedes(lhs, rhs)
         case .timestamp(let sort): sort.precedes(lhs, rhs)
         }
@@ -262,7 +269,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         readTicket = UUID(); isBusy = true
         do {
             var initial = try MobilePreviewFixture.session(samples: isQA && qaCase != .captureEmpty, unknownData: qaCase == .unknownWorkspace)
-            if isQA && (qaCase == .taskSort || qaCase == .priorityList || qaCase == .createdGrouping || qaCase == .dueDateGrouping) {
+            if isQA && (qaCase == .taskSort || qaCase == .organizationSort || qaCase == .priorityList || qaCase == .createdGrouping || qaCase == .dueDateGrouping) {
                 var data = initial.workspace
                 guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
                 let stamp = MobilePreviewFixture.now.addingTimeInterval(-86_400)
@@ -274,12 +281,16 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[7].createdAt = stamp.addingTimeInterval(-3600)
                 data.tasks[7].updatedAt = stamp.addingTimeInterval(3600)
                 data.tasks[5].isPinned = true
+                if qaCase == .organizationSort {
+                    data.tasks[0].dueDate = stamp
+                    data.tasks[7].dueDate = stamp.addingTimeInterval(172_800)
+                }
                 if qaCase == .priorityList {
                     data.tasks[0].priority = .high
                     data.tasks[1].priority = .low
                     data.tasks[7].priority = .high
                 }
-                if qaCase != .taskSort && qaCase != .priorityList {
+                if qaCase != .taskSort && qaCase != .priorityList && qaCase != .organizationSort {
                     data.tasks[0].createdAt = stamp.addingTimeInterval(-86_400)
                     let section = TaskSection(name: "Review section")
                     let create = TaskSectionChange(listID: work.id, operation: .create(section))

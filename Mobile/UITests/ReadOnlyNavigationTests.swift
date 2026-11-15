@@ -1817,6 +1817,45 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertLessThan(target.frame.minY, moving.frame.minY)
     }
 
+    @MainActor func testOrganizationGroupsAndMetadataSortingComposeAndRestore() {
+        let app = launch(qaCase: "organization-sort")
+        goTo("Work", in: app)
+        chooseTaskSort("Group by Tag", in: app)
+        XCTAssertTrue(app.staticTexts["Planning"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["No Tags"].exists)
+        chooseTaskSort("Date · Ascending", in: app)
+        app.buttons["taskSortMenu"].tap()
+        XCTAssertTrue(app.buttons["groupTag"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["groupTag"].isSelected)
+        XCTAssertTrue(app.buttons["sortDate"].isSelected)
+        attach(app, "Group Tag and Sort Date")
+        app.buttons["groupList"].tap(); waitGone(app.buttons["groupList"])
+        XCTAssertTrue(app.staticTexts["taskGroupHeader-Work"].exists)
+        XCTAssertFalse(app.staticTexts["No Tags"].exists)
+        chooseTaskSort("No Groups", in: app)
+        XCTAssertFalse(app.staticTexts["taskGroupHeader-Work"].exists)
+        XCTAssertFalse(app.staticTexts["No Tags"].exists)
+        XCTAssertLessThan(app.buttons["Review the project outline"].frame.minY, app.buttons["Review the draft"].frame.minY)
+        chooseTaskSort("Date · Descending", in: app)
+        XCTAssertLessThan(app.buttons["Review the draft"].frame.minY, app.buttons["Review the project outline"].frame.minY)
+        chooseTaskSort("Tag · Ascending", in: app)
+        XCTAssertLessThan(app.buttons["Prepare the weekly plan"].frame.minY, app.buttons["Review the project outline"].frame.minY)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        app.buttons["taskSortMenu"].tap()
+        XCTAssertTrue(app.buttons["groupNone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["groupNone"].isSelected)
+        XCTAssertTrue(app.buttons["sortTag"].isSelected)
+        attach(app, "All Group and Sort choices")
+        app.buttons["restoreDefaultTaskSort"].tap(); waitGone(app.buttons["restoreDefaultTaskSort"])
+        app.buttons["taskSortMenu"].tap()
+        XCTAssertTrue(app.buttons["groupNone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["groupNone"].isSelected)
+        app.buttons["groupDefault"].tap(); waitGone(app.buttons["groupDefault"])
+        XCTAssertTrue(app.buttons["Review the project outline"].exists)
+    }
+
     @MainActor func testPriorityListGroupingKeepsPinSortAndSurvivesRelaunch() {
         let app = launch(qaCase: "priority-list")
         goTo("Work", in: app)
@@ -2013,6 +2052,11 @@ final class ReadOnlyNavigationTests: XCTestCase {
         case "Group by Created Date": id = "groupCreated"
         case "Group by Due Date": id = "groupDate"
         case "Group by Priority": id = "groupPriority"
+        case "Group by List": id = "groupList"
+        case "Group by Tag": id = "groupTag"
+        case "No Groups": id = "groupNone"
+        case "Date · Ascending", "Date · Descending": id = "sortDate"
+        case "Tag · Ascending", "Tag · Descending": id = "sortTag"
         case "Default Order": id = "restoreDefaultTaskSort"
         case "Priority": id = "sortPriority"
         case "Title · Ascending", "Title · Descending": id = "sortTitle"
@@ -2081,7 +2125,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         }
         openSheet()
         XCTAssertTrue(app.buttons["groupDefault"].isSelected)
-        XCTAssertFalse(app.buttons["sortTag"].exists)
+        XCTAssertTrue(app.buttons["sortTag"].exists)
         attach(app, "Supported Sort and Group sheet")
         app.buttons["groupCreated"].tap()
         waitGone(app.buttons["groupCreated"])

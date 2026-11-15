@@ -506,7 +506,7 @@ struct MobileRootView: View {
                             guard let document = model.document else { return }
                             showTaskActions = false
                             model.clearBatchNotice()
-                            let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+                            let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
                             batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
                         } label: {
                             Label("Select Tasks", systemImage: "checklist")
@@ -560,7 +560,7 @@ struct MobileRootView: View {
 
     private func taskDestinationRows(_ data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
-        let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
         return taskList(ordered, data: data)
     }
 
@@ -655,7 +655,7 @@ struct MobileRootView: View {
 
     private func sectionedPhoneRows(_ list: TaskList, data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
-        let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
         let rows = PinnedGrouping.partition(ordered)
         let editable = !list.isArchived && model.canBeginEditing
         return ScrollView {
@@ -708,7 +708,15 @@ struct MobileRootView: View {
         return ScrollView {
             if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
             taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
-            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .priority {
+            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .list {
+                ForEach(TaskOrganizationGroup.byList(ordinary, in: data)) { group in
+                    taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .tag {
+                ForEach(TaskOrganizationGroup.byTag(ordinary, in: data)) { group in
+                    taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .priority {
                 ForEach(TaskPriorityListGroup.group(ordinary)) { group in
                     taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
                 }
@@ -733,6 +741,7 @@ struct MobileRootView: View {
     @ViewBuilder private func taskGroup(_ title: String, tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
         if !tasks.isEmpty {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("taskGroupHeader-" + title)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
             taskRows(tasks, lists: lists, searchQuery: searchQuery)
         }
@@ -1324,7 +1333,7 @@ private struct PhoneSortGroupSheet: View {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: textSize.isAccessibilitySize ? 1 : 3)
     }
     private var ascending: Bool {
-        sort == .title(.ascending) || sort?.timestamp == .createdOldest || sort?.timestamp == .modifiedOldest
+        sort == .metadata(.dateAscending) || sort == .metadata(.tagAscending) || sort == .title(.ascending) || sort?.timestamp == .createdOldest || sort?.timestamp == .modifiedOldest
     }
     private var created: Bool { sort?.timestamp == .createdNewest || sort?.timestamp == .createdOldest }
     private var modified: Bool { sort?.timestamp == .modifiedNewest || sort?.timestamp == .modifiedOldest }
@@ -1336,20 +1345,32 @@ private struct PhoneSortGroupSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Group by").foregroundStyle(.secondary)
                         LazyVGrid(columns: columns, spacing: 8) {
-                            pill("Default Groups", selected: grouping == .standard, id: "groupDefault") { selectGroup(.standard) }
+                            pill("List", selected: grouping == .list, id: "groupList") { selectGroup(.list) }
                             pill("Date", selected: grouping == .dueDate, id: "groupDate") { selectGroup(.dueDate) }
                             pill("Created Time", selected: grouping == .creationDate, id: "groupCreated") { selectGroup(.creationDate) }
+                            pill("Tag", selected: grouping == .tag, id: "groupTag") { selectGroup(.tag) }
                             pill("Priority", selected: grouping == .priority, id: "groupPriority") { selectGroup(.priority) }
+                            pill("None", selected: grouping == .ungrouped, id: "groupNone") { selectGroup(.ungrouped) }
                         }
+                        Button("Restore default grouping") { selectGroup(.standard) }
+                            .accessibilityIdentifier("groupDefault")
+                            .accessibilityAddTraits(grouping == .standard ? .isSelected : [])
                     }
                 }
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Sort by").foregroundStyle(.secondary)
                         Spacer()
-                        if sort?.timestamp != nil || sort == .title(.ascending) || sort == .title(.descending) {
+                        if sort != nil && sort != .priority {
                             Button {
-                                if sort == .title(.ascending) || sort == .title(.descending) {
+                                if case .metadata(let value) = sort {
+                                    switch value {
+                                    case .dateAscending: selectSort(.metadata(.dateDescending))
+                                    case .dateDescending: selectSort(.metadata(.dateAscending))
+                                    case .tagAscending: selectSort(.metadata(.tagDescending))
+                                    case .tagDescending: selectSort(.metadata(.tagAscending))
+                                    }
+                                } else if sort == .title(.ascending) || sort == .title(.descending) {
                                     selectSort(.title(ascending ? .descending : .ascending))
                                 } else {
                                 selectSort(.timestamp(created ? (ascending ? .createdNewest : .createdOldest)
@@ -1364,6 +1385,7 @@ private struct PhoneSortGroupSheet: View {
                         }
                     }
                     LazyVGrid(columns: columns, spacing: 8) {
+                        pill("Date", selected: sort == .metadata(.dateAscending) || sort == .metadata(.dateDescending), id: "sortDate") { selectSort(.metadata(.dateAscending)) }
                         pill("Created Time", selected: created, id: "sortCreated") {
                             selectSort(.timestamp(ascending ? .createdOldest : .createdNewest))
                         }
@@ -1373,6 +1395,7 @@ private struct PhoneSortGroupSheet: View {
                         pill("Title", selected: sort == .title(.ascending) || sort == .title(.descending), id: "sortTitle") {
                             selectSort(.title(.ascending))
                         }
+                        pill("Tag", selected: sort == .metadata(.tagAscending) || sort == .metadata(.tagDescending), id: "sortTag") { selectSort(.metadata(.tagAscending)) }
                         pill("Priority", selected: sort == .priority, id: "sortPriority") { selectSort(.priority) }
                     }
                 }

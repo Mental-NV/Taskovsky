@@ -190,5 +190,18 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral sample workspace tasks only, no real profile information",
     "historical": true
+  },
+  {
+    "state": "T04",
+    "file": "t04-complete-choices.png",
+    "sha256": "67d6dd7eb1fcc2424c29124c6c7ff7136716262c0b6778e4b08c39dbdf9368e8",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-group-sort-complete-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral sample workspace only, no personal profile information",
+    "historical": true
   }
 ]
