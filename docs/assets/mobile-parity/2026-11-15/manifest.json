@@ -151,5 +151,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: empty neutral fixture composer, no personal account/task data",
     "historical": true
+  },
+  {
+    "state": "D10",
+    "file": "d10-reminder-options.png",
+    "sha256": "a575c24e568c251e0c25f255a775a1e857dcc7977f48c74aedd720dee8590965",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-schedule-options-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture schedule controls only, no personal profile/task data",
+    "historical": true
+  },
+  {
+    "state": "D12",
+    "file": "d12-repeat-options.png",
+    "sha256": "b3d5768f7373d2d7c202c4503151c9049bcd01cfda568d64e5c9419aadc8dfc0",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-schedule-options-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture schedule controls only, no personal profile/task data",
+    "historical": true
   }
 ]
