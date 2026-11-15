@@ -16,6 +16,7 @@ struct PhoneTaskSheet: View {
     @State private var scheduleRequest: PhoneScheduleRequest?
     @State private var moveRequest: PhoneTaskMoveRequest?
     @State private var metadataRequest: PhoneTaskMetadataRequest?
+    @State private var priorityRequest: PhoneTaskMetadataRequest?
     @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
     @State private var relatedTasks: [UUID] = []
     @State private var checklistError: String?
@@ -225,7 +226,14 @@ struct PhoneTaskSheet: View {
     private func metadata(_ task: TaskItem, data: WorkspaceData) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             metadataButton("Priority", detail: task.priority.phoneLabel, symbol: task.priority == .none ? "flag" : "flag.fill",
-                           identifier: "editTaskPriority") { openMetadata(.priority, task: task) }
+                           identifier: "editTaskPriority") {
+                guard writable, let revision = model.document?.revision else { return }
+                priorityRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .priority)
+            }
+            .popover(item: $priorityRequest) { request in
+                PhoneDetailPriorityPopover(model: model, request: request)
+                    .presentationCompactAdaptation(.popover)
+            }
             let names = task.tagIDs.compactMap { id in data.tags.first { $0.id == id }?.name }
             let extra = task.tagIDs.count - names.count
             let labels = names + (extra > 0 ? ["\(extra) unavailable"] : [])
@@ -956,5 +964,48 @@ private struct PhoneTaskActionLayoutEditor: View {
             data = draft == .init() ? Data() : encoded
         }
         dismiss()
+    }
+}
+
+
+/// Detail-only D05 presentation; other metadata routes keep their existing sheets.
+private struct PhoneDetailPriorityPopover: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: PhoneWorkspaceModel
+    let request: PhoneTaskMetadataRequest
+    @State private var error: String?
+    @State private var submitting = false
+    private let choices: [TaskPriority] = [.high, .medium, .low, .none]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(choices, id: \.self) { priority in
+                Button {
+                    guard !submitting, !model.isBusy else { return }
+                    submitting = true
+                    Task {
+                        error = await model.saveTaskMetadata(.priority(priority), taskID: request.task.id, expected: request.revision)
+                        submitting = false
+                        if error == nil { dismiss() }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: priority == .none ? "flag" : "flag.fill")
+                            .foregroundStyle(priority.phoneColor).frame(width: 20)
+                        Text(priority == .none ? "No Priority" : priority.phoneLabel + " Priority")
+                        Spacer(minLength: 12)
+                        if priority == request.task.priority { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }
+                    }.padding(.horizontal, 16).frame(minHeight: 48).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .accessibilityIdentifier("taskPriority-" + priority.rawValue)
+                    .accessibilityAddTraits(priority == request.task.priority ? .isSelected : [])
+                    .disabled(submitting || model.isBusy)
+            }
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(.red).padding()
+                    .accessibilityIdentifier("taskMetadataError")
+            }
+        }.frame(minWidth: 250)
+            .interactiveDismissDisabled(submitting || model.isBusy)
     }
 }

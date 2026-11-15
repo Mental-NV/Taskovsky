@@ -23,4 +23,3 @@ Default state preserves existing behavior: undated and notes enabled, overdue di
 ## Verification checkpoint
 
 Domain source `1105324`: five focused tests passed. The full local run logged 840 XCTest (134+55+122+529) and 38 Swift Testing passes. Independent source/test review is clean. Release compilation reached 143/148 before the execution transport disconnected; no final app/signature result is present, so release is unverified. Two native launch requests timed out in permission review; no native log/result bundle was created. Do not treat these as native failures or passes and do not duplicate the uncertain release process. Exact-head hosted CI and screenshot remain pending. SwiftUI Menu may not expose accessibilityValue, so native acceptance uses real candidate inclusion/exclusion plus inspected checkmark capture rather than unsupported AX assertions.
-

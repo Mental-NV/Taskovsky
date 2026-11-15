@@ -2129,3 +2129,7 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## D09 Time popup —2026-11-15
 
 [Receipt](../changes/mobile-time-popup-2026-11-15.md):844+38 tests/release passed; actual wheel save/reopen/removal, outerCancel, Duration regression and precise non-device-zone outside-dismiss/relaunch native checks passed. Exact CI/final review pending.
+
+## D05 detail Priority popup —2026-11-15
+
+[Receipt](../changes/mobile-detail-priority-popup-2026-11-15.md):844+38 tests/release/iPhone compile, independent review and native4/4 passed. Native result finalization delayed but exited0. Exact-head CI pending.
