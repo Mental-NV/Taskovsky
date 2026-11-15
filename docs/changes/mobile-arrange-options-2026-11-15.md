@@ -23,3 +23,9 @@ Default state preserves existing behavior: undated and notes enabled, overdue di
 ## Verification checkpoint
 
 Domain source `1105324`: five focused tests passed. The full local run logged 840 XCTest (134+55+122+529) and 38 Swift Testing passes. Independent source/test review is clean. Release compilation reached 143/148 before the execution transport disconnected; no final app/signature result is present, so release is unverified. Two native launch requests timed out in permission review; no native log/result bundle was created. Do not treat these as native failures or passes and do not duplicate the uncertain release process. Exact-head hosted CI and screenshot remain pending. SwiftUI Menu may not expose accessibilityValue, so native acceptance uses real candidate inclusion/exclusion plus inspected checkmark capture rather than unsupported AX assertions.
+
+## Resumed acceptance
+
+After Mac execution recovered, a fresh isolated checkout integrated main at `cec8cf1`. Four owned Simulator tests passed: independent option inclusion/exclusion/reopening, source-scoped scheduling, drag/Undo and recurring staged scope. Result: `TaskovskyArrangeResumeNative.xcresult`. The attached unmodified screenshot is from that tested checkpoint, with neutral seeded data; all three option labels/checkmarks are visible. Existing menu help truncation is visible, not claimed fixed. Show Task Hierarchy remains deferred pending behavioral evidence.
+
+PR135 was integrated at `f7a036b`; independent integration review confirms C14 production/domain unchanged and all native methods retained without duplication. Native acceptance belongs to `cec8cf1`, not a newly executed integrated run. The original uncertain local release was not repeated; exact-head hosted CI must supply the final compile/test/release gate before merge. No live TickTick data or user Simulator was changed.
