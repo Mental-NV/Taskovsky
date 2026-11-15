@@ -11,6 +11,46 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         return app
     }
+    @MainActor func testCompactCaptureOpensMetadataAndKeepsDraftThroughMoreAndCancel() {
+        let app = launch()
+        app.buttons["openCapture"].tap()
+        let title = app.textViews["captureTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textViews["captureDescription"].exists)
+        XCTAssertTrue(app.buttons["captureMore"].exists)
+        attach(app, "Compact task composer")
+        title.tap(); title.typeText("Compact composer draft")
+        app.buttons["capturePriorityPicker"].tap()
+        XCTAssertTrue(app.navigationBars["Priority"].waitForExistence(timeout: 5))
+        app.buttons["High"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["captureTagsPicker"].tap()
+        XCTAssertTrue(app.navigationBars["Tags"].waitForExistence(timeout: 5))
+        app.buttons["Planning"].tap()
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["captureDatePage"].tap()
+        XCTAssertTrue(app.switches["captureDateToggle"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["captureMore"].tap()
+        XCTAssertTrue(app.textViews["captureDescription"].waitForExistence(timeout: 5))
+        XCTAssertEqual(title.value as? String, "Compact composer draft")
+        app.buttons["captureCancel"].tap()
+        app.buttons["Keep Editing"].tap()
+        XCTAssertEqual(title.value as? String, "Compact composer draft")
+        app.buttons["captureCancel"].tap(); app.buttons["Discard"].tap()
+        waitGone(title)
+        XCTAssertFalse(app.buttons["Compact composer draft"].exists)
+        app.buttons["openCapture"].tap()
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap(); title.typeText("Saved compact task")
+        app.buttons["captureAdd"].tap()
+        XCTAssertTrue(app.buttons["taskDetailDone"].waitForExistence(timeout: 8))
+        app.buttons["taskDetailDone"].tap()
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["Saved compact task"].waitForExistence(timeout: 10))
+
+    }
+
     @MainActor func testEmptyDescriptionActionsStayCompactAndPlainSaveSurvivesRelaunch() {
         let app = launch()
         let input = openCapture(app)
@@ -1434,6 +1474,8 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let add = app.buttons["openCapture"]
         let ready = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == true AND enabled == true"), object: add)
         XCTAssertEqual(XCTWaiter.wait(for: [ready], timeout: 6), .completed); add.tap()
+        let more = app.buttons["captureMore"]
+        if more.waitForExistence(timeout: 5) { more.tap() }
         let title = app.textViews["captureTitle"]; XCTAssertTrue(title.waitForExistence(timeout: 5)); return title
     }
     @MainActor private func reveal(_ row: XCUIElement, in app: XCUIApplication, towardTop: Bool = false, mustBeVisible: Bool = true) {
