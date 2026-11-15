@@ -272,5 +272,18 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Inspected neutral fixture; Moscow is hard-coded QA primary zone, not personal settings",
     "historical": true
+  },
+  {
+    "state": "T16",
+    "file": "t16-parent-tag.png",
+    "sha256": "6e79fe2f473e316182ae75f5cc3398e23bd1ff0681aa6c4e6c6a21a8735fdcd5",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-parent-tag-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: None-only cycle-exclusion case, no personal content",
+    "historical": true
   }
 ]

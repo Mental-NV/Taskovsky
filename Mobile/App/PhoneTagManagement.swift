@@ -149,13 +149,13 @@ private struct PhoneTagEditor: View {
                     ColorPicker("Color", selection: Binding(get: { PhoneEntityColor.read(draft.color) },
                                                             set: { draft.color = PhoneEntityColor.encode($0) ?? draft.color }),
                                 supportsOpacity: false)
-                    Picker("Parent tag", selection: $draft.parentID) {
-                        Text("Top level").tag(UUID?.none).accessibilityIdentifier("tagParentChoice-root")
-                        ForEach(others.filter { TagOrganization.allowsParent($0.id, for: draft.id, in: tags) }) { tag in
-                            Text(path(tag)).tag(Optional(tag.id))
-                                .accessibilityIdentifier("tagParentChoice-" + tag.id.uuidString)
-                        }
-                    }.pickerStyle(.navigationLink).accessibilityIdentifier("tagParent")
+                    NavigationLink {
+                        PhoneParentTagPicker(selection: $draft.parentID, tags: tags, editingID: draft.id)
+                    } label: {
+                        LabeledContent("Parent Tag", value: draft.parentID.map { id in
+                            tags.first { $0.id == id }.map(path) ?? "Unavailable tag"
+                        } ?? "None")
+                    }.accessibilityIdentifier("tagParent")
                     Toggle("Pin tag", isOn: $draft.isPinned).accessibilityIdentifier("tagPin")
                 }
                 if !request.creating {
@@ -223,5 +223,44 @@ private struct PhoneTagEditor: View {
             error = await model.saveTag(command, expected: request.revision)
             if error == nil { dismiss() }
         }
+    }
+}
+
+
+private struct PhoneParentTagPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: UUID?
+    let tags: [TaskTag]
+    let editingID: UUID
+
+    var body: some View {
+        List {
+            choice("None", id: nil)
+            ForEach(tags.filter { TagOrganization.allowsParent($0.id, for: editingID, in: tags) }) { tag in
+                let title = (TagHierarchy.ancestors(of: tag.id, in: tags).reversed().map(\.name) + [tag.name]).joined(separator: " / ")
+                choice(title, id: tag.id)
+            }
+        }
+        .navigationTitle("Parent Tag")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func choice(_ title: String, id: UUID?) -> some View {
+        Button {
+            selection = id
+            dismiss()
+        } label: {
+            HStack {
+                Text(title).foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: selection == id ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selection == id ? Color.accentColor : Color.secondary)
+                    .accessibilityHidden(true)
+            }.frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tagParentChoice-" + (id?.uuidString ?? "root"))
+        .accessibilityValue(selection == id ? "Selected" : "Not selected")
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }
