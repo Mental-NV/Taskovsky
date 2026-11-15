@@ -63,25 +63,23 @@ struct PhoneCalendarPreferences: View {
 
     @ViewBuilder private var display: some View {
         Section("Appearance") {
-            Picker("Color by", selection: $draft.colorBy) {
-                ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-            }.accessibilityIdentifier("calendarColor")
-            if draft.colorBy != .priority, let data = model.document?.snapshot.workspace {
-                NavigationLink(draft.colorBy == .list ? "Customize List Colors" : "Customize Tag Colors") {
-                    PhoneCalendarSourceColors(mode: draft.colorBy, data: data, colors: $draft.sourceColors)
-                }.accessibilityIdentifier("calendarSourceColors")
-            }
-            Picker("Style", selection: $draft.itemStyle) {
-                ForEach(CalendarItemStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-            }.accessibilityIdentifier("calendarStyle")
-            Picker("Year style", selection: $draft.yearStyle) {
-                ForEach(CalendarYearStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-            }.accessibilityIdentifier("calendarYearStyle")
-            Toggle("Show Item Icons", isOn: $draft.showItemIcons).accessibilityIdentifier("calendarIcons")
-            Group {
-                Toggle("Show Task Icons", isOn: $draft.showTaskIcons).accessibilityIdentifier("calendarTaskIcons")
-                Toggle("Show Note Icons", isOn: $draft.showNoteIcons).accessibilityIdentifier("calendarNoteIcons")
-            }.disabled(!draft.showItemIcons)
+            NavigationLink {
+                Form { Section { colorControls } }
+                    .navigationTitle("Color").navigationBarTitleDisplayMode(.inline)
+            } label: { LabeledContent("Color", value: draft.colorBy.rawValue.capitalized) }
+                .accessibilityIdentifier("calendarColorPage")
+            NavigationLink {
+                Form {
+                    Section("Item Style") { styleControls }
+                    Section {
+                        NavigationLink("Show Item Icons") {
+                            Form { Section { iconControls } }
+                                .navigationTitle("Show Item Icons").navigationBarTitleDisplayMode(.inline)
+                        }.accessibilityIdentifier("calendarIconsPage")
+                    }
+                }.navigationTitle("Style").navigationBarTitleDisplayMode(.inline)
+            } label: { LabeledContent("Style", value: draft.itemStyle.rawValue.capitalized) }
+                .accessibilityIdentifier("calendarStylePage")
         }
         Section {
             Toggle("Show Completed", isOn: $draft.showCompleted).accessibilityIdentifier("calendarCompleted")
@@ -125,6 +123,34 @@ struct PhoneCalendarPreferences: View {
             }
             Button("Reset Folded Hours") { draft.foldedHours = .init() }.disabled(draft.foldedHours == .init())
         } header: { Text("Folded Hours") } footer: { Text("Expand both bands to drag their boundaries in the timeline.") }
+    }
+
+    @ViewBuilder private var colorControls: some View {
+        Picker("Color by", selection: $draft.colorBy) {
+            ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+        }.accessibilityIdentifier("calendarColor")
+        if draft.colorBy != .priority, let data = model.document?.snapshot.workspace {
+            NavigationLink(draft.colorBy == .list ? "Customize List Colors" : "Customize Tag Colors") {
+                PhoneCalendarSourceColors(mode: draft.colorBy, data: data, colors: $draft.sourceColors)
+            }.accessibilityIdentifier("calendarSourceColors")
+        }
+    }
+
+    @ViewBuilder private var styleControls: some View {
+        Picker("Style", selection: $draft.itemStyle) {
+            ForEach(CalendarItemStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+        }.accessibilityIdentifier("calendarStyle")
+        Picker("Year style", selection: $draft.yearStyle) {
+            ForEach(CalendarYearStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+        }.accessibilityIdentifier("calendarYearStyle")
+    }
+
+    @ViewBuilder private var iconControls: some View {
+        Toggle("Show Item Icons", isOn: $draft.showItemIcons).accessibilityIdentifier("calendarIcons")
+        Group {
+            Toggle("Show Task Icons", isOn: $draft.showTaskIcons).accessibilityIdentifier("calendarTaskIcons")
+            Toggle("Show Note Icons", isOn: $draft.showNoteIcons).accessibilityIdentifier("calendarNoteIcons")
+        }.disabled(!draft.showItemIcons)
     }
 
     @ViewBuilder private func sources(_ data: WorkspaceData) -> some View {

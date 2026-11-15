@@ -2088,3 +2088,7 @@ See [scope and pending gates](../changes/mobile-week-overview-2026-11-15.md). Si
 ### Mobile Schedule tabs candidate
 
 [Verified candidate receipt](../changes/mobile-schedule-tabs-2026-11-15.md): 827 XCTest +38 Swift Testing, release/signature, final four native cases and focused range-move regression passed. Screenshots inspected, review clean; hosted exact-head CI pending.
+
+### Mobile Calendar options navigation
+
+Color/Style/Show Item Icons hierarchy: full 827 XCTest + 38 Swift Testing, release/signature, three initial native save/relaunch/Cancel cases plus two final checklist/icons cases and independent review passed. Actual nested-page screenshots inspected; owned Simulator shut down. Exact-head CI remains pending. [Scope](../changes/mobile-calendar-options-navigation-2026-11-15.md).
