@@ -36,6 +36,25 @@ Next visual acceptance must archive sanitized matched-state captures with device
 
 The [46-state Tasks/Calendar inventory](../ticktick-spec/mobile-surface-inventory-2026-11-14.md) records entry paths, labels, presentation and dismissal, plus ten grouped unobserved branches. This expands the initial qualitative audit, not its pixel/behavior acceptance. Calendar has dedicated coverage; implementation begins with the confirmed drawer gap while further matched evidence is collected.
 
+## Per-form element and behavior contract
+
+User direction (November 15, 2026): inspect and specify **all UI elements in each active form/state**, then implement the closest evidence-backed match in placement, size, wording, interaction and underlying business logic. General similarity means the complete structure and working behavior, not merely a recognizable shell. Near-pixel-perfect polishing is the final stage, after broad core coverage.
+
+Use the stable IDs in the [46-state tracker](../mobile-visual-parity.md). For each active state, add a per-form element table to its bounded change specification before implementation; link it from the tracker. Include header/navigation, every visible control and label, content/empty state, menus and submenus, dialogs/popups, footer, keyboard and overlays. Enumerate conditional elements and their trigger states rather than treating one screenshot as exhaustive.
+
+| Required field per element | Record before implementing or accepting the form |
+| --- | --- |
+| Identity and evidence | Stable form/element ID, reference entry path, capture/observation locator, device/build, viewport, theme, text size, locale and relevant fixture state; current Taskovsky source/build and counterpart. |
+| Position and size | Exact observed placement and dimensions when measurable: logical-point bounds, alignment, ordering, spacing, safe-area/keyboard relationship, scrolling/sticky behavior and parent container. Record scale/calibration; label approximate values and unknown measurements explicitly, never invent exact numbers. |
+| Wording and presentation | Verbatim observed labels, placeholders, titles, options and ordering; icons, selected/disabled/empty states, text hierarchy and general component size. Keep private task/account text out of published evidence. |
+| UX behavior | Entry, tap/long-press/drag where applicable, selection/check states, focus, navigation, dismissal, Cancel/Back/Done, repeated and interrupted flows, and the visible result. Document unsampled paths as unknown. |
+| Business logic | Preconditions and eligibility; data read/written; staging versus immediate application; validation/defaults; filtering, sorting and grouping; date/timezone/duration and recurrence scope where applicable; save/reopen/Undo behavior and side effects. Separate observed TickTick behavior, existing Taskovsky rules and proposed deltas. |
+| Gap and acceptance | Missing/different elements, major layout/size/behavior/logic gaps, evidence confidence, implementation priority, native test cases and remaining unknowns; link exact-head review/CI and matched screenshots when available. |
+
+**Execution passes:** (1) inventory and classify the largest verified gaps across active forms; (2) implement broad major similarity, including all evidenced elements, comparable position/size, wording, UX and business rules, prioritizing substantially missing forms/flows over isolated polish; (3) re-audit cross-form flows and remaining core elements; (4) perform final calibrated near-pixel-perfect refinement of spacing, typography and visual details. Collect precise evidence from the start, but do not spend the broad-coverage pass repeatedly tuning a single screen. Existing historical estimates and ordered slices below are not a requirement to finish fine visual polish before broader implementation.
+
+**Evidence and scope gates:** unknown reference behavior is an investigation item, not an invented requirement or a passing result. Preserve existing Taskovsky semantics until a verified, scoped delta is specified; seek a product decision if it conflicts with approved business rules. Do not ship decorative nonfunctional controls to fake completeness. General-similarity acceptance requires the element inventory and relevant native flows to be checked; final pixel acceptance additionally requires calibrated matched captures and measured tolerances. Documentation alone does not upgrade any tracker state. Background chooser, Share / Print, accessibility-specific layouts, Dark matching and persistence polishing remain explicitly deferred as above; preserve existing accessibility and data-safety checks. This contract does not reopen deferred external integrations, notification permissions or sync work.
+
 ## Gap matrix
 
 | Area | Live reference observation | Taskovsky evidence / delta | Priority and boundary |
