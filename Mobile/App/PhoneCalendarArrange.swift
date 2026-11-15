@@ -31,6 +31,8 @@ struct PhoneCalendarArrangeSheet: View {
     @State private var overdue = false
     @State private var undated = true
     @State private var showNotes = true
+    @State private var showHierarchy = true
+    @State private var collapsedHierarchy = Set<UUID>()
     @State private var request: PhoneCalendarEditRequest?
     @State private var taskRoute: PhoneTaskRoute?
 
@@ -67,9 +69,26 @@ struct PhoneCalendarArrangeSheet: View {
                 Text("No tasks to arrange").foregroundStyle(.secondary).accessibilityIdentifier("arrangeEmpty")
             }
             ForEach(groups, id: \.name) { group in
+                let rows = TaskCalendarProjection.arrangementRows(for: group.tasks, grouping: grouping,
+                                                                  showHierarchy: showHierarchy,
+                                                                  collapsed: collapsedHierarchy)
                 Section("\(group.name) · \(group.tasks.count)") {
-                    ForEach(group.tasks) { task in
+                    ForEach(rows, id: \.task.id) { row in
+                        let task = row.task
                         HStack(spacing: 0) {
+                            if row.hasChildren {
+                                let collapsed = collapsedHierarchy.contains(task.id)
+                                Button {
+                                    if collapsed { collapsedHierarchy.remove(task.id) }
+                                    else { collapsedHierarchy.insert(task.id) }
+                                } label: {
+                                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                                        .frame(width: 32, height: 44).contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel((collapsed ? "Expand " : "Collapse ") + task.title)
+                                    .accessibilityIdentifier("arrangeDisclosure-" + task.id.uuidString)
+                            }
                             if let payload = drag?(task.id, document.revision) {
                                 Image(systemName: "line.3.horizontal")
                                     .foregroundStyle(.secondary)
@@ -100,6 +119,7 @@ struct PhoneCalendarArrangeSheet: View {
                                 .accessibilityIdentifier("arrangeSchedule-" + task.id.uuidString)
                                 .disabled(!model.canBeginEditing)
                         }
+                        .padding(.leading, CGFloat(row.depth) * 16)
                     }
                 }
             }
@@ -135,6 +155,7 @@ struct PhoneCalendarArrangeSheet: View {
                     option("Undated Task", selected: $undated, id: "arrangeUndated")
                     option("Overdue Task", selected: $overdue, id: "arrangeOverdue")
                     option("Show Notes", selected: $showNotes, id: "arrangeNotes")
+                    option("Show Task Hierarchy", selected: $showHierarchy, id: "arrangeHierarchy")
                     Text("Schedule tasks for \(focus.formatted(date)).")
                     if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
                 } label: { Image(systemName: "ellipsis") }

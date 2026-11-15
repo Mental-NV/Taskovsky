@@ -3444,6 +3444,88 @@ extension ReadOnlyNavigationTests {
         XCTAssertFalse(chapter.exists)
     }
 
+    @MainActor func testCalendarArrangeHierarchyDefaultsExpandedAndCollapses() {
+        let app = launch(qaCase: "arrange-hierarchy")
+        app.buttons["Calendar"].tap()
+        openArrange(app)
+        app.buttons["arrangeOptions"].tap()
+        XCTAssertEqual(app.buttons["arrangeHierarchy"].label, "Show Task Hierarchy")
+        XCTAssertEqual(app.buttons["arrangeHierarchy"].value as? String, "On")
+        app.tap()
+        XCTAssertTrue(app.staticTexts["Work · 4"].waitForExistence(timeout: 5))
+        let collapse = app.buttons["Collapse Neutral arrange parent"]
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5))
+        let parentSchedule = app.buttons["Schedule Neutral arrange parent"]
+        let childOne = app.buttons["Schedule Neutral arrange child one"]
+        let childTwo = app.buttons["Schedule Neutral arrange child two"]
+        XCTAssertTrue(childOne.exists)
+        XCTAssertTrue(childTwo.exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral orphan child"].exists)
+        XCTAssertGreaterThan(childOne.frame.minY, parentSchedule.frame.minY)
+        XCTAssertGreaterThan(childTwo.frame.minY, childOne.frame.minY)
+        XCTAssertGreaterThan(childOne.frame.minX, parentSchedule.frame.minX)
+        attach(app, "Arrange hierarchy expanded")
+        collapse.tap()
+        XCTAssertTrue(app.buttons["Expand Neutral arrange parent"].waitForExistence(timeout: 5))
+        waitGone(childOne)
+        XCTAssertFalse(childTwo.exists)
+        XCTAssertTrue(app.staticTexts["Work · 4"].exists)
+        XCTAssertTrue(parentSchedule.exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral orphan child"].exists)
+        attach(app, "Arrange hierarchy collapsed")
+        app.buttons["Expand Neutral arrange parent"].tap()
+        XCTAssertTrue(childOne.waitForExistence(timeout: 5))
+        XCTAssertTrue(childTwo.exists)
+    }
+
+    @MainActor func testCalendarArrangeHierarchyOffFlatOnExpandedWithGroupingAndChildSchedule() {
+        let app = launch(qaCase: "arrange-hierarchy")
+        app.buttons["Calendar"].tap()
+        openArrange(app)
+        XCTAssertTrue(app.buttons["Collapse Neutral arrange parent"].waitForExistence(timeout: 5))
+        app.buttons["arrangeOptions"].tap()
+        app.buttons["arrangeHierarchy"].tap()
+        XCTAssertFalse(app.buttons["Collapse Neutral arrange parent"].exists)
+        XCTAssertFalse(app.buttons["Expand Neutral arrange parent"].exists)
+        let flat = ["Schedule Neutral arrange parent", "Schedule Neutral orphan child",
+                    "Schedule Neutral arrange child one", "Schedule Neutral arrange child two"]
+        var lastY = -1.0
+        for id in flat {
+            XCTAssertTrue(app.buttons[id].exists)
+            let y = app.buttons[id].frame.minY
+            XCTAssertGreaterThan(y, lastY)
+            lastY = y
+        }
+        attach(app, "Arrange hierarchy off flat")
+        app.buttons["arrangeOptions"].tap()
+        app.buttons["arrangeHierarchy"].tap()
+        XCTAssertTrue(app.buttons["Collapse Neutral arrange parent"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Work · 4"].exists)
+        attach(app, "Arrange hierarchy on expanded")
+        app.segmentedControls["arrangeGroup"].buttons["Priority"].tap()
+        XCTAssertTrue(app.staticTexts["High · 1"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange child two"].exists)
+        XCTAssertFalse(app.buttons["Collapse Neutral arrange parent"].exists)
+        XCTAssertFalse(app.buttons["Expand Neutral arrange parent"].exists)
+        app.segmentedControls["arrangeGroup"].buttons["Tag"].tap()
+        XCTAssertTrue(app.staticTexts["Planning · 1"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Collapse Neutral arrange parent"].exists)
+        app.segmentedControls["arrangeGroup"].buttons["List"].tap()
+        XCTAssertTrue(app.buttons["Collapse Neutral arrange parent"].waitForExistence(timeout: 5))
+        attach(app, "Arrange hierarchy back on List")
+        let child = app.buttons["Schedule Neutral arrange child one"]
+        child.tap()
+        XCTAssertTrue(app.buttons["calendarEditDone"].waitForExistence(timeout: 5))
+        attach(app, "Arrange child schedule staged")
+        app.buttons["calendarEditCancel"].tap()
+        waitGone(app.buttons["calendarEditDone"])
+        XCTAssertTrue(child.exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange child two"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange parent"].exists)
+        app.buttons["arrangeDone"].tap()
+        waitGone(app.buttons["arrangeDone"])
+    }
+
     @MainActor func testCalendarArrangeDragSchedulesAndUndoes() {
         let app = launch(qaCase: "arrange")
         app.buttons["Calendar"].tap()
