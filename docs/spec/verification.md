@@ -2125,3 +2125,7 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## Mobile Calendar source layout — 2026-11-15
 
 [Live comparison and verification receipt](../changes/mobile-calendar-filter-layout-2026-11-15.md): compact source presentation with unchanged source-selection mutations and revision guards. Full838 XCTest+38 Swift tests, release/signature, five native cases and final inset case passed; independent review clean. Exact-head hosted CI pending. No calibrated pixel-perfect claim.
+
+## D09 Time popup —2026-11-15
+
+[Receipt](../changes/mobile-time-popup-2026-11-15.md):844+38 tests/release passed; actual wheel save/reopen/removal, outerCancel, Duration regression and precise non-device-zone outside-dismiss/relaunch native checks passed. Exact CI/final review pending.

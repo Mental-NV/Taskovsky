@@ -65,6 +65,7 @@ struct PhoneScheduleSheet: View {
     @State private var showZones = false
     @State private var showCustom = false
     @State private var showReplace = false
+    @State private var showTimePopover = false
 
     private var settings: AppSettings { request.document.snapshot.settings }
     private var due: Date { edit.schedule.effectiveDue }
@@ -204,9 +205,9 @@ struct PhoneScheduleSheet: View {
                             .accessibilityIdentifier("scheduleMoveDurationDate")
                     }
                 }
-                Toggle("Time", isOn: Binding(get: { edit.schedule.effectiveHasTime }, set: { edit.setTime($0) }))
-                    .accessibilityIdentifier("scheduleTime")
                 if let range = edit.schedule.duration {
+                    Toggle("Time", isOn: Binding(get: { edit.schedule.effectiveHasTime }, set: { edit.setTime($0) }))
+                        .accessibilityIdentifier("scheduleTime")
                     let components: DatePickerComponents = range.isAllDay ? .date : [.date, .hourAndMinute]
                     DatePicker("Start", selection: Binding(get: { edit.schedule.duration?.start ?? range.start },
                                                             set: { edit.setStart($0) }), displayedComponents: components)
@@ -216,9 +217,25 @@ struct PhoneScheduleSheet: View {
                     if range.validated(in: calendar) == nil {
                         Text("The end must be on or after the start.").font(.footnote).foregroundStyle(.red)
                     }
-                } else if edit.schedule.effectiveHasTime {
-                    DatePicker("Due time", selection: Binding(get: { due }, set: { edit.setEnd($0) }),
-                               displayedComponents: .hourAndMinute)
+                } else {
+                    Button {
+                        if !edit.schedule.effectiveHasTime { edit.setTime(true) }
+                        showTimePopover = true
+                    } label: {
+                        LabeledContent("Time", value: edit.schedule.effectiveHasTime
+                            ? Self.timeLabel(due, calendar: calendar) : "None")
+                    }
+                    .accessibilityIdentifier("scheduleTime")
+                    .accessibilityValue(edit.schedule.effectiveHasTime
+                        ? Self.timeLabel(due, calendar: calendar) : "None")
+                    .popover(isPresented: $showTimePopover) {
+                        PhoneScheduleTimePopover(edit: $edit)
+                            .presentationCompactAdaptation(.popover)
+                    }
+                    if edit.schedule.effectiveHasTime {
+                        Button("Remove time", role: .destructive) { edit.setTime(false) }
+                            .accessibilityIdentifier("scheduleTimeRemove")
+                    }
                 }
                 Button("Remove schedule", role: .destructive) { edit.hasDate = false }
                     .accessibilityIdentifier("scheduleRemove")
@@ -326,6 +343,46 @@ struct PhoneScheduleSheet: View {
     }
 
     fileprivate static func zoneLabel(_ id: String) -> String { id.replacingOccurrences(of: "_", with: " ") }
+
+    fileprivate static func timeLabel(_ date: Date, calendar: Calendar) -> String {
+        date.formatted(Date.FormatStyle(time: .shortened, calendar: calendar, timeZone: calendar.timeZone))
+    }
+}
+
+/// D09 compact Time popup for Date-mode schedules: hour/minute wheels with the
+/// staged time zone shown below. Opening stages a time through
+/// `TaskScheduleEdit.setTime`; closing the popup keeps the staged value and
+/// the outer Cancel/Done transaction is unchanged. Zone changes stay on the
+/// existing Time Zone row to avoid stacked presentations.
+private struct PhoneScheduleTimePopover: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var edit: TaskScheduleEdit
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DatePicker("Time",
+                       selection: Binding(get: { edit.schedule.effectiveDue },
+                                          set: { edit.setEnd($0) }),
+                       displayedComponents: .hourAndMinute)
+                .datePickerStyle(.wheel)
+                .labelsHidden()
+                .accessibilityIdentifier("scheduleTimeWheels")
+                .padding(.horizontal)
+            Divider()
+            LabeledContent("Time zone",
+                           value: edit.zoneID.map(PhoneScheduleSheet.zoneLabel) ?? "Device time zone")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .padding()
+                .accessibilityIdentifier("scheduleTimeZone")
+                .accessibilityValue(edit.zoneID.map(PhoneScheduleSheet.zoneLabel) ?? "Device time zone")
+            Button { dismiss() } label: {
+                Text("Done").frame(minWidth: 44, minHeight: 44)
+            }
+            .accessibilityIdentifier("scheduleTimePopoverDone")
+            .padding(.bottom)
+        }
+    }
 }
 
 struct PhoneScheduleZoneSheet: View {
