@@ -326,5 +326,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected: neutral3 Weeks/Mon/Wed recurrence settings, no personal data.",
     "historical": true
+  },
+  {
+    "state": "D14",
+    "file": "d14-repeat-type.png",
+    "sha256": "733276cc0729c735a2be38d66a679391858c128ecaa338a13cb2c7009d7ac79d",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-repeat-type-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral menu with exact labels/current check; no personal task/account data.",
+    "source_commit": "5d5af24",
+    "historical": true
   }
 ]

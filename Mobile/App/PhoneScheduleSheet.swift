@@ -707,6 +707,8 @@ private struct PhoneCustomRepeatSheet: View {
                     set: { if dates.indices.contains(index) { dates[index] = $0 } }),
                     displayedComponents: timed ? [.date, .hourAndMinute] : .date)
                     .accessibilityIdentifier("customRepeatDate-\(index)")
+                    .accessibilityValue((dates.indices.contains(index) ? dates[index] : due).formatted(
+                        Date.FormatStyle(date: .abbreviated, time: timed ? .shortened : .omitted, calendar: calendar, timeZone: calendar.timeZone)))
             }
             .onDelete { dates.remove(atOffsets: $0) }
             Button("Add date") {

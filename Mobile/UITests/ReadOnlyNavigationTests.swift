@@ -7870,6 +7870,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(first.exists); XCTAssertTrue(second.exists)
         let firstValue = first.value as? String, secondValue = second.value as? String
         XCTAssertNotNil(firstValue); XCTAssertNotNil(secondValue)
+        XCTAssertFalse(firstValue?.isEmpty ?? true); XCTAssertFalse(secondValue?.isEmpty ?? true)
         XCTAssertNotEqual(firstValue, secondValue)
         type.tap(); app.buttons["customRepeatType-due"].tap()
         XCTAssertEqual(app.pickerWheels.element(boundBy: 0).value as? String, "3")
