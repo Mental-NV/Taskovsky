@@ -1320,7 +1320,7 @@ private struct PhoneSortGroupSheet: View {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: textSize.isAccessibilitySize ? 1 : 3)
     }
     private var ascending: Bool {
-        sort?.timestamp == .createdOldest || sort?.timestamp == .modifiedOldest
+        sort == .title(.ascending) || sort?.timestamp == .createdOldest || sort?.timestamp == .modifiedOldest
     }
     private var created: Bool { sort?.timestamp == .createdNewest || sort?.timestamp == .createdOldest }
     private var modified: Bool { sort?.timestamp == .modifiedNewest || sort?.timestamp == .modifiedOldest }
@@ -1342,10 +1342,14 @@ private struct PhoneSortGroupSheet: View {
                     HStack {
                         Text("Sort by").foregroundStyle(.secondary)
                         Spacer()
-                        if sort?.timestamp != nil {
+                        if sort?.timestamp != nil || sort == .title(.ascending) || sort == .title(.descending) {
                             Button {
+                                if sort == .title(.ascending) || sort == .title(.descending) {
+                                    selectSort(.title(ascending ? .descending : .ascending))
+                                } else {
                                 selectSort(.timestamp(created ? (ascending ? .createdNewest : .createdOldest)
                                                             : (ascending ? .modifiedNewest : .modifiedOldest)))
+                                }
                             } label: {
                                 Label(ascending ? "Ascending" : "Descending", systemImage: ascending ? "arrow.up" : "arrow.down")
                                     .font(.subheadline).frame(minHeight: 44)
@@ -1360,6 +1364,9 @@ private struct PhoneSortGroupSheet: View {
                         }
                         pill("Modified Time", selected: modified, id: "sortModified") {
                             selectSort(.timestamp(ascending ? .modifiedOldest : .modifiedNewest))
+                        }
+                        pill("Title", selected: sort == .title(.ascending) || sort == .title(.descending), id: "sortTitle") {
+                            selectSort(.title(.ascending))
                         }
                         pill("Priority", selected: sort == .priority, id: "sortPriority") { selectSort(.priority) }
                     }

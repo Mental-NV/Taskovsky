@@ -1817,6 +1817,34 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertLessThan(target.frame.minY, moving.frame.minY)
     }
 
+    @MainActor func testTitleSortRetainsPinningDirectionAndDefaultOrderAfterRelaunch() {
+        let app = launch(qaCase: "task-sort")
+        goTo("Work", in: app)
+        func expect(_ titles: [String]) {
+            let rows = (["Write meeting notes"] + titles).map { app.buttons[$0] }
+            for row in rows { XCTAssertTrue(row.exists) }
+            let positions = rows.map { $0.frame.minY }
+            XCTAssertEqual(positions, positions.sorted())
+            XCTAssertEqual(Set(positions).count, positions.count)
+        }
+        chooseTaskSort("Title · Ascending", in: app)
+        expect(["Prepare the weekly plan", "Review the draft", "Review the project outline"])
+        app.buttons["taskSortMenu"].tap()
+        XCTAssertTrue(app.buttons["sortTitle"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["sortTitle"].isSelected)
+        XCTAssertTrue(app.buttons["sortDirection"].label.contains("Ascending"))
+        attach(app, "Title sorting choice")
+        app.buttons["sortDirection"].tap()
+        waitGone(app.buttons["sortDirection"])
+        expect(["Review the project outline", "Review the draft", "Prepare the weekly plan"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        expect(["Review the project outline", "Review the draft", "Prepare the weekly plan"])
+        chooseTaskSort("Default Order", in: app)
+        expect(["Review the project outline", "Prepare the weekly plan", "Review the draft"])
+    }
+
     @MainActor func testTaskTimestampSortOrdersWorkRowsAndSurvivesRelaunch() {
         let app = launch(qaCase: "task-sort")
         goTo("Work", in: app)
@@ -1957,6 +1985,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         case "Group by Due Date": id = "groupDate"
         case "Default Order": id = "restoreDefaultTaskSort"
         case "Priority": id = "sortPriority"
+        case "Title · Ascending", "Title · Descending": id = "sortTitle"
         default: id = choice.hasPrefix("Created") ? "sortCreated" : "sortModified"
         }
         let button = app.buttons[id]
