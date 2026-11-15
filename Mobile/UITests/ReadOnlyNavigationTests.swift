@@ -7174,3 +7174,30 @@ extension ReadOnlyNavigationTests {
         app.buttons["organizationCancel"].tap()
     }
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testListCreationPreviewScreenshotWithoutKeyboard() {
+        let app = launch()
+        openOrganization(app)
+        app.buttons["organizationNewList"].tap()
+        editOrganizationName("Neutral project", in: app)
+        let board = app.buttons["organizationView-board"]
+        reveal(board, in: app); board.tap()
+        // Form uses interactive scroll dismissal. Do not capture an obscured preview.
+        app.swipeUp()
+        if app.keyboards.firstMatch.exists { app.swipeUp() }
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let list = app.buttons["organizationView-list"]
+        let timeline = app.buttons["organizationView-timeline"]
+        let more = app.buttons["organizationMore"]
+        reveal(board, in: app)
+        XCTAssertTrue(list.isHittable && board.isHittable && timeline.isHittable)
+        XCTAssertTrue(more.isHittable)
+        XCTAssertEqual(board.value as? String, "Selected")
+        attach(app, "Add List view previews and More without keyboard")
+        app.buttons["organizationCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["organizationSave"])
+        XCTAssertFalse(app.buttons["Neutral project"].exists)
+    }
+}
