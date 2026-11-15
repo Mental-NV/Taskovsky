@@ -2084,3 +2084,7 @@ See [scope and pending gates](../changes/mobile-week-overview-2026-11-15.md). Si
 ### Arrange multi-source filter candidate
 
 [Verified candidate receipt](../changes/mobile-arrange-filter-2026-11-15.md): 827 XCTest + 38 Swift Testing, release/signature, initial three native tests and two final native checks passed. Actual screenshot inspected, review clean; hosted exact-head CI pending.
+
+### Mobile Schedule tabs candidate
+
+[Verified candidate receipt](../changes/mobile-schedule-tabs-2026-11-15.md): 827 XCTest +38 Swift Testing, release/signature, final four native cases and focused range-move regression passed. Screenshots inspected, review clean; hosted exact-head CI pending.
