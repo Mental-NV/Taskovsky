@@ -5684,7 +5684,7 @@ extension ReadOnlyNavigationTests {
         name.typeText("Sprint renamed")
         app.keyboards.buttons["Done"].tap()
         app.buttons["tagParent"].tap()
-        tagChoice("Top level", id: "tagParentChoice-root", in: app).tap()
+        tagChoice("None", id: "tagParentChoice-root", in: app).tap()
         app.buttons["tagDone"].tap()
         waitGone(name)
         XCTAssertTrue(sprint.label.contains("Sprint renamed"))
@@ -7417,5 +7417,34 @@ extension ReadOnlyNavigationTests {
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(app.staticTexts["calendarRuler-America/New_York"].waitForExistence(timeout: 5))
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testParentTagPickerExcludesCyclesAndCancelPreservesParent() {
+        let app = launch(qaCase: "tag-organization")
+        openTagManager(in: app)
+        let rootID = "00000000-0000-0000-0000-000000000200"
+        let childID = "00000000-0000-0000-0000-000000000201"
+        app.buttons["manageTag-" + rootID].tap()
+        app.buttons["tagParent"].tap()
+        let none = app.buttons["tagParentChoice-root"]
+        XCTAssertTrue(none.waitForExistence(timeout: 5))
+        XCTAssertEqual(none.value as? String, "Selected")
+        XCTAssertFalse(app.buttons["tagParentChoice-" + rootID].exists)
+        XCTAssertFalse(app.buttons["tagParentChoice-" + childID].exists)
+        attach(app, "Parent Tag None and cycle-safe radio choices")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.buttons["tagCancel"].tap()
+        app.buttons["manageTag-" + childID].tap()
+        app.buttons["tagParent"].tap()
+        XCTAssertEqual(app.buttons["tagParentChoice-" + rootID].value as? String, "Selected")
+        none.tap()
+        app.buttons["tagCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        app.buttons["manageTag-" + childID].tap()
+        app.buttons["tagParent"].tap()
+        XCTAssertEqual(app.buttons["tagParentChoice-" + rootID].value as? String, "Selected")
     }
 }
