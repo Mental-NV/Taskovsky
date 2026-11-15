@@ -24,3 +24,12 @@ D06 live reference inventory observed the task-detail list selector opening **Mo
 - Concurrent workspace/task change must retain stale refusal; unknown workspace/read-only/Trash guards unchanged; archived task can still move out.
 - Existing row swipe and lifecycle move tests updated for title **Move to**, without dropping persistence checks.
 - Neutral fixture screenshots only; no personal reference screenshots in public repository.
+
+
+## Acceptance receipt
+- Final production source `8b6da8b`. Coordinating parent reports final native run 3589: five regressions passed, covering search/folder/current checkmark/Close, actual move/reopen, Add List Cancel and creation without implicit movement, existing row swipe and archived move-out.
+- Initial native run exposed a real issue: `.searchable` hid Close while search was active. Replaced with an explicit Search row; final regression retains Close while typing rather than weakening the assertion.
+- Coordinating parent reports full **835 XCTest + 38 Swift Testing**, release and signature checks passed. Exact-head hosted CI remains a publication/merge gate.
+- Stale-write rejection remains the existing expected-revision source contract; no new native concurrent-write test was performed and none is claimed.
+- Actual neutral 1170×2532 Simulator screenshot inspected and retained unmodified: [D06 Move to](../assets/mobile-parity/2026-11-15/d06-move-hierarchy.png). SHA-256 `4f5639e39d9ba75db94a1f9cf923b4e8aa82e82069f3ef9a0eb30c9a3e6158a8`.
+- Exact reference layout, initial expansion and creation follow-up remain unknown. Taskovsky deliberately closes after Add List without moving the task; reopen is required to capture a fresh request. No exact-parity claim.
