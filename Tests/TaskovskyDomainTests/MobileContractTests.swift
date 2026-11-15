@@ -2546,3 +2546,69 @@ extension MobileContractTests {
                                               in: &data, position: .top, now: now))
     }
 }
+
+extension MobileContractTests {
+    /// D02 shared layout policy: untouched storage shows the strip and keeps
+    /// strip actions out of the default rows so each appears exactly once.
+    func testDetailLayoutUntouchedStorageShowsStripWithoutRowDuplicates() {
+        let layout = DetailActionLayout.decode(Data())
+        XCTAssertEqual(layout, .default)
+        XCTAssertTrue(DetailActionLayout.showsStrip(for: Data()))
+        XCTAssertTrue(layout?.isDefault == true)
+        XCTAssertEqual(DetailActionLayout.stripActions, [.pin, .wontDo, .trash])
+        let rows = layout?.pinnedRows(showingStrip: true) ?? []
+        for strip in DetailActionLayout.stripActions {
+            XCTAssertFalse(rows.contains(strip))
+        }
+        XCTAssertEqual(rows.count, DetailAction.allCases.count - DetailActionLayout.stripActions.count)
+        XCTAssertTrue(rows.contains(.addSubtask) && rows.contains(.linkParent) && rows.contains(.tags))
+    }
+
+    /// D02 customization preservation: a saved layout keeps its exact order
+    /// and placement with no forced migration, and hides the strip.
+    func testDetailLayoutPreservesSavedCustomOrderWithoutMigration() throws {
+        let saved = DetailActionLayout(pinned: [.trash, .complete, .pin], more: [.wontDo, .tags])
+        let data = try JSONEncoder().encode(saved)
+        let decoded = try XCTUnwrap(DetailActionLayout.decode(data))
+        XCTAssertEqual(decoded, saved)
+        XCTAssertFalse(decoded.isDefault)
+        XCTAssertFalse(DetailActionLayout.showsStrip(for: data))
+        // No strip, so rows render the exact pinned order including moved
+        // strip actions — nothing duplicates and nothing is reordered.
+        XCTAssertEqual(decoded.pinnedRows(showingStrip: false), [.trash, .complete, .pin])
+        XCTAssertEqual(decoded.more, [.wontDo, .tags])
+        // An older default predating newer actions is custom storage too:
+        // it keeps its exact rows with no strip and no appended actions.
+        let legacy = DetailActionLayout(
+            pinned: [.complete, .reopen, .wontDo, .pin, .move, .duplicate, .convert, .trash, .saveTemplate, .applyTemplate],
+            more: [])
+        let legacyData = try JSONEncoder().encode(legacy)
+        let legacyDecoded = try XCTUnwrap(DetailActionLayout.decode(legacyData))
+        XCTAssertEqual(legacyDecoded, legacy)
+        XCTAssertFalse(DetailActionLayout.showsStrip(for: legacyData))
+        XCTAssertFalse(legacyDecoded.pinnedRows(showingStrip: false).contains(.addSubtask))
+    }
+
+    /// Schema-unknown payloads fail as a whole so the UI preserves them
+    /// untouched; repeats dedupe to first occurrence without reordering.
+    func testDetailLayoutRefusesUnknownSchemaAndDedupesRepeats() throws {
+        let unknown = try XCTUnwrap("{\"pinned\":[\"complete\",\"futureAction\"],\"more\":[]}".data(using: .utf8))
+        XCTAssertNil(DetailActionLayout.decode(unknown))
+        XCTAssertFalse(DetailActionLayout.showsStrip(for: unknown))
+        let repeated = DetailActionLayout(pinned: [.complete, .complete, .reopen], more: [.reopen, .tags])
+        let data = try JSONEncoder().encode(repeated)
+        XCTAssertEqual(DetailActionLayout.decode(data)?.pinned, [.complete, .reopen])
+        XCTAssertEqual(DetailActionLayout.decode(data)?.more, [.tags])
+    }
+
+    /// Restoring defaults clears back to empty storage, which brings the
+    /// strip back; custom layouts encode exactly for byte-stable round trips.
+    func testDetailLayoutRestoreDefaultsClearsToEmptyStorage() throws {
+        XCTAssertEqual(DetailActionLayout.default.encoded(), Data())
+        XCTAssertTrue(DetailActionLayout.showsStrip(for: DetailActionLayout.default.encoded()))
+        let custom = DetailActionLayout(pinned: [.complete], more: [.pin])
+        let data = custom.encoded()
+        XCTAssertFalse(data.isEmpty)
+        XCTAssertEqual(DetailActionLayout.decode(data), custom)
+    }
+}

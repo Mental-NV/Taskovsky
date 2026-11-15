@@ -2363,6 +2363,176 @@ final class ReadOnlyNavigationTests: XCTestCase {
         }
         app.buttons["taskActionLayoutCancel"].tap()
         XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        // Each strip action appears exactly once: no duplicated default rows.
+        for label in ["Pin", "Won't Do", "Move to Trash"] {
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label == %@", label)).count, 1, label)
+        }
+    }
+
+    /// D02 Tags route (native slot): saving from Task Actions persists and
+    /// reopens selected, and survives relaunch.
+    @MainActor func testDetailActionsTagsSaveAndReopen() {
+        let app = launch(qaCase: "task-metadata"), task = "Review the project outline"
+        let tag = "taskTag-00000000-0000-0000-0000-000000000200"
+        app.buttons[task].tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let tags = app.buttons["taskActionRow-tags"]
+        reveal(tags, in: app)
+        tags.tap()
+        XCTAssertTrue(app.buttons["taskMetadataCancel"].waitForExistence(timeout: 5))
+        let search = app.textFields["searchTaskTags"]
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("Plan")
+        let option = app.buttons[tag]
+        XCTAssertTrue(option.waitForExistence(timeout: 5))
+        option.tap()
+        XCTAssertEqual(option.value as? String, "Selected")
+        app.buttons["taskMetadataDone"].tap()
+        waitGone(app.buttons["taskMetadataDone"])
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        app.buttons["taskActionsDone"].tap()
+        XCTAssertEqual(app.buttons["editTaskTags"].value as? String, "Planning, 1 unavailable")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons[task].waitForExistence(timeout: 10))
+        app.buttons[task].tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let reopened = app.buttons["taskActionRow-tags"]
+        reveal(reopened, in: app)
+        reopened.tap()
+        let saved = app.buttons[tag]
+        XCTAssertTrue(saved.waitForExistence(timeout: 5))
+        XCTAssertEqual(saved.value as? String, "Selected")
+        attach(app, "Tags saved from Task Actions")
+    }
+
+    /// D02 Add Subtask route (native slot): saving from Task Actions returns
+    /// to Task Actions, then to detail with the linked child, and persists.
+    @MainActor func testDetailActionsAddSubtaskSavesAndReturns() {
+        let app = launch(qaCase: "task-metadata"), root = "Review the project outline"
+        let child = "Pack the samples"
+        app.buttons[root].tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let add = app.buttons["taskActionRow-addSubtask"]
+        reveal(add, in: app)
+        add.tap()
+        let title = app.textViews["newSubtaskTitle"]
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
+        title.tap()
+        title.typeText(child)
+        app.buttons["taskHierarchyDone"].tap()
+        waitGone(app.buttons["taskHierarchyDone"])
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        app.buttons["taskActionsDone"].tap()
+        let open = app.buttons["Open subtask " + child]
+        reveal(open, in: app)
+        XCTAssertTrue(open.exists)
+        open.tap()
+        XCTAssertEqual(app.buttons["editTitle"].label, "Edit title, " + child)
+        let parent = app.buttons["openParentTask"]
+        reveal(parent, in: app)
+        XCTAssertEqual(parent.label, "Subtask of " + root)
+        parent.tap()
+        XCTAssertEqual(app.buttons["editTitle"].label, "Edit title, " + root)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons[root].waitForExistence(timeout: 10))
+        app.buttons[root].tap()
+        reveal(app.buttons["Open subtask " + child], in: app)
+        XCTAssertTrue(app.buttons["Open subtask " + child].exists)
+        attach(app, "Subtask added from Task Actions")
+    }
+
+    /// D02 customization regression (native slot): unpinning an action hides
+    /// the strip without reordering or migrating the saved layout; the change
+    /// survives relaunch and Restore Defaults brings the strip back.
+    @MainActor func testDetailActionsCustomLayoutHidesStripAndRestoresDefaults() {
+        let app = launch()
+        let task = app.buttons["Review the project outline"]
+        XCTAssertTrue(task.waitForExistence(timeout: 8))
+        task.tap()
+        func openActions() {
+            app.buttons["taskActions"].tap()
+            XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        }
+        func backToActions() {
+            app.navigationBars["More"].buttons.firstMatch.tap()
+            XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        }
+        openActions()
+        XCTAssertTrue(app.buttons["taskActionTile-pin"].exists)
+        let more = app.buttons["taskActionsMore"]
+        reveal(more, in: app)
+        more.tap()
+        app.buttons["editTaskActionLayout"].tap()
+        XCTAssertTrue(app.buttons["taskActionLayoutDone"].waitForExistence(timeout: 5))
+        let unpin = app.buttons["Unpin Won't Do"]
+        reveal(unpin, in: app, towardTop: true)
+        unpin.tap()
+        app.buttons["taskActionLayoutDone"].tap()
+        waitGone(app.buttons["taskActionLayoutDone"])
+        XCTAssertTrue(app.buttons["Won't Do"].waitForExistence(timeout: 5))
+        backToActions()
+        // Saved custom layout: no strip, exact rows, nothing duplicated.
+        XCTAssertFalse(app.buttons["taskActionTile-pin"].exists)
+        XCTAssertFalse(app.buttons["taskActionTile-wontDo"].exists)
+        XCTAssertFalse(app.buttons["taskActionTile-trash"].exists)
+        XCTAssertTrue(app.buttons["Complete"].exists)
+        XCTAssertFalse(app.buttons["Won't Do"].exists)
+        attach(app, "Custom Task Actions without the icon strip")
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(task.waitForExistence(timeout: 10))
+        task.tap()
+        openActions()
+        XCTAssertFalse(app.buttons["taskActionTile-pin"].exists)
+        let reopened = app.buttons["taskActionsMore"]
+        reveal(reopened, in: app)
+        reopened.tap()
+        XCTAssertTrue(app.buttons["Won't Do"].waitForExistence(timeout: 5))
+        backToActions()
+        app.buttons["taskActionsDone"].tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        let restore = app.buttons["taskActionsMore"]
+        reveal(restore, in: app)
+        restore.tap()
+        app.buttons["editTaskActionLayout"].tap()
+        XCTAssertTrue(app.buttons["taskActionLayoutDone"].waitForExistence(timeout: 5))
+        let defaults = app.buttons["Restore Defaults"]
+        reveal(defaults, in: app)
+        defaults.tap()
+        app.buttons["taskActionLayoutDone"].tap()
+        waitGone(app.buttons["taskActionLayoutDone"])
+        backToActions()
+        XCTAssertTrue(app.buttons["taskActionTile-pin"].exists)
+        XCTAssertTrue(app.buttons["taskActionTile-wontDo"].exists)
+        XCTAssertTrue(app.buttons["taskActionTile-trash"].exists)
+    }
+
+    /// D02 locked records (native slot): trashed tasks show Restore and
+    /// Delete Forever with no strip and no Tags/Add Subtask/Link Parent rows.
+    @MainActor func testDetailActionsLockedTrashHasNoStripOrRoutes() {
+        let app = launch(qaCase: "organization")
+        goTo("Trash", in: app)
+        let task = app.buttons["Review the draft"]
+        XCTAssertTrue(task.waitForExistence(timeout: 5))
+        task.tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["taskActionTile-pin"].exists)
+        XCTAssertFalse(app.buttons["taskActionTile-wontDo"].exists)
+        XCTAssertFalse(app.buttons["taskActionTile-trash"].exists)
+        XCTAssertFalse(app.buttons["taskActionRow-tags"].exists)
+        XCTAssertFalse(app.buttons["taskActionRow-addSubtask"].exists)
+        XCTAssertFalse(app.buttons["taskActionRow-linkParent"].exists)
+        XCTAssertFalse(app.buttons["taskActionsMore"].exists)
+        XCTAssertTrue(app.buttons["Restore"].exists)
+        XCTAssertTrue(app.buttons["Delete Forever"].exists)
     }
 
     @MainActor func testLifecycleCompletesRecurringTreeAndUndoFromRow() {

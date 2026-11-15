@@ -707,11 +707,13 @@ private struct PhoneTaskMoveChoices: View {
     }
 }
 
-private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
-    case complete, reopen, wontDo, pin, move, duplicate, convert, trash, saveTemplate, applyTemplate
-    case addSubtask, linkParent, tags
+/// D02 actions use the shared layout policy so tests exercise the production
+/// strip/rows/customization rules. Raw values and the stored encoding live in
+/// the shared type; only presentation titles stay here.
+private typealias PhoneTaskAction = DetailAction
+private typealias PhoneTaskActionLayout = DetailActionLayout
 
-    var id: Self { self }
+extension DetailAction {
     var title: String {
         switch self {
         case .complete: "Complete"
@@ -728,20 +730,6 @@ private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
         case .linkParent: "Link Parent Task"
         case .tags: "Tags"
         }
-    }
-}
-
-private struct PhoneTaskActionLayout: Codable, Equatable {
-    var pinned = PhoneTaskAction.allCases
-    var more: [PhoneTaskAction] = []
-
-    static func decode(_ data: Data) -> Self? {
-        if data.isEmpty { return Self() }
-        guard var layout = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
-        var seen = Set<PhoneTaskAction>()
-        layout.pinned = layout.pinned.filter { seen.insert($0).inserted }
-        layout.more = (layout.more + PhoneTaskAction.allCases).filter { seen.insert($0).inserted }
-        return layout
     }
 }
 
@@ -778,13 +766,18 @@ private struct PhoneTaskActions: View {
                 if let document = model.document,
                    let task = document.snapshot.workspace.tasks.first(where: { $0.id == taskID }) {
                     let layout = PhoneTaskActionLayout.decode(layoutData) ?? .init()
-                    if task.deletedAt == nil {
+                    // The strip renders only for untouched or default layouts;
+                    // saved custom layouts keep their exact rows with no strip
+                    // and no forced migration, so a moved Pin/Won't Do/Delete
+                    // row never duplicates or disappears.
+                    let showingStrip = task.deletedAt == nil && PhoneTaskActionLayout.showsStrip(for: layoutData)
+                    if showingStrip {
                         Section {
                             actionTiles(task: task, document: document)
                         }
                     }
                     Section(task.title) {
-                        ForEach(layout.pinned) { row($0, task: task, document: document) }
+                        ForEach(layout.pinnedRows(showingStrip: showingStrip)) { row($0, task: task, document: document) }
                         action("Restore", .restore, task: task, document: document)
                         if TaskLifecycle.refusal(for: .purge, task: task, lists: document.snapshot.workspace.lists) == nil {
                             Button("Delete Forever", role: .destructive) {
@@ -835,7 +828,7 @@ private struct PhoneTaskActions: View {
                  command: .setPinned(!task.isPinned), task: task, document: document)
             tile("Won't Do", systemImage: "moon", tint: .blue, identifier: "taskActionTile-wontDo",
                  command: .wontDo, task: task, document: document)
-            tile("Delete", systemImage: "trash", tint: .red, identifier: "taskActionTile-trash",
+            tile("Move to Trash", systemImage: "trash", tint: .red, identifier: "taskActionTile-trash",
                  role: .destructive, command: .trash, task: task, document: document)
         }
         .buttonStyle(.plain)
@@ -1042,8 +1035,7 @@ private struct PhoneTaskActionLayoutEditor: View {
     private func save() {
         guard data == originalData else { showSaveError = true; return }
         if draft != PhoneTaskActionLayout.decode(originalData) {
-            guard let encoded = try? JSONEncoder().encode(draft) else { showSaveError = true; return }
-            data = draft == .init() ? Data() : encoded
+            data = draft.encoded()
         }
         dismiss()
     }
