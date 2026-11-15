@@ -998,6 +998,19 @@ final class MobileContractTests: XCTestCase {
         XCTAssertTrue(RichBody.sameCodeUnits(preview.readingView(collapsed: []).preview.text, text))
     }
 
+    func testPriorityListGroupsRetainSortAndIdentityWithoutEmptyBuckets() {
+        let low = TaskItem(title: "Low", priority: .low)
+        let first = TaskItem(title: "First", priority: .high)
+        let second = TaskItem(title: "Second", priority: .high)
+        let none = TaskItem(title: "None")
+        let groups = TaskPriorityListGroup.group([low, second, none, first])
+        XCTAssertEqual(groups.map(\.id), [.high, .low, .none])
+        XCTAssertEqual(groups.flatMap(\.tasks).map(\.id), [second.id, first.id, low.id, none.id])
+        XCTAssertEqual(groups.map(\.title), ["High Priority", "Low Priority", "No Priority"])
+        XCTAssertTrue(TaskPriorityListGroup.group([]).isEmpty)
+        XCTAssertEqual(Set(groups.flatMap(\.tasks).map(\.id)).count, 4)
+    }
+
     func testTitleSortUsesNumericCaseInsensitiveStableOrderWithoutMutation() throws {
         let titles = ["Task 10", "café", "Task 2", "CAFE", "Alpha", ""]
         let tasks = titles.map { TaskItem(title: $0) }

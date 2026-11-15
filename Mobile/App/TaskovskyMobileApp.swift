@@ -442,7 +442,7 @@ struct MobileRootView: View {
         model.setTaskSort(choice)
     }
 
-    private func applyTaskGrouping(_ choice: TaskListGrouping) {
+    private func applyTaskGrouping(_ choice: PhoneTaskGrouping) {
         showTaskSort = false
         taskOrderNotice = nil
         taskListDragSession = UUID()
@@ -708,7 +708,11 @@ struct MobileRootView: View {
         return ScrollView {
             if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
             taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
-            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .creationDate {
+            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .priority {
+                ForEach(TaskPriorityListGroup.group(ordinary)) { group in
+                    taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .creationDate {
                 ForEach(TaskCreationDayGroup.group(ordinary, calendar: calendar, sort: model.taskSort?.timestamp)) { group in
                     taskGroup(group.title(calendar: calendar), tasks: group.tasks, lists: data.lists, searchQuery: nil)
                 }
@@ -1311,10 +1315,10 @@ struct MobileRootView: View {
 private struct PhoneSortGroupSheet: View {
     @Environment(\.dynamicTypeSize) private var textSize
     let sort: PhoneTaskSort?
-    let grouping: TaskListGrouping
+    let grouping: PhoneTaskGrouping
     let allowsGrouping: Bool
     let selectSort: (PhoneTaskSort?) -> Void
-    let selectGroup: (TaskListGrouping) -> Void
+    let selectGroup: (PhoneTaskGrouping) -> Void
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 8), count: textSize.isAccessibilitySize ? 1 : 3)
@@ -1335,6 +1339,7 @@ private struct PhoneSortGroupSheet: View {
                             pill("Default Groups", selected: grouping == .standard, id: "groupDefault") { selectGroup(.standard) }
                             pill("Date", selected: grouping == .dueDate, id: "groupDate") { selectGroup(.dueDate) }
                             pill("Created Time", selected: grouping == .creationDate, id: "groupCreated") { selectGroup(.creationDate) }
+                            pill("Priority", selected: grouping == .priority, id: "groupPriority") { selectGroup(.priority) }
                         }
                     }
                 }

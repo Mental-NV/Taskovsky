@@ -311,3 +311,7 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 ## Group & Sort Title criterion
 
 [Bounded Title sort](changes/mobile-title-sort-2026-11-15.md) adds one observed missing choice; exact reference order and remaining criteria are open. Local/native/review checks passed; exact-head CI pending.
+
+## Mobile Priority list grouping
+
+[Bounded grouping slice](changes/mobile-priority-list-2026-11-15.md) adds an observed missing choice without task writes. Local/native/review checks passed; hosted CI pending; full menu parity not claimed.

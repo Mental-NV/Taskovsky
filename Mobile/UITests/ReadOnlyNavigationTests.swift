@@ -1817,6 +1817,35 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertLessThan(target.frame.minY, moving.frame.minY)
     }
 
+    @MainActor func testPriorityListGroupingKeepsPinSortAndSurvivesRelaunch() {
+        let app = launch(qaCase: "priority-list")
+        goTo("Work", in: app)
+        chooseTaskSort("Group by Priority", in: app)
+        XCTAssertTrue(app.staticTexts["High Priority"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Low Priority"].exists)
+        let pinned = app.buttons["Write meeting notes"]
+        XCTAssertLessThan(pinned.frame.minY, app.staticTexts["High Priority"].frame.minY)
+        chooseTaskSort("Title · Ascending", in: app)
+        XCTAssertLessThan(app.buttons["Review the draft"].frame.minY, app.buttons["Review the project outline"].frame.minY)
+        attach(app, "Priority grouped list")
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Work", in: app)
+        XCTAssertTrue(app.staticTexts["High Priority"].waitForExistence(timeout: 5))
+        XCTAssertLessThan(pinned.frame.minY, app.staticTexts["High Priority"].frame.minY)
+        app.buttons["taskSortMenu"].tap()
+        XCTAssertTrue(app.buttons["groupPriority"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["groupPriority"].isSelected)
+        XCTAssertTrue(app.buttons["sortTitle"].isSelected)
+        attach(app, "Priority grouping and Title sorting")
+        app.buttons["restoreDefaultTaskSort"].tap()
+        waitGone(app.buttons["restoreDefaultTaskSort"])
+        XCTAssertTrue(app.staticTexts["High Priority"].exists)
+        chooseTaskSort("Group by Priority", in: app)
+        XCTAssertFalse(app.staticTexts["High Priority"].exists)
+        XCTAssertTrue(app.buttons["Review the project outline"].exists)
+    }
+
     @MainActor func testTitleSortRetainsPinningDirectionAndDefaultOrderAfterRelaunch() {
         let app = launch(qaCase: "task-sort")
         goTo("Work", in: app)
@@ -1983,6 +2012,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
         switch choice {
         case "Group by Created Date": id = "groupCreated"
         case "Group by Due Date": id = "groupDate"
+        case "Group by Priority": id = "groupPriority"
         case "Default Order": id = "restoreDefaultTaskSort"
         case "Priority": id = "sortPriority"
         case "Title · Ascending", "Title · Descending": id = "sortTitle"
