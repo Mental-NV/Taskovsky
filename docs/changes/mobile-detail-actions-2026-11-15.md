@@ -18,7 +18,7 @@ The mobile reference inventory observes a D02 icon strip (Pin / Share / Won't Do
 | Locked records | Trash | No strip, no Tags/Add/Link rows, no More; Restore and Delete Forever only |
 | Share, Attachment, Task Activities, Live Activity, Copy Link, Print | Absent | Deferred; no placeholders rendered |
 
-Taskovsky choices, not verified TickTick semantics: strip tiles render only for untouched or default layouts; nested Tags/hierarchy sheets dismiss back to Task Actions rather than directly to detail (partial reference behavior); unknown layout payloads refuse as a whole to preserve user data. The legacy native check proves visible routes, not raw bytes; byte stability is proven by the shared-policy domain tests and source review.
+Taskovsky choices, not verified TickTick semantics: strip tiles render only for untouched or default layouts; nested Tags/hierarchy sheets dismiss back to Task Actions rather than directly to detail (partial reference behavior); unknown layout payloads refuse as a whole to preserve user data. The legacy native check proves visible routes, not raw bytes; untouched storage behavior is established by source review; domain tests cover semantic layout roundtrips.
 
 ## Verification
 
