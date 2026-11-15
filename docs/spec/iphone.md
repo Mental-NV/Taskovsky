@@ -1005,3 +1005,7 @@ Reminder and Repeat appear as summary rows opening dedicated pages over the same
 ## iPhone Title sorting — 2026-11-15
 
 [Contract and evidence](../changes/mobile-title-sort-2026-11-15.md): new Title criterion and direction, preserving current grouping/pinning/storage semantics. Reference criterion observed, exact collation unverified. Local/native/review checks passed; exact-head CI pending.
+
+## Mobile Priority list grouping — 2026-11-15
+
+[Contract and evidence](../changes/mobile-priority-list-2026-11-15.md): display-only Priority groups preserve pin/history/sort and current preference scope. Local/native/review checks passed; hosted CI pending; no exact reference ordering claim.

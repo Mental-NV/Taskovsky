@@ -207,6 +207,19 @@ public struct TaskCreationDayGroup: Identifiable, Sendable {
     }
 }
 
+/// Display-only priority buckets retain the incoming (possibly sorted) row order.
+public struct TaskPriorityListGroup: Identifiable, Sendable {
+    public let id: TaskPriority
+    public let tasks: [TaskItem]
+    public var title: String { id == .none ? "No Priority" : id.rawValue.capitalized + " Priority" }
+    public static func group(_ tasks: [TaskItem]) -> [Self] {
+        let grouped = Dictionary(grouping: tasks, by: \.priority)
+        return TaskPriority.allCases.sorted { $0.rank < $1.rank }.compactMap { priority in
+            grouped[priority].map { Self(id: priority, tasks: $0) }
+        }
+    }
+}
+
 public enum TaskListGrouping: String, Sendable {
     case standard, creationDate, dueDate
 
