@@ -338,5 +338,17 @@
     "receipt": "../../../changes/mobile-normal-filter-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected neutral filter draft. Primary criteria and keyword/type visible; More/Preview below viewport. No personal information."
+  },
+  {
+    "state": "T14",
+    "file": "t14-advanced-filter.png",
+    "sha256": "a5511cad7a3fb65195c09bea18dc5879c6293bb77cb655fe3fbf299032b6fb9b",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-advanced-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral nested AND/OR with readable Keyword menus, Preview and Examples. No personal information."
   }
 ]

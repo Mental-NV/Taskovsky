@@ -91,6 +91,13 @@ struct PhoneFilterEditor: View {
     private var previewTasks: [TaskItem] {
         data.tasks.filter { draft.matches($0, lists: data.lists, now: model.now, calendar: model.calendar) }
     }
+    // Authoring affordance only: empty-group evaluation and save semantics stay unchanged.
+    private var previewAvailable: Bool {
+        switch draft.ruleRoot {
+        case .and(let children)?, .or(let children)?: !children.isEmpty
+        default: true
+        }
+    }
     private var requiresBounds: Bool { draft.ruleRoot == nil && draft.dateRules.contains(.custom) }
     private var canSave: Bool {
         !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -124,7 +131,7 @@ struct PhoneFilterEditor: View {
                         .accessibilityIdentifier("savedFilterMatchCount")
                 }
                 if let rule = Binding($draft.ruleRoot) {
-                    Section("Advanced Rules") {
+                    Section("Filter Conditions") {
                         PhoneFilterRuleNode(rule: rule, data: data, depth: 0, path: "root")
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                             .listRowBackground(Color.clear)
@@ -135,7 +142,7 @@ struct PhoneFilterEditor: View {
                 if draft.ruleRoot != nil || draft.dateRules.contains(.custom) {
                     PhoneFilterDateBounds(from: $draft.customDateFrom, to: $draft.customDateTo, now: model.now)
                 }
-                if draft.ruleRoot == nil {
+                Group {
                     Section {
                         NavigationLink {
                             List {
@@ -147,6 +154,14 @@ struct PhoneFilterEditor: View {
                         } label: {
                             LabeledContent("Preview", value: "\(previewTasks.count) matching")
                         }.accessibilityIdentifier("savedFilterPreview")
+                            .disabled(!previewAvailable)
+                        if !previewAvailable {
+                            Text("Add a filter condition to preview.").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        if draft.ruleRoot != nil {
+                            NavigationLink("Examples") { PhoneAdvancedFilterExamples() }
+                                .accessibilityIdentifier("savedFilterExamples")
+                        }
                     }
                 }
                 if !request.creating {
@@ -206,6 +221,32 @@ struct PhoneFilterEditor: View {
                 dismiss()
             }
         }
+    }
+}
+
+private struct PhoneAdvancedFilterExamples: View {
+    var body: some View {
+        List {
+            Section {
+                Text("Taskovsky examples").font(.headline)
+                Text("These examples explain supported rules. Reading them does not change your filter.")
+            }
+            Section("AND · All conditions") {
+                Text("Status is Active AND Priority is High")
+                Text("Matches only active high-priority tasks.").foregroundStyle(.secondary)
+            }
+            Section("OR · Any condition") {
+                Text("Keyword is weekly OR Keyword is meeting")
+                Text("Matches tasks whose searchable content contains either keyword.").foregroundStyle(.secondary)
+            }
+            Section("NOT · Invert condition") {
+                Text("NOT (Priority is High)")
+                Text("Matches eligible tasks that do not have High priority. Other eligibility rules still apply.").foregroundStyle(.secondary)
+            }
+            Section {
+                Text("An empty group keeps Taskovsky’s existing match-all behavior. Add a condition to preview it in the editor.")
+            }
+        }.navigationTitle("Examples").navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -378,7 +419,10 @@ private struct PhoneFilterRuleNode: View {
             HStack(spacing: 4) {
                 let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) :
                     AnyLayout(HStackLayout(spacing: 8))
-                layout { conditionFields(condition) }
+                layout {
+                    Text("Filter").font(.subheadline).foregroundStyle(.secondary)
+                    conditionFields(condition)
+                }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 actions
             }
@@ -389,6 +433,7 @@ private struct PhoneFilterRuleNode: View {
 
     private func operatorHeader(_ title: String, detail: String) -> some View {
         HStack(spacing: 8) {
+            Text("Logic").font(.subheadline).foregroundStyle(.secondary)
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 8).padding(.vertical, 4)
                 .background(Color.accentColor.opacity(0.12), in: Capsule())
@@ -506,7 +551,7 @@ private struct PhoneFilterRuleNode: View {
         Picker("Condition", selection: Binding(get: { condition.wrappedValue.kind },
                                                 set: { condition.wrappedValue = FilterCondition(kind: $0) })) {
             ForEach(FilterConditionKind.allCases, id: \.self) { kind in Text(kind.label).tag(kind) }
-        }.pickerStyle(.menu).labelsHidden().accessibilityLabel("Condition kind")
+        }.pickerStyle(.menu).labelsHidden().fixedSize(horizontal: true, vertical: false).accessibilityLabel("Condition kind")
             .accessibilityIdentifier("filterConditionKind-" + path)
         switch current.kind {
         case .list:
