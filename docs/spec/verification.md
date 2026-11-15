@@ -2141,3 +2141,29 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## D13 Custom Repeat Frequency —2026-11-15
 
 [Receipt](../changes/mobile-repeat-frequency-2026-11-15.md):851 XCTest+38 Swift/release, final iPhone compile/native4/4 and independent source/test review passed. Exact-head CI pending. Full interval model preserved by bounded wheel plus validated numeric fallback.
+
+## D14 Repeat Type —2026-11-15
+
+[Receipt](../changes/mobile-repeat-type-2026-11-15.md):852 XCTest+38 Swift/release/iPhone compile and independent review passed. Four initial native cases passed; specificDates AX-value failure fixed and final focused native passed after supported owned-Simulator boot/nonparallel launch. Exact CI pending. Neutral menu capture linked in tracker.
+
+## PR #139 integration with Normal Filter — 2026-11-15
+
+Merged main `dd406ec53d546554b323d4ff009f4d4730502588` into Repeat Type head `651aa1c95218242b504d30c6d8dc5307128a0d3d` in an isolated Linux checkout. Both additive UI test extensions and the D14/T13 manifest records are preserved; production files retain their respective feature-parent contents. The tracker counts 26/46 screenshot states, with 20 remaining.
+
+Local checks passed: four Python compile-gate command-double tests (`python3 -m unittest discover -s scripts/tests -v`), diff whitespace checks, all 26 manifest SHA-256 hashes/PNG dimensions, receipt paths and supplied source-commit references, and preservation of both parent UI test inventories (228 unique test names). The existing D14/T13 PNGs were inspected again and contain neutral QA settings/content. No new capture or personal TickTick data was added.
+
+Swift tests, macOS release build and iPhone compilation were not run: Swift/Xcode are unavailable in this Linux environment. No Simulator or GUI session was used. Historical feature results above do not validate this integration head; fresh native QA, review and exact-head hosted CI remain required before readiness or merge.
+
+## PR #139 integration with Task Actions — 2026-11-15
+
+Integrated main `e0161a1cbff7dfe2c6af95b37ef325da9fd99269` (PR #141) into `43451e264a937cc69ec8be6785f65485345c5372`. Only the screenshot manifest conflicted: both D14 and D02 records were retained alongside T13. UI tests merged automatically and were checked against the exact combined parent contents: 234 unique test names, with all three feature inventories preserved. Production/build files and domain/workspace tests retain the corresponding feature-parent bytes.
+
+Four Python compile-gate command-double tests passed again. All 27 manifest hashes, PNG dimensions, receipt paths and supplied commit references validate; screenshot coverage is 27/46 states, with 19 remaining. The existing D02 capture was inspected and contains neutral QA content. Diff whitespace checks passed. Swift/Xcode remain unavailable on Linux; native QA, review and exact-head hosted CI remain pending. No Simulator/GUI session, personal data, readiness change or PR merge was performed.
+
+## PR #139 integration with Advanced Filter — 2026-11-15
+
+Integrated main `55c089236af5e3b3202cb2df10915153169f5a4e` (PR #142) into `2db89d4d4456bb3edcf35f8634ee273ed8b064f5`. Resolved additive end-of-file UI-test and screenshot-manifest conflicts by preserving both feature additions. Advanced Filter modifications to existing tests are retained exactly, with Repeat Type extensions appended unchanged. All 235 UI test names are unique. Production files and domain tests match their corresponding feature parents; no integration-specific production changes were made.
+
+Four Python compile-gate command-double tests and diff whitespace checks passed. All 28 manifest hashes, PNG dimensions, receipt paths and supplied source-commit references validate. Tracker coverage is 28/46 screenshot states, with 18 remaining. The existing T14 PNG was inspected and contains neutral QA criteria. No personal data, Simulator/GUI session or fixture changes were introduced.
+
+The parent task reports 7/7 native cases, three domain tests, clean independent review and CI at exact prior head `2db89d4`; those results remain historical after this integration. Swift/Xcode are unavailable in this Linux checkout. Fresh review, native acceptance and exact-head CI remain pending; this integration does not mark the PR ready or merge it.
