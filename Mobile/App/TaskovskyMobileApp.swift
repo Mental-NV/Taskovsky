@@ -1212,20 +1212,26 @@ struct MobileRootView: View {
         Task { preferenceNotice = await model.saveCalendarOptions(draft, expected: expected) }
     }
 
-    private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date) {
+    private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date, multiDayCount: Int? = nil) {
         guard !model.isBusy, let document = model.document else { return }
         var draft = document.snapshot.settings.calendarOptions
-        if mode == draft.mode {
+        if mode == draft.mode && (multiDayCount == nil || multiDayCount == draft.multiDayCount) {
             sessionCalendarMode = nil
             preferenceNotice = nil
             focus = date
             return
         }
         draft.mode = mode
+        if let multiDayCount { draft.multiDayCount = multiDayCount }
         Task {
             if let error = await model.saveCalendarOptions(draft, expected: document.revision) {
-                sessionCalendarMode = mode
-                preferenceNotice = "View changed for this session. " + error
+                if multiDayCount != nil {
+                    // A count-changing shortcut must not mask later persisted View Options.
+                    preferenceNotice = "Could not switch to 3 Day. " + error
+                } else {
+                    sessionCalendarMode = mode
+                    preferenceNotice = "View changed for this session. " + error
+                }
             } else {
                 sessionCalendarMode = nil
                 preferenceNotice = nil
@@ -1246,9 +1252,21 @@ struct MobileRootView: View {
                         }.accessibilityLabel("Calendar view")
                             .popover(isPresented: $viewPicker, arrowEdge: .top) {
                                 VStack(spacing: 0) {
+                                    Button {
+                                        viewPicker = false
+                                        selectCalendarMode(.multiDay, at: focus, multiDayCount: 3)
+                                    } label: {
+                                        HStack {
+                                            Text("3 Day")
+                                            Spacer()
+                                            if options.mode == .multiDay && options.multiDayCount == 3 { Image(systemName: "checkmark") }
+                                        }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
+                                    }.buttonStyle(.plain)
+                                        .accessibilityIdentifier("calendarThreeDay")
+                                        .accessibilityValue(options.mode == .multiDay && options.multiDayCount == 3 ? "Selected" : "")
                                     ForEach(TaskCalendarMode.allCases, id: \.self) { mode in
                                         Button { viewPicker = false; selectCalendarMode(mode, at: focus) } label: {
-                                            HStack { Text(mode.title); Spacer(); if options.mode == mode { Image(systemName: "checkmark") } }
+                                            HStack { Text(mode.title); Spacer(); if options.mode == mode && !(mode == .multiDay && options.multiDayCount == 3) { Image(systemName: "checkmark") } }
                                                 .frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
                                         }.buttonStyle(.plain)
                                     }

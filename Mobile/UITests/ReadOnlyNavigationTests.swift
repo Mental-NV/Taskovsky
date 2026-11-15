@@ -273,6 +273,46 @@ final class ReadOnlyNavigationTests: XCTestCase {
         reveal(showMore, in: app)
         XCTAssertFalse(future.exists)
     }
+    @MainActor func testCalendarThreeDayModePersistsAndPagesThreeDays() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["calendarThreeDay"].tap()
+        let headers = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-"))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "count == 3"), object: headers)], timeout: 5), .completed)
+        XCTAssertTrue(app.buttons["calendarDay-2026-11-9"].exists)
+        XCTAssertTrue(app.buttons["calendarDay-2026-11-11"].exists)
+        attach(app, "Calendar explicit three-day view")
+        app.buttons["Next Calendar period"].tap()
+        XCTAssertTrue(app.buttons["calendarDay-2026-11-12"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["calendarDay-2026-11-14"].exists)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertEqual(headers.count, 3)
+        app.buttons["Calendar view"].tap()
+        XCTAssertEqual(app.buttons["calendarThreeDay"].value as? String, "Selected")
+        app.buttons["Week"].tap()
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "count == 7"), object: headers)], timeout: 5), .completed)
+    }
+
+    @MainActor func testCalendarThreeDaySaveFailureKeepsPriorView() {
+        let app = launch(qaCase: "save-failure")
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["calendarThreeDay"].tap()
+        let notice = app.staticTexts["calendarPreferenceNotice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertTrue(notice.label.contains("Could not switch to 3 Day"))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-")).count, 7)
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-")).count, 7)
+    }
+
     @MainActor func testCalendarHeaderModeAndOverflowPlacement() {
         let app = launch()
         app.buttons["Calendar"].tap()

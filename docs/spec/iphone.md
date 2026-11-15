@@ -951,3 +951,7 @@ For a schedule without Duration, Date uses a visible graphical month picker over
 ### Calendar Arrange panel
 
 Arrange Tasks is a trailing panel over Calendar rather than a bottom sheet. Exposed grid taps dismiss without opening/editing tasks; existing drag/drop, Undo and recurring-scope rules remain required. Existing grouping/filter controls and nested editors are retained. Panel width is approximate, and reference grouping/Filter placement is not completed by this container slice.
+
+### Calendar 3 Day shortcut
+
+Calendar mode selection includes explicit 3 Day, using existing Multi-Day mode with a saved count of 3. It intentionally replaces the configurable count; other counts remain editable in View Options. Failed count-changing save leaves the prior view/count with an error, while existing general-mode fallback remains unchanged. Exact reference menu order and grid geometry are not claimed.
