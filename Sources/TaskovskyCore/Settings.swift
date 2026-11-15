@@ -150,6 +150,19 @@ public enum TaskSortPolicy {
     public static func canReorder(_ raw: String) -> Bool { isManual(raw) }
 }
 
+/// iPhone title ordering is a Taskovsky contract, not a verified TickTick collation rule.
+/// Equal case/diacritic-insensitive keys retain the incoming stable order.
+public enum TaskTitleSort: String, CaseIterable, Sendable {
+    case ascending = "TitleAscending", descending = "TitleDescending"
+    public func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
+        let locale = Locale(identifier: "en_US_POSIX")
+        let left = lhs.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+        let right = rhs.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+        let order = left.compare(right, options: [.numeric], locale: locale)
+        return self == .ascending ? order == .orderedAscending : order == .orderedDescending
+    }
+}
+
 public enum TaskTimestampSort: String, CaseIterable, Sendable {
     // The existing Mac Created preference sorts newest first.
     case createdNewest = "Created"

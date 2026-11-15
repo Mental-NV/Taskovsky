@@ -1001,3 +1001,7 @@ Reminder and Repeat appear as summary rows opening dedicated pages over the same
 ## Composer recovery success notice removal — 2026-11-15
 
 [Bounded user-requested change](../changes/mobile-capture-notice-2026-11-15.md): remove normal recovery-status area and gap; retain actual warnings and underlying draft recovery. Local full tests/release/review and bounded native checks passed; exact-head CI pending. No full parity claim.
+
+## iPhone Title sorting — 2026-11-15
+
+[Contract and evidence](../changes/mobile-title-sort-2026-11-15.md): new Title criterion and direction, preserving current grouping/pinning/storage semantics. Reference criterion observed, exact collation unverified. Validation pending.

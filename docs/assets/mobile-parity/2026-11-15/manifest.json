@@ -177,5 +177,18 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral fixture schedule controls only, no personal profile/task data",
     "historical": true
+  },
+  {
+    "state": "T04",
+    "file": "t04-title-sort.png",
+    "sha256": "c1bfacc58ba6f77146b384859d45b425781dc2739dca9dd7d4ed4e2f6d16e6b1",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-title-sort-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral sample workspace tasks only, no real profile information",
+    "historical": true
   }
 ]

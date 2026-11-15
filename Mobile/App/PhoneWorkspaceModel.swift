@@ -7,12 +7,13 @@ import UniformTypeIdentifiers
 private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneTaskSort: Hashable {
-    case priority, timestamp(TaskTimestampSort)
+    case priority, timestamp(TaskTimestampSort), title(TaskTitleSort)
 
-    static let choices = [Self.priority] + TaskTimestampSort.allCases.map(Self.timestamp)
+    static let choices = [Self.priority] + TaskTimestampSort.allCases.map(Self.timestamp) + TaskTitleSort.allCases.map(Self.title)
 
     init?(stored: String) {
         if stored == "Priority" { self = .priority }
+        else if let title = TaskTitleSort(rawValue: stored) { self = .title(title) }
         else if let timestamp = TaskTimestampSort(rawValue: stored) { self = .timestamp(timestamp) }
         else { return nil }
     }
@@ -20,6 +21,7 @@ enum PhoneTaskSort: Hashable {
     var stored: String {
         switch self {
         case .priority: "Priority"
+        case .title(let sort): sort.rawValue
         case .timestamp(let sort): sort.rawValue
         }
     }
@@ -27,6 +29,7 @@ enum PhoneTaskSort: Hashable {
     var title: String {
         switch self {
         case .priority: "Priority"
+        case .title(let sort): sort == .ascending ? "Title · Ascending" : "Title · Descending"
         case .timestamp(let sort): sort.title
         }
     }
@@ -39,6 +42,7 @@ enum PhoneTaskSort: Hashable {
     func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
         switch self {
         case .priority: lhs.priority.rank < rhs.priority.rank
+        case .title(let sort): sort.precedes(lhs, rhs)
         case .timestamp(let sort): sort.precedes(lhs, rhs)
         }
     }

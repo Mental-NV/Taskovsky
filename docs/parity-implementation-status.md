@@ -307,3 +307,7 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 ## Composer recovery notice
 
 [User-requested removal](changes/mobile-capture-notice-2026-11-15.md) hides normal recovery status/gap, not recovery storage; actual warnings remain. Local full tests/release/review and bounded native checks passed; exact-head CI pending.
+
+## Group & Sort Title criterion
+
+[Bounded Title sort](changes/mobile-title-sort-2026-11-15.md) adds one observed missing choice; exact reference order and remaining criteria are open. Checks pending.

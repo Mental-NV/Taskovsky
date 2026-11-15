@@ -998,6 +998,21 @@ final class MobileContractTests: XCTestCase {
         XCTAssertTrue(RichBody.sameCodeUnits(preview.readingView(collapsed: []).preview.text, text))
     }
 
+    func testTitleSortUsesNumericCaseInsensitiveStableOrderWithoutMutation() throws {
+        let titles = ["Task 10", "café", "Task 2", "CAFE", "Alpha", ""]
+        let tasks = titles.map { TaskItem(title: $0) }
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        let before = try encoder.encode(tasks)
+        XCTAssertEqual(tasks.sorted(by: TaskTitleSort.ascending.precedes).map(\.title), ["", "Alpha", "café", "CAFE", "Task 2", "Task 10"])
+        XCTAssertEqual(tasks.sorted(by: TaskTitleSort.descending.precedes).map(\.title), ["Task 10", "Task 2", "café", "CAFE", "Alpha", ""])
+        XCTAssertFalse(TaskTitleSort.ascending.precedes(tasks[1], tasks[3]))
+        XCTAssertFalse(TaskTitleSort.descending.precedes(tasks[3], tasks[1]))
+        XCTAssertEqual(try encoder.encode(tasks), before)
+        XCTAssertEqual(TaskTitleSort(rawValue: "TitleAscending"), .ascending)
+        XCTAssertEqual(TaskTitleSort(rawValue: "TitleDescending"), .descending)
+        XCTAssertFalse(TaskSortPolicy.canReorder(TaskTitleSort.ascending.rawValue))
+    }
+
     func testTimestampSortDistinguishesCreatedModifiedAndRetainsEqualOrder() {
         let first = TaskItem(title: "First", createdAt: now.addingTimeInterval(-100), updatedAt: now.addingTimeInterval(200))
         let second = TaskItem(title: "Second", createdAt: now, updatedAt: now)
