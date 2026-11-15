@@ -2,6 +2,8 @@
 
 ## Current delivery priority: core features first
 
+User direction (November 15, 2026): **Background chooser and Share / Print are explicitly deferred until core Tasks and Calendar features are finished.** Keep these surfaces in the later-work backlog, not the active core-parity implementation queue or core completion gate. This is a deferral, not a claim that they are implemented or verified, and it does not authorize new external integrations. Revisit both after core feature completion.
+
 User direction (November 14, 2026): defer accessibility-specific layouts and accessibility-layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
 
 
@@ -297,3 +299,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - Mobile Calendar View Options navigation candidate: Color and Style pushed pages, nested Show Item Icons, existing draft semantics and supported controls. Local/native/review validation passed; exact-head CI pending. Complete style parity not claimed. [Scope](changes/mobile-calendar-options-navigation-2026-11-15.md).
 
 - T17 compact capture candidate: core metadata routes and More-to-advanced form, same draft/title identity. Partial structural coverage; regression checks pending, exact low-sheet geometry/IME not certified. [Scope](changes/mobile-compact-capture-2026-11-15.md).
+
+- Mobile ordinary empty-description candidate replaces three idle rows with one Add description menu. Existing nonempty/rich/editor semantics preserved. Local/native/review passed; exact-head CI pending and exact footer parity not claimed. [Scope](changes/mobile-empty-description-2026-11-15.md).

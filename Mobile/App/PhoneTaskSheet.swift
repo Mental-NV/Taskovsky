@@ -100,12 +100,19 @@ struct PhoneTaskSheet: View {
                                 progressRow(task)
                             }
                         }
-                        description(task)
-                        Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
-                            .disabled(!writable || task.richBody != nil).frame(minHeight: 44)
-                        if (try? RichBodyEdit.applying([], to: task.body, rich: task.richBody)) != nil {
-                            Button("Format description") { Task { await model.begin(taskID: task.id, field: .richBody) } }
-                                .disabled(!writable).frame(minHeight: 44).accessibilityIdentifier("editRichDescription")
+                        if task.body.isEmpty && task.richBody == nil {
+                            Menu {
+                                descriptionActions(task)
+                            } label: {
+                                Label("Add description", systemImage: "text.alignleft")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                    .frame(minHeight: 44)
+                            }
+                            .disabled(!writable)
+                            .accessibilityIdentifier("emptyDescriptionActions")
+                        } else {
+                            description(task)
+                            descriptionActions(task)
                         }
                         metadata(task, data: data)
                         if task.kind == .task || task.parentID != nil {
@@ -155,6 +162,15 @@ struct PhoneTaskSheet: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+        }
+    }
+
+    @ViewBuilder private func descriptionActions(_ task: TaskItem) -> some View {
+        Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
+            .disabled(!writable || task.richBody != nil).frame(minHeight: 44)
+        if (try? RichBodyEdit.applying([], to: task.body, rich: task.richBody)) != nil {
+            Button("Format description") { Task { await model.begin(taskID: task.id, field: .richBody) } }
+                .disabled(!writable).frame(minHeight: 44).accessibilityIdentifier("editRichDescription")
         }
     }
 

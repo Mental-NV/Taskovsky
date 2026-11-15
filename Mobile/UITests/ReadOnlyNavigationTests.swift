@@ -51,6 +51,63 @@ final class ReadOnlyNavigationTests: XCTestCase {
 
     }
 
+    @MainActor func testEmptyDescriptionActionsStayCompactAndPlainSaveSurvivesRelaunch() {
+        let app = launch()
+        let input = openCapture(app)
+        input.tap(); input.typeText("Compact empty description")
+        app.buttons["captureAdd"].tap()
+        let menu = app.buttons["emptyDescriptionActions"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 8))
+        XCTAssertFalse(app.staticTexts["taskDescription"].exists)
+        XCTAssertFalse(app.buttons["Edit description"].exists)
+        XCTAssertFalse(app.buttons["editRichDescription"].exists)
+        attach(app, "Compact empty description detail")
+        menu.tap()
+        XCTAssertTrue(app.buttons["Edit description"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["editRichDescription"].exists)
+        app.buttons["Edit description"].tap()
+        let editor = app.textViews["fieldEditor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        app.buttons["fieldEditorCancel"].tap()
+        waitGone(editor)
+        XCTAssertTrue(menu.exists)
+        menu.tap(); app.buttons["Edit description"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("A saved description")
+        app.buttons["fieldEditorDone"].tap(); waitGone(editor)
+        XCTAssertFalse(menu.exists)
+        XCTAssertEqual(app.staticTexts["taskDescription"].label, "A saved description")
+        app.buttons["taskDetailDone"].tap()
+        app.terminate(); app.launch()
+        let task = app.buttons["Compact empty description"]
+        XCTAssertTrue(task.waitForExistence(timeout: 10)); task.tap()
+        XCTAssertEqual(app.staticTexts["taskDescription"].label, "A saved description")
+        XCTAssertFalse(menu.exists)
+    }
+
+    @MainActor func testEmptyDescriptionFormattedRouteCanCancelWithoutCreatingBody() {
+        let app = launch()
+        let input = openCapture(app)
+        input.tap(); input.typeText("Empty formatted route")
+        app.buttons["captureAdd"].tap()
+        let menu = app.buttons["emptyDescriptionActions"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 8))
+        menu.tap(); app.buttons["editRichDescription"].tap()
+        let editor = app.textViews["richFieldEditor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        XCTAssertEqual(editor.value as? String ?? "", "")
+        app.buttons["fieldEditorCancel"].tap(); waitGone(editor)
+        XCTAssertTrue(menu.exists)
+        XCTAssertFalse(app.staticTexts["taskDescription"].exists)
+        menu.tap(); app.buttons["editRichDescription"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.typeText("Unsaved text")
+        app.buttons["fieldEditorCancel"].tap(); app.buttons["Discard"].tap()
+        waitGone(editor)
+        XCTAssertTrue(menu.exists)
+        XCTAssertFalse(app.staticTexts["taskDescription"].exists)
+    }
+
     @MainActor func testCompactListDatesRemainAccessibleAndOpenDetail() {
         let app = launch()
         let task = app.buttons["Review the project outline"]

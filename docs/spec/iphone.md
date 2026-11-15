@@ -2,6 +2,8 @@
 
 ## Current delivery priority: core features first
 
+User direction (November 15, 2026): **Background chooser and Share / Print are explicitly deferred until core Tasks and Calendar features are finished.** Keep these surfaces in the later-work backlog, not the active core-parity implementation queue or core completion gate. This is a deferral, not a claim that they are implemented or verified, and it does not authorize new external integrations. Revisit both after core feature completion.
+
 User direction (November 14, 2026): defer accessibility-specific layouts and accessibility-layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
 
 
@@ -987,3 +989,7 @@ Calendar View Options groups appearance choices on Color and Style pushed pages.
 ### Compact capture shell
 
 New ordinary capture starts with a title and direct date/priority/tag/list controls; More expands the existing advanced form. Prepared/template/range/nonempty-description drafts open expanded. One stable title input retains editing identity while metadata expands. Existing capture transaction, recovery, recognition and template behavior stays authoritative. This is structural coverage, not measured low-sheet/keyboard parity. [Scope](../changes/mobile-compact-capture-2026-11-15.md).
+
+### Empty description affordance
+
+An ordinary empty plain description uses one Add description menu exposing existing plain and formatted editing routes, without an idle No description row. Existing nonempty and rich-description presentation and write guards remain unchanged. This is compact empty-state presentation, not exact TickTick toolbar matching. [Scope](../changes/mobile-empty-description-2026-11-15.md).

@@ -2096,3 +2096,7 @@ Color/Style/Show Item Icons hierarchy: full 827 XCTest + 38 Swift Testing, relea
 ### Compact capture navigation
 
 Initial native testing exposed competing navigation links in one Form row; explicit route buttons corrected that defect. Corrected compact metadata/More/Cancel/direct save-relaunch and Calendar capture native checks passed, as did full 827 XCTest + 38 Swift Testing and release/signature. Source rereview clean. Range/recovery/template/note/retry native regression checks remain in progress; exact-head CI not yet run. [Scope](../changes/mobile-compact-capture-2026-11-15.md).
+
+### Compact mobile empty description
+
+Candidate native checks cover plain editor Cancel/reopen/save/relaunch and formatted Cancel/discard, plus existing rich/unknown/malformed protections. Full 827 XCTest + 38 Swift Testing, release/signature, independent review and all five native cases passed; actual screenshot inspected and owned Simulator shut down. Exact-head CI pending. [Scope](../changes/mobile-empty-description-2026-11-15.md).
