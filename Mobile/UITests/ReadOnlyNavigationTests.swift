@@ -5860,6 +5860,13 @@ extension ReadOnlyNavigationTests {
         let wrappedOperator = app.staticTexts["filterOperator-root-1-0"]
         XCTAssertTrue(wrappedOperator.waitForExistence(timeout: 5))
         XCTAssertEqual(wrappedOperator.label, "NOT")
+        let invertedPreview = app.buttons["savedFilterPreview"]
+        reveal(invertedPreview, in: app); invertedPreview.tap()
+        XCTAssertTrue(app.navigationBars["Preview"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["savedFilterPreviewTask-00000000-0000-0000-0000-000000000002"].exists)
+        XCTAssertTrue(app.staticTexts["savedFilterPreviewTask-00000000-0000-0000-0000-000000000001"].exists)
+        app.navigationBars["Preview"].buttons.firstMatch.tap()
+        reveal(app.buttons["filterRuleActions-root-1-0"], in: app, towardTop: true)
         chooseFilterRule("Remove NOT", from: "filterRuleActions-root-1-0", in: app)
         XCTAssertEqual(app.textFields["filterRuleKeyword-root-1-0"].value as? String, "weekly")
         chooseFilterRule("Add AND group", from: "filterAddRule-root-1", in: app)
@@ -5872,6 +5879,21 @@ extension ReadOnlyNavigationTests {
         attach(app, "Nested keyword keyboard")
         app.keyboards.buttons["Done"].tap()
         attach(app, "Nested saved filter rules")
+        let preview = app.buttons["savedFilterPreview"]
+        reveal(preview, in: app); preview.tap()
+        XCTAssertTrue(app.navigationBars["Preview"].waitForExistence(timeout: 5))
+        let rows = app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "savedFilterPreviewTask-"))
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertTrue(app.staticTexts["savedFilterPreviewTask-00000000-0000-0000-0000-000000000002"].exists)
+        XCTAssertTrue(app.staticTexts["savedFilterPreviewTask-00000000-0000-0000-0000-000000000006"].exists)
+        XCTAssertFalse(app.staticTexts["savedFilterPreviewTask-00000000-0000-0000-0000-000000000001"].exists)
+        app.navigationBars["Preview"].buttons.firstMatch.tap()
+        let examples = app.buttons["savedFilterExamples"]
+        reveal(examples, in: app); examples.tap()
+        XCTAssertTrue(app.staticTexts["Taskovsky examples"].waitForExistence(timeout: 5))
+        app.navigationBars["Examples"].buttons.firstMatch.tap()
+        reveal(app.staticTexts["filterOperator-root"], in: app, towardTop: true)
+        attach(app, "Advanced Filter logic and filters")
         app.buttons["savedFilterDone"].tap()
         waitGone(app.buttons["savedFilterDone"])
         app.terminate()
@@ -5890,7 +5912,20 @@ extension ReadOnlyNavigationTests {
         let row = managedFilter("Unavailable work", in: app)
         reveal(row, in: app)
         row.tap()
-        XCTAssertTrue(app.staticTexts["Advanced Rules"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Filter Conditions"].waitForExistence(timeout: 5))
+        let preview = app.buttons["savedFilterPreview"]
+        reveal(preview, in: app); XCTAssertTrue(preview.isEnabled); preview.tap()
+        XCTAssertTrue(app.staticTexts["No matching tasks"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.staticTexts.matching(NSPredicate(format: "identifier BEGINSWITH %@", "savedFilterPreviewTask-")).count, 0)
+        app.navigationBars["Preview"].buttons.firstMatch.tap()
+        let examples = app.buttons["savedFilterExamples"]
+        reveal(examples, in: app); examples.tap()
+        XCTAssertTrue(app.staticTexts["Taskovsky examples"].waitForExistence(timeout: 5))
+        app.navigationBars["Examples"].buttons.firstMatch.tap()
+        app.buttons["savedFilterCancel"].tap()
+        waitGone(app.buttons["savedFilterDone"])
+        XCTAssertFalse(app.alerts["Discard changes?"].exists)
+        row.tap()
         let mode = app.segmentedControls["savedFilterMode"]
         reveal(mode, in: app)
         mode.buttons["Normal"].tap()
@@ -8198,5 +8233,39 @@ extension ReadOnlyNavigationTests {
             app.navigationBars["Preview"].buttons.firstMatch.tap()
         }
         app.buttons["savedFilterCancel"].tap(); waitGone(app.buttons["savedFilterDone"])
+    }
+}
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testAdvancedEmptyPreviewAndExamplesPreserveSavedRule() {
+        let app = launch(); openFilterManagement(in: app); app.buttons["newSavedFilter"].tap()
+        let name = app.textFields["savedFilterName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5)); name.tap(); name.typeText("Empty logic\n")
+        let mode = app.segmentedControls["savedFilterMode"]
+        mode.buttons["Advanced"].tap()
+        let preview = app.buttons["savedFilterPreview"]
+        reveal(preview, in: app); XCTAssertFalse(preview.isEnabled)
+        XCTAssertTrue(app.staticTexts["Add a filter condition to preview."].exists)
+        XCTAssertTrue(app.buttons["savedFilterDone"].isEnabled)
+        let examples = app.buttons["savedFilterExamples"]
+        reveal(examples, in: app); examples.tap()
+        XCTAssertTrue(app.staticTexts["Taskovsky examples"].waitForExistence(timeout: 5))
+        app.navigationBars["Examples"].buttons.firstMatch.tap()
+        XCTAssertFalse(preview.isEnabled)
+        app.buttons["savedFilterDone"].tap(); waitGone(app.buttons["savedFilterDone"])
+        app.terminate(); app.launch(); XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openFilterManagement(in: app); managedFilter("Empty logic", in: app).tap()
+        XCTAssertTrue(mode.buttons["Advanced"].waitForExistence(timeout: 5)); XCTAssertTrue(mode.buttons["Advanced"].isSelected)
+        reveal(preview, in: app); XCTAssertFalse(preview.isEnabled)
+        reveal(examples, in: app); examples.tap()
+        XCTAssertTrue(app.staticTexts["Taskovsky examples"].waitForExistence(timeout: 5))
+        app.navigationBars["Examples"].buttons.firstMatch.tap()
+        app.buttons["savedFilterCancel"].tap(); waitGone(app.buttons["savedFilterDone"])
+        XCTAssertFalse(app.alerts["Discard changes?"].exists)
+        app.buttons["filterManagerDone"].tap()
+        let destination = app.buttons["Empty logic"]
+        reveal(destination, in: app); destination.tap(); waitGone(destination)
+        XCTAssertTrue(app.buttons["Prepare the weekly plan"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Review the project outline"].exists)
     }
 }
