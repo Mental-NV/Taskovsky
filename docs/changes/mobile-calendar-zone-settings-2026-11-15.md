@@ -17,4 +17,4 @@ Taskovsky retains explicit Cancel/Done instead of assuming TickTick Back saves. 
 
 ## Verification
 
-Pending: full suite/release, independent source review, isolated native staging/persistence/ruler regressions, exact-head hosted CI and safe screenshot. Do not interpret test source as a passed run.
+Source checkpoint `e01e8e0`: 838 XCTest (134+55+120+529) and 38 Swift Testing tests passed; release and strict signature verification passed. Independent source/test review clean after strengthening real On-to-Off coverage. Four owned iPhone Simulator tests passed: child and parent Cancel staging, Off/save/relaunch/re-enable, four-ruler limit/labels, and swipe behavior with extra rulers. Screenshot inspected: neutral QA zones (primary Moscow is hard-coded by QA), no personal data. Toolbar title truncation remains visible, not a pixel-parity claim. Hosted exact-head CI pending.
