@@ -5302,7 +5302,18 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(field.value as? String, name)
     }
 
+    @MainActor private func revealListCreationMore(_ app: XCUIApplication) {
+        guard app.navigationBars["Add List"].exists else { return }
+        // Edit List remains expanded; only creation has the More disclosure.
+        if !app.buttons["organizationPlacement"].exists {
+            let more = app.buttons["organizationMore"]
+            reveal(more, in: app)
+            XCTAssertTrue(more.waitForExistence(timeout: 5)); more.tap()
+        }
+    }
+
     @MainActor private func chooseListPlacement(_ name: String, in app: XCUIApplication) {
+        revealListCreationMore(app)
         let placement = app.buttons["organizationPlacement"]
         reveal(placement, in: app)
         placement.tap()
@@ -7042,6 +7053,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["taskMoveList"].tap()
         app.buttons["taskMoveAddList"].tap()
         editOrganizationName("Neutral destination", in: app)
+        XCTAssertEqual(app.buttons["organizationView-list"].value as? String, "Selected")
         app.buttons["organizationSave"].tap()
         waitGone(app.buttons["organizationSave"])
         waitGone(app.navigationBars["Move to"])
@@ -7171,6 +7183,63 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(inbox.value as? String, "Not selected")
         app.buttons["calendarPreferencesDone"].tap()
     }
+
+    @MainActor func testListCreationSelectedViewModesPersistAfterRelaunch() {
+        let app = launch()
+        for (mode, title, expected) in [("list", "Neutral List", "List"), ("board", "Neutral Board", "Board"), ("timeline", "Neutral Timeline", "Timeline")] {
+            openOrganization(app)
+            app.buttons["organizationNewList"].tap()
+            XCTAssertTrue(app.navigationBars["Add List"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["organizationSave"].isEnabled)
+            editOrganizationName(title, in: app)
+            let choice = app.buttons["organizationView-" + mode]
+            reveal(choice, in: app); choice.tap()
+            XCTAssertEqual(choice.value as? String, "Selected")
+            attach(app, "Add List selected " + mode)
+            finishOrganizationEdit(app)
+            app.buttons["organizationManagerDone"].tap()
+            let destination = app.buttons[title]
+            XCTAssertTrue(destination.waitForExistence(timeout: 5))
+            reveal(destination, in: app); destination.tap()
+            waitGone(app.buttons["manageLists"])
+
+            XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
+            if mode == "board" {
+                XCTAssertTrue(app.buttons["boardColumn-open"].waitForExistence(timeout: 5))
+            } else if mode == "timeline" {
+                XCTAssertTrue(app.descendants(matching: .any)["taskTimelineAxis"].waitForExistence(timeout: 5))
+            }
+            app.terminate(); app.launch()
+            XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+            goTo(title, in: app)
+            XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
+            if mode == "board" {
+                XCTAssertTrue(app.buttons["boardColumn-open"].waitForExistence(timeout: 5))
+            } else if mode == "timeline" {
+                XCTAssertTrue(app.descendants(matching: .any)["taskTimelineAxis"].waitForExistence(timeout: 5))
+            }
+        }
+    }
+
+    @MainActor func testListCreationViewSelectionCancelDoesNotCreateList() {
+        let app = launch()
+        openOrganization(app)
+        app.buttons["organizationNewList"].tap()
+        editOrganizationName("Discarded Board", in: app)
+        let board = app.buttons["organizationView-board"]
+        reveal(board, in: app); board.tap()
+        revealListCreationMore(app)
+        XCTAssertTrue(app.buttons["organizationPlacement"].exists)
+        XCTAssertTrue(app.buttons["organizationIcon"].exists)
+        setSwitch("organizationPin", to: true, app: app)
+        app.buttons["organizationCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["organizationSave"])
+        XCTAssertFalse(app.buttons["Discarded Board"].exists)
+        app.buttons["organizationNewList"].tap()
+        XCTAssertEqual(app.buttons["organizationView-list"].value as? String, "Selected")
+        app.buttons["organizationCancel"].tap()
+    }
 }
 
 extension ReadOnlyNavigationTests {
@@ -7203,5 +7272,30 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(app.buttons["Planning"].value as? String, "Not selected")
         XCTAssertEqual(app.buttons["Inbox"].value as? String, "Not selected")
         app.buttons["calendarPreferencesCancel"].tap()
+    }
+
+    @MainActor func testListCreationPreviewScreenshotWithoutKeyboard() {
+        let app = launch()
+        openOrganization(app)
+        app.buttons["organizationNewList"].tap()
+        editOrganizationName("Neutral project", in: app)
+        let board = app.buttons["organizationView-board"]
+        reveal(board, in: app); board.tap()
+        // Form uses interactive scroll dismissal. Do not capture an obscured preview.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.35))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.85)))
+        XCTAssertFalse(app.keyboards.firstMatch.exists)
+        let list = app.buttons["organizationView-list"]
+        let timeline = app.buttons["organizationView-timeline"]
+        let more = app.buttons["organizationMore"]
+        reveal(board, in: app)
+        XCTAssertTrue(list.isHittable && board.isHittable && timeline.isHittable)
+        XCTAssertTrue(more.isHittable)
+        XCTAssertEqual(board.value as? String, "Selected")
+        attach(app, "Add List view previews and More without keyboard")
+        app.buttons["organizationCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["organizationSave"])
+        XCTAssertFalse(app.buttons["Neutral project"].exists)
     }
 }
