@@ -1004,4 +1004,4 @@ Reminder and Repeat appear as summary rows opening dedicated pages over the same
 
 ## iPhone Title sorting — 2026-11-15
 
-[Contract and evidence](../changes/mobile-title-sort-2026-11-15.md): new Title criterion and direction, preserving current grouping/pinning/storage semantics. Reference criterion observed, exact collation unverified. Validation pending.
+[Contract and evidence](../changes/mobile-title-sort-2026-11-15.md): new Title criterion and direction, preserving current grouping/pinning/storage semantics. Reference criterion observed, exact collation unverified. Local/native/review checks passed; exact-head CI pending.

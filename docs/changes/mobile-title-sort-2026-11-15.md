@@ -6,4 +6,4 @@ Taskovsky contract: Title defaults to ascending, direction toggles ascending/des
 
 No Tag/Date sorting, extra grouping criteria, reference reset semantics, accessibility-layout polishing or task mutations. Title is one additional supported pill, not full Group & Sort parity.
 
-Acceptance: domain numeric/case/tie/empty/no-mutation rules; native ascending/descending/pinning/relaunch/reset plus existing timestamp/grouping regression; independent review, full tests/release/signature and exact-head CI. Checks pending.
+Acceptance: domain numeric/case/tie/empty/no-mutation rules; native ascending/descending/pinning/relaunch/reset plus existing timestamp/grouping regression; independent review, full tests/release/signature and exact-head CI. Initial domain test caught POSIX comparison inconsistency; explicit key folding fixed source without changing expected results. Final 828 XCTest +38 Swift Testing, signed release/signature and independent rereview passed. Initial three native regressions passed; final corrected-source Title/pinning/direction/relaunch/reset regression passed. Neutral screenshot inspected and tracker updated. Exact-head hosted CI pending.
