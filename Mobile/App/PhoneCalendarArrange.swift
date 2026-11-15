@@ -76,19 +76,6 @@ struct PhoneCalendarArrangeSheet: View {
                     ForEach(rows, id: \.task.id) { row in
                         let task = row.task
                         HStack(spacing: 0) {
-                            if row.hasChildren {
-                                let collapsed = collapsedHierarchy.contains(task.id)
-                                Button {
-                                    if collapsed { collapsedHierarchy.remove(task.id) }
-                                    else { collapsedHierarchy.insert(task.id) }
-                                } label: {
-                                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
-                                        .frame(width: 32, height: 44).contentShape(Rectangle())
-                                }.buttonStyle(.plain)
-                                    .foregroundStyle(.secondary)
-                                    .accessibilityLabel((collapsed ? "Expand " : "Collapse ") + task.title)
-                                    .accessibilityIdentifier("arrangeDisclosure-" + task.id.uuidString)
-                            }
                             if let payload = drag?(task.id, document.revision) {
                                 Image(systemName: "line.3.horizontal")
                                     .foregroundStyle(.secondary)
@@ -106,6 +93,20 @@ struct PhoneCalendarArrangeSheet: View {
                                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     .contentShape(Rectangle())
                             }.buttonStyle(.plain)
+                                .accessibilityIdentifier("arrangeTitle-" + task.id.uuidString)
+                            if row.hasChildren {
+                                let collapsed = collapsedHierarchy.contains(task.id)
+                                Button {
+                                    if collapsed { collapsedHierarchy.remove(task.id) }
+                                    else { collapsedHierarchy.insert(task.id) }
+                                } label: {
+                                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                                        .frame(width: 32, height: 44).contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel((collapsed ? "Expand " : "Collapse ") + task.title)
+                                    .accessibilityIdentifier("arrangeDisclosure-" + task.id.uuidString)
+                            }
                             Button {
                                 request = PhoneCalendarEditRequest(task: task, expected: document.revision,
                                                                    focus: focus, hourly: options.mode.isHourly,
@@ -123,6 +124,9 @@ struct PhoneCalendarArrangeSheet: View {
                     }
                 }
             }
+        }
+        .onChange(of: showHierarchy) { _, expanded in
+            if expanded { collapsedHierarchy.removeAll() }
         }
         .safeAreaInset(edge: .top, spacing: 0) {
             Picker("Group by", selection: $grouping) {

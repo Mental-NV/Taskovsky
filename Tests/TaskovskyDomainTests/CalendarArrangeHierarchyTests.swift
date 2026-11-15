@@ -184,6 +184,29 @@ final class CalendarArrangeHierarchyTests: XCTestCase {
         XCTAssertEqual(rows.first { $0.task.id == lone.id }?.depth, 0)
     }
 
+    func testDuplicateIdentifiersRenderOnceInEveryBranch() {
+        let work = TaskList(name: "Work", color: "#123456")
+        var parent = TaskItem(title: "Dup parent", listID: work.id)
+        var child = TaskItem(title: "Dup child", listID: work.id)
+        child.parentID = parent.id
+        var ghost = child
+        ghost.title = "Dup child duplicate record"
+        let tasks = [parent, child, ghost]
+        for grouping in [CalendarColorMode.list, .tag, .priority] as [CalendarColorMode] {
+            for show in [true, false] {
+                let rows = TaskCalendarProjection.arrangementRows(for: tasks, grouping: grouping,
+                                                                  showHierarchy: show, collapsed: [])
+                XCTAssertEqual(rows.map(\.task.id), [parent.id, child.id],
+                               "grouping=\(grouping) show=\(show)")
+                XCTAssertEqual(rows.map(\.task.title)[1], "Dup child")
+            }
+        }
+        let nested = TaskCalendarProjection.arrangementRows(for: tasks, grouping: .list,
+                                                            showHierarchy: true, collapsed: [])
+        XCTAssertEqual(nested.map(\.depth), [0, 1])
+        XCTAssertEqual(nested.first?.hasChildren, true)
+    }
+
     func testHierarchyProjectionDoesNotMutateCandidates() throws {
         let fixture = Fixture(now: now)
         let tasks = candidates(fixture)

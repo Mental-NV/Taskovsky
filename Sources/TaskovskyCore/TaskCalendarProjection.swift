@@ -190,14 +190,17 @@ public enum TaskCalendarProjection {
     /// another group — or is not an eligible candidate at all — renders as a
     /// root, and collapsing never changes the group count. Tag and Priority
     /// grouping keep the exact incoming flat order. Cycle-safe by
-    /// construction (shared `TaskHierarchy.listRows`); duplicate identifiers
-    /// render once so row identity stays stable and no eligible row vanishes.
+    /// construction (shared `TaskHierarchy.listRows`); every branch keeps
+    /// stable unique identifiers by rendering the first occurrence of a
+    /// duplicate identifier once, so no eligible row vanishes.
     public static func arrangementRows(for tasks: [TaskItem], grouping: CalendarColorMode,
                                        showHierarchy: Bool, collapsed: Set<UUID>) -> [ArrangementRow] {
+        var seen = Set<UUID>()
+        let unique = tasks.filter { seen.insert($0.id).inserted }
         guard showHierarchy, grouping == .list else {
-            return tasks.map { ArrangementRow(task: $0, depth: 0, hasChildren: false) }
+            return unique.map { ArrangementRow(task: $0, depth: 0, hasChildren: false) }
         }
-        return TaskHierarchy.listRows(tasks, collapsed: collapsed).map {
+        return TaskHierarchy.listRows(unique, collapsed: collapsed).map {
             ArrangementRow(task: $0.task, depth: $0.depth, hasChildren: $0.hasChildren)
         }
     }

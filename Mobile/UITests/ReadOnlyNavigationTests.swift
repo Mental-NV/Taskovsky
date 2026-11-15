@@ -3448,10 +3448,18 @@ extension ReadOnlyNavigationTests {
         let app = launch(qaCase: "arrange-hierarchy")
         app.buttons["Calendar"].tap()
         openArrange(app)
+        XCTAssertTrue(app.buttons["Collapse Neutral arrange parent"].waitForExistence(timeout: 5))
+        // The option ships checked: the tree starts expanded, turning the
+        // control off flattens it, and turning it back on restores it. Menu
+        // hosts do not expose the button value, so the default is proven
+        // through this behavior rather than the value string.
         app.buttons["arrangeOptions"].tap()
         XCTAssertEqual(app.buttons["arrangeHierarchy"].label, "Show Task Hierarchy")
-        XCTAssertEqual(app.buttons["arrangeHierarchy"].value as? String, "On")
-        app.tap()
+        app.buttons["arrangeHierarchy"].tap()
+        waitGone(app.buttons["Collapse Neutral arrange parent"])
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange child one"].exists)
+        app.buttons["arrangeOptions"].tap()
+        app.buttons["arrangeHierarchy"].tap()
         XCTAssertTrue(app.staticTexts["Work · 4"].waitForExistence(timeout: 5))
         let collapse = app.buttons["Collapse Neutral arrange parent"]
         XCTAssertTrue(collapse.waitForExistence(timeout: 5))
@@ -3463,7 +3471,15 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["Schedule Neutral orphan child"].exists)
         XCTAssertGreaterThan(childOne.frame.minY, parentSchedule.frame.minY)
         XCTAssertGreaterThan(childTwo.frame.minY, childOne.frame.minY)
-        XCTAssertGreaterThan(childOne.frame.minX, parentSchedule.frame.minX)
+        let parentTitle = app.buttons["arrangeTitle-00000000-0000-0000-0000-000000000002"]
+        let childTitle = app.buttons["arrangeTitle-00000000-0000-0000-0000-000000000006"]
+        XCTAssertTrue(parentTitle.exists)
+        XCTAssertGreaterThan(childTitle.frame.minX, parentTitle.frame.minX)
+        let parentGrip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000002"].firstMatch
+        let childGrip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000006"].firstMatch
+        XCTAssertTrue(parentGrip.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(childGrip.frame.minX, parentGrip.frame.minX)
+        XCTAssertGreaterThan(collapse.frame.minX, childTitle.frame.minX)
         attach(app, "Arrange hierarchy expanded")
         collapse.tap()
         XCTAssertTrue(app.buttons["Expand Neutral arrange parent"].waitForExistence(timeout: 5))
@@ -3483,6 +3499,9 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar"].tap()
         openArrange(app)
         XCTAssertTrue(app.buttons["Collapse Neutral arrange parent"].waitForExistence(timeout: 5))
+        app.buttons["Collapse Neutral arrange parent"].tap()
+        XCTAssertTrue(app.buttons["Expand Neutral arrange parent"].waitForExistence(timeout: 5))
+        waitGone(app.buttons["Schedule Neutral arrange child one"])
         app.buttons["arrangeOptions"].tap()
         app.buttons["arrangeHierarchy"].tap()
         XCTAssertFalse(app.buttons["Collapse Neutral arrange parent"].exists)
@@ -3500,6 +3519,8 @@ extension ReadOnlyNavigationTests {
         app.buttons["arrangeOptions"].tap()
         app.buttons["arrangeHierarchy"].tap()
         XCTAssertTrue(app.buttons["Collapse Neutral arrange parent"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Expand Neutral arrange parent"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral arrange child one"].exists)
         XCTAssertTrue(app.staticTexts["Work · 4"].exists)
         attach(app, "Arrange hierarchy on expanded")
         app.segmentedControls["arrangeGroup"].buttons["Priority"].tap()
@@ -3516,12 +3537,16 @@ extension ReadOnlyNavigationTests {
         let child = app.buttons["Schedule Neutral arrange child one"]
         child.tap()
         XCTAssertTrue(app.buttons["calendarEditDone"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Neutral arrange child one"].waitForExistence(timeout: 5))
         attach(app, "Arrange child schedule staged")
         app.buttons["calendarEditCancel"].tap()
         waitGone(app.buttons["calendarEditDone"])
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+        XCTAssertTrue(app.staticTexts["Work · 4"].exists)
         XCTAssertTrue(child.exists)
         XCTAssertTrue(app.buttons["Schedule Neutral arrange child two"].exists)
         XCTAssertTrue(app.buttons["Schedule Neutral arrange parent"].exists)
+        XCTAssertTrue(app.buttons["Schedule Neutral orphan child"].exists)
         app.buttons["arrangeDone"].tap()
         waitGone(app.buttons["arrangeDone"])
     }
