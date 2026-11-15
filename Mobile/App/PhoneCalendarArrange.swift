@@ -47,22 +47,6 @@ struct PhoneCalendarArrangeSheet: View {
         let groups = TaskCalendarProjection.arrangementGroups(candidates, data: data, grouping: grouping)
         let date = Date.FormatStyle(date: .complete, time: .omitted, calendar: model.calendar, timeZone: model.calendar.timeZone)
         return List {
-            Section {
-                Picker("Group by", selection: $grouping) {
-                    ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-                }.accessibilityIdentifier("arrangeGroup")
-                Picker("List", selection: $selection) {
-                    Text("Calendar sources").tag(CalendarArrangeSelection.calendar)
-                    Text("Inbox").tag(CalendarArrangeSelection.inbox)
-                    ForEach(data.lists.filter { !$0.isArchived }) { list in
-                        Text(list.name).tag(CalendarArrangeSelection.list(list.id))
-                    }
-                }.accessibilityIdentifier("arrangeList")
-                Toggle("Include overdue", isOn: $overdue).accessibilityIdentifier("arrangeOverdue")
-            } footer: {
-                Text("Schedule tasks for \(focus.formatted(date)).")
-                if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
-            }
             if model.scheduleNotice(in: .calendar) != nil { Section { PhoneScheduleFeedback(model: model, surface: .calendar) } }
             if groups.isEmpty {
                 Text("No tasks to arrange").foregroundStyle(.secondary).accessibilityIdentifier("arrangeEmpty")
@@ -105,11 +89,51 @@ struct PhoneCalendarArrangeSheet: View {
                 }
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("Group by", selection: $grouping) {
+                ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("arrangeGroup")
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(.bar)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Menu {
+                Picker("Source", selection: $selection) {
+                    Text("Calendar sources").tag(CalendarArrangeSelection.calendar)
+                    Text("Inbox").tag(CalendarArrangeSelection.inbox)
+                    ForEach(data.lists.filter { !$0.isArchived }) { list in
+                        Text(list.name).tag(CalendarArrangeSelection.list(list.id))
+                    }
+                }
+            } label: {
+                Label("Filter", systemImage: "line.3.horizontal.decrease")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .accessibilityIdentifier("arrangeList")
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, 8).background(.bar)
+        }
         .navigationTitle("Arrange Tasks")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done", action: close).disabled(model.isBusy).accessibilityIdentifier("arrangeDone")
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: close) { Image(systemName: "xmark") }
+                    .accessibilityLabel("Close Arrange Tasks")
+                    .disabled(model.isBusy).accessibilityIdentifier("arrangeDone")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button { overdue.toggle() } label: {
+                        Label(overdue ? "Hide overdue" : "Include overdue", systemImage: overdue ? "checkmark" : "circle")
+                    }.accessibilityIdentifier("arrangeOverdue")
+                        .accessibilityValue(overdue ? "On" : "Off")
+                    Text("Schedule tasks for \(focus.formatted(date)).")
+                    if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
+                } label: { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("Arrange options")
+                    .accessibilityIdentifier("arrangeOptions")
             }
         }
     }

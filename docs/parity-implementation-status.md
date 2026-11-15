@@ -279,3 +279,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone Arrange right-side container candidate follows observed panel/dismissal direction; existing control placement retained. Six native drag/Undo/recurrence/dismissal/resize tests, full suite/release/review and source CI passed; final receipt-head CI remains required. See `docs/changes/mobile-arrange-side-panel-2026-11-14.md`.
 
 - iPhone explicit 3 Day candidate uses existing configurable Multi-Day projection and saves count 3; failed save retains prior view. Full suite/release, three native tests and independent review passed; exact-head CI pending; no complete mode-menu or pixel parity. See `docs/changes/mobile-three-day-mode-2026-11-14.md`.
+
+- iPhone Arrange control hierarchy candidate moves grouping below title, source Filter to footer and overdue to overflow without changing domain semantics. Full suite/release/review and four native tests passed; exact-head CI pending; centered Filter hierarchy dialog still open. See `docs/changes/mobile-arrange-controls-2026-11-15.md`.

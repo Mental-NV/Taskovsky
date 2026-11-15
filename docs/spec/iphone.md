@@ -955,3 +955,6 @@ Arrange Tasks is a trailing panel over Calendar rather than a bottom sheet. Expo
 ### Calendar 3 Day shortcut
 
 Calendar mode selection includes explicit 3 Day, using existing Multi-Day mode with a saved count of 3. It intentionally replaces the configurable count; other counts remain editable in View Options. Failed count-changing save leaves the prior view/count with an error, while existing general-mode fallback remains unchanged. Exact reference menu order and grid geometry are not claimed.
+
+### Arrange control hierarchy (November 15 candidate)
+Arrange places List/Tag/Priority grouping below the title and the existing single-source Filter menu at the bottom. Overflow retains Include overdue and scheduling guidance; Close remains visible. Projection/scheduling/drag behavior is unchanged. Reference centered Filter dialog and hierarchy remain open, not implied by this placement slice. See `../changes/mobile-arrange-controls-2026-11-15.md`.
