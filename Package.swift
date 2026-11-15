@@ -37,7 +37,8 @@ let domainSources = [
     "TaskTemplateChange.swift",
     "TaskLifecycle.swift",
     "TaskBatchEdit.swift",
-    "TaskMetadataChange.swift"
+    "TaskMetadataChange.swift",
+    "DetailActionLayout.swift"
 ]
 let desktopSources = [
     "AppMigration.swift",

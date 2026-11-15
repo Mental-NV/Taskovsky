@@ -352,5 +352,19 @@
     "receipt": "../../../changes/mobile-normal-filter-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected neutral filter draft. Primary criteria and keyword/type visible; More/Preview below viewport. No personal information."
+  },
+  {
+    "state": "D02",
+    "file": "d02-task-actions.png",
+    "sha256": "aebf208ccad354206dec9fa19e0248d9c0973765f86781c9f1d5e2c1deb5b9be",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-detail-actions-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral fixture task only (Review the project outline); custom Task Actions rows, no strip, no Share placeholder; no personal information.",
+    "source_commit": "fd962df",
+    "historical": true
   }
 ]

@@ -1594,6 +1594,83 @@ final class LifecycleRepositoryTests: XCTestCase {
         else { return XCTFail("Expected compatibility refusal") }
         XCTAssertEqual(try Data(contentsOf: workspace), opaque)
     }
+
+    /// D02 icon strip commits: Pin, Won't Do and Delete each save once, a
+    /// retried revision refuses stale, and locked records refuse without
+    /// changing bytes. A reused Duplicate copy ID cannot write twice.
+    func testDetailActionStripCommitsOnceAndRefusesLockedRecords() async throws {
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let active = TaskItem(title: "Active")
+        var finished = TaskItem(title: "Finished")
+        finished.completedAt = now.addingTimeInterval(-60)
+        let archived = TaskItem(title: "Archived", listID: archive.id)
+        let trashed = TaskItem(title: "Trashed", deletedAt: now)
+        let data = WorkspaceData(tasks: [active, finished, archived, trashed], lists: [archive])
+        let (directory, workspace, settings) = try files(data)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let initial = try await repository.load()
+        guard case .saved(let pinned, nil) = await repository.apply(.setPinned(true), to: active.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected durable pin") }
+        XCTAssertTrue(pinned.snapshot.workspace.tasks[0].isPinned)
+        guard case .refused(.stale) = await repository.apply(.setPinned(false), to: active.id, expected: initial.revision, now: now),
+              case .refused(.task(.archived)) = await repository.apply(.setPinned(true), to: archived.id, expected: pinned.revision, now: now),
+              case .refused(.task(.wrongStatus)) = await repository.apply(.setPinned(true), to: trashed.id, expected: pinned.revision, now: now)
+        else { return XCTFail("Expected stale and locked pin refusals") }
+        guard case .saved(let wontDo, nil) = await repository.apply(.wontDo, to: finished.id, expected: pinned.revision, now: now)
+        else { return XCTFail("Expected durable Won't Do") }
+        XCTAssertNotNil(wontDo.snapshot.workspace.tasks[1].wontDoAt)
+        XCTAssertNil(wontDo.snapshot.workspace.tasks[1].completedAt)
+        let copyID = UUID()
+        guard case .saved(let duplicated, nil) = await repository.apply(.duplicate(copyID: copyID), to: active.id, expected: wontDo.revision, now: now),
+              case .refused(.task(.invalidCopy)) = await repository.apply(.duplicate(copyID: copyID), to: active.id, expected: duplicated.revision, now: now)
+        else { return XCTFail("Expected one copy and a reused-ID refusal") }
+        XCTAssertEqual(duplicated.snapshot.workspace.tasks.filter { $0.title == "Active" }.count, 2)
+        guard case .saved(let trashedNow, let undo?) = await repository.apply(.trash, to: finished.id, expected: duplicated.revision, now: now)
+        else { return XCTFail("Expected durable Delete") }
+        XCTAssertNotNil(trashedNow.snapshot.workspace.tasks[1].deletedAt)
+        XCTAssertEqual(try Data(contentsOf: workspace), trashedNow.snapshot.workspaceBytes)
+        guard case .refused(.task(.wrongStatus)) = await repository.apply(.trash, to: trashed.id, expected: trashedNow.revision, now: now)
+        else { return XCTFail("Expected trashed-record Delete refusal") }
+        XCTAssertEqual(try Data(contentsOf: workspace), trashedNow.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
+        _ = undo
+    }
+
+    /// D02 Tags and Add Subtask routes commit through the existing flows: the
+    /// saved tags reopen on the next read, an unchanged resubmit writes
+    /// nothing, a stale revision refuses, and blank subtask titles refuse.
+    func testDetailTagsAndSubtaskRoutesCommitAndReopen() async throws {
+        let work = TaskList(name: "Work", color: "#123456")
+        let tag = TaskTag(name: "Planning", color: "#123456")
+        let parent = TaskItem(title: "Parent", listID: work.id)
+        let data = WorkspaceData(tasks: [parent], lists: [work], tags: [tag])
+        let (directory, workspace, settings) = try files(data)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let repository = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let initial = try await repository.load()
+        guard case .saved(let tagged) = await repository.apply(.metadata(.tags([tag.id])), to: parent.id, expected: initial.revision, now: now)
+        else { return XCTFail("Expected durable Tags save") }
+        XCTAssertEqual(tagged.snapshot.workspace.tasks[0].tagIDs, [tag.id])
+        guard case .unchanged = await repository.apply(.metadata(.tags([tag.id])), to: parent.id, expected: tagged.revision, now: now)
+        else { return XCTFail("Expected an unchanged Tags resubmit to write nothing") }
+        XCTAssertEqual(try Data(contentsOf: workspace), tagged.snapshot.workspaceBytes)
+        let reopened = try await repository.load()
+        XCTAssertEqual(reopened.snapshot.workspace.tasks[0].tagIDs, [tag.id])
+        let childID = UUID()
+        guard case .saved(let withChild, nil) = await repository.apply(.addSubtask(id: childID, title: "Kid"), to: parent.id, expected: reopened.revision, now: now)
+        else { return XCTFail("Expected durable subtask") }
+        let child = try XCTUnwrap(withChild.snapshot.workspace.tasks.first { $0.id == childID })
+        XCTAssertEqual(child.listID, work.id)
+        XCTAssertEqual(child.parentID, parent.id)
+        XCTAssertEqual(withChild.snapshot.workspace.tasks.first { $0.id == parent.id }?.tagIDs, [tag.id])
+        guard case .refused(.stale) = await repository.apply(.addSubtask(id: UUID(), title: "Late"), to: parent.id, expected: reopened.revision, now: now),
+              case .refused(.task(.invalidChild)) = await repository.apply(.addSubtask(id: UUID(), title: "  "), to: parent.id, expected: withChild.revision, now: now)
+        else { return XCTFail("Expected stale and blank-title subtask refusals") }
+        XCTAssertEqual(try Data(contentsOf: workspace), withChild.snapshot.workspaceBytes)
+        XCTAssertEqual(try Data(contentsOf: settings), initial.snapshot.settingsBytes)
+    }
 }
 
 extension ReadOnlyWorkspaceTests {

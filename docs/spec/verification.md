@@ -2153,3 +2153,9 @@ Merged main `dd406ec53d546554b323d4ff009f4d4730502588` into Repeat Type head `65
 Local checks passed: four Python compile-gate command-double tests (`python3 -m unittest discover -s scripts/tests -v`), diff whitespace checks, all 26 manifest SHA-256 hashes/PNG dimensions, receipt paths and supplied source-commit references, and preservation of both parent UI test inventories (228 unique test names). The existing D14/T13 PNGs were inspected again and contain neutral QA settings/content. No new capture or personal TickTick data was added.
 
 Swift tests, macOS release build and iPhone compilation were not run: Swift/Xcode are unavailable in this Linux environment. No Simulator or GUI session was used. Historical feature results above do not validate this integration head; fresh native QA, review and exact-head hosted CI remain required before readiness or merge.
+
+## PR #139 integration with Task Actions — 2026-11-15
+
+Integrated main `e0161a1cbff7dfe2c6af95b37ef325da9fd99269` (PR #141) into `43451e264a937cc69ec8be6785f65485345c5372`. Only the screenshot manifest conflicted: both D14 and D02 records were retained alongside T13. UI tests merged automatically and were checked against the exact combined parent contents: 234 unique test names, with all three feature inventories preserved. Production/build files and domain/workspace tests retain the corresponding feature-parent bytes.
+
+Four Python compile-gate command-double tests passed again. All 27 manifest hashes, PNG dimensions, receipt paths and supplied commit references validate; screenshot coverage is 27/46 states, with 19 remaining. The existing D02 capture was inspected and contains neutral QA content. Diff whitespace checks passed. Swift/Xcode remain unavailable on Linux; native QA, review and exact-head hosted CI remain pending. No Simulator/GUI session, personal data, readiness change or PR merge was performed.
