@@ -23,7 +23,7 @@ Adding custom reminders freezes the currently staged automatic dates (including 
 - Preintegration package checks: 849 XCTest + 38 Swift tests passed; release passed. After integrating main fe9af52, 851 XCTest + 38 Swift tests, release and iPhone build-for-testing passed.
 - Domain tests cover DST gaps/repeats, leap boundary, schedule-zone day/week offsets, limits and unit switching, staged date/zone automatic-to-manual migration and duplicate prevention.
 - Final native two-case run passed: actual Week→Day switching and nondefault offset1/hour10/minute35 wheels, nested/outer Cancel, exact computed preview versus saved/reopened reminder after relaunch and expired disabled state. Native test/build completed successfully.
-- Independent final review and exact-head hosted CI pending. No pixel-perfect acceptance claim.
+- Independent final source/test/doc review clean at e710ee6. Exact-head hosted CI pending. No pixel-perfect acceptance claim.
 
 ## Screenshot
 

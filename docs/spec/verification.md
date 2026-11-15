@@ -2136,4 +2136,4 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 
 ## D11 all-day Custom Reminder — 2026-11-15
 
-[Receipt](../changes/mobile-custom-reminder-2026-11-15.md): 851+38 integrated package tests, release and iPhone build-for-testing passed. Final nondefault wheel native2/2 passed. Independent review and exact CI pending.
+[Receipt](../changes/mobile-custom-reminder-2026-11-15.md): 851+38 integrated package tests, release and iPhone build-for-testing passed. Final nondefault wheel native2/2 passed. Independent source/test/doc review clean; exact CI pending.
