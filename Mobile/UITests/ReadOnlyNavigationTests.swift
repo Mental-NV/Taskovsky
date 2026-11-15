@@ -7172,3 +7172,36 @@ extension ReadOnlyNavigationTests {
         app.buttons["calendarPreferencesDone"].tap()
     }
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testCalendarNestedFolderListSelectionSavesResultsAndRelaunches() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        let inboxTask = app.buttons["Review the project outline"]
+        let workTask = app.buttons["Prepare the weekly plan"]
+        XCTAssertTrue(inboxTask.waitForExistence(timeout: 5))
+        openCalendarSourceHierarchy(app)
+        let folder = app.buttons["calendarFilterFolder-00000000-0000-0000-0000-000000000700"]
+        reveal(folder, in: app); folder.tap()
+        let work = app.buttons["Work"]
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        reveal(work, in: app); work.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["All"].value as? String, "Not selected")
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertFalse(inboxTask.exists)
+        XCTAssertTrue(workTask.waitForExistence(timeout: 5))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(workTask.waitForExistence(timeout: 5))
+        XCTAssertFalse(inboxTask.exists)
+        openCalendarSourceHierarchy(app)
+        reveal(folder, in: app); folder.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["Planning"].value as? String, "Not selected")
+        XCTAssertEqual(app.buttons["Inbox"].value as? String, "Not selected")
+        app.buttons["calendarPreferencesCancel"].tap()
+    }
+}
