@@ -474,9 +474,17 @@ private struct PhoneCustomRepeatSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Pattern", selection: $pattern) {
-                        ForEach(Pattern.allCases, id: \.self) { Text($0.rawValue).tag($0) }
-                    }
+                    Menu {
+                        repeatTypeChoice("By Due Dates", id: "due", selected: pattern == .cadence && rule.anchor == .dueDate) {
+                            pattern = .cadence; rule.anchor = .dueDate
+                        }
+                        repeatTypeChoice("By Completion Date", id: "completion", selected: pattern == .cadence && rule.anchor == .completionDate) {
+                            pattern = .cadence; rule.anchor = .completionDate
+                        }
+                        repeatTypeChoice("By Specific Dates", id: "dates", selected: pattern == .dates) { pattern = .dates }
+                    } label: {
+                        HStack { Text("Repeat Type"); Spacer(); Text(repeatTypeLabel).foregroundStyle(.secondary); Image(systemName: "chevron.up.chevron.down").font(.caption) }
+                    }.accessibilityIdentifier("customRepeatType").accessibilityValue(repeatTypeLabel)
                     if pattern == .cadence { cadence } else { specificDates }
                 }
                 limits
@@ -540,6 +548,19 @@ private struct PhoneCustomRepeatSheet: View {
                              nominal: stagedNominal(draftDue: due, draftRule: candidate, task: task))
     }
 
+    private var repeatTypeLabel: String {
+        if pattern == .dates { return "By Specific Dates" }
+        return rule.anchor == .completionDate ? "By Completion Date" : "By Due Dates"
+    }
+
+    private func repeatTypeChoice(_ title: String, id: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            if selected { Label(title, systemImage: "checkmark") } else { Text(title) }
+        }.accessibilityIdentifier("customRepeatType-" + id)
+            .accessibilityLabel(title)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
     // A huge wheel makes native accessibility snapshots unresponsive. Preserve the
     // complete model range through Exact interval and include an existing large value.
     private var intervalChoices: [Int] {
@@ -548,10 +569,6 @@ private struct PhoneCustomRepeatSheet: View {
     }
 
     @ViewBuilder private var cadence: some View {
-        Picker("Anchor", selection: $rule.anchor) {
-            Text("By due dates").tag(RecurrenceAnchor.dueDate)
-            Text("By completion date").tag(RecurrenceAnchor.completionDate)
-        }
         VStack(alignment: .leading, spacing: 8) {
             Text("Frequency").font(.subheadline).foregroundStyle(.secondary)
             HStack(spacing: 0) {
@@ -689,6 +706,9 @@ private struct PhoneCustomRepeatSheet: View {
                     get: { dates.indices.contains(index) ? dates[index] : due },
                     set: { if dates.indices.contains(index) { dates[index] = $0 } }),
                     displayedComponents: timed ? [.date, .hourAndMinute] : .date)
+                    .accessibilityIdentifier("customRepeatDate-\(index)")
+                    .accessibilityValue((dates.indices.contains(index) ? dates[index] : due).formatted(
+                        Date.FormatStyle(date: .abbreviated, time: timed ? .shortened : .omitted, calendar: calendar, timeZone: calendar.timeZone)))
             }
             .onDelete { dates.remove(atOffsets: $0) }
             Button("Add date") {
