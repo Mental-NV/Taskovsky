@@ -7,7 +7,7 @@ D06 live reference inventory observed the task-detail list selector opening **Mo
 | --- | --- | --- |
 | Detail list label | Existing detail header beside completion; list name + chevron | Opens frozen task/revision Move request. Uses lifecycle eligibility, so Trash/locked states remain unavailable; archived move-out remains supported. |
 | Header | Inline **Move to** | Standalone row/detail route has × / accessible Close; no movement on close. Existing pushed Task Actions route retains native back navigation. |
-| Search | Native searchable field, **Search** prompt | Matches active list names; matching folder reveals its active children. Search expansion is temporary and does not save folder state. |
+| Search | Explicit search row with magnifying glass, **Search** prompt and Clear search | Matches active list names; matching folder reveals its active children. Search expansion is temporary and does not save folder state. The row does not replace the navigation toolbar, so Close remains available while typing. |
 | Inbox | First destination row, tray | Nil list target via existing lifecycle write. Current destination has checkmark/value and is disabled. |
 | Lists above/folders/below | Existing workspace placement/order | Known folder children expand/collapse locally. Current destination shows checkmark. Orphan-folder destinations remain available rather than being lost. Archived target lists excluded. |
 | Add List | Plus row after destinations | Reuses existing List editor, expected-revision save, validation and dirty-cancel behavior. Enabled only while original move revision is still current. |

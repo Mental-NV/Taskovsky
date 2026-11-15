@@ -6993,8 +6993,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(work.value as? String, "Current list")
         XCTAssertFalse(work.isEnabled)
         folder.tap(); XCTAssertFalse(work.exists)
-        let search = app.searchFields.firstMatch
-        if !search.isHittable { app.swipeDown() }
+        let search = app.textFields["taskMoveSearch"]
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Work")
         XCTAssertTrue(work.waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["taskMoveTarget-inbox"].exists)

@@ -619,6 +619,20 @@ private struct PhoneTaskMoveChoices: View {
 
     var body: some View {
         List {
+            Section {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                    TextField("Search", text: $search)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("taskMoveSearch")
+                    if !search.isEmpty {
+                        Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.plain).foregroundStyle(.secondary)
+                            .accessibilityLabel("Clear search")
+                            .accessibilityIdentifier("taskMoveClearSearch")
+                    }
+                }
+            }
             if let data = model.document?.snapshot.workspace {
                 let active = data.lists.filter { !$0.isArchived }
                 let folderIDs = Set(data.folders.map(\.id))
@@ -653,7 +667,7 @@ private struct PhoneTaskMoveChoices: View {
             }
             PhoneLifecycleFeedback(model: model)
         }
-        .searchable(text: $search, prompt: "Search")
+        .scrollDismissesKeyboard(.interactively)
         .navigationTitle("Move to")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $addList, onDismiss: {
