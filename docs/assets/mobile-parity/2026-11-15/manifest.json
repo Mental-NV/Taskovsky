@@ -338,7 +338,19 @@
     "receipt": "../../../changes/mobile-detail-actions-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected: neutral fixture task only (Review the project outline); custom Task Actions rows, no strip, no Share placeholder; no personal information.",
-    "source_commit": "9a72b78",
+    "source_commit": "fd962df",
     "historical": true
+  },
+  {
+    "state": "T13",
+    "file": "t13-normal-filter.png",
+    "sha256": "1cf1a5fa15622189efb4adf4b73088d46b94a9712d83ec63f485bb7b69f89e4c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-normal-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral filter draft. Primary criteria and keyword/type visible; More/Preview below viewport. No personal information."
   }
 ]
