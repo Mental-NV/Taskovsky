@@ -1,6 +1,6 @@
 # Mobile Calendar Color page structural parity (C07/C08)
 
-Status: implemented candidate, local tests and compile gates passed; native Simulator run pending with parent.
+Status: implemented candidate; local full tests/release, independent source review and three native Simulator tests passed. Exact-head hosted CI remains required.
 
 The observed mobile inventory C07–C08 places an anchored **Color By** menu
 (List/Tag/Priority, current checked, backdrop closes) and the genuine source
@@ -49,7 +49,7 @@ rendering change is intended.
 - `./scripts/build-ios-simulator-ci.sh /private/tmp/TaskovskyCalendarColor-ios`:
   iPhone app plus contract/navigation test bundles compiled
   (`build-for-testing` only; no tests executed).
-- Native UI coverage was updated but NOT run here: the existing
+- Initial implementation stage (superseded by the completed native run below): native UI coverage was updated but not yet run: the existing
   `testCalendarSourceColorSavesAndResetCanBeCancelled` now exercises the
   flattened page (inline Inbox pick, save, relaunch, reset, Cancel, Priority
   note, Tag customize, Done), and a new
@@ -112,3 +112,7 @@ PR139 source, tests, docs, and assets.
 - Tag/Priority reference layouts beyond C07/C08 remain unverified; Tag rows and
   the Priority note are truthful local behavior, not reference equivalence.
 - Exact-head hosted CI is still required before merge.
+
+## Published QA evidence
+
+The two unmodified neutral Simulator attachments are linked from tracker C07/C08. They were independently inspected before publication. Capture source is integrated `d25580b` plus the screenshot-only native attachment committed in `8b0e625`; production code is unchanged. Reference palette contents and exact visual matching remain unverified.
