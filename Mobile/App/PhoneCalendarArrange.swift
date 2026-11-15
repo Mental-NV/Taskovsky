@@ -29,6 +29,8 @@ struct PhoneCalendarArrangeSheet: View {
     @State private var selection = CalendarArrangeSelection.calendar
     @State private var showFilter = false
     @State private var overdue = false
+    @State private var undated = true
+    @State private var showNotes = true
     @State private var request: PhoneCalendarEditRequest?
     @State private var taskRoute: PhoneTaskRoute?
 
@@ -47,10 +49,16 @@ struct PhoneCalendarArrangeSheet: View {
         }
     }
 
+    private func option(_ title: String, selected: Binding<Bool>, id: String) -> some View {
+        Button { selected.wrappedValue.toggle() } label: {
+            Label(title, systemImage: selected.wrappedValue ? "checkmark" : "circle")
+        }.accessibilityIdentifier(id).accessibilityValue(selected.wrappedValue ? "On" : "Off")
+    }
+
     private func content(_ document: WorkspaceDocument) -> some View {
         let data = document.snapshot.workspace
         let candidates = TaskCalendarProjection.arrangementTasks(data: data, options: options, overdue: overdue,
-                                                                  now: model.now, calendar: model.calendar, selection: selection)
+                                                                  now: model.now, calendar: model.calendar, selection: selection, undated: undated, showNotes: showNotes)
         let groups = TaskCalendarProjection.arrangementGroups(candidates, data: data, grouping: grouping)
         let date = Date.FormatStyle(date: .complete, time: .omitted, calendar: model.calendar, timeZone: model.calendar.timeZone)
         return List {
@@ -124,10 +132,9 @@ struct PhoneCalendarArrangeSheet: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu {
-                    Button { overdue.toggle() } label: {
-                        Label(overdue ? "Hide overdue" : "Include overdue", systemImage: overdue ? "checkmark" : "circle")
-                    }.accessibilityIdentifier("arrangeOverdue")
-                        .accessibilityValue(overdue ? "On" : "Off")
+                    option("Undated Task", selected: $undated, id: "arrangeUndated")
+                    option("Overdue Task", selected: $overdue, id: "arrangeOverdue")
+                    option("Show Notes", selected: $showNotes, id: "arrangeNotes")
                     Text("Schedule tasks for \(focus.formatted(date)).")
                     if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
                 } label: { Image(systemName: "ellipsis") }
