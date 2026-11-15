@@ -203,5 +203,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral sample workspace only, no personal profile information",
     "historical": true
+  },
+  {
+    "state": "D04",
+    "file": "d04-assigned-tags.png",
+    "sha256": "1e40871b196a8ccd286542ca352fb950b006a5b8781505fb7292509eebfb24ab",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "source_commit": "9459da6",
+    "receipt": "../../../changes/mobile-assigned-tags-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral Planning/Studio fixture and unavailable reference notice only; no personal profile information",
+    "historical": true
   }
 ]
