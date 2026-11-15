@@ -288,6 +288,7 @@ private struct MobileCalendarContent: View {
     private var allDayRowHeight: CGFloat { showsDetails ? detailedRowHeight : compactRowHeight }
     @ScaledMetric(relativeTo: .caption) private var monthDateHeight = 17.0
     @State private var expansion = CalendarHourlyWindow()
+    @State private var showHours = false
     @GestureState private var previewCutoffs: CalendarFoldedHours?
     @State private var monthWeekFrames: [Date: CGRect] = [:]
     @State private var monthWeekAnchors = PhoneMonthWeekAnchors()
@@ -306,11 +307,24 @@ private struct MobileCalendarContent: View {
                 Button { focus = CalendarDates.navigate(focus, direction: -1, mode: options.mode, options: options, calendar: calendar, monthZoom: monthZoom) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.accessibilityLabel("Previous Calendar period")
                 Spacer(); Text(options.mode.title).font(.subheadline)
                 Button("Today", action: showToday).frame(minHeight: 44)
+                if options.mode.isHourly {
+                    Button { showHours = true } label: {
+                        Image(systemName: "clock").frame(width: 44, height: 44)
+                    }.accessibilityLabel("Calendar hours").accessibilityIdentifier("calendarHours")
+                        .popover(isPresented: $showHours) {
+                            VStack(spacing: 12) {
+                                Text("Visible hours").font(.headline)
+                                hourFoldControls
+                                Button("Done") { showHours = false }
+                                    .frame(minHeight: 44).accessibilityIdentifier("calendarHoursDone")
+                            }.padding(.vertical, 16).frame(width: 300)
+                                .presentationCompactAdaptation(.popover)
+                        }
+                }
                 Spacer()
                 Button { focus = CalendarDates.navigate(focus, direction: 1, mode: options.mode, options: options, calendar: calendar, monthZoom: monthZoom) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.accessibilityLabel("Next Calendar period")
             }.padding(.horizontal, 16)
             if options.mode.isHourly {
-                hourFoldControls
                 hourly
             }
             else if options.mode == .year { year }
@@ -327,6 +341,7 @@ private struct MobileCalendarContent: View {
             }
         }.buttonStyle(.plain)
             .onChange(of: options.mode) { old, new in
+                showHours = false
                 if old.isHourly && !new.isHourly { expansion = CalendarHourlyWindow() }
             }
     }

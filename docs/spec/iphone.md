@@ -961,3 +961,6 @@ Arrange places List/Tag/Priority grouping below the title and the existing singl
 
 ### Day/Multi-Day viewport fill
 Day and configurable Multi-Day hourly columns fill available viewport width after existing timezone rulers, retaining prior minimum widths and overflow behavior. Week layout and swipe remain unchanged. This addresses blank side space, not full Calendar chrome/geometry parity. See `../changes/mobile-hourly-viewport-2026-11-15.md`.
+
+### On-demand Calendar hours
+Hourly views expose existing Early/Late hour expansion controls in a Calendar hours popover rather than a permanent grid-header row. Counts/session reset remain unchanged; Done dismisses without changing schedule data. This is Taskovsky's preserved feature access, not exact TickTick control design. See `../changes/mobile-calendar-hours-popover-2026-11-15.md`.
