@@ -561,7 +561,7 @@ private struct MobileCalendarContent: View {
                     VStack(spacing: 0) {
                         HStack(spacing: 0) {
                             ForEach(days, id: \.self) { day in
-                                hourlyDayHeader(day).frame(width: columnWidth)
+                                hourlyColumnHeader(day).frame(width: columnWidth)
                                     .overlay(alignment: .leading) { hourlyDayBoundary }
                             }
                         }
@@ -577,7 +577,7 @@ private struct MobileCalendarContent: View {
                 } else {
                     ForEach(Array(days.enumerated()), id: \.element) { index, day in
                         VStack(spacing: 0) {
-                            hourlyDayHeader(day)
+                            hourlyColumnHeader(day)
                             allDayCards((byDay[day] ?? []).filter(\.isAllDay),
                                         index: index, columnWidth: columnWidth)
                                 .frame(height: allDayHeight, alignment: .top)
@@ -616,6 +616,32 @@ private struct MobileCalendarContent: View {
 
     private func pageWeek(_ direction: Int) {
         focus = CalendarDates.navigate(focus, direction: direction, mode: .week, options: options, calendar: calendar)
+    }
+
+    @ViewBuilder private func hourlyColumnHeader(_ day: Date) -> some View {
+        if options.mode == .day {
+            let start = CalendarDates.weekStart(day, calendar: calendar)
+            HStack(spacing: 0) {
+                ForEach((0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }, id: \.self) { date in
+                    let selected = calendar.isDate(date, inSameDayAs: day)
+                    let parts = calendar.dateComponents([.year, .month, .day], from: date)
+                    Button { select(.day, date) } label: {
+                        VStack(spacing: 4) {
+                            Text(date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, calendar: calendar, timeZone: calendar.timeZone).weekday(.narrow))).foregroundStyle(.secondary)
+                            Text("\(calendar.component(.day, from: date))")
+                                .fontWeight(selected ? .bold : .regular)
+                                .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                        }.font(.caption).frame(maxWidth: .infinity, minHeight: 52)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Show " + date.formatted(Date.FormatStyle(date: .complete, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)) + " in Day view")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier((selected ? "calendarDay-" : "calendarDaySelector-") + "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)")
+                }
+            }
+        } else {
+            hourlyDayHeader(day)
+        }
     }
 
     private func hourlyDayHeader(_ day: Date) -> some View {

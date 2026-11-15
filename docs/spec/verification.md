@@ -2073,3 +2073,6 @@ Verify three equal columns reach the viewport trailing edge and exceed the prior
 
 ### Calendar hours popover
 Check no permanent hour row, accessible clock opening, counts, expansion/collapse, Done and reopened state, relaunch reset, hourly drag, Week swipe and 3Day geometry; inspect actual screenshots. See `../changes/mobile-calendar-hours-popover-2026-11-15.md`.
+
+### Day seven-date navigation
+Check seven dates, current selection, another-day focus without schedule notice/data change, week-boundary navigation and Today, restoration of Week headers, plus Day Arrange drag/Undo and resize. Inspect actual screenshot. See `../changes/mobile-day-week-strip-2026-11-15.md`.
