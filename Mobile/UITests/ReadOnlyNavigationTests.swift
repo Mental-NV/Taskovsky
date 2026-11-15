@@ -7184,8 +7184,8 @@ extension ReadOnlyNavigationTests {
         let board = app.buttons["organizationView-board"]
         reveal(board, in: app); board.tap()
         // Form uses interactive scroll dismissal. Do not capture an obscured preview.
-        app.swipeUp()
-        if app.keyboards.firstMatch.exists { app.swipeUp() }
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.35))
+            .press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.85)))
         XCTAssertFalse(app.keyboards.firstMatch.exists)
         let list = app.buttons["organizationView-list"]
         let timeline = app.buttons["organizationView-timeline"]
