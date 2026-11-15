@@ -8354,6 +8354,63 @@ extension ReadOnlyNavigationTests {
 }
 
 extension ReadOnlyNavigationTests {
+    @MainActor func testAddTagPaletteParentSaveReloadAndCancel() {
+        let app = launch(); openTagManager(in: app); app.buttons["newTag"].tap()
+        let name = app.textFields["tagName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["Add Tag"].exists)
+        XCTAssertFalse(app.buttons["tagDone"].isEnabled)
+        XCTAssertTrue(app.buttons["tagParent"].label.contains("None"))
+        name.tap(); name.typeText("Palette child\n")
+        let colors = ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"]
+        for color in colors {
+            let swatch = app.buttons["tagColor-" + color]
+            reveal(swatch, in: app); swatch.tap(); XCTAssertTrue(swatch.isSelected)
+            XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND selected == true", "tagColor-")).count, 1)
+        }
+        app.buttons["tagColor-#EC6574"].tap()
+        app.buttons["tagParent"].tap()
+        tagChoice("Planning", id: "tagParentChoice-00000000-0000-0000-0000-000000000200", in: app).tap()
+        XCTAssertTrue(app.buttons["tagParent"].label.contains("Planning"))
+        attach(app, "Add Tag palette and parent")
+        app.buttons["tagDone"].tap(); waitGone(name)
+        app.terminate(); app.launch(); XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openTagManager(in: app)
+        let row = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@", "manageTag-", "Palette child")).firstMatch
+        reveal(row, in: app); row.tap(); XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["tagColor-#EC6574"].isSelected)
+        XCTAssertTrue(app.buttons["tagParent"].label.contains("Planning"))
+        app.buttons["tagColor-#526BF5"].tap()
+        app.buttons["tagParent"].tap(); tagChoice("None", id: "tagParentChoice-root", in: app).tap()
+        app.buttons["tagCancel"].tap(); app.alerts["Discard changes?"].buttons["Discard Changes"].tap(); waitGone(name)
+        row.tap(); XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["tagColor-#EC6574"].isSelected)
+        XCTAssertTrue(app.buttons["tagParent"].label.contains("Planning"))
+        app.buttons["tagCancel"].tap(); waitGone(name)
+    }
+
+    @MainActor func testTagCustomColorIsPreservedOnOpenAndUnrelatedSave() {
+        let app = launch(); openTagManager(in: app)
+        let planning = app.buttons["manageTag-00000000-0000-0000-0000-000000000200"]
+        planning.tap()
+        let name = app.textFields["tagName"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        let custom = app.descendants(matching: .any).matching(identifier: "tagCustomColor").firstMatch
+        XCTAssertTrue(custom.exists)
+        let original = custom.value as? String
+        XCTAssertEqual(original, "#E6A53A")
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND selected == true", "tagColor-")).count, 0)
+        app.buttons["tagCancel"].tap(); waitGone(name); XCTAssertFalse(app.alerts["Discard changes?"].exists)
+        planning.tap(); XCTAssertTrue(name.waitForExistence(timeout: 5))
+        setSwitch("tagPin", to: true, app: app)
+        app.buttons["tagDone"].tap(); waitGone(name)
+        app.terminate(); app.launch(); XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        openTagManager(in: app); planning.tap(); XCTAssertTrue(name.waitForExistence(timeout: 5))
+        XCTAssertEqual(custom.value as? String, original)
+        XCTAssertEqual(app.switches["tagPin"].value as? String, "1")
+        app.buttons["tagCancel"].tap(); waitGone(name)
+    }
+
     @MainActor func testRepeatTypeCompletionPersistsAndMenuDismissalDoesNotChange() {
         let app = launch(), title = "Review the project outline"
         _ = openSchedule(app, task: title); openScheduleOptions("scheduleRepeatOptions", in: app)

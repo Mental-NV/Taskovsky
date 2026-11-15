@@ -380,6 +380,18 @@
     "review": "Pixel inspected: neutral nested AND/OR with readable Keyword menus, Preview and Examples. No personal information."
   },
   {
+    "state": "T15",
+    "file": "t15-add-tag.png",
+    "sha256": "c9f2e9acc23cdf8efc7844fc472520ec8b276c53791ee0ebfa38aae1f4ecf255",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-add-tag-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral Add Tag: current pink swatch check, retained Custom Color, Parent Tag and confirmation. No personal information."
+  },
+  {
     "state": "C07",
     "file": "c07-calendar-color.png",
     "sha256": "f40e67116659a1cfde9d231dd34d33ff7ccd4e477aadc677a908481886b6cb9a",
