@@ -66,6 +66,7 @@ struct PhoneScheduleSheet: View {
     @State private var showCustom = false
     @State private var showReplace = false
     @State private var showTimePopover = false
+    @State private var showCustomReminder = false
 
     private var settings: AppSettings { request.document.snapshot.settings }
     private var due: Date { edit.schedule.effectiveDue }
@@ -278,6 +279,15 @@ struct PhoneScheduleSheet: View {
                         .accessibilityIdentifier("scheduleEndReminderDate")
                 }
             }
+            if edit.schedule.duration == nil && !edit.schedule.effectiveHasTime {
+                Button("Custom") { showCustomReminder = true }
+                    .accessibilityIdentifier("scheduleCustomReminder")
+                    .popover(isPresented: $showCustomReminder) {
+                        PhoneAllDayReminderDialog(due: due, calendar: calendar, clock: { model.now }) { date in
+                            edit.addManualReminder(date, settings: settings)
+                        }.presentationCompactAdaptation(.popover)
+                    }
+            }
             Toggle("Use default reminders", isOn: $edit.usesAutomaticReminders)
                 .accessibilityIdentifier("scheduleAutomaticReminders")
             if edit.usesAutomaticReminders {
@@ -292,6 +302,8 @@ struct PhoneScheduleSheet: View {
                     DatePicker("Reminder \(index + 1)", selection: Binding(
                         get: { edit.manualReminders.indices.contains(index) ? edit.manualReminders[index] : due },
                         set: { if edit.manualReminders.indices.contains(index) { edit.manualReminders[index] = $0 } }))
+                        .accessibilityIdentifier("scheduleManualReminder-" + String(index))
+                        .accessibilityValue(edit.manualReminders[index].formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, calendar: calendar, timeZone: calendar.timeZone)))
                 }
                 .onDelete { edit.manualReminders.remove(atOffsets: $0) }
                 Button("Add reminder") {
@@ -662,5 +674,56 @@ private struct PhoneCustomRepeatSheet: View {
                         in: 1...999_999)
             }
         }
+    }
+}
+
+
+private struct PhoneAllDayReminderDialog: View {
+    @Environment(\.dismiss) private var dismiss
+    let due: Date
+    let calendar: Calendar
+    let clock: () -> Date
+    @State private var expiredOnAdd = false
+    let add: (Date) -> Void
+    @State private var weeks = false
+    @State private var offset = 0
+    @State private var hour = 9
+    @State private var minute = 0
+    private var candidate: Date? {
+        AllDayReminderOffset.date(due: due, weeks: weeks, offset: offset, hour: hour, minute: minute, calendar: calendar)
+    }
+    var body: some View {
+        VStack(spacing: 12) {
+            Text("Custom Reminder").font(.headline)
+            Picker("Unit", selection: $weeks) { Text("Day").tag(false); Text("Week").tag(true) }
+                .pickerStyle(.segmented).accessibilityIdentifier("customReminderUnit")
+            HStack(spacing: 0) {
+                Picker("Offset", selection: $offset) { ForEach(0...52, id: \.self) { Text(String($0)).tag($0) } }
+                    .accessibilityIdentifier("customReminderOffset")
+                Picker("Hour", selection: $hour) { ForEach(0...23, id: \.self) { Text(String(format: "%02d", $0)).tag($0) } }
+                    .accessibilityIdentifier("customReminderHour")
+                Picker("Minute", selection: $minute) { ForEach(0...59, id: \.self) { Text(String(format: "%02d", $0)).tag($0) } }
+                    .accessibilityIdentifier("customReminderMinute")
+            }.pickerStyle(.wheel).frame(height: 150)
+            Text("Before the scheduled date · " + calendar.timeZone.identifier).font(.caption).foregroundStyle(.secondary)
+            if let candidate {
+                Text(candidate.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened, calendar: calendar, timeZone: calendar.timeZone)))
+                    .font(.footnote).accessibilityIdentifier("customReminderPreview")
+                if candidate <= clock() || expiredOnAdd { Text("This reminder has expired.").foregroundStyle(.red).accessibilityIdentifier("customReminderExpired") }
+            } else {
+                Text("This time does not exist in the selected time zone.").foregroundStyle(.red)
+            }
+            HStack {
+                Button { dismiss() } label: { Text("Cancel").frame(minWidth: 44, minHeight: 44) }.accessibilityIdentifier("customReminderCancel")
+                Spacer()
+                Button {
+                    guard let candidate, candidate > clock() else { expiredOnAdd = true; return }
+                    add(candidate); dismiss()
+                } label: { Text("Add").frame(minWidth: 44, minHeight: 44) }
+                    .disabled(candidate == nil || candidate! <= clock())
+                    .accessibilityIdentifier("customReminderAdd")
+            }
+        }.padding(16).frame(width: 310)
+            .onChange(of: candidate) { _, _ in expiredOnAdd = false }
     }
 }

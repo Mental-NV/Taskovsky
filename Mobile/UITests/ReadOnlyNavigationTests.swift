@@ -7649,3 +7649,63 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(app.buttons["tagParentChoice-" + rootID].value as? String, "Selected")
     }
 }
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testCustomReminderStagesCancelsAndPersistsExactDate() {
+        let app = launch(), task = "Review the project outline"
+        let original = openSchedule(app, task: task)
+        app.buttons["scheduleDay-7"].tap()
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        app.buttons["scheduleCustomReminder"].tap()
+        let preview = app.staticTexts["customReminderPreview"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        func selectCustomTime() {
+            app.buttons["Week"].tap()
+            app.buttons["Day"].tap()
+            let wheels = app.pickerWheels
+            XCTAssertEqual(wheels.count, 3)
+            wheels.element(boundBy: 0).adjust(toPickerWheelValue: "1")
+            wheels.element(boundBy: 1).adjust(toPickerWheelValue: "10")
+            wheels.element(boundBy: 2).adjust(toPickerWheelValue: "35")
+        }
+        selectCustomTime()
+        let expected = preview.label
+        XCTAssertTrue(expected.contains("10:35"))
+        XCTAssertTrue(app.buttons["customReminderAdd"].isEnabled)
+        attach(app, "Custom Reminder Day and time wheels")
+        app.buttons["customReminderCancel"].tap()
+        waitGone(app.buttons["customReminderAdd"])
+        app.buttons["scheduleCustomReminder"].tap()
+        selectCustomTime()
+        app.buttons["customReminderAdd"].tap()
+        waitGone(app.buttons["customReminderAdd"])
+        let reminder = app.datePickers["scheduleManualReminder-0"]
+        XCTAssertEqual(reminder.value as? String, expected)
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.buttons["editSchedule"].label, original)
+        app.buttons["editSchedule"].tap()
+        app.buttons["scheduleDay-7"].tap()
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        app.buttons["scheduleCustomReminder"].tap(); selectCustomTime(); app.buttons["customReminderAdd"].tap()
+        waitGone(app.buttons["customReminderAdd"])
+        scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app); _ = openSchedule(app, task: task)
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        XCTAssertEqual(reminder.value as? String, expected)
+    }
+    @MainActor func testCustomReminderExpiredCannotAdd() {
+        let app = launch()
+        _ = openSchedule(app, task: "Review the project outline")
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        app.buttons["scheduleCustomReminder"].tap()
+        XCTAssertTrue(app.staticTexts["customReminderExpired"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["customReminderAdd"].isEnabled)
+        app.buttons["customReminderCancel"].tap()
+        waitGone(app.buttons["customReminderAdd"])
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+    }
+}
