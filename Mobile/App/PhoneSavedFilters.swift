@@ -321,6 +321,7 @@ struct PhoneNormalFilterFields: View {
                         if selected { Image(systemName: "checkmark") }
                     }.frame(minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("normalFilterOption-" + name + "-" + String(describing: value))
                 }
             }.navigationTitle(name)
         } label: {

@@ -22,7 +22,7 @@ Preview does not mutate tasks or save the filter. It reflects the current worksp
 ## Verification
 
 - Source and semantic review clean after fixing restrictive Tag-mode All behavior.
-- Full 853 XCTest + 38 Swift tests and release passed; final iPhone compile pending.
+- Full 853 XCTest + 38 Swift tests and release passed; iPhone compile passed.
 - Production helper tests verify explicit Tag All restores both tagged/untagged matching while preserving other criteria, and opening restrictive empty modes is not mislabeled All.
-- Native multi-criteria preview/persistence/cancellation, restrictive Tag mode reset, Search archive, Advanced and failed-write regressions pending while another coordinated native task owns the Simulator.
-- Exact-head CI and final actual screenshot pending. No pixel-perfect acceptance claim.
+- Native regression run logged passes for Normal create/delete, Search archive round-trip, Advanced retention and failed-write draft retention. Two new preview tests required surface-scoped row queries because underlying task-list titles remain in the accessibility tree. Corrected two-test rerun passed (2/2, exit 0) with exact preview row identities/count, persisted criteria, outer Cancel and restrictive Tag-mode reset; the six-test run finalization stalled and its exact owned xcodebuild was gracefully terminated after tests completed. No native-completion claim for the incomplete result bundle.
+- Actual neutral Simulator screenshot inspected and included; shows primary criteria and keyword/type. More and Preview are below the captured viewport, exercised by native tests. Exact-head CI pending. No pixel-perfect acceptance claim.
