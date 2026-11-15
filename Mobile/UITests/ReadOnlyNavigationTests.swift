@@ -2362,7 +2362,7 @@ final class ReadOnlyNavigationTests: XCTestCase {
             XCTAssertTrue(row.exists)
         }
         app.buttons["taskActionLayoutCancel"].tap()
-        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        waitGone(app.buttons["taskActionLayoutDone"])
         // Back on Task Actions before counting: the More screen sits above
         // the actions list, so label queries must run on this screen.
         app.navigationBars["More"].buttons.firstMatch.tap()
