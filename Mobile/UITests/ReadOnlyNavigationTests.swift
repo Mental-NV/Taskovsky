@@ -2555,7 +2555,7 @@ extension ReadOnlyNavigationTests {
         attach(app, "Schedule Duration tab preserves all-day draft")
         type.buttons["Date"].tap()
         XCTAssertTrue(type.buttons["Date"].isSelected)
-        XCTAssertEqual(app.switches["scheduleTime"].value as? String, "0")
+        XCTAssertEqual(app.buttons["scheduleTime"].value as? String, "None")
         type.buttons["Duration"].tap()
         app.buttons["scheduleCancel"].tap()
         app.buttons["editSchedule"].tap()
@@ -2563,6 +2563,93 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(type.buttons["Date"].isSelected)
         attach(app, "Schedule Date tab after canceled Duration draft")
         app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testScheduleTimePopupOpensStagesClosesAndOuterCancelDiscards() {
+        let app = launch(), task = "Review the project outline"
+        let original = openSchedule(app, task: task)
+        let time = app.buttons["scheduleTime"]
+        reveal(time, in: app)
+        XCTAssertEqual(time.value as? String, "None")
+        XCTAssertFalse(app.buttons["scheduleTimeRemove"].exists)
+        time.tap()
+        let wheels = app.datePickers["scheduleTimeWheels"]
+        XCTAssertTrue(wheels.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["scheduleTimeZone"].exists)
+        attach(app, "Schedule Time popup with staged time and zone")
+        app.buttons["scheduleTimePopoverDone"].tap()
+        waitGone(wheels)
+        XCTAssertNotEqual(time.value as? String, "None")
+        XCTAssertTrue(app.buttons["scheduleTimeRemove"].exists)
+        // The zone route stays available on the staged draft; choosing a zone
+        // then cancelling the outer sheet discards both staged changes.
+        let zone = app.buttons["scheduleZone"]
+        reveal(zone, in: app)
+        zone.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("London")
+        let choice = app.buttons["Europe/London"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5))
+        choice.tap()
+        waitGone(search)
+        app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.buttons["editSchedule"].label, original)
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(app.buttons["scheduleDone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["scheduleTime"].value as? String, "None")
+        XCTAssertFalse(app.buttons["scheduleTimeRemove"].exists)
+        app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testScheduleTimeSaveReopenRemoveAndDurationUnchanged() {
+        let app = launch(), task = "Review the project outline"
+        let original = openSchedule(app, task: task)
+        app.buttons["scheduleTime"].tap()
+        XCTAssertTrue(app.datePickers["scheduleTimeWheels"].waitForExistence(timeout: 5))
+        let wheels = app.pickerWheels
+        XCTAssertGreaterThanOrEqual(wheels.count, 2)
+        wheels.element(boundBy: 0).adjust(toPickerWheelValue: "10")
+        wheels.element(boundBy: 1).adjust(toPickerWheelValue: "35")
+        XCTAssertEqual((wheels.element(boundBy: 0).value as? String)?.split(separator: " ").first.map(String.init), "10")
+        XCTAssertEqual((wheels.element(boundBy: 1).value as? String)?.split(separator: " ").first.map(String.init), "35")
+        app.buttons["scheduleTimePopoverDone"].tap()
+        waitGone(app.datePickers["scheduleTimeWheels"])
+        let selectedTime = app.buttons["scheduleTime"].value as? String
+        XCTAssertTrue(selectedTime?.contains("10:35") == true)
+        XCTAssertTrue(app.buttons["scheduleTimeRemove"].exists)
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        let saved = app.buttons["editSchedule"].label
+        XCTAssertNotEqual(saved, original)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app)
+        XCTAssertEqual(openSchedule(app, task: task), saved)
+        XCTAssertEqual(app.buttons["scheduleTime"].value as? String, selectedTime)
+        // The saved time reopens with an inline remove control, and the
+        // Duration toggle still offers the unchanged range editor.
+        XCTAssertNotEqual(app.buttons["scheduleTime"].value as? String, "None")
+        XCTAssertTrue(app.buttons["scheduleTimeRemove"].exists)
+        let type = app.segmentedControls["scheduleType"]
+        XCTAssertTrue(type.waitForExistence(timeout: 5))
+        XCTAssertTrue(type.buttons["Date"].isSelected)
+        type.buttons["Duration"].tap()
+        XCTAssertTrue(app.switches["scheduleTime"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["scheduleRangeStart"].firstMatch.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["scheduleRangeEnd"].firstMatch.exists)
+        attach(app, "Duration editor unchanged after Time popup save")
+        type.buttons["Date"].tap()
+        XCTAssertNotEqual(app.buttons["scheduleTime"].value as? String, "None")
+        app.buttons["scheduleTimeRemove"].tap()
+        XCTAssertEqual(app.buttons["scheduleTime"].value as? String, "None")
+        XCTAssertFalse(app.buttons["scheduleTimeRemove"].exists)
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.buttons["editSchedule"].label, original)
     }
 
     @MainActor func testScheduleDurationDateMoveRemainsAvailableAndCancels() {
@@ -2819,7 +2906,7 @@ extension ReadOnlyNavigationTests {
         let cancel = app.buttons["scheduleCancel"]
         let done = app.buttons["scheduleDone"]
         let notice = app.staticTexts["taskScheduleNotice"]
-        let time = app.switches["scheduleTime"]
+        let time = app.buttons["scheduleTime"]
 
         func openFromSwipe() {
             XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -2829,14 +2916,25 @@ extension ReadOnlyNavigationTests {
             XCTAssertTrue(done.waitForExistence(timeout: 5))
         }
 
+        func stageTimeThroughPopup() {
+            reveal(time, in: app)
+            XCTAssertEqual(time.value as? String, "None")
+            time.tap()
+            XCTAssertTrue(app.datePickers["scheduleTimeWheels"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.descendants(matching: .any)["scheduleTimeZone"].exists)
+            app.buttons["scheduleTimePopoverDone"].tap()
+            waitGone(app.datePickers["scheduleTimeWheels"])
+            XCTAssertNotEqual(time.value as? String, "None")
+            XCTAssertTrue(app.buttons["scheduleTimeRemove"].exists)
+        }
+
         openFromSwipe()
-        XCTAssertEqual(time.value as? String, "0")
-        setSwitch("scheduleTime", to: true, app: app)
+        stageTimeThroughPopup()
         stageTaskScheduleSkip(in: app)
         attach(app, "Task swipe stages a skip of the saved occurrence")
         app.buttons["Keep editing"].tap()
         reveal(time, in: app, towardTop: true)
-        XCTAssertEqual(time.value as? String, "1")
+        XCTAssertNotEqual(time.value as? String, "None")
         stageTaskScheduleSkip(in: app)
         cancel.tap()
         waitGone(done)
@@ -2844,8 +2942,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertFalse(notice.exists)
 
         openFromSwipe()
-        XCTAssertEqual(time.value as? String, "0")
-        setSwitch("scheduleTime", to: true, app: app)
+        stageTimeThroughPopup()
         stageTaskScheduleSkip(in: app)
         done.tap()
         waitGone(done)
@@ -2858,7 +2955,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         XCTAssertFalse(undo.exists)
         openFromSwipe()
-        XCTAssertEqual(time.value as? String, "0")
+        XCTAssertEqual(time.value as? String, "None")
         cancel.tap()
         waitGone(done)
     }
@@ -7335,5 +7432,34 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar actions"].tap(); app.buttons["Filter View Range"].tap()
         XCTAssertEqual(app.buttons["All"].value as? String, "Selected")
         app.buttons["calendarPreferencesCancel"].tap()
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testTimePrecisionZoneAndOutsideDismissal() {
+        let app = launch(qaCase: "time-precision")
+        let originalEvidence = app.staticTexts["previewNotice"].value as? String
+        XCTAssertTrue(originalEvidence?.contains("Pacific/Kiritimati") == true)
+        _ = openSchedule(app, task: "Review the project outline")
+        let time = app.buttons["scheduleTime"]
+        reveal(time, in: app)
+        XCTAssertTrue((time.value as? String)?.contains("0:15") == true)
+        time.tap()
+        let wheels = app.pickerWheels
+        XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual((wheels.element(boundBy: 0).value as? String)?.split(separator: " ").first.flatMap { Int($0) }, 0)
+        XCTAssertEqual((wheels.element(boundBy: 1).value as? String)?.split(separator: " ").first.map(String.init), "15")
+        XCTAssertEqual(app.descendants(matching: .any)["scheduleTimeZone"].firstMatch.value as? String, "Pacific/Kiritimati")
+        attach(app, "Time popup in non-device zone")
+        // The sheet title is visibly outside the popover; dismiss without selecting Done.
+        app.navigationBars["Schedule"].staticTexts["Schedule"].tap()
+        waitGone(app.buttons["scheduleTimePopoverDone"])
+        XCTAssertTrue((time.value as? String)?.contains("0:15") == true)
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["previewNotice"].value as? String, originalEvidence)
     }
 }

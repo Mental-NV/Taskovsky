@@ -4,7 +4,7 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, timePrecision = "time-precision", calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneTaskGrouping: String {
     case standard, creationDate, dueDate, priority, list, tag, ungrouped
@@ -133,6 +133,12 @@ final class PhoneWorkspaceModel: ObservableObject {
     private struct ScheduleFeedback {
         let message: String
         let undo: WorkspaceCalendarUndo?
+    }
+
+    var timePrecisionEvidence: String {
+        guard isQA, qaCase == .timePrecision, let task = document?.snapshot.workspace.tasks.first,
+              let due = task.dueDate else { return "" }
+        return "\(due.timeIntervalSince1970)|\(task.hasDueTime)|\(task.timeZoneID ?? "device")"
     }
 
     @Published private var scheduleFeedback: [PhoneScheduleSurface: ScheduleFeedback] = [:]
@@ -641,6 +647,17 @@ final class PhoneWorkspaceModel: ObservableObject {
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             #if DEBUG
+            if isQA && qaCase == .timePrecision {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                var zone = Calendar(identifier: .gregorian)
+                zone.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+                let precise = zone.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 0, minute: 15, second: 37))!
+                data.tasks[0].dueDate = precise
+                data.tasks[0].hasDueTime = true
+                data.tasks[0].timeZoneID = "Pacific/Kiritimati"
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .shortCalendarMove {
                 var data = initial.workspace
                 guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
