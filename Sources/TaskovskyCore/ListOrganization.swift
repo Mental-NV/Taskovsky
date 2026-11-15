@@ -35,7 +35,7 @@ public enum ListPlacement: Hashable, Sendable {
 }
 
 public enum ListOrganizationCommand: Sendable {
-    case saveList(TaskList, creating: Bool)
+    case saveList(TaskList, creating: Bool, initialViewMode: TaskListViewMode = .list)
     case setListViewMode(UUID, TaskListViewMode)
     case setListColor(UUID, expected: String, color: String)
     case deleteList(UUID)
@@ -48,14 +48,14 @@ public enum ListOrganizationCommand: Sendable {
     /// Returns nil on invalid input, false for an unchanged draft, and true after a mutation.
     public func apply(to data: inout WorkspaceData, now: Date) -> Bool? {
         switch self {
-        case .saveList(var list, let creating):
+        case .saveList(var list, let creating, let initialViewMode):
             list.name = list.name.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !list.name.isEmpty, list.folderID.map({ id in data.folders.contains { $0.id == id } }) ?? true
             else { return nil }
             let index = data.lists.firstIndex { $0.id == list.id }
             if creating {
                 guard index == nil else { return nil }
-                list.viewMode = .list
+                list.viewMode = initialViewMode
                 list.sections = []
                 data.lists.append(list)
             } else {
