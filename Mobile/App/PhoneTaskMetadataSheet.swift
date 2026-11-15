@@ -77,9 +77,13 @@ struct PhoneTaskMetadataSheet: View {
                 }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
+                        Button {
                             if hasChanges { confirmDiscard = true } else { dismiss() }
-                        }.disabled(model.isBusy).accessibilityIdentifier("taskMetadataCancel")
+                        } label: {
+                            if request.kind == .tags { Image(systemName: "xmark") }
+                            else { Text("Cancel") }
+                        }.accessibilityLabel(request.kind == .tags ? "Close" : "Cancel")
+                            .disabled(model.isBusy).accessibilityIdentifier("taskMetadataCancel")
                     }
                     if request.kind != .priority {
                         ToolbarItemGroup(placement: .confirmationAction) {
@@ -137,24 +141,18 @@ struct PhoneTaskMetadataSheet: View {
         let visible = tags.filter { query.isEmpty || $0.name.localizedStandardContains(query) }
         return List {
             Section {
-                TextField("Search existing tags", text: $query)
+                TextField("Input Tag", text: $query)
                     .autocorrectionDisabled()
                     .accessibilityIdentifier("searchTaskTags")
             }
             if visible.isEmpty { Text(query.isEmpty ? "No tags in this workspace" : "No matching tags").foregroundStyle(.secondary) }
-            ForEach(visible) { tag in
-                let selected = tagIDs.contains(tag.id)
-                Button {
-                    if selected { tagIDs.removeAll { $0 == tag.id } } else { tagIDs.append(tag.id) }
-                } label: {
-                    HStack {
-                        Text(tag.name)
-                        Spacer()
-                        Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint)
-                    }.frame(minHeight: 44).contentShape(Rectangle())
-                }.buttonStyle(.plain).accessibilityLabel(tag.name)
-                    .accessibilityValue(selected ? "Selected" : "Not selected")
-                    .accessibilityIdentifier("taskTag-" + tag.id.uuidString)
+            let assigned = visible.filter { tagIDs.contains($0.id) }
+            let remaining = visible.filter { !tagIDs.contains($0.id) }
+            if !assigned.isEmpty {
+                Section { ForEach(assigned) { tag in tagRow(tag, selected: true) } }
+            }
+            if !remaining.isEmpty {
+                Section { ForEach(remaining) { tag in tagRow(tag, selected: false) } }
             }
             if !unavailable.isEmpty {
                 Section {
@@ -162,6 +160,20 @@ struct PhoneTaskMetadataSheet: View {
                 } footer: { Text("Unavailable saved tag references are kept until you remove them.") }
             }
         }.scrollDismissesKeyboard(.interactively)
+    }
+
+    private func tagRow(_ tag: TaskTag, selected: Bool) -> some View {
+        Button {
+            if selected { tagIDs.removeAll { $0 == tag.id } } else { tagIDs.append(tag.id) }
+        } label: {
+            HStack {
+                Text(tag.name)
+                Spacer()
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle").foregroundStyle(.tint)
+            }.frame(minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel(tag.name)
+            .accessibilityValue(selected ? "Selected" : "Not selected")
+            .accessibilityIdentifier("taskTag-" + tag.id.uuidString)
     }
 
     private var checklistEditor: some View {

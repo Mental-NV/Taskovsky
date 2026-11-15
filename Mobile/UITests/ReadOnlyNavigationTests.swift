@@ -6970,3 +6970,57 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["tagManagerDone"].waitForExistence(timeout: 5))
     }
 }
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testAssignedTagsPartitionSearchAndCloseDiscard() {
+        let app = launch(qaCase: "assigned-tags")
+        app.buttons["Review the project outline"].tap()
+        openTaskMetadata("editTaskTags", in: app)
+        let planning = app.buttons["taskTag-00000000-0000-0000-0000-000000000200"]
+        let studio = app.buttons["taskTag-00000000-0000-0000-0000-000000000201"]
+        XCTAssertTrue(studio.waitForExistence(timeout: 5))
+        XCTAssertEqual(studio.value as? String, "Selected")
+        XCTAssertEqual(planning.value as? String, "Not selected")
+        XCTAssertLessThan(studio.frame.minY, planning.frame.minY)
+        XCTAssertEqual(app.buttons["taskMetadataCancel"].label, "Close")
+        attach(app, "Assigned checked tags separate from remaining tags")
+        planning.tap()
+        XCTAssertEqual(planning.value as? String, "Selected")
+        XCTAssertLessThan(planning.frame.minY, studio.frame.minY)
+        studio.tap()
+        XCTAssertEqual(studio.value as? String, "Not selected")
+        let search = app.textFields["searchTaskTags"]
+        XCTAssertEqual(search.placeholderValue, "Input Tag")
+        search.tap(); search.typeText("Studio")
+        XCTAssertTrue(studio.exists); XCTAssertFalse(planning.exists)
+        search.typeText(" no match")
+        XCTAssertTrue(app.staticTexts["No matching tags"].exists)
+        app.buttons["taskMetadataCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["taskMetadataCancel"])
+        XCTAssertEqual(app.buttons["editTaskTags"].value as? String, "Studio, 1 unavailable")
+        openTaskMetadata("editTaskTags", in: app)
+        XCTAssertEqual(studio.value as? String, "Selected")
+        XCTAssertEqual(planning.value as? String, "Not selected")
+        app.buttons["taskMetadataCancel"].tap()
+    }
+
+    @MainActor func testAssignedTagsSaveRetainsUnavailableIDsAcrossRelaunch() {
+        let app = launch(qaCase: "assigned-tags")
+        app.buttons["Review the project outline"].tap()
+        openTaskMetadata("editTaskTags", in: app)
+        app.buttons["taskTag-00000000-0000-0000-0000-000000000200"].tap()
+        app.buttons["taskMetadataDone"].tap()
+        waitGone(app.buttons["taskMetadataDone"])
+        XCTAssertTrue((app.buttons["editTaskTags"].value as? String ?? "").contains("1 unavailable"))
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.buttons["Review the project outline"].waitForExistence(timeout: 10))
+        app.buttons["Review the project outline"].tap()
+        openTaskMetadata("editTaskTags", in: app)
+        XCTAssertEqual(app.buttons["taskTag-00000000-0000-0000-0000-000000000200"].value as? String, "Selected")
+        XCTAssertEqual(app.buttons["taskTag-00000000-0000-0000-0000-000000000201"].value as? String, "Selected")
+        XCTAssertTrue(app.buttons["Remove unavailable tags"].exists)
+        app.buttons["taskMetadataCancel"].tap()
+    }
+}
