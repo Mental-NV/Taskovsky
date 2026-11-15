@@ -4853,7 +4853,8 @@ extension ReadOnlyNavigationTests {
         let button = app.buttons[identifier]
         reveal(button, in: app)
         button.tap()
-        XCTAssertTrue(app.buttons["taskMetadataCancel"].waitForExistence(timeout: 5))
+        let presented = identifier == "editTaskPriority" ? app.buttons["taskPriority-high"] : app.buttons["taskMetadataCancel"]
+        XCTAssertTrue(presented.waitForExistence(timeout: 5))
     }
 
     @MainActor func testTaskPriorityAndTagsPersistWithoutChangingDescription() {
@@ -4861,7 +4862,7 @@ extension ReadOnlyNavigationTests {
         app.buttons[task].tap()
         openTaskMetadata("editTaskPriority", in: app)
         app.buttons["taskPriority-high"].tap()
-        waitGone(app.buttons["taskMetadataCancel"])
+        waitGone(app.buttons["taskPriority-high"])
         XCTAssertEqual(app.buttons["editTaskPriority"].value as? String, "High")
         openTaskMetadata("editTaskTags", in: app)
         let search = app.textFields["searchTaskTags"]
@@ -6839,7 +6840,7 @@ extension ReadOnlyNavigationTests {
         card.tap()
         openTaskMetadata("editTaskPriority", in: app)
         app.buttons["taskPriority-high"].tap()
-        waitGone(app.buttons["taskMetadataCancel"])
+        waitGone(app.buttons["taskPriority-high"])
         app.buttons["taskDetailDone"].tap()
         XCTAssertEqual(lane.label, "High Priority")
         lane.tap()
@@ -6847,7 +6848,7 @@ extension ReadOnlyNavigationTests {
         card.tap()
         openTaskMetadata("editTaskPriority", in: app)
         app.buttons["taskPriority-none"].tap()
-        waitGone(app.buttons["taskMetadataCancel"])
+        waitGone(app.buttons["taskPriority-none"])
         app.buttons["taskDetailDone"].tap()
         XCTAssertEqual(lane.label, "No Priority")
         XCTAssertTrue(card.waitForExistence(timeout: 5))
@@ -7540,5 +7541,55 @@ extension ReadOnlyNavigationTests {
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         XCTAssertTrue(app.staticTexts["calendarRuler-America/New_York"].waitForExistence(timeout: 5))
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testDetailPriorityPopupChoicesPersistAndDismissWithoutChange() {
+        let app = launch(), title = "Review the project outline"
+        app.buttons[title].tap()
+        let entry = app.buttons["editTaskPriority"]
+        for (key, label) in [("high", "High"), ("medium", "Medium"), ("low", "Low"), ("none", "None")] {
+            openTaskMetadata("editTaskPriority", in: app)
+            let rows = ["high", "medium", "low", "none"].map { app.buttons["taskPriority-" + $0] }
+            for index in 0..<3 { XCTAssertLessThan(rows[index].frame.minY, rows[index + 1].frame.minY) }
+            XCTAssertTrue(rows[0].label.contains("High Priority"))
+            XCTAssertTrue(rows[1].label.contains("Medium Priority"))
+            XCTAssertTrue(rows[2].label.contains("Low Priority"))
+            XCTAssertTrue(rows[3].label.contains("No Priority"))
+            attach(app, "Detail Priority popup")
+            app.buttons["taskPriority-" + key].tap()
+            waitGone(rows[0])
+            XCTAssertEqual(entry.value as? String, label)
+            app.buttons["taskDetailDone"].tap()
+            app.buttons[title].tap()
+            XCTAssertEqual(entry.value as? String, label)
+        }
+        openTaskMetadata("editTaskPriority", in: app)
+        XCTAssertTrue(app.buttons["taskPriority-none"].isSelected)
+        app.navigationBars.firstMatch.tap()
+        waitGone(app.buttons["taskPriority-high"])
+        XCTAssertEqual(entry.value as? String, "None")
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testDetailPriorityLockedTrashAndRestore() {
+        let app = launch(qaCase: "lifecycle")
+        app.buttons["Review the project outline"].tap()
+        chooseLifecycleAction("Move to Trash", in: app)
+        expectLifecycleNotice("Moved to Trash", in: app)
+        let entry = app.buttons["editTaskPriority"]
+        reveal(entry, in: app)
+        XCTAssertFalse(entry.isEnabled)
+        XCTAssertFalse(app.buttons["taskPriority-high"].exists)
+        app.buttons["undoLifecycle"].tap()
+        expectLifecycleNotice("Change undone", in: app)
+        openTaskMetadata("editTaskPriority", in: app)
+        app.buttons["taskPriority-high"].tap()
+        waitGone(app.buttons["taskPriority-high"])
+        XCTAssertEqual(entry.value as? String, "High")
     }
 }
