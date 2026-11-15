@@ -15,11 +15,13 @@ public enum DetailAction: String, Codable, CaseIterable, Identifiable, Sendable 
 /// Presentation policy for the D02 actions sheet layout.
 ///
 /// The icon strip renders only for untouched (empty) or default layouts.
-/// Any saved custom layout keeps its exact pinned/more order and placement:
-/// decoding never reorders and never appends missing actions. Restoring
-/// defaults clears back to empty storage, which brings the strip back.
-/// Schema-unknown payloads fail decoding as a whole so the UI preserves
-/// them untouched instead of rewriting or dropping saved actions.
+/// Saved custom layouts keep their stored pinned order and existing More
+/// prefix with no strip and no reordering; absent supported actions are
+/// appended to the effective More list so older layouts keep access to new
+/// routes. Nothing is written back to storage until an explicit edit.
+/// Restoring defaults clears back to empty storage, which brings the strip
+/// back. Schema-unknown payloads fail decoding as a whole so the UI
+/// preserves them untouched instead of rewriting or dropping saved actions.
 public struct DetailActionLayout: Codable, Equatable, Sendable {
     /// Actions rendered as icon-strip tiles when the strip is shown.
     public static let stripActions: [DetailAction] = [.pin, .wontDo, .trash]
@@ -41,20 +43,22 @@ public struct DetailActionLayout: Codable, Equatable, Sendable {
         guard var layout = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
         var seen = Set<DetailAction>()
         layout.pinned = layout.pinned.filter { seen.insert($0).inserted }
-        layout.more = layout.more.filter { seen.insert($0).inserted }
+        // Keep the stored More prefix, then append absent supported actions
+        // so pre-existing layouts gain new routes without a storage rewrite.
+        layout.more = (layout.more + DetailAction.allCases).filter { seen.insert($0).inserted }
         return layout
     }
 
     /// The strip shows only for untouched or default layouts. Saved custom
     /// layouts — including older defaults that predate newer actions — keep
-    /// their exact rows with no strip and no forced migration.
+    /// their exact pinned rows with no strip and no reordering.
     public static func showsStrip(for data: Data) -> Bool {
         data.isEmpty || decode(data) == Self()
     }
 
     /// Rows for the main actions list. When the strip is shown, strip actions
     /// are excluded so each appears exactly once. Custom layouts render their
-    /// exact pinned order unchanged.
+    /// exact stored pinned order unchanged.
     public func pinnedRows(showingStrip: Bool) -> [DetailAction] {
         showingStrip ? pinned.filter({ !Self.stripActions.contains($0) }) : pinned
     }

@@ -2564,29 +2564,40 @@ extension MobileContractTests {
         XCTAssertTrue(rows.contains(.addSubtask) && rows.contains(.linkParent) && rows.contains(.tags))
     }
 
-    /// D02 customization preservation: a saved layout keeps its exact order
-    /// and placement with no forced migration, and hides the strip.
-    func testDetailLayoutPreservesSavedCustomOrderWithoutMigration() throws {
+    /// D02 customization preservation: a saved layout keeps its stored pinned
+    /// order and existing More prefix with no strip. Absent supported actions
+    /// join the effective More list so older layouts gain new routes, while
+    /// the saved raw bytes stay untouched until an explicit edit.
+    func testDetailLayoutPreservesStoredOrderAndAppendsAbsentToMore() throws {
         let saved = DetailActionLayout(pinned: [.trash, .complete, .pin], more: [.wontDo, .tags])
         let data = try JSONEncoder().encode(saved)
         let decoded = try XCTUnwrap(DetailActionLayout.decode(data))
-        XCTAssertEqual(decoded, saved)
         XCTAssertFalse(decoded.isDefault)
         XCTAssertFalse(DetailActionLayout.showsStrip(for: data))
         // No strip, so rows render the exact pinned order including moved
         // strip actions — nothing duplicates and nothing is reordered.
+        XCTAssertEqual(decoded.pinned, [.trash, .complete, .pin])
         XCTAssertEqual(decoded.pinnedRows(showingStrip: false), [.trash, .complete, .pin])
-        XCTAssertEqual(decoded.more, [.wontDo, .tags])
-        // An older default predating newer actions is custom storage too:
-        // it keeps its exact rows with no strip and no appended actions.
+        // The stored More prefix is stable; absent actions follow in
+        // supported order without touching storage.
+        XCTAssertEqual(decoded.more, [.wontDo, .tags, .reopen, .move, .duplicate, .convert,
+                                      .saveTemplate, .applyTemplate, .addSubtask, .linkParent])
+        // An older default predating newer actions keeps its exact pinned
+        // rows with no strip while gaining the new routes in More.
         let legacy = DetailActionLayout(
             pinned: [.complete, .reopen, .wontDo, .pin, .move, .duplicate, .convert, .trash, .saveTemplate, .applyTemplate],
             more: [])
         let legacyData = try JSONEncoder().encode(legacy)
         let legacyDecoded = try XCTUnwrap(DetailActionLayout.decode(legacyData))
-        XCTAssertEqual(legacyDecoded, legacy)
+        XCTAssertEqual(legacyDecoded.pinned, legacy.pinned)
+        XCTAssertEqual(legacyDecoded.more, [.addSubtask, .linkParent, .tags])
         XCTAssertFalse(DetailActionLayout.showsStrip(for: legacyData))
-        XCTAssertFalse(legacyDecoded.pinnedRows(showingStrip: false).contains(.addSubtask))
+        XCTAssertEqual(legacyDecoded.pinnedRows(showingStrip: false), legacy.pinned)
+        // The decode/encode round trip through an explicit edit is stable:
+        // saving the effective layout and decoding it again changes nothing.
+        let rewritten = try XCTUnwrap(DetailActionLayout.decode(legacyDecoded.encoded()))
+        XCTAssertEqual(rewritten, legacyDecoded)
+        XCTAssertEqual(rewritten.pinned, legacy.pinned)
     }
 
     /// Schema-unknown payloads fail as a whole so the UI preserves them
@@ -2598,7 +2609,11 @@ extension MobileContractTests {
         let repeated = DetailActionLayout(pinned: [.complete, .complete, .reopen], more: [.reopen, .tags])
         let data = try JSONEncoder().encode(repeated)
         XCTAssertEqual(DetailActionLayout.decode(data)?.pinned, [.complete, .reopen])
-        XCTAssertEqual(DetailActionLayout.decode(data)?.more, [.tags])
+        // Repeats collapse to first occurrence; absent actions still append
+        // after the stored More prefix.
+        XCTAssertEqual(DetailActionLayout.decode(data)?.more,
+                       [.tags, .wontDo, .pin, .move, .duplicate, .convert, .trash,
+                        .saveTemplate, .applyTemplate, .addSubtask, .linkParent])
     }
 
     /// Restoring defaults clears back to empty storage, which brings the
@@ -2609,6 +2624,10 @@ extension MobileContractTests {
         let custom = DetailActionLayout(pinned: [.complete], more: [.pin])
         let data = custom.encoded()
         XCTAssertFalse(data.isEmpty)
-        XCTAssertEqual(DetailActionLayout.decode(data), custom)
+        let effective = try XCTUnwrap(DetailActionLayout.decode(data))
+        XCTAssertEqual(effective.pinned, [.complete])
+        XCTAssertTrue(effective.more.prefix(1).elementsEqual([.pin]))
+        XCTAssertTrue(effective.more.contains(.tags))
+        XCTAssertEqual(DetailActionLayout.decode(effective.encoded()), effective)
     }
 }

@@ -2535,6 +2535,43 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(app.buttons["Delete Forever"].exists)
     }
 
+    /// D02 legacy layout (native slot): a persisted pre-D02 custom layout
+    /// keeps its exact pinned order with no strip, gains the new Tags, Add
+    /// Subtask and Link Parent Task routes in More, and keeps its stored
+    /// bytes through an untouched Edit save.
+    @MainActor func testDetailActionsLegacyLayoutGainsNewRoutesInMore() {
+        let app = launch(qaCase: "legacy-actions")
+        let task = app.buttons["Review the project outline"]
+        XCTAssertTrue(task.waitForExistence(timeout: 8))
+        task.tap()
+        app.buttons["taskActions"].tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["taskActionTile-pin"].exists)
+        XCTAssertFalse(app.buttons["taskActionTile-wontDo"].exists)
+        XCTAssertFalse(app.buttons["taskActionTile-trash"].exists)
+        XCTAssertTrue(app.buttons["Complete"].exists)
+        XCTAssertFalse(app.buttons["taskActionRow-tags"].exists)
+        let more = app.buttons["taskActionsMore"]
+        reveal(more, in: app)
+        more.tap()
+        for identifier in ["taskActionRow-tags", "taskActionRow-addSubtask", "taskActionRow-linkParent"] {
+            let row = app.buttons[identifier]
+            reveal(row, in: app)
+            XCTAssertTrue(row.exists)
+        }
+        let edit = app.buttons["editTaskActionLayout"]
+        reveal(edit, in: app)
+        edit.tap()
+        XCTAssertTrue(app.buttons["taskActionLayoutDone"].waitForExistence(timeout: 5))
+        app.buttons["taskActionLayoutDone"].tap()
+        waitGone(app.buttons["taskActionLayoutDone"])
+        app.navigationBars["More"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons["taskActionsDone"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["taskActionTile-pin"].exists)
+        XCTAssertFalse(app.buttons["taskActionRow-tags"].exists)
+        attach(app, "Legacy Task Actions gain new routes in More")
+    }
+
     @MainActor func testLifecycleCompletesRecurringTreeAndUndoFromRow() {
         let app = launch(qaCase: "lifecycle")
         let toggle = app.buttons["lifecycleToggle-00000000-0000-0000-0000-000000000001"]
