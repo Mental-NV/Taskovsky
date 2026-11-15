@@ -285,5 +285,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected: None-only cycle-exclusion case, no personal content",
     "historical": true
+  },
+  {
+    "state": "C14",
+    "file": "c14-arrange-options.png",
+    "sha256": "01d137b4c5f99de0cacd9cb6d56f61a6e31b81e9b785ef0695bf85d239209590",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-arrange-options-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral seeded fixture only; no personal account/task data. Three choices and checks visible; existing help truncates.",
+    "source_commit": "cec8cf1",
+    "historical": true
   }
 ]
