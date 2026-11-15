@@ -964,3 +964,6 @@ Day and configurable Multi-Day hourly columns fill available viewport width afte
 
 ### On-demand Calendar hours
 Hourly views expose existing Early/Late hour expansion controls in a Calendar hours popover rather than a permanent grid-header row. Counts/session reset remain unchanged; Done dismisses without changing schedule data. This is Taskovsky's preserved feature access, not exact TickTick control design. See `../changes/mobile-calendar-hours-popover-2026-11-15.md`.
+
+### Day week selector
+Day replaces its single focused-date header with seven dates from the current Calendar week. Tapping selects focus through the existing Day action without rescheduling tasks; current calendar week-start rules apply. Week/other headers unchanged. Reference exact strip geometry/selection semantics remain unverified. See `../changes/mobile-day-week-strip-2026-11-15.md`.

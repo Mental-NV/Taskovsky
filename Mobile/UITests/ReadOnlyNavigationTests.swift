@@ -325,6 +325,34 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
     }
 
+    @MainActor func testCalendarDayWeekStripSelectsWithoutRescheduling() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        let monday = app.buttons["calendarDay-2026-11-9"]
+        XCTAssertTrue(monday.waitForExistence(timeout: 5))
+        XCTAssertTrue(monday.isSelected)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDaySelector-")).count, 6)
+        let sunday = app.buttons["calendarDaySelector-2026-11-15"]
+        XCTAssertTrue(sunday.isHittable)
+        attach(app, "Day seven-date selector")
+        sunday.tap()
+        XCTAssertTrue(app.buttons["calendarDay-2026-11-15"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["calendarJumpToDate"].value as? String, "Sunday, 15 November 2026")
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+        app.buttons["Next Calendar period"].tap()
+        XCTAssertTrue(app.buttons["calendarDay-2026-11-16"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["calendarDaySelector-2026-11-22"].exists)
+        app.buttons["Today"].tap()
+        XCTAssertTrue(monday.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Review the project outline"].exists)
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+        XCTAssertFalse(app.buttons["calendarDaySelector-2026-11-15"].exists)
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-")).count, 7)
+    }
+
     @MainActor func testCalendarThreeDaySaveFailureKeepsPriorView() {
         let app = launch(qaCase: "save-failure")
         app.buttons["Calendar"].tap()

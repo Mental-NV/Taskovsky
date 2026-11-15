@@ -285,3 +285,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone Day/Multi-Day viewport-fill candidate replaces fixed narrow columns with available width while preserving minimums and Week behavior. Full suite/release/review and five native tests passed; exact-head CI pending; header chrome and calibrated pixel parity still open. See `docs/changes/mobile-hourly-viewport-2026-11-15.md`.
 
 - Calendar hour-row chrome candidate relocates existing controls to an on-demand popover, preserving session behavior. Full suite/release/review and four native tests plus backdrop recheck passed; exact-head CI pending; this is not observed TickTick hour-menu parity. See `docs/changes/mobile-calendar-hours-popover-2026-11-15.md`.
+
+- iPhone Day seven-date selector candidate replaces lone header, reusing existing focus navigation; full suite/release/review and four native tests passed; exact-head CI pending. Exact reference strip semantics and pixel geometry remain open. See `docs/changes/mobile-day-week-strip-2026-11-15.md`.
