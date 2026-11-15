@@ -231,5 +231,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral Planning/Studio fixture and unavailable reference notice only; no personal profile information",
     "historical": true
+  },
+  {
+    "state": "T12",
+    "file": "t12-list-creation.png",
+    "sha256": "1093ce6c693b70b7092bc382545dba6427bf3c2945cab45a6cda4e74dfa6aae7",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "capture_checkpoint": "9b8896b",
+    "receipt": "../../../changes/mobile-list-creation-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral project name, creation controls and no personal information",
+    "historical": true
   }
 ]

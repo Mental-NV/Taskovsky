@@ -21,5 +21,7 @@ Verification added but not run here: three portable domain tests for atomic mode
 - Coordinating parent reports final five native regressions passed: List/Board/Timeline creation, actual rendered mode controls and relaunch; changed-mode Cancel; D06 nested creation without implicit task movement; folder placement/ungrouping; emoji preservation/editing.
 - Coordinating parent reports full **838 XCTest + 38 Swift Testing**, release and signature checks passed. Exact-head hosted CI remains required before merge.
 - Native test navigation initially toggled an already-open drawer after manager dismissal; test corrected to select its visible destination directly. Production routing was not changed to accommodate the test.
-- Initial screenshot had the keyboard obscuring preview labels/More. A dedicated screenshot-only regression now requires keyboard dismissal and all three preview controls plus More hittable before attaching; its focused execution remains pending.
+- Initial screenshot had the keyboard obscuring preview labels/More. A dedicated screenshot-only regression now requires keyboard dismissal and all three preview controls plus More hittable before attaching; its focused run 48511 passed at test checkpoint `9b8896b`, as reported by coordinating parent.
 - No new matched reference capture, exact swatch/layout acceptance or pixel certification is claimed. Existing explicit semantic differences above remain.
+
+- Final inspected neutral screenshot: [T12 Add List](../assets/mobile-parity/2026-11-15/t12-list-creation.png), 1170×2532, unmodified. SHA-256 `1093ce6c693b70b7092bc382545dba6427bf3c2945cab45a6cda4e74dfa6aae7`. Name, all three preview labels, selection checkmark and More are unobscured; no personal profile content.

@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**15/46 states have an attached Taskovsky screenshot; 31/46 await one. 0/46 have a portable TickTick reference image attached here.** All seventeen assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**16/46 states have an attached Taskovsky screenshot; 30/46 await one. 0/46 have a portable TickTick reference image attached here.** All eighteen assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -84,7 +84,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | T09 | Smart Lists management | Partial | Visibility management exists; combined layout differs. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T10 | Smart-list visibility popup | Similar | Show / Show if not empty / Hidden choices exist; visual match pending. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T11 | Management Tags tab | Partial | Separate tag management, not matching tab. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
-| T12 | Add List | Partial | Fields exist; matching previews and More layout absent. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| T12 | Add List | Partial | Real List/Kanban/Timeline creation previews and More implemented; reference palette, advanced wording and final layout remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/t12-list-creation.png" width="180" alt="Taskovsky Add List view previews">](assets/mobile-parity/2026-11-15/t12-list-creation.png)<br>[Receipt](changes/mobile-list-creation-2026-11-15.md) |
 | T13 | Normal Filter | Partial | Criteria, keywords, type and preview exist; subforms and layout differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T14 | Advanced Filter | Partial | Logic and criteria exist; examples and layout differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T15 | Add Tag | Partial | Name/color/parent exist via different system controls. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
@@ -192,3 +192,11 @@ Source checkpoint `8b6da8b`; actual owned Simulator QA screenshot (1170×2532), 
 Source checkpoint `9459da6`; actual owned Simulator QA screenshot (1170×2532), neutral assigned-tags fixture. Two native regression tests passed; full 835 XCTest + 38 Swift Testing, release and signature verification passed. Assigned section structure is implemented; this is not matched TickTick visual acceptance or pixel certification.
 
 [<img src="assets/mobile-parity/2026-11-15/d04-assigned-tags.png" width="250" alt="Taskovsky Simulator QA assigned Tags">](assets/mobile-parity/2026-11-15/d04-assigned-tags.png)
+
+
+<a id="evidence-t12"></a>
+### T12 — Add List view previews
+
+Actual 1170×2532 owned Simulator capture at checkpoint `9b8896b`, neutral project name, keyboard dismissed. Focused capture run 48511 passed; production source unchanged from tested creation candidate. List/Kanban/Timeline choices are backed by atomic initial mode creation. Color palette and matched reference layout remain partial, not pixel certification.
+
+[<img src="assets/mobile-parity/2026-11-15/t12-list-creation.png" width="250" alt="Taskovsky Simulator QA Add List">](assets/mobile-parity/2026-11-15/t12-list-creation.png)
