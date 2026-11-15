@@ -163,6 +163,14 @@ struct PhoneScheduleSheet: View {
     private var dateSection: some View {
         Section {
             if edit.hasDate {
+                Picker("Schedule type", selection: Binding(
+                    get: { edit.schedule.duration != nil },
+                    set: { edit.setDuration($0, defaultMinutes: settings.defaultDurationMinutes) })) {
+                        Text("Date").tag(false)
+                        Text("Duration").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .accessibilityIdentifier("scheduleType")
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack {
                         shortcut("Today", offset: 0)
@@ -175,18 +183,20 @@ struct PhoneScheduleSheet: View {
                         .datePickerStyle(.graphical)
                         .accessibilityIdentifier("scheduleDateGrid")
                 } else {
-                    DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
+                    DisclosureGroup("Move duration to another date") {
+                        DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
+                            .accessibilityIdentifier("scheduleMoveDurationDate")
+                    }
                 }
                 Toggle("Time", isOn: Binding(get: { edit.schedule.effectiveHasTime }, set: { edit.setTime($0) }))
                     .accessibilityIdentifier("scheduleTime")
-                Toggle("Duration", isOn: Binding(get: { edit.schedule.duration != nil },
-                                                  set: { edit.setDuration($0, defaultMinutes: settings.defaultDurationMinutes) }))
-                    .accessibilityIdentifier("scheduleDuration")
                 if let range = edit.schedule.duration {
                     let components: DatePickerComponents = range.isAllDay ? .date : [.date, .hourAndMinute]
                     DatePicker("Start", selection: Binding(get: { edit.schedule.duration?.start ?? range.start },
                                                             set: { edit.setStart($0) }), displayedComponents: components)
+                        .accessibilityIdentifier("scheduleRangeStart")
                     DatePicker("End", selection: Binding(get: { due }, set: { edit.setEnd($0) }), displayedComponents: components)
+                        .accessibilityIdentifier("scheduleRangeEnd")
                     if range.validated(in: calendar) == nil {
                         Text("The end must be on or after the start.").font(.footnote).foregroundStyle(.red)
                     }
@@ -200,7 +210,7 @@ struct PhoneScheduleSheet: View {
                 Button("Add date") { edit.hasDate = true }.accessibilityIdentifier("scheduleAddDate")
                 if request.task.dueDate != nil { Text("Schedule removal is staged until you tap Done.").font(.footnote) }
             }
-        } header: { Text("Date") }
+        } header: { Text(edit.schedule.duration == nil ? "Date" : "Duration") }
     }
 
     private func shortcut(_ label: String, offset: Int) -> some View {

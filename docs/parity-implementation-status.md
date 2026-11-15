@@ -291,3 +291,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - Mobile Week overview: [bounded candidate](changes/mobile-week-overview-2026-11-15.md), native navigation/filter/relaunch verified, hosted CI pending. Live evidence establishes mini-month/week tiles and Day/Back navigation; exact visual matching remains incomplete.
 
 - Mobile Arrange Filter: [staged multi-source candidate](changes/mobile-arrange-filter-2026-11-15.md); reference selection/Cancel observed, native selection/folder/schedule checks passed; exact-head CI pending.
+
+- Mobile Schedule Date/Duration: [presentation candidate](changes/mobile-schedule-tabs-2026-11-15.md); existing conversion semantics retained, native checks passed; hosted exact-head CI pending.

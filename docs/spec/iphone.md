@@ -975,3 +975,7 @@ The bounded [Week overview](../changes/mobile-week-overview-2026-11-15.md) adds 
 ### Arrange Filter dialog candidate
 
 See [staged multi-source Arrange Filter](../changes/mobile-arrange-filter-2026-11-15.md). Applies within the existing Arrange session; reference Done persistence is unverified.
+
+### Schedule type presentation
+
+[Date/Duration segmented presentation](../changes/mobile-schedule-tabs-2026-11-15.md) uses existing conversion semantics, explicitly not the unverified reference timed default.
