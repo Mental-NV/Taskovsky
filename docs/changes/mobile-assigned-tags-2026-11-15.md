@@ -12,3 +12,12 @@ Reference: mobile-surface-inventory-2026-11-14.md D04 observed Input Tag, assign
 | Unavailable tags | Existing final section | IDs preserved unless explicit removal; never silently filtered from saved draft |
 
 Only Tags gets the new Close presentation; Priority/Progress/Checklist retain Cancel. Sections have no invented visible heading. No domain semantics or storage changes. Neutral assigned-tags QA fixture contains Planning, Studio and one unavailable reference. Native coverage checks partition order, selection movement, search/no-match, dirty dismissal, save/relaunch and unavailable ID retention. Parent owns execution, review and CI; source-only checkpoint does not claim tested or pixel-perfect parity.
+
+
+## Verification receipt
+- Source checkpoint `9459da6`. Independent source review reported clean by coordinating parent.
+- Owned Simulator run session 56579: both `testAssignedTagsPartitionSearchAndCloseDiscard` and `testAssignedTagsSaveRetainsUnavailableIDsAcrossRelaunch` passed, as reported by coordinating parent.
+- Full 835 XCTest + 38 Swift Testing / release run 95844: **pending confirmation** at receipt preparation. Hosted exact-head CI and merge gates remain pending.
+- Actual 1170×2532 owned Simulator screenshot inspected: neutral Planning/Studio fixture and unavailable-ID notice only, no personal data. Unmodified image [D04 assigned tags](../assets/mobile-parity/2026-11-15/d04-assigned-tags.png).
+- SHA-256: `1e40871b196a8ccd286542ca352fb950b006a5b8781505fb7292509eebfb24ab`.
+- Remaining: matched reference layout and reference save timing unverified; no pixel-perfect claim.

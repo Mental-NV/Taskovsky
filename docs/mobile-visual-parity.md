@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**13/46 states have an attached Taskovsky screenshot; 33/46 await one. 0/46 have a portable TickTick reference image attached here.** All fifteen assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**14/46 states have an attached Taskovsky screenshot; 32/46 await one. 0/46 have a portable TickTick reference image attached here.** All sixteen assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -57,7 +57,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | D01 | Task detail | Partial | Empty plain descriptions use one Add description menu; metadata and populated detail layout still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/d01-empty-description.png" width="180" alt="Taskovsky neutral empty task detail">](#evidence-d01)<br>[PR116](https://github.com/Mental-NV/Taskovsky/pull/116) |
 | D02 | Actions sheet | Partial | Local actions exist; icon strip, order and external actions differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | D03 | Actions More | Partial | Actions/customization counterparts exist; inventory and nested structure differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
-| D04 | Tags picker | Partial | Search, selection and save exist; no separate assigned checked section. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| D04 | Tags picker | Partial | Assigned checked section, Input Tag and Close implemented; exact reference save timing and matched layout acceptance remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/d04-assigned-tags.png" width="180" alt="Taskovsky assigned Tags picker">](assets/mobile-parity/2026-11-15/d04-assigned-tags.png)<br>[Receipt](changes/mobile-assigned-tags-2026-11-15.md) |
 | D05 | Priority popup | Partial | Choices live in metadata sheet, not matching anchored popup. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | D06 | Move to list | Partial | Flat Inbox/list selection; search, folder hierarchy and Add List layout differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | D07 | Schedule Date | Partial | Tabs and month grid implemented; outer and nested presentation still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/d07-schedule-date.png"><img src="assets/mobile-parity/2026-11-15/d07-schedule-date.png" width="180" alt="Taskovsky D07 historical Simulator QA screenshot"></a><br>[PR #114](https://github.com/Mental-NV/Taskovsky/pull/114) · [Capture details](#evidence-d07)<br>Historical QA; not current-main capture. |
@@ -177,3 +177,11 @@ Follow-up source `a8731b6`; [notice-removal receipt](changes/mobile-capture-noti
 [<img src="assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png" width="250" alt="Taskovsky compact composer">](assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png)
 
 Schedule Reminder/Repeat images show existing controls on dedicated staged pages, not the reference anchored preset menus. Both states remain partial.
+
+
+<a id="evidence-d04"></a>
+### D04 — Assigned Tags picker
+
+Source checkpoint `9459da6`; actual owned Simulator QA screenshot (1170×2532), neutral assigned-tags fixture. Two native regression tests passed; full-suite/release verification was pending when this receipt was prepared. Assigned section structure is implemented; this is not matched TickTick visual acceptance or pixel certification.
+
+[<img src="assets/mobile-parity/2026-11-15/d04-assigned-tags.png" width="250" alt="Taskovsky Simulator QA assigned Tags">](assets/mobile-parity/2026-11-15/d04-assigned-tags.png)
