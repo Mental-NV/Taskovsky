@@ -205,6 +205,20 @@
     "historical": true
   },
   {
+    "state": "D06",
+    "file": "d06-move-hierarchy.png",
+    "sha256": "4f5639e39d9ba75db94a1f9cf923b4e8aa82e82069f3ef9a0eb30c9a3e6158a8",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "source_commit": "8b6da8b",
+    "receipt": "../../../changes/mobile-move-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral move-hierarchy fixture after test list creation; no personal task/account/profile information",
+    "historical": true
+  },
+  {
     "state": "D04",
     "file": "d04-assigned-tags.png",
     "sha256": "1e40871b196a8ccd286542ca352fb950b006a5b8781505fb7292509eebfb24ab",

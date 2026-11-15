@@ -36,7 +36,7 @@ enum PhoneEntityColor {
     }
 }
 
-private struct ListEditorRequest: Identifiable {
+struct ListEditorRequest: Identifiable {
     let id = UUID()
     let revision: WorkspaceRevision
     let list: TaskList?
@@ -157,7 +157,7 @@ struct PhoneListOrganization: View {
     }
 }
 
-private struct PhoneListEditor: View {
+struct PhoneListEditor: View {
     private enum IconChoice: Hashable { case defaultIcon, symbol(String), emoji }
 
     private enum Confirmation: String, Identifiable {
@@ -176,6 +176,7 @@ private struct PhoneListEditor: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: PhoneWorkspaceModel
     let request: ListEditorRequest
+    let didSave: () -> Void
     @State private var list: TaskList
     @State private var iconChoice: IconChoice
     @State private var emojiText: String
@@ -187,9 +188,10 @@ private struct PhoneListEditor: View {
     @State private var error: String?
     @State private var copyID = UUID()
 
-    init(model: PhoneWorkspaceModel, request: ListEditorRequest) {
+    init(model: PhoneWorkspaceModel, request: ListEditorRequest, didSave: @escaping () -> Void = {}) {
         self.model = model
         self.request = request
+        self.didSave = didSave
         let list = request.list ?? TaskList(name: "", color: "#4E64D8")
         let emoji = list.symbol.flatMap { ListIcon.emoji($0) == $0 ? $0 : nil }
         _list = State(initialValue: list)
@@ -372,7 +374,7 @@ private struct PhoneListEditor: View {
     private func submit(_ command: ListOrganizationCommand) {
         Task {
             error = await model.saveOrganization(command, expected: request.revision)
-            if error == nil { dismiss() }
+            if error == nil { didSave(); dismiss() }
         }
     }
 }
