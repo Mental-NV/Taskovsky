@@ -1,6 +1,6 @@
 # C05 Calendar filter layout follow-up
 
-Status: implemented, verification pending. User explicitly requested live near-pixel layout verification of PR #130 on November 15, 2026; this bounded request is an exception to the broader final-polish ordering.
+Status: implemented and locally verified; hosted exact-head CI pending. User explicitly requested live near-pixel layout verification of PR #130 on November 15, 2026; this bounded request is an exception to the broader final-polish ordering.
 
 ## Live reference evidence
 
@@ -38,4 +38,9 @@ Taskovsky retains explicit accessible Cancel (x) despite no visible reference Ca
 
 ## Verification
 
-Pending. Initial simulator build succeeded; initial native invocation named the wrong test target and ran no tests. Corrected target is `MobileNavigation`. Do not count that failed invocation as acceptance.
+Source checkpoint `570a5fb`, integrated with unchanged main source in `b43cf3a`.
+- Full Swift package suite: 838 XCTest (134 workspace + 55 Mac + 120 domain + 529 core) and 38 Swift Testing passed. Release app build and strict/deep signature verification passed. The final 8 pt phone inset refinement does not affect these shared/Mac targets.
+- Five native Simulator tests passed for compact layout/secondary actions, folders/Cancel, tag+Inbox union/relaunch, nested-list actual results/relaunch, and Week overview Only filtering. After final top-inset refinement, compact geometry/Only/bulk/Cancel test passed again. Owned iPhone13Pro Simulator, iOS26.3.1, standard light appearance.
+- Independent source review clean after moving 44 pt header hit area into button labels. No test assertions weakened. Initial native invocation named the wrong target and ran no tests; corrected `MobileNavigation` run supplies the evidence.
+- Actual final screenshot inspected: 1170×2532, neutral QA data only, [compact layout](../assets/mobile-parity/2026-11-15/c05-compact-layout.png). First white surface ~125 pt from phone top, ~78 pt below the sheet edge; primary row pitch 50 pt, lateral inset16 pt. Old source screenshot remains historical evidence. Screenshot SHA-256: `8bcbafdf414ac06cd40ecda1899ff76f2d87afcc0ded93147ce283e8dca884c4`.
+- Exact fonts/colors, additional real-device scale calibration, unobserved non-All reference selection states, and unsupported source types are not certified. No pixel-perfect acceptance claim. Hosted exact-head CI remains required before merge.
