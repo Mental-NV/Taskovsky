@@ -2100,3 +2100,7 @@ Initial native testing exposed competing navigation links in one Form row; expli
 ### Compact mobile empty description
 
 Candidate native checks cover plain editor Cancel/reopen/save/relaunch and formatted Cancel/discard, plus existing rich/unknown/malformed protections. Full 827 XCTest + 38 Swift Testing, release/signature, independent review and all five native cases passed; actual screenshot inspected and owned Simulator shut down. Exact-head CI pending. [Scope](../changes/mobile-empty-description-2026-11-15.md).
+
+### Schedule Reminder/Repeat pages
+
+Candidate checks in progress for nested/outer Cancel, custom rule creation/removal, manual/end reminders and occurrence skip. Source review, full tests/release, native screenshots and exact-head CI remain gates. [Scope](../changes/mobile-schedule-options-2026-11-15.md).

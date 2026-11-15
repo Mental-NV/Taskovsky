@@ -2584,8 +2584,10 @@ extension ReadOnlyNavigationTests {
         let rule = app.staticTexts["scheduleCustomRule"]
         reveal(rule, in: app)
         XCTAssertTrue(rule.exists)
+        let expectedRule = rule.label
+        XCTAssertFalse(expectedRule.isEmpty)
         scheduleRoot(app)
-        XCTAssertNotEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, expectedRule)
         app.buttons["scheduleDone"].tap()
         waitGone(app.buttons["scheduleDone"])
         app.buttons["editSchedule"].tap()
