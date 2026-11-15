@@ -289,3 +289,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone Day seven-date selector candidate replaces lone header, reusing existing focus navigation; full suite/release/review and four native tests passed; exact-head CI pending. Exact reference strip semantics and pixel geometry remain open. See `docs/changes/mobile-day-week-strip-2026-11-15.md`.
 
 - Mobile Week overview: [bounded candidate](changes/mobile-week-overview-2026-11-15.md), native navigation/filter/relaunch verified, hosted CI pending. Live evidence establishes mini-month/week tiles and Day/Back navigation; exact visual matching remains incomplete.
+
+- Mobile Arrange Filter: [staged multi-source candidate](changes/mobile-arrange-filter-2026-11-15.md); reference selection/Cancel observed, native selection/folder/schedule checks passed; exact-head CI pending.

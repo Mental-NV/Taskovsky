@@ -143,6 +143,7 @@ public enum TaskCalendarProjection {
         case .calendar: break
         case .inbox: scope.listIDs = []; scope.includeInbox = true; scope.tagIDs = []
         case .list(let id): scope.listIDs = [id]; scope.includeInbox = false; scope.tagIDs = []
+        case .sources(let ids, let inbox): scope.listIDs = Array(ids); scope.includeInbox = inbox; scope.tagIDs = []
         }
         return data.tasks.filter { task in
             guard scope.includes(task, data: data), task.completedAt == nil, task.wontDoAt == nil else { return false }

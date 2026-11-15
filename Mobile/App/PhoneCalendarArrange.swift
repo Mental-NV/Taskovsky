@@ -27,6 +27,7 @@ struct PhoneCalendarArrangeSheet: View {
     let drag: ((UUID, WorkspaceRevision) -> PhoneCalendarDrag?)?
     @State private var grouping = CalendarColorMode.list
     @State private var selection = CalendarArrangeSelection.calendar
+    @State private var showFilter = false
     @State private var overdue = false
     @State private var request: PhoneCalendarEditRequest?
     @State private var taskRoute: PhoneTaskRoute?
@@ -38,6 +39,12 @@ struct PhoneCalendarArrangeSheet: View {
         .sheet(item: $request) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(item: $taskRoute) { PhoneTaskSheet(model: model, route: $0, close: { taskRoute = nil }) }
         .interactiveDismissDisabled(model.isBusy)
+        .fullScreenCover(isPresented: $showFilter) {
+            if let data = model.document?.snapshot.workspace {
+                PhoneArrangeFilter(data: data, selection: selection) { selection = $0 }
+                    .presentationBackground(.clear)
+            }
+        }
     }
 
     private func content(_ document: WorkspaceDocument) -> some View {
@@ -99,15 +106,7 @@ struct PhoneCalendarArrangeSheet: View {
             .background(.bar)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            Menu {
-                Picker("Source", selection: $selection) {
-                    Text("Calendar sources").tag(CalendarArrangeSelection.calendar)
-                    Text("Inbox").tag(CalendarArrangeSelection.inbox)
-                    ForEach(data.lists.filter { !$0.isArchived }) { list in
-                        Text(list.name).tag(CalendarArrangeSelection.list(list.id))
-                    }
-                }
-            } label: {
+            Button { showFilter = true } label: {
                 Label("Filter", systemImage: "line.3.horizontal.decrease")
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
@@ -136,6 +135,75 @@ struct PhoneCalendarArrangeSheet: View {
                     .accessibilityIdentifier("arrangeOptions")
             }
         }
+    }
+}
+
+private struct PhoneArrangeFilter: View {
+    @Environment(\.dismiss) private var dismiss
+    let data: WorkspaceData
+    let apply: (CalendarArrangeSelection) -> Void
+    @State private var all: Bool
+    @State private var inbox: Bool
+    @State private var listIDs: Set<UUID>
+    @State private var collapsed = Set<UUID>()
+
+    init(data: WorkspaceData, selection: CalendarArrangeSelection, apply: @escaping (CalendarArrangeSelection) -> Void) {
+        self.data = data; self.apply = apply
+        switch selection {
+        case .calendar: _all = State(initialValue: true); _inbox = State(initialValue: false); _listIDs = State(initialValue: [])
+        case .inbox: _all = State(initialValue: false); _inbox = State(initialValue: true); _listIDs = State(initialValue: [])
+        case .list(let id): _all = State(initialValue: false); _inbox = State(initialValue: false); _listIDs = State(initialValue: [id])
+        case .sources(let ids, let inbox): _all = State(initialValue: false); _inbox = State(initialValue: inbox); _listIDs = State(initialValue: ids)
+        }
+    }
+    private var lists: [TaskList] { data.lists.filter { !$0.isArchived } }
+    private func choice(_ title: String, checked: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack { Text(title); Spacer(); Image(systemName: checked ? "checkmark.circle.fill" : "circle").foregroundStyle(checked ? Color.accentColor : Color.secondary) }
+                .frame(minHeight: 40).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier(id).accessibilityValue(checked ? "Selected" : "Not selected")
+    }
+    private func list(_ value: TaskList) -> some View {
+        choice(value.name, checked: !all && listIDs.contains(value.id), id: "arrangeFilterList-" + value.id.uuidString) {
+            all = false
+            if !listIDs.insert(value.id).inserted { listIDs.remove(value.id) }
+        }
+    }
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.opacity(0.25).ignoresSafeArea()
+                VStack(spacing: 0) {
+                    Text("Filter").font(.headline).padding(16)
+                    ScrollView {
+                        VStack(spacing: 4) {
+                            choice("All", checked: all, id: "arrangeFilterAll") { all = true; inbox = false; listIDs.removeAll() }
+                            choice("Inbox", checked: !all && inbox, id: "arrangeFilterInbox") { all = false; inbox.toggle() }
+                            ForEach(lists.filter { value in value.folderID == nil || !data.folders.contains(where: { $0.id == value.folderID }) }) { value in list(value) }
+                            ForEach(data.folders) { folder in
+                                Button {
+                                    if !collapsed.insert(folder.id).inserted { collapsed.remove(folder.id) }
+                                } label: {
+                                    HStack { Image(systemName: "folder"); Text(folder.name); Spacer(); Image(systemName: collapsed.contains(folder.id) ? "chevron.right" : "chevron.down") }
+                                        .frame(minHeight: 40).contentShape(Rectangle())
+                                }.buttonStyle(.plain).accessibilityIdentifier("arrangeFilterFolder-" + folder.id.uuidString)
+                                if !collapsed.contains(folder.id) {
+                                    ForEach(lists.filter { $0.folderID == folder.id }) { value in list(value).padding(.leading, 20) }
+                                }
+                            }
+                        }.padding(.horizontal, 16)
+                    }
+                    Divider()
+                    HStack {
+                        Button("Cancel") { dismiss() }.accessibilityIdentifier("arrangeFilterCancel")
+                        Spacer()
+                        Button("Done") { apply(all ? .calendar : .sources(listIDs: listIDs, inbox: inbox)); dismiss() }
+                            .accessibilityIdentifier("arrangeFilterDone")
+                    }.padding(16)
+                }.frame(width: min(340, geometry.size.width - 32), height: min(520, geometry.size.height - 64))
+                    .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 16))
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }.interactiveDismissDisabled()
     }
 }
 

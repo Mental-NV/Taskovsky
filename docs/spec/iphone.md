@@ -971,3 +971,7 @@ Day replaces its single focused-date header with seven dates from the current Ca
 ### Week overview candidate (November 15)
 
 The bounded [Week overview](../changes/mobile-week-overview-2026-11-15.md) adds a mini-month and seven day tiles using the existing filtered projection. Day header drill-in and Back are session-only; explicit mode selection exits. Exact reference styling and swipe behavior are not claimed.
+
+### Arrange Filter dialog candidate
+
+See [staged multi-source Arrange Filter](../changes/mobile-arrange-filter-2026-11-15.md). Applies within the existing Arrange session; reference Done persistence is unverified.

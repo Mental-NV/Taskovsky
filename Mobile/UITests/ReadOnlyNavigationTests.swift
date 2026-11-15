@@ -2655,6 +2655,56 @@ extension ReadOnlyNavigationTests {
         waitGone(app.buttons["arrangeDone"])
     }
 
+    @MainActor func testArrangeFilterStagesMultipleSourcesAndCancels() {
+        let app = launch(qaCase: "arrange")
+        app.buttons["Calendar"].tap(); openArrange(app)
+        app.buttons["arrangeOptions"].tap(); app.buttons["arrangeOverdue"].tap()
+        app.buttons["arrangeList"].tap()
+        let all = app.buttons["arrangeFilterAll"], inbox = app.buttons["arrangeFilterInbox"]
+        XCTAssertTrue(all.waitForExistence(timeout: 5))
+        XCTAssertEqual(all.value as? String, "Selected")
+        inbox.tap(); app.buttons["Personal"].tap()
+        XCTAssertEqual(inbox.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["Personal"].value as? String, "Selected")
+        XCTAssertEqual(all.value as? String, "Not selected")
+        attach(app, "Arrange staged multi-source filter")
+        app.buttons["arrangeFilterCancel"].tap()
+        app.buttons["arrangeList"].tap()
+        XCTAssertEqual(all.value as? String, "Selected")
+        inbox.tap(); app.buttons["Personal"].tap()
+        app.buttons["arrangeFilterDone"].tap()
+        XCTAssertTrue(app.buttons["Schedule Read a chapter"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Schedule Arrange the studio"].exists)
+        app.buttons["arrangeList"].tap()
+        XCTAssertEqual(inbox.value as? String, "Selected")
+        XCTAssertEqual(app.buttons["Personal"].value as? String, "Selected")
+        all.tap()
+        XCTAssertEqual(inbox.value as? String, "Not selected")
+        XCTAssertEqual(app.buttons["Personal"].value as? String, "Not selected")
+        app.buttons["arrangeFilterDone"].tap()
+        app.buttons["arrangeDone"].tap()
+    }
+
+    @MainActor func testArrangeFilterFolderDisclosureDoesNotSelectChildren() {
+        let app = launch(qaCase: "timeline-arrange")
+        app.buttons["Calendar"].tap(); openArrange(app)
+        app.buttons["arrangeList"].tap()
+        let folder = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "arrangeFilterFolder-")).firstMatch
+        XCTAssertTrue(folder.waitForExistence(timeout: 5))
+        let work = app.buttons["Work"]
+        XCTAssertTrue(work.exists)
+        folder.tap(); XCTAssertFalse(work.exists)
+        XCTAssertEqual(app.buttons["arrangeFilterAll"].value as? String, "Selected")
+        folder.tap(); XCTAssertTrue(work.exists)
+        XCTAssertEqual(work.value as? String, "Not selected")
+        work.tap(); XCTAssertEqual(work.value as? String, "Selected")
+        folder.tap(); folder.tap()
+        XCTAssertEqual(work.value as? String, "Selected")
+        XCTAssertFalse(app.buttons["Old projects"].exists)
+        app.buttons["arrangeFilterCancel"].tap()
+        app.buttons["arrangeDone"].tap()
+    }
+
     @MainActor func testCalendarArrangeScopesAndSchedulesTheFocusedDay() {
         let app = launch(qaCase: "arrange")
         app.buttons["Calendar"].tap()
@@ -2677,11 +2727,15 @@ extension ReadOnlyNavigationTests {
         attach(app, "Arrange overdue selected")
         app.tap()
         app.buttons["arrangeList"].tap()
-        app.buttons["Inbox"].tap()
+        XCTAssertTrue(app.buttons["arrangeFilterInbox"].waitForExistence(timeout: 5))
+        app.buttons["arrangeFilterInbox"].tap()
+        app.buttons["arrangeFilterDone"].tap()
         XCTAssertTrue(overdueTask.exists)
         XCTAssertFalse(chapter.exists)
         app.buttons["arrangeList"].tap()
+        app.buttons["arrangeFilterInbox"].tap()
         app.buttons["Personal"].tap()
+        app.buttons["arrangeFilterDone"].tap()
         XCTAssertTrue(chapter.waitForExistence(timeout: 5))
         XCTAssertFalse(overdueTask.exists)
         app.segmentedControls["arrangeGroup"].buttons["Priority"].tap()
