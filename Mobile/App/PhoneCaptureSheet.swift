@@ -48,6 +48,7 @@ struct PhoneCaptureSheet: View {
                 let preview = model.capturePreview
                 let tagNames = (preview?.tagIDs ?? draft.input.tagIDs).compactMap { id in document.snapshot.workspace.tags.first { $0.id == id }?.name }
                 Form {
+                    if model.captureError != nil || model.staleCapture || frozen || model.captureRecoveryStatus.hasPrefix("Recovery copy could not") {
                     Section {
                         if let error = model.captureError {
                             Text(error).foregroundStyle(.red).accessibilityIdentifier("captureError")
@@ -57,7 +58,10 @@ struct PhoneCaptureSheet: View {
                         }
                         if model.staleCapture { Text("This capture is based on an older workspace. Your text is kept.").foregroundStyle(.orange) }
                         if frozen { Text("Retry checks this same task. Its submitted contents are protected until the outcome is known.").font(.footnote) }
-                        Text(model.captureRecoveryStatus).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("captureRecoveryStatus")
+                        if model.captureRecoveryStatus.hasPrefix("Recovery copy could not") {
+                            Text(model.captureRecoveryStatus).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("captureRecoveryWarning")
+                        }
+                    }
                     }
                     Section {
                         titleField(draft, frozen: frozen)

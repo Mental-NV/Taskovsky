@@ -2104,3 +2104,7 @@ Candidate native checks cover plain editor Cancel/reopen/save/relaunch and forma
 ### Schedule Reminder/Repeat pages
 
 Candidate checks in progress for nested/outer Cancel, custom rule creation/removal, manual/end reminders and occurrence skip. Source review, full tests/release, native screenshots and exact-head CI remain gates. [Scope](../changes/mobile-schedule-options-2026-11-15.md).
+
+## Composer recovery success notice removal — 2026-11-15
+
+[Bounded user-requested change](../changes/mobile-capture-notice-2026-11-15.md): remove normal recovery-status area and gap; retain actual warnings and underlying draft recovery. Local full tests/release/review and bounded native checks passed; exact-head CI pending. No full parity claim.

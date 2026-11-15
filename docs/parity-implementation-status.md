@@ -303,3 +303,7 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - Mobile ordinary empty-description candidate replaces three idle rows with one Add description menu. Existing nonempty/rich/editor semantics preserved. Local/native/review passed; exact-head CI pending and exact footer parity not claimed. [Scope](changes/mobile-empty-description-2026-11-15.md).
 
 - D10/D12 Schedule options candidate: compact root summaries and pushed supported-control pages, no new reminder or repeat semantics. Validation pending; reference anchored-popup presentation remains open. [Scope](changes/mobile-schedule-options-2026-11-15.md).
+
+## Composer recovery notice
+
+[User-requested removal](changes/mobile-capture-notice-2026-11-15.md) hides normal recovery status/gap, not recovery storage; actual warnings remain. Local full tests/release/review and bounded native checks passed; exact-head CI pending.

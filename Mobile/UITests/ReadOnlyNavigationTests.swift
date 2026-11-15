@@ -18,7 +18,9 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertTrue(title.waitForExistence(timeout: 5))
         XCTAssertFalse(app.textViews["captureDescription"].exists)
         XCTAssertTrue(app.buttons["captureMore"].exists)
-        attach(app, "Compact task composer")
+        XCTAssertFalse(app.staticTexts["captureRecoveryStatus"].exists)
+        XCTAssertFalse(app.staticTexts["Recovery copy saved"].exists)
+        attach(app, "Compact task composer without recovery notice")
         title.tap(); title.typeText("Compact composer draft")
         app.buttons["capturePriorityPicker"].tap()
         XCTAssertTrue(app.navigationBars["Priority"].waitForExistence(timeout: 5))
@@ -1529,9 +1531,13 @@ final class ReadOnlyNavigationTests: XCTestCase {
         let taskTitle = "Phone range capture tomorrow"
         title.tap()
         title.typeText(taskTitle)
-        let recovery = app.staticTexts["captureRecoveryStatus"]
-        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Recovery copy saved"), object: recovery)
-        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 6), .completed)
+        XCTAssertFalse(app.staticTexts["captureRecoveryStatus"].exists)
+        let priority = app.buttons["capturePriorityPicker"]
+        reveal(priority, in: app); priority.tap()
+        XCTAssertTrue(app.navigationBars["Priority"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(title, in: app, towardTop: true)
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
         app.terminate()
         app.launch()
         let prompt = app.alerts["Resume new task?"]
@@ -1599,8 +1605,14 @@ final class ReadOnlyNavigationTests: XCTestCase {
     }
     @MainActor func testCaptureRecoveryDoesNotAutosubmitAndSavesOnce() {
         let app = launch(), title = openCapture(app); title.tap(); title.typeText("Recovered capture")
-        let saved = XCTNSPredicateExpectation(predicate: NSPredicate(format: "label == %@", "Recovery copy saved"), object: app.staticTexts["captureRecoveryStatus"])
-        XCTAssertEqual(XCTWaiter.wait(for: [saved], timeout: 6), .completed)
+        XCTAssertFalse(app.staticTexts["captureRecoveryStatus"].exists)
+        // Exercise a real metadata round trip rather than depending on removed status text.
+        // This also gives the existing 250ms scratch debounce time to finish before force quit.
+        app.buttons["capturePriorityPicker"].tap()
+        XCTAssertTrue(app.navigationBars["Priority"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.firstMatch.tap()
+        reveal(title, in: app, towardTop: true)
+        XCTAssertTrue(title.waitForExistence(timeout: 5))
         app.terminate(); app.launch()
         XCTAssertTrue(app.alerts["Resume new task?"].waitForExistence(timeout: 10)); app.alerts["Resume new task?"].buttons["Later"].tap()
         XCTAssertFalse(app.buttons["Recovered capture"].exists)
