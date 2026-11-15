@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**20/46 states have an attached Taskovsky screenshot; 26/46 await one. 0/46 have a portable TickTick reference image attached here.** All twenty-one assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**20/46 states have an attached Taskovsky screenshot; 26/46 await one. 0/46 have a portable TickTick reference image attached here.** The attached assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
