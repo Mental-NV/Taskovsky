@@ -8269,3 +8269,88 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.buttons["Review the project outline"].exists)
     }
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testRepeatTypeCompletionPersistsAndMenuDismissalDoesNotChange() {
+        let app = launch(), title = "Review the project outline"
+        _ = openSchedule(app, task: title); openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        let type = app.buttons["customRepeatType"]
+        XCTAssertEqual(type.value as? String, "By Due Dates")
+        type.tap()
+        XCTAssertTrue(app.buttons["customRepeatType-due"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["customRepeatType-completion"].exists)
+        XCTAssertTrue(app.buttons["customRepeatType-dates"].exists)
+        let choices = [app.buttons["customRepeatType-due"], app.buttons["customRepeatType-completion"], app.buttons["customRepeatType-dates"]]
+        XCTAssertEqual(choices.map(\.label), ["By Due Dates", "By Completion Date", "By Specific Dates"])
+        XCTAssertTrue(choices[0].isSelected)
+        XCTAssertLessThan(choices[0].frame.minY, choices[1].frame.minY)
+        XCTAssertLessThan(choices[1].frame.minY, choices[2].frame.minY)
+        attach(app, "Repeat Type observed three choices")
+        app.navigationBars["Custom Repeat"].tap()
+        waitGone(app.buttons["customRepeatType-due"])
+        XCTAssertEqual(type.value as? String, "By Due Dates")
+        type.tap(); app.buttons["customRepeatType-completion"].tap()
+        XCTAssertEqual(type.value as? String, "By Completion Date")
+        app.pickerWheels.element(boundBy: 0).adjust(toPickerWheelValue: "2")
+        app.buttons["customRepeatDone"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app); _ = openSchedule(app, task: title)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(type.value as? String, "By Completion Date")
+        XCTAssertEqual(app.pickerWheels.element(boundBy: 0).value as? String, "2")
+        type.tap(); app.buttons["customRepeatType-due"].tap()
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(type.value as? String, "By Completion Date")
+        type.tap(); app.buttons["customRepeatType-due"].tap()
+        app.buttons["customRepeatDone"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap(); openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(type.value as? String, "By Completion Date")
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testRepeatTypeSpecificDatesPreservesBothDraftsAndPersistsDates() {
+        let app = launch(), title = "Review the project outline"
+        _ = openSchedule(app, task: title); openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        app.pickerWheels.element(boundBy: 0).adjust(toPickerWheelValue: "3")
+        let type = app.buttons["customRepeatType"]
+        type.tap(); app.buttons["customRepeatType-dates"].tap()
+        XCTAssertFalse(app.buttons["customRepeatDone"].isEnabled)
+        app.buttons["Add date"].tap(); app.buttons["Add date"].tap()
+        let first = app.datePickers["customRepeatDate-0"], second = app.datePickers["customRepeatDate-1"]
+        XCTAssertTrue(first.exists); XCTAssertTrue(second.exists)
+        let firstValue = first.value as? String, secondValue = second.value as? String
+        XCTAssertNotNil(firstValue); XCTAssertNotNil(secondValue)
+        XCTAssertFalse(firstValue?.isEmpty ?? true); XCTAssertFalse(secondValue?.isEmpty ?? true)
+        XCTAssertNotEqual(firstValue, secondValue)
+        type.tap(); app.buttons["customRepeatType-due"].tap()
+        XCTAssertEqual(app.pickerWheels.element(boundBy: 0).value as? String, "3")
+        type.tap(); app.buttons["customRepeatType-dates"].tap()
+        XCTAssertEqual(first.value as? String, firstValue); XCTAssertEqual(second.value as? String, secondValue)
+        app.buttons["customRepeatDone"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app); _ = openSchedule(app, task: title)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        reveal(app.buttons["scheduleCustom"], in: app); app.buttons["scheduleCustom"].tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        XCTAssertEqual(type.value as? String, "By Specific Dates")
+        XCTAssertEqual(first.value as? String, firstValue); XCTAssertEqual(second.value as? String, secondValue)
+        app.buttons["customRepeatCancel"].tap(); waitGone(app.buttons["customRepeatDone"])
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap()
+    }
+}

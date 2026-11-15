@@ -328,17 +328,17 @@
     "historical": true
   },
   {
-    "state": "D02",
-    "file": "d02-task-actions.png",
-    "sha256": "aebf208ccad354206dec9fa19e0248d9c0973765f86781c9f1d5e2c1deb5b9be",
+    "state": "D14",
+    "file": "d14-repeat-type.png",
+    "sha256": "733276cc0729c735a2be38d66a679391858c128ecaa338a13cb2c7009d7ac79d",
     "pixels": [
       1170,
       2532
     ],
-    "receipt": "../../../changes/mobile-detail-actions-2026-11-15.md",
+    "receipt": "../../../changes/mobile-repeat-type-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
-    "review": "Pixel inspected: neutral fixture task only (Review the project outline); custom Task Actions rows, no strip, no Share placeholder; no personal information.",
-    "source_commit": "fd962df",
+    "review": "Pixel inspected neutral menu with exact labels/current check; no personal task/account data.",
+    "source_commit": "5d5af24",
     "historical": true
   },
   {
@@ -352,6 +352,20 @@
     "receipt": "../../../changes/mobile-normal-filter-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected neutral filter draft. Primary criteria and keyword/type visible; More/Preview below viewport. No personal information."
+  },
+  {
+    "state": "D02",
+    "file": "d02-task-actions.png",
+    "sha256": "aebf208ccad354206dec9fa19e0248d9c0973765f86781c9f1d5e2c1deb5b9be",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-detail-actions-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral fixture task only (Review the project outline); custom Task Actions rows, no strip, no Share placeholder; no personal information.",
+    "source_commit": "fd962df",
+    "historical": true
   },
   {
     "state": "T14",
