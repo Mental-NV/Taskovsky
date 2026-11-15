@@ -520,15 +520,11 @@ private struct MobileCalendarContent: View {
         }.font(.caption).padding(.horizontal, 16)
     }
 
-    @ViewBuilder private var hourly: some View {
-        if options.mode == .week {
-            GeometryReader { viewport in hourlyGrid(weekViewportWidth: viewport.size.width) }
-        } else {
-            hourlyGrid(weekViewportWidth: nil)
-        }
+    private var hourly: some View {
+        GeometryReader { viewport in hourlyGrid(viewportWidth: viewport.size.width) }
     }
 
-    private func hourlyGrid(weekViewportWidth: CGFloat?) -> some View {
+    private func hourlyGrid(viewportWidth: CGFloat) -> some View {
         let byDay = Dictionary(uniqueKeysWithValues: days.map { ($0, entries(on: $0)) })
         let placements = CalendarAllDayLayout.placements(entries: entries, days: days, calendar: calendar)
         let rowCount = (placements.map(\.lane).max() ?? -1) + 1
@@ -536,10 +532,12 @@ private struct MobileCalendarContent: View {
             ?? max(36, Double(rowCount) * (allDayRowHeight + 2))
         let secondary = options.visibleTimeZones(primary: calendar.timeZone)
         let rulerWidth = primaryRulerWidth + CGFloat(secondary.count) * secondaryRulerWidth
-        let columnWidth: CGFloat = if let weekViewportWidth {
-            min(64, max(46, (weekViewportWidth - rulerWidth) / 7))
+        let columnWidth: CGFloat = if options.mode == .week {
+            min(64, max(46, (viewportWidth - rulerWidth) / 7))
         } else {
-            days.count == 1 ? 300 : 64
+            // Fill the available Day/Multi-Day viewport without shrinking existing minimums.
+            max(days.count == 1 ? 300 : 64,
+                (viewportWidth - rulerWidth) / CGFloat(max(1, days.count)))
         }
         return ScrollView([.horizontal, .vertical]) {
             HStack(alignment: .top, spacing: 0) {
@@ -582,7 +580,7 @@ private struct MobileCalendarContent: View {
             }
             .padding(.bottom, 100)
             .background {
-                if weekViewportWidth != nil {
+                if options.mode == .week {
                     PhoneWeekSwipe(layoutDirection: layoutDirection, page: pageWeek)
                         .allowsHitTesting(false).accessibilityHidden(true)
                 }
