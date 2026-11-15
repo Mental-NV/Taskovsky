@@ -2076,3 +2076,7 @@ Check no permanent hour row, accessible clock opening, counts, expansion/collaps
 
 ### Day seven-date navigation
 Check seven dates, current selection, another-day focus without schedule notice/data change, week-boundary navigation and Today, restoration of Week headers, plus Day Arrange drag/Undo and resize. Inspect actual screenshot. See `../changes/mobile-day-week-strip-2026-11-15.md`.
+
+### Mobile Week overview candidate
+
+See [scope and pending gates](../changes/mobile-week-overview-2026-11-15.md). Simulator compilation, 826 XCTest + 38 Swift Testing, release/signature and three final native UI tests passed. Actual screenshot inspected and independent review clean. See receipt for corrected filter-test diagnosis and remaining exact-head CI gate.

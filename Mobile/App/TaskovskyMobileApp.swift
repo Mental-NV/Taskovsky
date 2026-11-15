@@ -85,6 +85,8 @@ struct MobileRootView: View {
     @State private var batchRequest: PhoneBatchRequest?
     @State private var showArrange = false
     @State private var showCalendarActions = false
+    @State private var showWeekOverview = false
+    @State private var overviewReturnDate: Date?
     @State private var calendarEdit: PhoneCalendarEditRequest?
     @State private var occurrenceChange: PhoneOccurrenceChange?
     @State private var calendarDragSession = UUID()
@@ -92,6 +94,7 @@ struct MobileRootView: View {
     private var options: TaskCalendarOptions {
         var displayed = model.document?.snapshot.settings.calendarOptions ?? TaskCalendarOptions()
         if let sessionCalendarMode { displayed.mode = sessionCalendarMode }
+        if overviewReturnDate != nil { displayed.mode = .day }
         return displayed
     }
     var body: some View {
@@ -165,7 +168,13 @@ struct MobileRootView: View {
             PhoneStyle.page.ignoresSafeArea()
             VStack(spacing: 12) {
                 HStack {
-                    if section == .calendar { calendarModeChooser }
+                    if section == .calendar {
+                        if let returnDate = overviewReturnDate {
+                            circle("Back to Week overview", symbol: "chevron.left") {
+                                focus = returnDate; overviewReturnDate = nil
+                            }.accessibilityIdentifier("calendarWeekOverviewBack")
+                        } else { calendarModeChooser }
+                    }
                     else { circle("Open navigation", symbol: "line.3.horizontal") { drawer = true } }
                     Spacer()
                     if section == .calendar {
@@ -184,6 +193,11 @@ struct MobileRootView: View {
                                                                             calendar: calendar, timeZone: calendar.timeZone)))
                         .accessibilityIdentifier("calendarJumpToDate")
                         Spacer()
+                        if options.mode == .week {
+                            circle(showWeekOverview ? "Show hourly Week" : "Show Week overview", symbol: showWeekOverview ? "calendar" : "rectangle.grid.2x2") {
+                                showWeekOverview.toggle()
+                            }.accessibilityIdentifier("calendarWeekOverviewToggle")
+                        }
                         circle("Calendar actions", symbol: "ellipsis") { showCalendarActions = true }
                             .popover(isPresented: $showCalendarActions, arrowEdge: .top) {
                                 VStack(spacing: 0) {
@@ -1141,9 +1155,14 @@ struct MobileRootView: View {
             || capturePresented || model.captureDraft != nil || selectedTask != nil || batchRequest != nil
         return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
                                      options: options, monthInteractionActive: holdsMonthPosition, controls: controls,
+                                     weekOverview: showWeekOverview && options.mode == .week,
                                      select: { mode, date in
                                          if arranging { showArrange = false }
-                                         else { selectCalendarMode(mode, at: date) }
+                                         else if overviewReturnDate != nil && mode == .day {
+                                             focus = date
+                                         } else if showWeekOverview && options.mode == .week && mode == .day {
+                                             overviewReturnDate = focus; focus = date
+                                         } else { selectCalendarMode(mode, at: date) }
                                      }) { id in
             if arranging { showArrange = false }
             else { selectedTask = PhoneTaskRoute(id: id) }
@@ -1214,6 +1233,8 @@ struct MobileRootView: View {
 
     private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date, multiDayCount: Int? = nil) {
         guard !model.isBusy, let document = model.document else { return }
+        overviewReturnDate = nil
+        showWeekOverview = false
         var draft = document.snapshot.settings.calendarOptions
         if mode == draft.mode && (multiDayCount == nil || multiDayCount == draft.multiDayCount) {
             sessionCalendarMode = nil

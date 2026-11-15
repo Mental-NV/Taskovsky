@@ -967,3 +967,7 @@ Hourly views expose existing Early/Late hour expansion controls in a Calendar ho
 
 ### Day week selector
 Day replaces its single focused-date header with seven dates from the current Calendar week. Tapping selects focus through the existing Day action without rescheduling tasks; current calendar week-start rules apply. Week/other headers unchanged. Reference exact strip geometry/selection semantics remain unverified. See `../changes/mobile-day-week-strip-2026-11-15.md`.
+
+### Week overview candidate (November 15)
+
+The bounded [Week overview](../changes/mobile-week-overview-2026-11-15.md) adds a mini-month and seven day tiles using the existing filtered projection. Day header drill-in and Back are session-only; explicit mode selection exits. Exact reference styling and swipe behavior are not claimed.
