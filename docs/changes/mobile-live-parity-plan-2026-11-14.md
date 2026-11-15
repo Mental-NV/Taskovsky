@@ -2,6 +2,8 @@
 
 ## Current delivery priority: core features first
 
+User direction (November 15, 2026): **Background chooser and Share / Print are explicitly deferred until core Tasks and Calendar features are finished.** Keep these surfaces in the later-work backlog, not the active core-parity implementation queue or core completion gate. This is a deferral, not a claim that they are implemented or verified, and it does not authorize new external integrations. Revisit both after core feature completion.
+
 User direction (November 14, 2026): defer accessibility-specific layouts and accessibility-layout polishing until core Tasks and Calendar features are finished. Prioritize ordinary light-theme task/list/board/detail/schedule and Calendar workflows, observed menu/dialog structure, and the largest verified parity gaps. Preserve existing accessibility support and prevent regressions in controls changed by core work, but do not open separate accessibility-layout enhancements or treat pre-existing large-text polish gaps as new core scope. Revisit the deferred accessibility-layout backlog after core feature completion. This does not remove safety, data-integrity, functional testing, independent review or exact-head CI gates.
 
 
@@ -47,6 +49,8 @@ The [46-state Tasks/Calendar inventory](../ticktick-spec/mobile-surface-inventor
 | Kanban / alternate Calendar states | Previously supplied user screenshots cover mobile board; current live pass did not enter Kanban or inspect all Calendar modes. | Existing compact cards/Priority grouping are integrated, not complete board parity. | P2 evidence gate; do not reopen already completed work or invent missing behavior. |
 
 ## Delivery order and acceptance
+
+**Current execution strategy (November 15, 2026): breadth first.** Cover the active screen forms with the biggest structural or functional parity gaps before polishing individual screens. Prioritize missing or substantially different core surfaces and their main flows; defer fine spacing, typography and isolated visual refinements until this broad coverage pass is complete. The ordered slices below remain a reference backlog, not a reason to repeatedly polish one screen while larger gaps remain. Keep native functional regression checks, data safety, independent review and exact-head CI as completion gates for each slice. Reassess the remaining form/state inventory after each broad coverage pass.
 
 1. **Matched evidence baseline (0.5–1 focused day, estimate).** Neutral fixture matrix: empty/populated lists; short/long/date/tag rows; simple/checklist/rich tasks; all-day/timed events; List/Priority board. Record device and typography above. Capture reference and exact Taskovsky build at equivalent states. Preserve original data/preferences. Deliver discrepancy overlays or side-by-side crops with measured bounds before token tuning.
 2. **Tasks drawer/shell (1–2 days).** Side panel/backdrop/selection/counts/nesting and utility placement. Verify dismissal, destination changes, reopening/scroll retention, safe areas, compact screen, VoiceOver focus return and non-overlap with navigation gestures. No external account controls.

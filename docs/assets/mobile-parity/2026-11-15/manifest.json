@@ -1,0 +1,114 @@
+[
+  {
+    "state": "C03",
+    "file": "c03-week-overview.png",
+    "sha256": "b0e5287489baa6a02b3c1ae27f5b12d13bae8380a1a7bc696a905616c52aa630",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 112,
+    "receipt": "../../../changes/mobile-week-overview-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C04",
+    "file": "c04-calendar-overflow.png",
+    "sha256": "9ba6f21fe2820e36f385daa74893f9631849ae9fab1262d028104760e4af9025",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 103,
+    "receipt": "../../../changes/mobile-calendar-header-2026-11-14.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C10",
+    "file": "c10-calendar-style.png",
+    "sha256": "e06a7040b206ce7689091a117dec7dd1ca62b9bd5cc09ba022eba26b6ee02b15",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 115,
+    "receipt": "../../../changes/mobile-calendar-options-navigation-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C11",
+    "file": "c11-calendar-icons.png",
+    "sha256": "f9b1d56d92c7181857ba342af9c62171876f760e9ce558540845c3e16f27c32a",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 115,
+    "receipt": "../../../changes/mobile-calendar-options-navigation-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C15",
+    "file": "c15-arrange-filter.png",
+    "sha256": "6bcb4652577035fb2cc1909e2017721b3b0831ba09fff7b6b3c4ba3bf0a5d4cd",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 113,
+    "receipt": "../../../changes/mobile-arrange-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "D07",
+    "file": "d07-schedule-date.png",
+    "sha256": "57bda70c13f2dc0270ee6eed7aa3461e896fe9ec7693db62c874400e6dc2f437",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 114,
+    "receipt": "../../../changes/mobile-schedule-tabs-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "D08",
+    "file": "d08-schedule-duration.png",
+    "sha256": "633e427689d4e2dd00125c383b56f1fe0ad65ce47538f251f200e32ab0fd092d",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 114,
+    "receipt": "../../../changes/mobile-schedule-tabs-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "T01",
+    "file": "t01-today-list.png",
+    "sha256": "7b1d283fcf54de5ae4e831fe9a1d5d4c4112ad2750d6645a20619fe8369e04bd",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 102,
+    "receipt": "../../../changes/mobile-list-row-density-2026-11-14.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  }
+]
