@@ -231,7 +231,7 @@ struct MobileRootView: View {
                     }
                 }.padding(.horizontal, 16)
                 if model.isQA || section != .tasks {
-                    Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
+                    Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice").accessibilityValue(model.timePrecisionEvidence)
                 }
                 if model.recoveredDraft != nil || model.activeDraft != nil {
                     Button(model.activeDraft != nil ? "Continue your edit" : "Resume saved edit", action: resumeEdit).frame(minHeight: 44)
