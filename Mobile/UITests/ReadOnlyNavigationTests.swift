@@ -7133,10 +7133,20 @@ extension ReadOnlyNavigationTests {
             app.buttons["organizationManagerDone"].tap()
             goTo(title, in: app)
             XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
+            if mode == "board" {
+                XCTAssertTrue(app.buttons["boardColumn-open"].waitForExistence(timeout: 5))
+            } else if mode == "timeline" {
+                XCTAssertTrue(app.descendants(matching: .any)["taskTimelineAxis"].waitForExistence(timeout: 5))
+            }
             app.terminate(); app.launch()
             XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
             goTo(title, in: app)
             XCTAssertTrue(app.segmentedControls["listViewMode"].buttons[expected].isSelected)
+            if mode == "board" {
+                XCTAssertTrue(app.buttons["boardColumn-open"].waitForExistence(timeout: 5))
+            } else if mode == "timeline" {
+                XCTAssertTrue(app.descendants(matching: .any)["taskTimelineAxis"].waitForExistence(timeout: 5))
+            }
         }
     }
 
