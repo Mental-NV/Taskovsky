@@ -7024,3 +7024,47 @@ extension ReadOnlyNavigationTests {
         app.buttons["taskMetadataCancel"].tap()
     }
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testListCreationSelectedViewModesPersistAfterRelaunch() {
+        let app = launch()
+        for (mode, title, expected) in [("list", "Neutral List", "List View"), ("board", "Neutral Board", "Kanban View"), ("timeline", "Neutral Timeline", "Timeline View")] {
+            openOrganization(app)
+            app.buttons["organizationNewList"].tap()
+            XCTAssertTrue(app.navigationBars["Add List"].waitForExistence(timeout: 5))
+            XCTAssertFalse(app.buttons["organizationSave"].isEnabled)
+            editOrganizationName(title, in: app)
+            let choice = app.buttons["organizationView-" + mode]
+            reveal(choice, in: app); choice.tap()
+            XCTAssertEqual(choice.value as? String, "Selected")
+            attach(app, "Add List selected " + mode)
+            finishOrganizationEdit(app)
+            app.buttons["organizationManagerDone"].tap()
+            goTo(title, in: app)
+            XCTAssertEqual(app.buttons["taskListActions"].value as? String, expected)
+            app.terminate(); app.launch()
+            XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+            goTo(title, in: app)
+            XCTAssertEqual(app.buttons["taskListActions"].value as? String, expected)
+        }
+    }
+
+    @MainActor func testListCreationViewSelectionCancelDoesNotCreateList() {
+        let app = launch()
+        openOrganization(app)
+        app.buttons["organizationNewList"].tap()
+        editOrganizationName("Discarded Board", in: app)
+        let board = app.buttons["organizationView-board"]
+        reveal(board, in: app); board.tap()
+        let more = app.buttons["organizationMore"]
+        reveal(more, in: app); more.tap()
+        XCTAssertTrue(app.buttons["organizationPlacement"].exists)
+        app.buttons["organizationCancel"].tap()
+        app.alerts["Discard changes?"].buttons["Discard Changes"].tap()
+        waitGone(app.buttons["organizationSave"])
+        XCTAssertFalse(app.buttons["Discarded Board"].exists)
+        app.buttons["organizationNewList"].tap()
+        XCTAssertEqual(app.buttons["organizationView-list"].value as? String, "Selected")
+        app.buttons["organizationCancel"].tap()
+    }
+}
