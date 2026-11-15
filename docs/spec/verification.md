@@ -2092,3 +2092,7 @@ See [scope and pending gates](../changes/mobile-week-overview-2026-11-15.md). Si
 ### Mobile Calendar options navigation
 
 Color/Style/Show Item Icons hierarchy: full 827 XCTest + 38 Swift Testing, release/signature, three initial native save/relaunch/Cancel cases plus two final checklist/icons cases and independent review passed. Actual nested-page screenshots inspected; owned Simulator shut down. Exact-head CI remains pending. [Scope](../changes/mobile-calendar-options-navigation-2026-11-15.md).
+
+### Compact mobile empty description
+
+Candidate native checks cover plain editor Cancel/reopen/save/relaunch and formatted Cancel/discard, plus existing rich/unknown/malformed protections. Full 827 XCTest + 38 Swift Testing, release/signature, independent review and all five native cases passed; actual screenshot inspected and owned Simulator shut down. Exact-head CI pending. [Scope](../changes/mobile-empty-description-2026-11-15.md).
