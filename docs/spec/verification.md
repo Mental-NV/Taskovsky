@@ -2067,3 +2067,6 @@ Run `testCalendarThreeDayModePersistsAndPagesThreeDays` and `testCalendarThreeDa
 
 ### iPhone Arrange control placement
 Verify top grouping and footer Filter remain visible/reachable; List/Tag/Priority selection, source filtering and Include overdue still affect existing candidate projection. Check nested schedule Cancel/save and recurring drop scope/Undo; inspect neutral screenshot. This does not verify reference staged Filter dialog parity. See `../changes/mobile-arrange-controls-2026-11-15.md` for evidence and final receipt.
+
+### Hourly viewport width
+Verify three equal columns reach the viewport trailing edge and exceed the prior fixed-width layout, then paging/persistence, Day navigation, Week swipe and Day drag/Undo/resize regressions. Inspect actual screenshot rather than equating AX label widths with column widths. See `../changes/mobile-hourly-viewport-2026-11-15.md`.

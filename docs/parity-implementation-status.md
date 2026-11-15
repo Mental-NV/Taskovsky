@@ -281,3 +281,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - iPhone explicit 3 Day candidate uses existing configurable Multi-Day projection and saves count 3; failed save retains prior view. Full suite/release, three native tests and independent review passed; exact-head CI pending; no complete mode-menu or pixel parity. See `docs/changes/mobile-three-day-mode-2026-11-14.md`.
 
 - iPhone Arrange control hierarchy candidate moves grouping below title, source Filter to footer and overdue to overflow without changing domain semantics. Full suite/release/review and four native tests passed; exact-head CI pending; centered Filter hierarchy dialog still open. See `docs/changes/mobile-arrange-controls-2026-11-15.md`.
+
+- iPhone Day/Multi-Day viewport-fill candidate replaces fixed narrow columns with available width while preserving minimums and Week behavior. Full suite/release/review and five native tests passed; exact-head CI pending; header chrome and calibrated pixel parity still open. See `docs/changes/mobile-hourly-viewport-2026-11-15.md`.

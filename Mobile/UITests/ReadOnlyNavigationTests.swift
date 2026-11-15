@@ -298,6 +298,33 @@ final class ReadOnlyNavigationTests: XCTestCase {
             predicate: NSPredicate(format: "count == 7"), object: headers)], timeout: 5), .completed)
     }
 
+    @MainActor func testCalendarThreeDayFillsViewportAndDayRemainsUsable() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        app.buttons["Calendar view"].tap()
+        app.buttons["calendarThreeDay"].tap()
+        let first = app.buttons["calendarDay-2026-11-9"]
+        let middle = app.buttons["calendarDay-2026-11-10"]
+        let last = app.buttons["calendarDay-2026-11-11"]
+        XCTAssertTrue(last.waitForExistence(timeout: 5))
+        let grid = app.scrollViews["calendarHourlyGrid"]
+        let pitch = middle.frame.midX - first.frame.midX
+        XCTAssertGreaterThan(pitch * 3, grid.frame.width * 0.8)
+        XCTAssertEqual(last.frame.midX - middle.frame.midX, pitch, accuracy: 2)
+        XCTAssertEqual(last.frame.midX + pitch / 2, grid.frame.maxX, accuracy: 3)
+        attach(app, "Three Day fills hourly viewport")
+        app.buttons["Calendar view"].tap()
+        app.buttons["Day"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-")).count, 1)
+        attach(app, "Day fills hourly viewport")
+        app.buttons["Next Calendar period"].tap()
+        XCTAssertTrue(middle.waitForExistence(timeout: 5))
+        app.buttons["Previous Calendar period"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
+    }
+
     @MainActor func testCalendarThreeDaySaveFailureKeepsPriorView() {
         let app = launch(qaCase: "save-failure")
         app.buttons["Calendar"].tap()

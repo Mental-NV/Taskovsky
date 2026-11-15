@@ -958,3 +958,6 @@ Calendar mode selection includes explicit 3 Day, using existing Multi-Day mode w
 
 ### Arrange control hierarchy (November 15 candidate)
 Arrange places List/Tag/Priority grouping below the title and the existing single-source Filter menu at the bottom. Overflow retains Include overdue and scheduling guidance; Close remains visible. Projection/scheduling/drag behavior is unchanged. Reference centered Filter dialog and hierarchy remain open, not implied by this placement slice. See `../changes/mobile-arrange-controls-2026-11-15.md`.
+
+### Day/Multi-Day viewport fill
+Day and configurable Multi-Day hourly columns fill available viewport width after existing timezone rulers, retaining prior minimum widths and overflow behavior. Week layout and swipe remain unchanged. This addresses blank side space, not full Calendar chrome/geometry parity. See `../changes/mobile-hourly-viewport-2026-11-15.md`.
