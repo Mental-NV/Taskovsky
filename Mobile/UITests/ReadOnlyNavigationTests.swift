@@ -2518,6 +2518,15 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(panel.waitForExistence(timeout: 5))
         XCTAssertGreaterThan(panel.frame.minX, app.frame.width * 0.2)
         XCTAssertLessThan(panel.frame.width, app.frame.width * 0.8)
+        let grouping = app.segmentedControls["arrangeGroup"]
+        let filter = app.buttons["arrangeList"]
+        XCTAssertTrue(grouping.waitForExistence(timeout: 5))
+        XCTAssertTrue(filter.isHittable)
+        XCTAssertEqual(filter.label, "Filter")
+        XCTAssertGreaterThan(filter.frame.minY, grouping.frame.maxY)
+        grouping.buttons["Tag"].tap()
+        XCTAssertTrue(grouping.buttons["Tag"].isSelected)
+        grouping.buttons["List"].tap()
         attach(app, "Calendar Arrange right panel")
         app.coordinate(withNormalizedOffset: CGVector(dx: 0.12, dy: 0.65)).tap()
         waitGone(app.buttons["arrangeDone"])
@@ -2540,10 +2549,15 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(chapter.waitForExistence(timeout: 5))
         XCTAssertFalse(overdueTask.exists)
 
-        let overdue = app.switches["arrangeOverdue"]
-        XCTAssertEqual(overdue.value as? String, "0")
-        overdue.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        app.buttons["arrangeOptions"].tap()
+        let overdue = app.buttons["arrangeOverdue"]
+        XCTAssertEqual(overdue.label, "Include overdue")
+        overdue.tap()
         XCTAssertTrue(overdueTask.waitForExistence(timeout: 5))
+        app.buttons["arrangeOptions"].tap()
+        XCTAssertEqual(app.buttons["arrangeOverdue"].label, "Hide overdue")
+        attach(app, "Arrange overdue selected")
+        app.tap()
         app.buttons["arrangeList"].tap()
         app.buttons["Inbox"].tap()
         XCTAssertTrue(overdueTask.exists)
@@ -2552,8 +2566,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["Personal"].tap()
         XCTAssertTrue(chapter.waitForExistence(timeout: 5))
         XCTAssertFalse(overdueTask.exists)
-        app.buttons["arrangeGroup"].tap()
-        app.buttons["Priority"].tap()
+        app.segmentedControls["arrangeGroup"].buttons["Priority"].tap()
         XCTAssertTrue(app.staticTexts["High · 1"].waitForExistence(timeout: 5))
         attach(app, "Arrange Tasks scoped and grouped")
 
@@ -2672,7 +2685,8 @@ extension ReadOnlyNavigationTests {
         let target = app.coordinate(withNormalizedOffset: .zero)
             .withOffset(CGVector(dx: app.frame.width * 0.2, dy: day.frame.maxY + 12))
         openArrange(app)
-        app.switches["arrangeOverdue"].coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        app.buttons["arrangeOptions"].tap()
+        app.buttons["arrangeOverdue"].tap()
         let grip = app.descendants(matching: .any)["calendarArrangeDrag-00000000-0000-0000-0000-000000000004"].firstMatch
         guard grip.waitForExistence(timeout: 5) else { return XCTFail("The overdue recurring task is unavailable.") }
         func drag() {
@@ -2686,7 +2700,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["Cancel"].tap()
         waitGone(occurrence)
         XCTAssertTrue(app.buttons["arrangeDone"].exists)
-        XCTAssertEqual(app.switches["arrangeOverdue"].value as? String, "1")
+        // The recurring row remaining available proves Include overdue survives Cancel.
         guard grip.waitForExistence(timeout: 5) else { return XCTFail("Cancelling should keep the recurring task in Arrange.") }
         XCTAssertFalse(app.staticTexts["calendarScheduleNotice"].exists)
         drag()

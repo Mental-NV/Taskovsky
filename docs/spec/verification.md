@@ -2064,3 +2064,6 @@ Run the five `testCalendarArrange...` native tests covering side-panel dismissal
 ### iPhone explicit 3 Day
 
 Run `testCalendarThreeDayModePersistsAndPagesThreeDays` and `testCalendarThreeDaySaveFailureKeepsPriorView`, plus existing preference-save-failure coverage. Confirm three actual headers, three-day page step, relaunch and return to Week; failure keeps prior seven-day view and no saved change. Inspect actual screenshot before merge; no accessibility-layout polishing added.
+
+### iPhone Arrange control placement
+Verify top grouping and footer Filter remain visible/reachable; List/Tag/Priority selection, source filtering and Include overdue still affect existing candidate projection. Check nested schedule Cancel/save and recurring drop scope/Undo; inspect neutral screenshot. This does not verify reference staged Filter dialog parity. See `../changes/mobile-arrange-controls-2026-11-15.md` for evidence and final receipt.
