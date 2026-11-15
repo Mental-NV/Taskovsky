@@ -60,6 +60,22 @@ rendering change is intended.
 - No live TickTick, no personal data, no Codex. Fixtures are neutral QA
   samples only.
 
+## Correction: stable Color By leaf IDs
+
+Independent review found the Menu buttons expose AX labels `Color by
+List/Tag/Priority` while the native tests tapped `Tag`/`Priority`. Each Menu
+button now carries a stable `calendarColorMode-list/tag/priority` identifier;
+all five Calendar Color callers (save/reset/Cancel test, hierarchy test, and
+the existing View Options render/persist regression) tap those IDs. Unrelated
+Tag/Priority controls (Tasks Group & Sort, Arrange grouping) are untouched,
+and the root `calendarColor` ID is unchanged. The `calendarColor` value
+assertions are retained as row/effect checks; whether the Menu label's value
+survives on device is verified at native run time, not assumed here.
+
+Origin/main PR142 (Advanced filter draft preview and read-only examples) was
+merged additively underneath this work; its source, tests, docs, and asset
+changes are preserved and the C07 hunks are intact.
+
 ## Open items
 
 - Actual Simulator navigation of the new menu/rows, VoiceOver and reduced-motion

@@ -160,6 +160,7 @@ struct PhoneCalendarPreferences: View {
                         }
                     }
                     .accessibilityLabel("Color by " + mode.rawValue.capitalized)
+                    .accessibilityIdentifier("calendarColorMode-" + mode.rawValue)
                     .accessibilityValue(draft.colorBy == mode ? "Selected" : "Not selected")
                     .accessibilityAddTraits(draft.colorBy == mode ? .isSelected : [])
                 }
