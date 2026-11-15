@@ -137,7 +137,8 @@ public enum TaskCalendarProjection {
     }
     public static func arrangementTasks(data: WorkspaceData, options: TaskCalendarOptions, overdue: Bool = false,
                                         now: Date = Date(), calendar: Calendar,
-                                        selection: CalendarArrangeSelection = .calendar) -> [TaskItem] {
+                                        selection: CalendarArrangeSelection = .calendar,
+                                        undated: Bool = true, showNotes: Bool = true) -> [TaskItem] {
         var scope = options
         switch selection {
         case .calendar: break
@@ -146,6 +147,7 @@ public enum TaskCalendarProjection {
         case .sources(let ids, let inbox): scope.listIDs = Array(ids); scope.includeInbox = inbox; scope.tagIDs = []
         }
         return data.tasks.filter { task in
+            guard showNotes || task.kind != .note, undated || task.dueDate != nil else { return false }
             guard scope.includes(task, data: data), task.completedAt == nil, task.wontDoAt == nil else { return false }
             if selection != .calendar && !options.tagIDs.isEmpty && !options.matchesSelectedTags(task, data: data) { return false }
             if let due = task.dueDate {
