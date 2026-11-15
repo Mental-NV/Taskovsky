@@ -2141,3 +2141,7 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 ## D13 Custom Repeat Frequency —2026-11-15
 
 [Receipt](../changes/mobile-repeat-frequency-2026-11-15.md):851 XCTest+38 Swift/release, final iPhone compile/native4/4 and independent source/test review passed. Exact-head CI pending. Full interval model preserved by bounded wheel plus validated numeric fallback.
+
+## D14 Repeat Type —2026-11-15
+
+[Receipt](../changes/mobile-repeat-type-2026-11-15.md):852 XCTest+38 Swift/release/iPhone compile and independent review passed. Four initial native cases passed; specificDates AX-value failure fixed and final focused native passed after supported owned-Simulator boot/nonparallel launch. Exact CI pending. Neutral menu capture linked in tracker.
