@@ -1009,3 +1009,7 @@ Reminder and Repeat appear as summary rows opening dedicated pages over the same
 ## Mobile Priority list grouping — 2026-11-15
 
 [Contract and evidence](../changes/mobile-priority-list-2026-11-15.md): display-only Priority groups preserve pin/history/sort and current preference scope. Local/native/review checks passed; hosted CI pending; no exact reference ordering claim.
+
+## Real mobile organization grouping and sorting — 2026-11-15
+
+[Contract](../changes/mobile-group-sort-complete-2026-11-15.md) defines distinct List/Tag/None, metadata-aware Date/Tag sorting and unchanged compatibility/reset boundaries. Checks pending; exact unobserved reference semantics not claimed.

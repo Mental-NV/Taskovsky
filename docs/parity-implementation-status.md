@@ -315,3 +315,7 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 ## Mobile Priority list grouping
 
 [Bounded grouping slice](changes/mobile-priority-list-2026-11-15.md) adds an observed missing choice without task writes. Local/native/review checks passed; hosted CI pending; full menu parity not claimed.
+
+## Group & Sort underlying logic
+
+[Real choices](changes/mobile-group-sort-complete-2026-11-15.md) implement List/Tag/None and Date/Tag behavior, not label-only controls. Compatibility and unobserved semantics explicit. Checks pending.

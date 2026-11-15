@@ -741,6 +741,7 @@ struct MobileRootView: View {
     @ViewBuilder private func taskGroup(_ title: String, tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
         if !tasks.isEmpty {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("taskGroupHeader-" + title)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
             taskRows(tasks, lists: lists, searchQuery: searchQuery)
         }

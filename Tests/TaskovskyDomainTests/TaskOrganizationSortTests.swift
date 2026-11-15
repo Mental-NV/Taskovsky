@@ -4,6 +4,28 @@ import TaskovskyDomain
 final class TaskOrganizationSortTests: XCTestCase {
     private var calendar: Calendar { var c = Calendar(identifier: .gregorian); c.timeZone = TimeZone(secondsFromGMT: 0)!; return c }
 
+    func testMetadataSortAndOrganizationGroupsComposeWithoutLossOrMutation() {
+        let list = TaskList(name: "Work", color: "#000000")
+        let tag = TaskTag(name: "Tag", color: "#000000")
+        var a = TaskItem(title: "A", listID: list.id, dueDate: Date(timeIntervalSince1970: 100)); a.tagIDs = [tag.id]
+        let b = TaskItem(title: "B", parentID: a.id)
+        let c = TaskItem(title: "C", listID: list.id, dueDate: Date(timeIntervalSince1970: 200))
+        let tasks = [c, b, a], data = WorkspaceData(tasks: tasks, lists: [list], tags: [tag])
+        let before = data
+        for sort in TaskMetadataSort.allCases {
+            let sorted = tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) }
+            let projections = [TaskOrganizationGroup.byList(sorted, in: data), TaskOrganizationGroup.byTag(sorted, in: data), TaskOrganizationGroup.ungrouped(sorted)]
+            for groups in projections {
+                XCTAssertEqual(groups.flatMap(\.tasks).count, tasks.count)
+                XCTAssertEqual(Set(groups.flatMap(\.tasks).map(\.id)), Set(tasks.map(\.id)))
+                for group in groups {
+                    XCTAssertEqual(group.tasks, sorted.filter { item in group.tasks.contains { $0.id == item.id } })
+                }
+            }
+        }
+        XCTAssertEqual(data, before)
+    }
+
     func testListGroupingIsDistinctFromNoneAndRetainsEveryRow() {
         let first = TaskList(name: "First", color: "#000000")
         let second = TaskList(name: "Second", color: "#000000", isArchived: true)
