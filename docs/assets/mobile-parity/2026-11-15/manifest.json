@@ -378,5 +378,33 @@
     "receipt": "../../../changes/mobile-advanced-filter-2026-11-15.md",
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixel inspected: neutral nested AND/OR with readable Keyword menus, Preview and Examples. No personal information."
+  },
+  {
+    "state": "C07",
+    "file": "c07-calendar-color.png",
+    "sha256": "f40e67116659a1cfde9d231dd34d33ff7ccd4e477aadc677a908481886b6cb9a",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-page-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral Inbox/Personal/Projects/Work fixture only; no personal account/task data",
+    "capture_source": "d25580b with screenshot-only native attachment addition committed as 8b0e625",
+    "historical": false
+  },
+  {
+    "state": "C08",
+    "file": "c08-color-by.png",
+    "sha256": "ab240271ccb5089b9fbf94eda9f92e7caa99705f2bfa56889444bc07abc9cb70",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-page-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral Inbox/Personal/Projects/Work fixture only; no personal account/task data",
+    "capture_source": "d25580b with screenshot-only native attachment addition committed as 8b0e625",
+    "historical": false
   }
 ]

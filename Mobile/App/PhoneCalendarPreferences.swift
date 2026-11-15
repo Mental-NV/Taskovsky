@@ -83,7 +83,7 @@ struct PhoneCalendarPreferences: View {
     @ViewBuilder private var display: some View {
         Section("Appearance") {
             NavigationLink {
-                Form { Section { colorControls } }
+                Form { colorControls }
                     .navigationTitle("Color").navigationBarTitleDisplayMode(.inline)
             } label: { LabeledContent("Color", value: draft.colorBy.rawValue.capitalized) }
                 .accessibilityIdentifier("calendarColorPage")
@@ -142,15 +142,80 @@ struct PhoneCalendarPreferences: View {
         } header: { Text("Folded Hours") } footer: { Text("Expand both bands to drag their boundaries in the timeline.") }
     }
 
+    /// C07/C08 structural parity: the Color page carries the anchored
+    /// Color By menu and the genuine source swatches inline. Every row edits
+    /// the outer staged draft; nothing saves until View Options Done.
     @ViewBuilder private var colorControls: some View {
-        Picker("Color by", selection: $draft.colorBy) {
-            ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-        }.accessibilityIdentifier("calendarColor")
-        if draft.colorBy != .priority, let data = model.document?.snapshot.workspace {
-            NavigationLink(draft.colorBy == .list ? "Customize List Colors" : "Customize Tag Colors") {
-                PhoneCalendarSourceColors(mode: draft.colorBy, data: data, colors: $draft.sourceColors)
-            }.accessibilityIdentifier("calendarSourceColors")
+        Section {
+            Menu {
+                ForEach(CalendarColorMode.allCases, id: \.self) { mode in
+                    Button {
+                        draft.colorBy = mode
+                    } label: {
+                        HStack {
+                            Text(mode.rawValue.capitalized)
+                            if draft.colorBy == mode {
+                                Image(systemName: "checkmark").accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .accessibilityLabel("Color by " + mode.rawValue.capitalized)
+                    .accessibilityIdentifier("calendarColorMode-" + mode.rawValue)
+                    .accessibilityValue(draft.colorBy == mode ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(draft.colorBy == mode ? .isSelected : [])
+                }
+            } label: {
+                LabeledContent("Color By", value: draft.colorBy.rawValue.capitalized)
+            }
+            .accessibilityIdentifier("calendarColor")
+            .accessibilityValue(draft.colorBy.rawValue.capitalized)
         }
+        if let data = model.document?.snapshot.workspace {
+            switch draft.colorBy {
+            case .list: listColorGroups(data)
+            case .tag: tagColorGroups(data)
+            case .priority: priorityColorNote
+            }
+        }
+    }
+
+    @ViewBuilder private func listColorGroups(_ data: WorkspaceData) -> some View {
+        let hierarchy = CalendarColorSource.listSections(in: data)
+        Section {
+            colorRow(hierarchy.inbox)
+        }
+        ForEach(hierarchy.sections, id: \.placement) { section in
+            Section {
+                ForEach(section.rows) { row in colorRow(row) }
+            } header: {
+                if let folderName = section.folderName { Text(folderName) }
+            }
+        }
+    }
+
+    @ViewBuilder private func tagColorGroups(_ data: WorkspaceData) -> some View {
+        Section {
+            let rows = CalendarColorSource.swatches(in: data, by: .tag)
+            if rows.isEmpty {
+                Text("No tags to customize.").foregroundStyle(.secondary)
+            }
+            ForEach(rows) { row in colorRow(row) }
+        } footer: {
+            Text("These colors apply only in Calendar. Changes save when you tap Done in View Options.")
+        }
+    }
+
+    private var priorityColorNote: some View {
+        Section {
+            Text("Priority uses its fixed Calendar colors. There is nothing to customize.")
+                .foregroundStyle(.secondary)
+        } footer: {
+            Text("High, Medium, Low, and No Priority keep their built-in colors in Calendar.")
+        }
+    }
+
+    private func colorRow(_ row: CalendarColorSource.Swatch) -> some View {
+        PhoneCalendarSourceColorRow(row: row, colors: $draft.sourceColors)
     }
 
     @ViewBuilder private var styleControls: some View {
@@ -287,28 +352,18 @@ struct PhoneCalendarPreferences: View {
     }
 }
 
-private struct PhoneCalendarSourceColors: View {
-    let mode: CalendarColorMode
-    let data: WorkspaceData
+private struct PhoneCalendarSourceColorRow: View {
+    let row: CalendarColorSource.Swatch
     @Binding var colors: CalendarColorSource.Overrides
 
     var body: some View {
-        let rows = CalendarColorSource.swatches(in: data, by: mode)
-        Form {
-            Section {
-                if rows.isEmpty { Text("No tags to customize.").foregroundStyle(.secondary) }
-                ForEach(rows) { row in
-                    HStack {
-                        ColorPicker(row.name, selection: selection(for: row), supportsOpacity: false)
-                            .accessibilityValue(colors[row.id] ?? "Default")
-                        Button("Default") { colors[row.id] = nil }
-                            .buttonStyle(.borderless).disabled(colors[row.id] == nil)
-                            .accessibilityLabel("Use default color for " + row.name)
-                    }
-                }
-            } footer: { Text("These colors apply only in Calendar. Changes save when you tap Done in View Options.") }
-        }.navigationTitle(mode == .list ? "Calendar List Colors" : "Calendar Tag Colors")
-            .navigationBarTitleDisplayMode(.inline)
+        HStack {
+            ColorPicker(row.name, selection: selection(for: row), supportsOpacity: false)
+                .accessibilityValue(colors[row.id] ?? "Default")
+            Button("Default") { colors[row.id] = nil }
+                .buttonStyle(.borderless).disabled(colors[row.id] == nil)
+                .accessibilityLabel("Use default color for " + row.name)
+        }
     }
 
     private func selection(for row: CalendarColorSource.Swatch) -> Binding<Color> {
