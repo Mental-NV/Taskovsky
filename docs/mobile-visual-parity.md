@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**18/46 states have an attached Taskovsky screenshot; 28/46 await one. 0/46 have a portable TickTick reference image attached here.** All twenty-one assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**20/46 states have an attached Taskovsky screenshot; 26/46 await one. 0/46 have a portable TickTick reference image attached here.** All twenty-one assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. They are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -88,7 +88,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | T13 | Normal Filter | Partial | Criteria, keywords, type and preview exist; subforms and layout differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T14 | Advanced Filter | Partial | Logic and criteria exist; examples and layout differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T15 | Add Tag | Partial | Name/color/parent exist via different system controls. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
-| T16 | Parent Tag | Partial | Selection exists, not matching pushed radio-list. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| T16 | Parent Tag | Partial | Explicit None/radio choices and cycle-safe staged selection implemented; exact geometry/order unverified. | **Screenshot missing**<br>[Reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/t16-parent-tag.png" width="180" alt="Taskovsky Parent Tag cycle-safe None choice">](assets/mobile-parity/2026-11-15/t16-parent-tag.png)<br>[Receipt](changes/mobile-parent-tag-2026-11-15.md) |
 | T17 | Quick-add composer | Partial | Compact core actions and More→advanced form; keyboard/height and fine layout still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png" width="180" alt="Taskovsky compact composer">](#evidence-t17)<br>[Receipt](changes/mobile-compact-capture-2026-11-15.md) |
 
 ## Screenshot gallery
