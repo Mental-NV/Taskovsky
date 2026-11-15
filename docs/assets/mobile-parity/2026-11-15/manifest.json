@@ -110,5 +110,19 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
     "historical": true
+  },
+  {
+    "state": "D01",
+    "file": "d01-empty-description.png",
+    "sha256": "d1a8c5ad6d640037b927ee4b6094dad2b8c04f847374c7f885f35a7f1af0e986",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 116,
+    "receipt": "../../../changes/mobile-empty-description-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
+    "historical": true
   }
 ]

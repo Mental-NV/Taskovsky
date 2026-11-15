@@ -297,3 +297,5 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 - Mobile Schedule Date/Duration: [presentation candidate](changes/mobile-schedule-tabs-2026-11-15.md); existing conversion semantics retained, native checks passed; hosted exact-head CI pending.
 
 - Mobile Calendar View Options navigation candidate: Color and Style pushed pages, nested Show Item Icons, existing draft semantics and supported controls. Local/native/review validation passed; exact-head CI pending. Complete style parity not claimed. [Scope](changes/mobile-calendar-options-navigation-2026-11-15.md).
+
+- Mobile ordinary empty-description candidate replaces three idle rows with one Add description menu. Existing nonempty/rich/editor semantics preserved. Local/native/review passed; exact-head CI pending and exact footer parity not claimed. [Scope](changes/mobile-empty-description-2026-11-15.md).
