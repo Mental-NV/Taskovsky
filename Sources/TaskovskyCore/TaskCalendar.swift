@@ -365,6 +365,27 @@ public struct CalendarAgendaWindow: Sendable {
     }
 }
 
+/// Production formatting for the hourly calendar day header, resolved in the
+/// supplied calendar/timezone. The weekday label, accessible date, numeric
+/// day and identifier must agree with each other: formatting any of them in
+/// the device zone instead would show the wrong civil date near a midnight
+/// timezone boundary (C01/C02).
+public struct CalendarDayHeader: Equatable, Sendable {
+    public let weekdayNarrow: String
+    public let dayNumber: Int
+    public let accessibleLabel: String
+    public let identifier: String
+    public init(day: Date, calendar: Calendar) {
+        let parts = calendar.dateComponents([.year, .month, .day], from: day)
+        weekdayNarrow = day.formatted(Date.FormatStyle(date: .omitted, time: .omitted,
+                                                       calendar: calendar, timeZone: calendar.timeZone).weekday(.narrow))
+        dayNumber = calendar.component(.day, from: day)
+        accessibleLabel = "Show " + day.formatted(Date.FormatStyle(date: .complete, time: .omitted,
+                                                                   calendar: calendar, timeZone: calendar.timeZone)) + " in Day view"
+        identifier = "calendarDay-\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
+    }
+}
+
 public enum CalendarHourBand: String, CaseIterable, Hashable, Sendable {
     case early, late
 

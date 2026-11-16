@@ -532,6 +532,91 @@ final class ReadOnlyNavigationTests: XCTestCase {
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-")).count, 7)
     }
 
+    @MainActor func testCalendarModeMenuShowsObservedPrimaryOrderWithSingleCheck() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.staticTexts["Week"].waitForExistence(timeout: 5))
+        attach(app, "Calendar Week")
+        app.buttons["Calendar view"].tap()
+        let primary = ["List", "Year", "Month", "Week", "3 Day", "Day"]
+        for name in primary { XCTAssertTrue(app.buttons[name].waitForExistence(timeout: 5), name) }
+        var previousMaxY = -1.0
+        for name in primary {
+            let minY = app.buttons[name].frame.minY
+            XCTAssertGreaterThan(minY, previousMaxY, name)
+            previousMaxY = minY
+        }
+        let extras = app.staticTexts["calendarModeExtrasHeader"]
+        XCTAssertTrue(extras.waitForExistence(timeout: 5))
+        XCTAssertGreaterThan(extras.frame.minY, previousMaxY)
+        for name in ["Multi-Day", "Multi-Week"] {
+            let row = app.buttons[name]
+            XCTAssertTrue(row.waitForExistence(timeout: 5), name)
+            XCTAssertGreaterThan(row.frame.minY, extras.frame.minY, name)
+        }
+        let keys = ["Agenda", "Year", "Month", "Week", "calendarThreeDay", "Day", "calendarModeMultiDay", "calendarModeMultiWeek"]
+        XCTAssertEqual(keys.filter { (app.buttons[$0].value as? String ?? "") == "Selected" }, ["Week"])
+        attach(app, "Calendar mode menu with observed order")
+        app.buttons["Week"].tap()
+        waitGone(app.buttons["Multi-Week"])
+        XCTAssertTrue(app.staticTexts["Week"].exists)
+    }
+
+    @MainActor func testCalendarModeMenuSelectsYearThenListAndPersists() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.staticTexts["Week"].waitForExistence(timeout: 5))
+        app.buttons["Calendar view"].tap()
+        app.buttons["Year"].tap()
+        waitGone(app.buttons["Year"])
+        XCTAssertTrue(app.staticTexts["Year"].waitForExistence(timeout: 5))
+        app.buttons["Calendar view"].tap()
+        XCTAssertTrue(app.buttons["Year"].waitForExistence(timeout: 5))
+        let keys = ["Agenda", "Year", "Month", "Week", "calendarThreeDay", "Day", "calendarModeMultiDay", "calendarModeMultiWeek"]
+        XCTAssertEqual(keys.filter { (app.buttons[$0].value as? String ?? "") == "Selected" }, ["Year"])
+        attach(app, "Calendar Year after mode menu selection")
+        app.buttons["Year"].tap()
+        waitGone(app.buttons["Multi-Week"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.staticTexts["Year"].waitForExistence(timeout: 5))
+        app.buttons["Calendar view"].tap()
+        XCTAssertTrue(app.buttons["List"].waitForExistence(timeout: 5))
+        app.buttons["List"].tap()
+        waitGone(app.buttons["List"])
+        XCTAssertTrue(app.staticTexts["Agenda"].exists)
+        app.buttons["Calendar view"].tap()
+        XCTAssertTrue(app.buttons["List"].waitForExistence(timeout: 5))
+        XCTAssertEqual(keys.filter { (app.buttons[$0].value as? String ?? "") == "Selected" }, ["Agenda"])
+        attach(app, "Calendar List after mode menu selection")
+    }
+
+    @MainActor func testCalendarModeMenuExtrasKeepMultiDayAndMultiWeek() {
+        let app = launch()
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.staticTexts["Week"].waitForExistence(timeout: 5))
+        app.buttons["Calendar view"].tap()
+        app.buttons["calendarModeMultiDay"].tap()
+        waitGone(app.buttons["calendarModeMultiDay"])
+        let headers = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "calendarDay-"))
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "count == 5"), object: headers)], timeout: 5), .completed)
+        app.buttons["Calendar view"].tap()
+        XCTAssertTrue(app.buttons["calendarModeMultiDay"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["calendarModeMultiDay"].value as? String ?? "", "Selected")
+        XCTAssertEqual(app.buttons["calendarThreeDay"].value as? String ?? "", "")
+        attach(app, "Calendar generic Multi-Day from extras")
+        app.buttons["calendarModeMultiWeek"].tap()
+        waitGone(app.buttons["calendarModeMultiWeek"])
+        XCTAssertTrue(app.staticTexts["Multi-Week"].waitForExistence(timeout: 5))
+        app.buttons["Calendar view"].tap()
+        XCTAssertTrue(app.buttons["calendarModeMultiWeek"].waitForExistence(timeout: 5))
+        let keys = ["Agenda", "Year", "Month", "Week", "calendarThreeDay", "Day", "calendarModeMultiDay", "calendarModeMultiWeek"]
+        XCTAssertEqual(keys.filter { (app.buttons[$0].value as? String ?? "") == "Selected" }, ["calendarModeMultiWeek"])
+        attach(app, "Calendar Multi-Week from extras")
+    }
+
     @MainActor func testCalendarHeaderModeAndOverflowPlacement() {
         let app = launch()
         app.buttons["Calendar"].tap()

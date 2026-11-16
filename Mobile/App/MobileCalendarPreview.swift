@@ -707,15 +707,14 @@ private struct MobileCalendarContent: View {
     }
 
     private func hourlyDayHeader(_ day: Date) -> some View {
-        let parts = calendar.dateComponents([.year, .month, .day], from: day)
-        let identifier = "calendarDay-\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
+        let header = CalendarDayHeader(day: day, calendar: calendar)
         return Button { select(.day, day) } label: {
             VStack(spacing: 6) {
-                Text(day.formatted(.dateTime.weekday(.narrow))).foregroundStyle(.secondary)
-                Text("\(calendar.component(.day, from: day))").fontWeight(.semibold)
+                Text(header.weekdayNarrow).foregroundStyle(.secondary)
+                Text("\(header.dayNumber)").fontWeight(.semibold)
             }.font(.caption).frame(height: 52)
-        }.accessibilityLabel("Show " + day.formatted(date: .complete, time: .omitted) + " in Day view")
-            .accessibilityIdentifier(identifier)
+        }.accessibilityLabel(header.accessibleLabel)
+            .accessibilityIdentifier(header.identifier)
     }
 
     private var hourlyDayBoundary: some View {

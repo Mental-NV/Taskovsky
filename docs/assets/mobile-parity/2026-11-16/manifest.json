@@ -180,5 +180,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual pixels inspected: neutral schedule fixture only; no personal TickTick information",
     "historical": false
+  },
+  {
+    "state": "C01",
+    "file": "c01-week.png",
+    "sha256": "2116fa56febe862af25619e08827255f12f7468dd45fa7ad843da497341257af",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-week-header-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Parent pixel-inspected: neutral fixture tasks only, weekday strip Mon 9 through partially clipped Sun 15, tall all-day band visible; no personal TickTick data. All 16 manifest hashes/dimensions validated.",
+    "historical": false
+  },
+  {
+    "state": "C02",
+    "file": "c02-mode-menu.png",
+    "sha256": "036af2ade3d9be7beb034963f0c7f2b6d380118c5c2d3a09f14bd60784ce4b32",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-week-header-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Parent pixel-inspected: primary order List/Year/Month/Week check/3 Day/Day with separated More views Multi-Day/Multi-Week; neutral fixture only. All 16 manifest hashes/dimensions validated.",
+    "historical": false
   }
 ]

@@ -585,7 +585,7 @@ R09 Settings shows Tab Bar; Appearance; Sounds & Notifications; Date & Time; Wid
 
 ### Calendar layout mapping to desktop
 
-Desktop Calendar is in scope because it is already implemented, not because the screenshots contain Calendar. Its seven modes are **Day, Week, Month, Year, Agenda, Multi-Day, Multi-Week**. The reference menu instead lists List, Year, Month, Week, 3 Day, Day and also shows two different Week presentations. These are different product taxonomies. Use desktop mode identity and semantics; adapt labels/controls without adding the extra screenshot mode or losing Multi-Week.
+Desktop Calendar is in scope because it is already implemented, not because the screenshots contain Calendar. Its seven modes are **Day, Week, Month, Year, Agenda, Multi-Day, Multi-Week**. The reference menu instead lists List, Year, Month, Week, 3 Day, Day and also shows two different Week presentations. These are different product taxonomies. Use desktop mode identity and semantics; adapt labels/controls without adding the extra screenshot mode or losing Multi-Week. The phone menu presents the observed order with List naming for the agenda mode and a separated Multi-Day/Multi-Week extras area, per [mobile week header](../changes/mobile-week-header-2026-11-16.md).
 
 | Desktop mode or capability | Matching reference evidence | Mobile requirement and limits |
 | --- | --- | --- |
@@ -956,7 +956,7 @@ Arrange Tasks is a trailing panel over Calendar rather than a bottom sheet. Expo
 
 ### Calendar 3 Day shortcut
 
-Calendar mode selection includes explicit 3 Day, using existing Multi-Day mode with a saved count of 3. It intentionally replaces the configurable count; other counts remain editable in View Options. Failed count-changing save leaves the prior view/count with an error, while existing general-mode fallback remains unchanged. Exact reference menu order and grid geometry are not claimed.
+Calendar mode selection includes explicit 3 Day, using existing Multi-Day mode with a saved count of 3. It intentionally replaces the configurable count; other counts remain editable in View Options. Failed count-changing save leaves the prior view/count with an error, while existing general-mode fallback remains unchanged. Grid geometry is not claimed. The phone mode menu now follows the observed reference order List, Year, Month, Week, 3 Day, Day, with existing Multi-Day and Multi-Week kept in a separated extras area; the agenda mode keeps its desktop identity with the `Agenda` identifier while its visible and accessible menu name is List. See [mobile week header](../changes/mobile-week-header-2026-11-16.md).
 
 ### Arrange control hierarchy (November 15 candidate)
 Arrange places List/Tag/Priority grouping below the title and the existing single-source Filter menu at the bottom. Overflow retains Include overdue and scheduling guidance; Close remains visible. Projection/scheduling/drag behavior is unchanged. Reference centered Filter dialog and hierarchy remain open, not implied by this placement slice. See `../changes/mobile-arrange-controls-2026-11-15.md`.
