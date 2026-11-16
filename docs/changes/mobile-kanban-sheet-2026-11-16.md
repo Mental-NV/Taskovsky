@@ -42,3 +42,7 @@ Exact font rendering/color values and unobserved Tag secondary/multi-tag semanti
 | Before PR149 correction | After |
 | --- | --- |
 | [<img src="../assets/mobile-parity/2026-11-16/t04-kanban-menu-before.png" width="220" alt="Old Kanban popup menu">](../assets/mobile-parity/2026-11-16/t04-kanban-menu-before.png) | [<img src="../assets/mobile-parity/2026-11-16/t04-kanban-sheet.png" width="220" alt="Reference-structured Kanban Group and Sort sheet">](../assets/mobile-parity/2026-11-16/t04-kanban-sheet.png) |
+
+### Integration with PR150
+
+Merged current main `d41ee5f` into this branch at `c9e6072`. Independent actual integration review verified unchanged Kanban production source, preservation of both native test groups, C10/T04 tracker rows, receipts, manifests and assets. Calendar style changes are separate; no additional native rerun was required solely for the merge. Integrated full suite passed 915 XCTest plus 38 Swift tests; release and iPhone build-for-testing passed (all completed, exit 0). Refreshed exact-head hosted CI remains required.
