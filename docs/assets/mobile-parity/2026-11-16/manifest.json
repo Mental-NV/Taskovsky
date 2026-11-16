@@ -206,5 +206,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Parent pixel-inspected: primary order List/Year/Month/Week check/3 Day/Day with separated More views Multi-Day/Multi-Week; neutral fixture only. All 16 manifest hashes/dimensions validated.",
     "historical": false
+  },
+  {
+    "state": "C06",
+    "file": "c06-view-options-primary.png",
+    "sha256": "261e3652117a5118be9c166663ad8a9a5938a0af6ac392da6d9a15a3a10a9845",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-view-options-c06-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual final Run2 pixels inspected: neutral calendar-options fixture only; corrected useful extras guidance; no personal data",
+    "historical": false
+  },
+  {
+    "state": "C06",
+    "file": "c06-view-options-extras.png",
+    "sha256": "a80aba4190e5f2ea897d91cae2b73044b7a5e21f4ba4a9aa710ca597b269dba6",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-view-options-c06-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual final Run2 pixels inspected: neutral calendar-options fixture only; corrected useful extras guidance; no personal data",
+    "historical": false
   }
 ]
