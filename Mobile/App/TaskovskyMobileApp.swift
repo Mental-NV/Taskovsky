@@ -59,7 +59,10 @@ struct MobileRootView: View {
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
     @State private var boardGroupings: [TaskDestination: PhoneScopedBoardGrouping] = [:]
-    @State private var boardTitleSorts: [TaskDestination: TaskTitleSort] = [:]
+    @State private var boardSorts: [TaskDestination: TaskBoardSortKind] = [:]
+    @State private var boardSortAscending: [TaskDestination: Bool] = [:]
+    @State private var boardSortRequest: PhoneBoardSortRequest?
+    @State private var pendingBoardSortRequest: PhoneBoardSortRequest?
     @State private var capturePresented = false
     @State private var drawer = false
     @State private var manageLists = false
@@ -360,6 +363,26 @@ struct MobileRootView: View {
             case .move(let request): PhoneTaskMoveSheet(model: model, request: request)
             }
         }
+        .overlay {
+            if let request = boardSortRequest {
+                GeometryReader { geometry in
+                    ZStack(alignment: .bottom) {
+                        Color.black.opacity(0.25).contentShape(Rectangle())
+                            .onTapGesture { boardSortRequest = nil }
+                            .accessibilityLabel("Dismiss Group and Sort")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityIdentifier("boardSortBackdrop")
+                        PhoneBoardSortSheet(
+                            grouping: Binding(get: { boardGroupings[request.destination] ?? PhoneScopedBoardGrouping.defaultGrouping(for: request.destination) },
+                                              set: { boardGroupings[request.destination] = $0 }),
+                            sort: Binding(get: { boardSorts[request.destination] }, set: { boardSorts[request.destination] = $0 }),
+                            ascending: Binding(get: { boardSortAscending[request.destination] ?? true }, set: { boardSortAscending[request.destination] = $0 }))
+                            .frame(height: max(330, geometry.size.height * 0.41))
+                            .background(Color(uiColor: .systemBackground), in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24))
+                    }
+                }.ignoresSafeArea()
+            }
+        }
         .sheet(isPresented: $showTaskSort) {
             PhoneSortGroupSheet(sort: model.taskSort, grouping: model.taskGrouping,
                                 allowsGrouping: destination.supportsTaskDateGrouping,
@@ -538,17 +561,9 @@ struct MobileRootView: View {
                     if supportsScopedViewMenu(data) {
                         scopedViewMenu(data)
                         if alternateModes[destination] == .board {
-                            Menu {
-                                Picker("Group by", selection: scopedBoardGrouping) {
-                                    ForEach(PhoneScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
-                                }
-                                Picker("Sort by", selection: Binding<TaskTitleSort?>(
-                                    get: { boardTitleSorts[destination] },
-                                    set: { boardTitleSorts[destination] = $0; showTaskActions = false })) {
-                                    Text("Existing Order").tag(Optional<TaskTitleSort>.none)
-                                    Text("Title · Ascending").tag(Optional(TaskTitleSort.ascending))
-                                    Text("Title · Descending").tag(Optional(TaskTitleSort.descending))
-                                }
+                            Button {
+                                pendingBoardSortRequest = PhoneBoardSortRequest(destination: destination)
+                                showTaskActions = false
                             } label: {
                                 Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
                             }.accessibilityIdentifier("scopedBoardGrouping")
@@ -588,6 +603,10 @@ struct MobileRootView: View {
                 }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 6)
                     .presentationCompactAdaptation(.popover)
                     .onDisappear {
+                        if let pending = pendingBoardSortRequest {
+                            pendingBoardSortRequest = nil
+                            boardSortRequest = pending
+                        }
                         if openSortAfterActions {
                             openSortAfterActions = false
                             showTaskSort = true
@@ -651,7 +670,7 @@ struct MobileRootView: View {
             case .timeline:
                 if let scope { taskTimeline(scope, data: data) }
             case .board:
-                PhoneScopedTaskBoard(model: model, destination: destination, data: data, grouping: scopedBoardGrouping, titleSort: boardTitleSorts[destination],
+                PhoneScopedTaskBoard(model: model, destination: destination, data: data, grouping: scopedBoardGrouping, sort: boardSorts[destination], ascending: boardSortAscending[destination] ?? true,
                                      open: { selectedTask = PhoneTaskRoute(id: $0) },
                                      schedule: scheduleFromScopedBoard).id(destination)
             default:

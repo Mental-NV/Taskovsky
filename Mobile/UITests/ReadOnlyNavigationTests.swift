@@ -7305,9 +7305,19 @@ extension ReadOnlyNavigationTests {
     @MainActor private func selectScopedGrouping(_ name: String, in app: XCUIApplication) {
         app.buttons["taskListActions"].tap()
         app.buttons["scopedBoardGrouping"].tap()
-        let choice = app.buttons[name]
-        XCTAssertTrue(choice.waitForExistence(timeout: 5))
-        choice.tap()
+        XCTAssertTrue(app.buttons["boardGroup-list"].waitForExistence(timeout: 5))
+        if name.hasPrefix("Title ·") {
+            let wanted = name.contains("Descending") ? "Descending" : "Ascending"
+            let direction = app.buttons["boardSortDirection"]
+            if direction.value as? String != wanted { direction.tap() }
+            app.buttons["boardSort-title"].tap()
+        } else {
+            let key = name == "Created Time" ? "createdTime" : name.lowercased()
+            app.buttons["boardGroup-" + key].tap()
+        }
+        XCTAssertTrue(app.buttons["boardGroup-list"].exists)
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        waitGone(app.buttons["boardGroup-list"])
     }
 
     @MainActor func testPriorityBoardEmptyState() {
@@ -7403,10 +7413,12 @@ extension ReadOnlyNavigationTests {
         attach(app, "Today Kanban without permanent mode controls")
         app.buttons["taskListActions"].tap()
         app.buttons["scopedBoardGrouping"].tap()
-        XCTAssertTrue(app.buttons["Date"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["List"].exists)
-        attach(app, "Today Group and Sort submenu")
-        app.buttons["Date"].tap()
+        XCTAssertTrue(app.buttons["boardGroup-date"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["boardGroup-list"].exists)
+        attach(app, "Today Group and Sort sheet")
+        app.buttons["boardGroup-date"].tap()
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        waitGone(app.buttons["boardGroup-date"])
         selectScopedView("List View", in: app)
     }
 
@@ -8839,5 +8851,96 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(card.exists)
         selectScopedGrouping("Date", in: app)
         XCTAssertTrue(app.buttons["scopedBoardColumn-0"].exists)
+    }
+}
+
+extension ReadOnlyNavigationTests {
+    @MainActor private func openKanbanSortSheet(_ app: XCUIApplication) {
+        app.buttons["taskListActions"].tap()
+        app.buttons["scopedBoardGrouping"].tap()
+        XCTAssertTrue(app.buttons["boardGroup-list"].waitForExistence(timeout: 5))
+    }
+    @MainActor private func dismissKanbanSortSheet(_ app: XCUIApplication) {
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.2)).tap()
+        waitGone(app.buttons["boardGroup-list"])
+    }
+    @MainActor private func assertKanbanOrder(_ ids: [Int], _ app: XCUIApplication) {
+        let cards = ids.map { app.buttons[String(format: "boardCard-00000000-0000-0000-0000-%012d", $0)] }
+        for card in cards { XCTAssertTrue(card.waitForExistence(timeout: 5)) }
+        for index in 1..<cards.count { XCTAssertLessThan(cards[index-1].frame.minY, cards[index].frame.minY) }
+    }
+    @MainActor func testKanbanSheetEverySortIsRealAndStaysOpen() {
+        let app = launch(qaCase: "kanban-sort")
+        selectScopedView("Kanban View", in: app)
+        openKanbanSortSheet(app)
+        let groupKeys = ["list","date","createdTime","tag","priority"]
+        let groupLabels = ["List","Date","Created Time","Tag","Priority"]
+        for (key,label) in zip(groupKeys,groupLabels) {
+            let button = app.buttons["boardGroup-"+key]
+            XCTAssertEqual(button.label,label); XCTAssertGreaterThanOrEqual(button.frame.height,44)
+        }
+        for key in ["date","createdTime","modifiedTime","title","tag","priority"] {
+            XCTAssertTrue(app.buttons["boardSort-"+key].exists)
+            XCTAssertFalse(app.buttons["boardSort-"+key].isSelected)
+        }
+        XCTAssertFalse(app.buttons["Done"].exists)
+        XCTAssertFalse(app.buttons["Existing Order"].exists)
+        XCTAssertFalse(app.staticTexts["Group & Sort"].exists)
+        let first = app.buttons["boardGroup-list"], second = app.buttons["boardGroup-date"], third = app.buttons["boardGroup-createdTime"]
+        XCTAssertLessThan(first.frame.minX,second.frame.minX); XCTAssertLessThan(second.frame.minX,third.frame.minX)
+        XCTAssertEqual(first.frame.minY,second.frame.minY,accuracy:1)
+        XCTAssertGreaterThan(app.buttons["boardGroup-tag"].frame.minY,first.frame.minY)
+        let direction = app.buttons["boardSortDirection"]
+        XCTAssertGreaterThanOrEqual(direction.frame.height,44)
+        XCTAssertLessThanOrEqual(direction.frame.maxY, app.buttons["boardSort-date"].frame.minY)
+        direction.tap()
+        XCTAssertEqual(direction.value as? String,"Descending")
+        app.buttons["boardSort-title"].tap()
+        XCTAssertTrue(app.buttons["boardSort-title"].isSelected)
+        XCTAssertEqual(direction.value as? String,"Descending")
+        for key in groupKeys {
+            app.buttons["boardGroup-"+key].tap()
+            XCTAssertTrue(app.buttons["boardGroup-"+key].isSelected)
+            XCTAssertTrue(app.buttons["boardSort-title"].isSelected)
+        }
+        app.buttons["boardGroup-list"].tap()
+        attach(app,"Kanban Group and Sort reference-structured sheet")
+        dismissKanbanSortSheet(app)
+        assertKanbanOrder([3,1,2],app)
+        let choices: [(String,[Int])] = [("date",[1,2,3]),("createdTime",[3,1,2]),("modifiedTime",[2,3,1]),("priority",[3,1,2]),("title",[2,1,3])]
+        for (key,expected) in choices {
+            openKanbanSortSheet(app)
+            if app.buttons["boardSortDirection"].value as? String != "Ascending" { app.buttons["boardSortDirection"].tap() }
+            app.buttons["boardSort-"+key].tap()
+            XCTAssertTrue(app.buttons["boardSort-"+key].isSelected)
+            dismissKanbanSortSheet(app)
+            assertKanbanOrder(expected,app)
+        }
+        selectScopedView("List View",in:app)
+        XCTAssertTrue(app.buttons["Beta"].waitForExistence(timeout:5))
+    }
+    @MainActor func testKanbanTagSortHasRealCollapsibleSections() {
+        let app = launch(qaCase:"kanban-sort")
+        selectScopedView("Kanban View",in:app)
+        openKanbanSortSheet(app)
+        app.buttons["boardGroup-list"].tap(); app.buttons["boardSort-tag"].tap()
+        XCTAssertTrue(app.buttons["boardSort-tag"].isSelected)
+        dismissKanbanSortSheet(app)
+        let sections = app.buttons.matching(NSPredicate(format:"identifier BEGINSWITH %@","boardTagSection-"))
+        let planning = sections.matching(NSPredicate(format:"label == %@","Planning")).firstMatch
+        let untagged = sections.matching(NSPredicate(format:"label == %@","No Tags")).firstMatch
+        XCTAssertTrue(planning.waitForExistence(timeout:5)); XCTAssertTrue(untagged.exists)
+        XCTAssertEqual(planning.value as? String,"1, Expanded")
+        XCTAssertEqual(untagged.value as? String,"2, Expanded")
+        XCTAssertLessThan(planning.frame.minY,untagged.frame.minY)
+        planning.tap()
+        XCTAssertEqual(planning.value as? String,"1, Collapsed")
+        XCTAssertFalse(app.buttons["boardCard-00000000-0000-0000-0000-000000000001"].exists)
+        XCTAssertTrue(app.buttons["boardCard-00000000-0000-0000-0000-000000000002"].exists)
+        openKanbanSortSheet(app); app.buttons["boardSortDirection"].tap(); dismissKanbanSortSheet(app)
+        XCTAssertEqual(planning.value as? String,"1, Collapsed")
+        planning.tap()
+        XCTAssertTrue(app.buttons["boardCard-00000000-0000-0000-0000-000000000001"].exists)
+        attach(app,"Kanban real Tag subsections")
     }
 }
