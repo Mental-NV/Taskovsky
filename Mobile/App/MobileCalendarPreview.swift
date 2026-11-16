@@ -468,7 +468,7 @@ private struct MobileCalendarContent: View {
     }
 
     private static func cardFillOpacity(_ style: CalendarItemStyle, entry: CalendarEntry) -> Double {
-        entry.isCompleted ? style.rendering.completedFillOpacity : style.rendering.fillOpacity
+        style.phoneFillOpacity(completed: entry.isCompleted)
     }
 
     private func cardColor(_ hex: String) -> Color {

@@ -32,7 +32,7 @@ struct CalendarEntryView: View {
     var edit: (CalendarEntry) -> Void
     private var tint: Color { Color(hex: entry.color) }
     private var rendering: CalendarItemStyle.Rendering { style.rendering }
-    private var fillOpacity: Double { entry.isCompleted ? rendering.completedFillOpacity : rendering.fillOpacity }
+    private var fillOpacity: Double { style.macFillOpacity(completed: entry.isCompleted) }
     /// Classic uses a saturated block with dark icons; other styles keep the source tint for icons.
     private var iconTint: Color { style == .classic ? .primary : tint }
     private var completionAction: String {

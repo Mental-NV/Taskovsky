@@ -5150,9 +5150,10 @@ extension ReadOnlyNavigationTests {
         attach(app, "Saved Year Standard view")
     }
 
-    /// C10 Style tiles: Modern/Classic save and relaunch, Back retains the
-    /// staged draft, outer Cancel discards it, and a saved legacy style
-    /// stays selected until explicitly changed. Year Show shades by count.
+    /// C10 Style tiles: Modern/Classic save and relaunch with actual rendered
+    /// Week screenshots, Back retains the staged draft, outer Cancel discards
+    /// it, Year Show/Hide assert the actual grid mode, and a saved legacy
+    /// style stays selected until explicitly changed.
     @MainActor func testCalendarStyleTilesSaveModernClassicAndLegacyAcrossRelaunch() {
         let app = launch(qaCase: "calendar-options")
         app.buttons["Calendar"].tap()
@@ -5175,15 +5176,21 @@ extension ReadOnlyNavigationTests {
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
-        // Year Show uses heatmap shading; task data is unchanged.
+        // Year Show uses the actual heatmap mode with shading; task data is unchanged.
         app.buttons["Calendar view"].tap()
         app.buttons["Year"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["calendarYearHeatmap"].waitForExistence(timeout: 5))
+        attach(app, "Year rendered with Show heatmap")
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         app.buttons["Calendar"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["calendarYearHeatmap"].waitForExistence(timeout: 5))
+        // Actual rendered Week under Modern, not just the selected tile.
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+        XCTAssertTrue(app.scrollViews["calendarHourlyGrid"].waitForExistence(timeout: 5))
+        attach(app, "Week rendered with Modern style")
         // Classic: staged Back retention, then outer Cancel discards the change.
         openCalendarViewOptions(app)
         app.buttons["calendarStylePage"].tap()
@@ -5201,20 +5208,31 @@ extension ReadOnlyNavigationTests {
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesCancel"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
-        // Classic saves, and a saved legacy style stays honest on reopen.
+        // Classic saves together with Hide; actual Week and Year Standard follow.
         openCalendarViewOptions(app)
         app.buttons["calendarStylePage"].tap()
         app.buttons["calendarItemStyle-classic"].tap()
+        app.buttons["calendarYearStyle-hide"].tap()
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
+        app.buttons["Calendar view"].tap()
+        app.buttons["Week"].tap()
+        XCTAssertTrue(app.scrollViews["calendarHourlyGrid"].waitForExistence(timeout: 5))
+        attach(app, "Week rendered with Classic style")
+        app.buttons["Calendar view"].tap()
+        app.buttons["Year"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["calendarYearStandard"].waitForExistence(timeout: 5))
+        attach(app, "Year rendered with Hide standard dots")
         app.terminate()
         app.launch()
         XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
         app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["calendarYearStandard"].waitForExistence(timeout: 5))
         openCalendarViewOptions(app)
         app.buttons["calendarStylePage"].tap()
         XCTAssertEqual(app.buttons["calendarItemStyle-classic"].value as? String, "Selected")
+        // A saved legacy style stays honest on reopen across relaunch.
         app.buttons["calendarItemStyle-filled"].tap()
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()

@@ -154,7 +154,9 @@ extension CalendarItemStyle {
     }
 
     /// Single source of truth for both production cards and Style preview
-    /// tiles. Legacy rows preserve their existing treatments exactly.
+    /// tiles. Stored values round-trip unchanged; the fill/stripe/outline
+    /// literals below reproduce each platform's prior treatment (see the
+    /// platform mappings for the one completed-state difference).
     public var rendering: Rendering {
         switch self {
         case .filled:
@@ -166,6 +168,20 @@ extension CalendarItemStyle {
         case .classic:
             return Rendering(fillOpacity: 0.55, completedFillOpacity: 0.28, showsStripe: false, showsOutline: false)
         }
+    }
+
+    /// Mac card fill: completed rows dim the fill itself (prior Mac values).
+    public func macFillOpacity(completed: Bool) -> Double {
+        completed ? rendering.completedFillOpacity : rendering.fillOpacity
+    }
+
+    /// iPhone card fill: legacy styles keep their prior fill with the
+    /// platform overall opacity handling completed dimming (a completed
+    /// Filled card was and stays fill 0.15 under overall 0.58); new styles
+    /// use the shared policy value on both platforms.
+    public func phoneFillOpacity(completed: Bool) -> Double {
+        if isLegacy { return rendering.fillOpacity }
+        return completed ? rendering.completedFillOpacity : rendering.fillOpacity
     }
 }
 

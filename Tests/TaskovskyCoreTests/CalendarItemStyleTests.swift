@@ -45,6 +45,28 @@ final class CalendarItemStyleTests: XCTestCase {
         XCTAssertFalse(CalendarItemStyle.outline.displayTitle == "Classic")
     }
 
+    func testPlatformCompletedFillsPreserveLegacyTreatments() {
+        // Mac dims the fill itself (prior Mac literals).
+        XCTAssertEqual(CalendarItemStyle.filled.macFillOpacity(completed: false), 0.15, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.filled.macFillOpacity(completed: true), 0.06, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.outline.macFillOpacity(completed: false), 0, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.outline.macFillOpacity(completed: true), 0, accuracy: 0.0001)
+        // iPhone legacy keeps its prior fill; completed dimming comes from
+        // the platform overall opacity (0.58), so a completed Filled card
+        // was and stays fill 0.15 under that overall opacity.
+        XCTAssertEqual(CalendarItemStyle.filled.phoneFillOpacity(completed: false), 0.15, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.filled.phoneFillOpacity(completed: true), 0.15, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.outline.phoneFillOpacity(completed: false), 0, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.outline.phoneFillOpacity(completed: true), 0, accuracy: 0.0001)
+        // New styles use the shared policy value on both platforms.
+        XCTAssertEqual(CalendarItemStyle.modern.macFillOpacity(completed: true),
+                       CalendarItemStyle.modern.phoneFillOpacity(completed: true), accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.classic.macFillOpacity(completed: true),
+                       CalendarItemStyle.classic.phoneFillOpacity(completed: true), accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.modern.phoneFillOpacity(completed: false), 0.12, accuracy: 0.0001)
+        XCTAssertEqual(CalendarItemStyle.classic.phoneFillOpacity(completed: false), 0.55, accuracy: 0.0001)
+    }
+
     func testLegacyArchiveRoundTripsWithoutMigration() throws {
         for raw in ["filled", "outline"] {
             let options = try decodeOptions(#"{"itemStyle":"\#(raw)"}"#)

@@ -230,7 +230,6 @@ struct PhoneCalendarPreferences: View {
                 itemTile(style)
             }
         }
-        .accessibilityIdentifier("calendarStyle")
         if draft.itemStyle.isLegacy {
             Text("Current saved style: \(draft.itemStyle.displayTitle). It stays unchanged until you pick another style.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -293,7 +292,6 @@ struct PhoneCalendarPreferences: View {
                 heatTile(style)
             }
         }
-        .accessibilityIdentifier("calendarYearStyle")
         Text("Hide keeps Standard dots; Show shades dates by item count.")
             .font(.caption).foregroundStyle(.secondary)
     }
