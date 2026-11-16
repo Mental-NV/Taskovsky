@@ -225,3 +225,44 @@ public struct PriorityBoardProjection: Sendable {
         }
     }
 }
+
+
+/// Display-only mobile board lanes. These reuse Taskovsky's List grouping policies;
+/// multi-tag duplication and the reference app's creation buckets are not certified.
+public struct TaskMetadataBoardProjection: Sendable {
+    public enum Grouping: Sendable { case createdTime, tag }
+    public struct Column: Identifiable, Sendable {
+        public enum ID: Hashable, Sendable { case createdDay(Date), tag(TaskOrganizationGroup.ID) }
+        public let id: ID
+        public let title: String
+        public let tasks: [TaskItem]
+    }
+    public let columns: [Column]
+
+    public init(destination: TaskDestination, grouping: Grouping, in data: WorkspaceData,
+                now: Date, calendar: Calendar) {
+        guard ScopedBoardProjection.supports(destination, in: data) else { columns = []; return }
+        let tasks = destination.matchingTasks(in: data, now: now, calendar: calendar)
+            .filter { !SmartListEligibility.isArchived($0, lists: data.lists) }
+        switch grouping {
+        case .createdTime:
+            columns = TaskCreationDayGroup.group(tasks, calendar: calendar, sort: nil).map {
+                Column(id: .createdDay($0.day), title: $0.title(calendar: calendar), tasks: $0.tasks)
+            }
+        case .tag:
+            columns = TaskOrganizationGroup.byTag(tasks, in: data).map {
+                Column(id: .tag($0.id), title: $0.title, tasks: $0.tasks)
+            }
+        }
+    }
+
+    /// No pin repartition: retain the board's existing incoming order for equal keys.
+    public static func ordered(_ tasks: [TaskItem], title: TaskTitleSort?) -> [TaskItem] {
+        guard let title else { return tasks }
+        return tasks.enumerated().sorted { lhs, rhs in
+            if title.precedes(lhs.element, rhs.element) { return true }
+            if title.precedes(rhs.element, lhs.element) { return false }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+}
