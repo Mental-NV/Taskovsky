@@ -2179,3 +2179,27 @@ The parent task reports 7/7 native cases, three domain tests, clean independent 
 ### C14 child Schedule Done candidate — 2026-11-16
 
 New native regression `testCalendarArrangeChildScheduleDonePersistsOnlyChild` (test-only addition, no production change): pre-state proves the child is unscheduled, Done runs the production schedule action on the actual child (editor title asserted), then the test verifies the save notice, the child's disappearance from undated Arrange with `Work · 3` and the full family intact, the child's detail carrying a real schedule while the parent stays `"Schedule"`, and after relaunch the same Arrange/detail state with the same saved schedule summary persisted (not an assertion of the pre-Done timestamp or every unrelated task field). Undo is intentionally not exercised — it would destroy the persistence subject; the Undo path is covered by the drag test. Status: PASSED on the owned simulator (B263E8E7-F1A5-4407-894D-23FC224B1013, nonparallel, collect-test-diagnostics never) with exit 0 in 58.3s — the saved `arrange-hierarchy-child.xcresult` independently records Success with zero failure, error, or warning summaries. The first attempt failed honestly: launch lands on Today, which hides undated rows, so the pre-state detail read found no row; the test now opens the Work list via the drawer (`goTo`) for every detail read, preserving assertion strength. Visual inspection of the exported post-relaunch screenshot confirms the persisted value (`Nov 9, 2026 at 9:00 – 9:30` on child one; parent/sibling unscheduled) with neutral fixture content only. Gates for the test addition: full `swift test --disable-sandbox` 876 XCTest + 38 Swift Testing passed (one bundle reports 38 across 6 suites; three bundles report 0 — zero-test bundle reports never counted), 0 failures, 0 warnings; release plus `codesign --verify` passed; iPhone compile TEST BUILD SUCCEEDED. Logs: `/private/tmp/TaskovskyArrangeHierarchyDrag/` (`swift-test-full-r2.log`, `build-app-r2.log`, `ci-ios-r2/`); native logs and xcresult: `/private/tmp/TaskovskyArrangeHierarchyChild/` (`child-run.log`, `arrange-hierarchy-child.xcresult`, `xcresult-tests.json`, `screenshots/`); first failed attempt preserved under `attempt1-today-view/`.
+
+<a id="mobile-unified-management"></a>
+## Unified Smart Lists/Tags management on iPhone — 2026-11-16
+
+[Bounded change](../changes/mobile-unified-management-2026-11-16.md): drawer **Manage**
+entry opens one sheet with Smart Lists and Tags tabs sharing a single staged
+visibility/order draft (`UnifiedManagementSession`). Nested Add/Edit Tag and Add Filter
+reuse the standalone editors; a dirty parent gates entry behind Save/Discard/Keep
+Editing, the CAS token stays pinned while dirty, and a clean parent adopts a child's
+successful revision. Existing Smart Lists / Filters / Tags routes remain as shortcuts.
+Unsupported Assigned to Me / Subscribed Calendars rows are absent, not faked. No T02
+display changes. Old checkouts `/private/tmp/TaskovskyUnifiedManagement` and
+`/private/tmp/TaskovskyUnifiedManagementVerify` were never read, listed or modified.
+Fresh checkout `feat/mobile-management-tabs-fresh` at base `b635613`; T13/T14 filter and
+T15/T16 tag behavior retained.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **890 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 150 (14 new `UnifiedManagementTests`: tab/draft preservation, CAS/stale/no-mutation, real tag+filter save/reopen, cycle/duplicate refusal), Mac 55, Domain 154, Core 531. Full log `/tmp/mgmt-swift-test.log`. Zero-test bundle summaries not counted. |
+| Release | **Passed** | `./scripts/build-app.sh` exit 0, release `build/Taskovsky.app`. Log `/tmp/mgmt-release.log`. |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh` (Xcode 27.0 27A266a, Swift 6.4, simulator SDK 27.0, iOS 17.0 target, signing disabled). App, MobileContracts and MobileNavigation bundles plus the xctestrun manifest compiled, including `PhoneUnifiedManagement.swift` and `UnifiedManagementTests.swift` with zero file warnings/errors. One iOS-only closure fix (explicit binding parameter; Mobile sources sit outside the SwiftPM build). Logs `/tmp/mgmt-ios2/`. |
+| Native tests | **Prepared, NOT RUN** | 7 UITests cover tabs, staged visibility, real Add Tag/Add Filter save+relaunch, Keep Editing/Discard/Save gates, child Cancel and save-failure draft retention. Stale-write UI is unverified (`stale-save` injection covers only task/capture saves); CAS staleness is covered at repository level. Screenshots attach in-test for later export. |
+
+Independent review, native slot execution and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.

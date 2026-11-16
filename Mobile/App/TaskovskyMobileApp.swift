@@ -60,6 +60,7 @@ struct MobileRootView: View {
     @State private var drawer = false
     @State private var manageLists = false
     @State private var smartListRequest: PhoneSmartListRequest?
+    @State private var managementRequest: PhoneManagementRequest?
     @State private var manageFilters = false
     @State private var manageTags = false
     @State private var manageTemplates = false
@@ -990,6 +991,7 @@ struct MobileRootView: View {
         }
         .sheet(isPresented: $manageLists) { PhoneListOrganization(model: model) }
         .sheet(item: $smartListRequest) { request in PhoneSmartListSettings(model: model, request: request) }
+        .sheet(item: $managementRequest) { request in PhoneUnifiedManagement(model: model, request: request) }
         .sheet(isPresented: $manageFilters) { PhoneSavedFilters(model: model) }
         .sheet(isPresented: $manageTags) { PhoneTagManagement(model: model) }
         .sheet(isPresented: $manageTemplates) { PhoneTemplateManager(model: model) }
@@ -1011,6 +1013,12 @@ struct MobileRootView: View {
         } label: {
             Label("Smart Lists", systemImage: "slider.horizontal.3")
         }.tint(.white).accessibilityLabel("Smart Lists").accessibilityIdentifier("openSmartLists")
+        Button {
+            guard let document = model.document else { return }
+            managementRequest = PhoneManagementRequest(settings: document.snapshot.settings, revision: document.revision, initialTab: .smartLists)
+        } label: {
+            Label("Manage", systemImage: "rectangle.stack")
+        }.tint(.white).accessibilityLabel("Manage").accessibilityIdentifier("openManagement")
         Button { manageFilters = true } label: {
             Label("Manage Filters", systemImage: "line.3.horizontal.decrease.circle")
         }.tint(.white).accessibilityLabel("Manage Filters").accessibilityIdentifier("manageFilters")
