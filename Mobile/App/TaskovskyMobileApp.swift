@@ -377,6 +377,7 @@ struct MobileRootView: View {
                                               set: { boardGroupings[request.destination] = $0 }),
                             sort: Binding(get: { boardSorts[request.destination] }, set: { boardSorts[request.destination] = $0 }),
                             ascending: Binding(get: { boardSortAscending[request.destination] ?? true }, set: { boardSortAscending[request.destination] = $0 }))
+                            .accessibilityAction(.escape) { boardSortRequest = nil }
                             .frame(height: max(330, geometry.size.height * 0.41))
                             .background(Color(uiColor: .systemBackground), in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24))
                     }

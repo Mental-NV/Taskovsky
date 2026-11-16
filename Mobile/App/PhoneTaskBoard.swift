@@ -695,7 +695,7 @@ struct PhoneBoardSortSheet: View {
                         HStack(spacing: 4) {
                             Text(ascending ? "Ascending" : "Descending")
                             Image(systemName: ascending ? "arrow.up" : "arrow.down")
-                        }.font(.system(size: 14)).frame(minHeight: 44)
+                        }.font(.system(size: 14)).frame(minHeight: 44).contentShape(Rectangle())
                     }.buttonStyle(.plain).accessibilityIdentifier("boardSortDirection")
                         .accessibilityValue(ascending ? "Ascending" : "Descending")
                 }.frame(height: 44)
