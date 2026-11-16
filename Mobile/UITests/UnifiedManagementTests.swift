@@ -104,6 +104,27 @@ final class UnifiedManagementTests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Neutral unified tag"].waitForExistence(timeout: 5))
     }
 
+    @MainActor func testReorderResetsWhenSwitchingTabs() {
+        let app = launch()
+        openManagement(app)
+        app.buttons["managementReorder"].tap()
+        XCTAssertEqual(app.buttons["managementReorder"].label, "Finish")
+        // Leaving the Smart Lists tab resets reorder: the Tags tab keeps its
+        // own controls enabled and shows no Finish toolbar item.
+        selectTab("Tags", in: app)
+        XCTAssertFalse(app.buttons["managementReorder"].exists)
+        XCTAssertTrue(app.buttons["newTag"].isEnabled)
+        XCTAssertTrue(app.buttons["smartListVisibility-tags"].exists)
+        // Returning shows a reset Reorder control, not a stuck Finish mode.
+        selectTab("Smart Lists", in: app)
+        let reorder = app.buttons["managementReorder"]
+        XCTAssertTrue(reorder.waitForExistence(timeout: 5))
+        XCTAssertEqual(reorder.label, "Reorder")
+        XCTAssertTrue(app.buttons["addFilter"].exists)
+        app.buttons["managementCancel"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+    }
+
     @MainActor func testAddFilterSaveAndReopen() {
         let app = launch()
         openManagement(app)
@@ -190,6 +211,33 @@ final class UnifiedManagementTests: XCTestCase {
         XCTAssertTrue(app.segmentedControls["managementTabs"].exists)
         attach(app, "Management save failure retains draft")
         // The draft is still staged: Cancel must still offer to discard it.
+        app.buttons["managementCancel"].tap()
+        XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
+        app.buttons["Keep Editing"].tap()
+        XCTAssertTrue(app.segmentedControls["managementTabs"].exists)
+    }
+
+    @MainActor func testFailedSaveThenDoneDoesNotOpenStaleChild() {
+        // The Save-and-Continue boundary fails: no child editor may open, and
+        // the pending intent must be cleared so an ordinary Done afterwards
+        // retries the save instead of navigating to the previously requested
+        // child.
+        let app = launch(qaCase: "save-failure")
+        openManagement(app)
+        stageTomorrowVisible(in: app)
+        selectTab("Tags", in: app)
+        app.buttons["newTag"].tap()
+        XCTAssertTrue(app.buttons["Save Changes"].waitForExistence(timeout: 5))
+        app.buttons["managementSaveAndContinue"].tap()
+        XCTAssertTrue(app.staticTexts["managementError"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["tagName"].exists)
+        app.buttons["managementDone"].tap()
+        XCTAssertTrue(app.staticTexts["managementError"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["tagName"].exists)
+        XCTAssertFalse(app.textFields["savedFilterName"].exists)
+        XCTAssertTrue(app.segmentedControls["managementTabs"].exists)
+        attach(app, "Management failed save then Done opens nothing")
+        // The failed write kept the staged draft: Cancel still asks.
         app.buttons["managementCancel"].tap()
         XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
         app.buttons["Keep Editing"].tap()

@@ -16,6 +16,12 @@ public enum UnifiedManagementTab: String, Sendable, CaseIterable {
 /// mutation (tag/filter) may only move the baseline forward while the parent
 /// draft is clean. When dirty, the baseline is pinned so a later parent save
 /// fails stale instead of overwriting newer settings.
+///
+/// Baseline moves always carry one exact persisted document's settings plus
+/// its revision — fields are never paired across revisions. Nested tag entry
+/// captures only the tag ID; the editor snapshot is resolved from that same
+/// document at handoff, so a stale captured tag is never saved under a fresh
+/// token.
 public struct UnifiedManagementSession: Sendable {
     public private(set) var baselineSettings: AppSettings
     public private(set) var baselineRevision: WorkspaceRevision
@@ -58,15 +64,38 @@ public struct UnifiedManagementSession: Sendable {
         baselineRevision = revision
     }
 
-    /// Adopt newer settings plus their revision only when nothing is staged.
-    /// Returns false and changes nothing while dirty, so a newer external
-    /// revision is never swallowed and newer settings are never overwritten.
+    /// Adopt an exact persisted document as the new baseline, but only when
+    /// nothing is staged. Returns false and changes nothing while dirty.
+    ///
+    /// Provenance (owned child save, external update, stale-recovery reload)
+    /// does not matter here: a clean session holds no user edits, so moving
+    /// the baseline to this document's own settings+revision pair preserves
+    /// newer state and never mixes fields across revisions. While dirty the
+    /// pinned token is kept, so a later parent save reports stale instead of
+    /// overwriting the newer document.
     @discardableResult
-    public mutating func adoptBaseline(settings: AppSettings, revision: WorkspaceRevision) -> Bool {
+    public mutating func adoptCleanBaseline(from document: WorkspaceDocument) -> Bool {
         guard !isDirty else { return false }
-        baselineSettings = settings
-        baselineRevision = revision
-        staged = settings
+        baselineSettings = document.snapshot.settings
+        baselineRevision = document.revision
+        staged = document.snapshot.settings
         return true
     }
+
+    /// Resolve a nested Edit Tag handoff from one exact persisted document.
+    /// Returns the tag snapshot together with that same document's revision,
+    /// or nil when the tag is gone (deleted or unknown). Callers must open the
+    /// editor with exactly this pair — never a previously captured tag under a
+    /// newer token — and must refuse to open when this returns nil.
+    public func tagHandoff(tagID: UUID, in document: WorkspaceDocument) -> UnifiedTagHandoff? {
+        guard let tag = document.snapshot.workspace.tags.first(where: { $0.id == tagID }) else { return nil }
+        return UnifiedTagHandoff(tag: tag, revision: document.revision)
+    }
+}
+
+/// One exact document's tag snapshot plus its own revision for a nested Edit
+/// Tag handoff. The pair must travel together into the editor request.
+public struct UnifiedTagHandoff: Sendable {
+    public let tag: TaskTag
+    public let revision: WorkspaceRevision
 }

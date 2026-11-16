@@ -12,7 +12,7 @@ struct PhoneManagementRequest: Identifiable {
 
 private enum ManagementPendingChild {
     case newTag
-    case editTag(TaskTag)
+    case editTag(UUID)
     case newFilter
 }
 
@@ -52,7 +52,12 @@ struct PhoneUnifiedManagement: View {
         NavigationStack {
             VStack(spacing: 0) {
                 Picker("Manage", selection: Binding(get: { session.selectedTab },
-                                                    set: { session.select($0) })) {
+                                                    set: {
+                                                        session.select($0)
+                                                        // Reorder belongs to the Smart Lists tab: leaving it
+                                                        // resets the mode so Tags controls stay enabled.
+                                                        if $0 != .smartLists { reordering = false }
+                                                    })) {
                     Text("Smart Lists").tag(UnifiedManagementTab.smartLists)
                     Text("Tags").tag(UnifiedManagementTab.tags)
                 }.pickerStyle(.segmented).padding(.horizontal, 16).padding(.vertical, 8)
@@ -109,11 +114,21 @@ struct PhoneUnifiedManagement: View {
         }
         .sheet(item: $tagRequest) { PhoneTagEditor(model: model, request: $0) }
         .sheet(item: $filterRequest) { PhoneFilterEditor(model: model, request: $0) }
-        .onChange(of: model.document?.revision) { _, _ in
-            guard let document = model.document else { return }
-            _ = session.adoptBaseline(settings: document.snapshot.settings,
-                                      revision: document.revision)
-        }
+        .onChange(of: model.document?.revision) { _, _ in adoptLatestDocumentIfClean() }
+    }
+
+    /// Moves the baseline to the live document when nothing is staged.
+    ///
+    /// Owned child saves, external updates and stale-recovery reloads all
+    /// arrive here, and any of them is safe to adopt while clean: the session
+    /// holds no user edits, and the settings plus revision always come from
+    /// this one exact document — fields are never paired across revisions and
+    /// newer unrelated settings are preserved. While dirty this refuses, so
+    /// staged edits keep their original token and fail stale instead of being
+    /// overwritten.
+    private func adoptLatestDocumentIfClean() {
+        guard let document = model.document else { return }
+        _ = session.adoptCleanBaseline(from: document)
     }
 
     // MARK: - Smart Lists tab
@@ -186,7 +201,7 @@ struct PhoneUnifiedManagement: View {
                 let tags = document.snapshot.workspace.tags
                 ForEach(orderedTags(tags)) { tag in
                     let depth = TagHierarchy.ancestors(of: tag.id, in: tags).count
-                    Button { requestChild(.editTag(tag)) } label: {
+                    Button { requestChild(.editTag(tag.id)) } label: {
                         HStack {
                             tagLabel(tag)
                             Spacer()
@@ -224,7 +239,8 @@ struct PhoneUnifiedManagement: View {
     // MARK: - Nested entry gating
 
     private var canOpenChild: Bool {
-        !model.isBusy && model.canBeginEditing && tagRequest == nil && filterRequest == nil && !confirmChild
+        !model.isBusy && model.canBeginEditing && model.document != nil &&
+            tagRequest == nil && filterRequest == nil && !confirmChild
     }
 
     private func requestChild(_ child: ManagementPendingChild) {
@@ -238,12 +254,21 @@ struct PhoneUnifiedManagement: View {
     }
 
     private func openChild(_ child: ManagementPendingChild) {
-        guard canOpenChild, let revision = model.document?.revision else { return }
+        // The snapshot and the CAS token always come from this one exact
+        // document. Edit Tag captures only the ID at tap time and resolves it
+        // here, so a tag renamed or deleted while the dirty gate was open is
+        // never paired with a newer token — and a missing tag refuses to open.
+        guard canOpenChild, let document = model.document else { return }
+        let revision = document.revision
         switch child {
         case .newTag:
             tagRequest = PhoneTagRequest(tag: TaskTag(name: "", color: "#4E64D8"), creating: true, revision: revision)
-        case .editTag(let tag):
-            tagRequest = PhoneTagRequest(tag: tag, creating: false, revision: revision)
+        case .editTag(let id):
+            guard let handoff = session.tagHandoff(tagID: id, in: document) else {
+                error = "That tag is no longer available."
+                return
+            }
+            tagRequest = PhoneTagRequest(tag: handoff.tag, creating: false, revision: handoff.revision)
         case .newFilter:
             filterRequest = PhoneFilterRequest(filter: TaskFilter(name: ""), creating: true, revision: revision)
         }
@@ -255,6 +280,10 @@ struct PhoneUnifiedManagement: View {
             let staged = session.staged
             let expected = session.baselineRevision
             if let message = await model.saveSmartLists(staged, expected: expected) {
+                // The boundary failed: drop the pending child intent so a later
+                // ordinary Done retries the save instead of opening the child
+                // requested before the failure.
+                pendingChild = nil
                 error = message
                 return
             }
@@ -278,7 +307,7 @@ struct PhoneUnifiedManagement: View {
         pendingChild = nil
         session.discardStaged()
         if let document = model.document {
-            _ = session.adoptBaseline(settings: document.snapshot.settings, revision: document.revision)
+            _ = session.adoptCleanBaseline(from: document)
         }
         openChild(child)
     }

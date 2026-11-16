@@ -57,15 +57,35 @@ final class UnifiedManagementTests: XCTestCase {
         XCTAssertEqual(session.baselineRevision, revision)
     }
 
-    func testAdoptBaselineOnlyMovesForwardWhenClean() async throws {
-        var session = UnifiedManagementSession(settings: AppSettings(), revision: try await neutralRevision())
-        let cleanToken = try await neutralRevision()
-        XCTAssertTrue(session.adoptBaseline(settings: AppSettings(), revision: cleanToken))
+    func testAdoptCleanBaselineOnlyMovesForwardWhenClean() async throws {
+        let (root, workspace, settings) = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repo = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let opened = try await repo.load()
+        var session = UnifiedManagementSession(settings: opened.snapshot.settings, revision: opened.revision)
+        // A clean session adopts the exact newer document, preserving its settings.
+        var newer = opened.snapshot.settings
+        newer.smartListVisibility[.today] = .showIfNotEmpty
+        guard case .saved = await repo.saveSmartLists(newer, expected: opened.revision) else {
+            return XCTFail("External settings save must succeed")
+        }
+        let latest = try await repo.load()
+        XCTAssertTrue(session.adoptCleanBaseline(from: latest))
+        XCTAssertEqual(session.baselineRevision, latest.revision)
+        XCTAssertEqual(session.baselineSettings.smartListVisibility[.today], .showIfNotEmpty)
+        XCTAssertFalse(session.isDirty)
+        // While dirty the pinned token is refused: the staged draft and the
+        // original token survive the newer document untouched.
         session.stage { $0.smartListVisibility[.trash] = .hidden }
         let staged = session.staged
         let token = session.baselineRevision
-        let newerToken = try await neutralRevision()
-        XCTAssertFalse(session.adoptBaseline(settings: AppSettings(), revision: newerToken))
+        var evenNewer = latest.snapshot.settings
+        evenNewer.smartListVisibility[.inbox] = .hidden
+        guard case .saved = await repo.saveSmartLists(evenNewer, expected: latest.revision) else {
+            return XCTFail("Second external settings save must succeed")
+        }
+        let newest = try await repo.load()
+        XCTAssertFalse(session.adoptCleanBaseline(from: newest))
         XCTAssertEqual(session.staged, staged)
         XCTAssertEqual(session.baselineRevision, token)
         XCTAssertTrue(session.isDirty)
@@ -160,7 +180,7 @@ final class UnifiedManagementTests: XCTestCase {
                                                              expected: session.baselineRevision) else {
             return XCTFail("Child tag creation must save while the parent is clean")
         }
-        XCTAssertTrue(session.adoptBaseline(settings: afterChild.snapshot.settings, revision: afterChild.revision))
+        XCTAssertTrue(session.adoptCleanBaseline(from: afterChild))
         session.stage { $0.smartListVisibility[.inbox] = .hidden }
         guard case .saved(let saved) = await repo.saveSmartLists(session.staged, expected: session.baselineRevision) else {
             return XCTFail("Parent save on the adopted child revision must succeed")
@@ -184,7 +204,7 @@ final class UnifiedManagementTests: XCTestCase {
         // The dirty parent must not adopt the newer revision: refreshing the
         // baseline would silently re-token staged edits onto newer state.
         let latest = try await repo.load()
-        XCTAssertFalse(session.adoptBaseline(settings: latest.snapshot.settings, revision: latest.revision))
+        XCTAssertFalse(session.adoptCleanBaseline(from: latest))
         XCTAssertEqual(session.baselineRevision, opened.revision)
         guard case .stale = await repo.saveSmartLists(session.staged, expected: session.baselineRevision) else {
             return XCTFail("Dirty parent save after a child mutation must report stale")
@@ -194,6 +214,92 @@ final class UnifiedManagementTests: XCTestCase {
         let current = try await repo.load()
         XCTAssertEqual(current.snapshot.workspace.filters.count, 1)
         XCTAssertEqual(current.snapshot.settings.smartListVisibility[.week], opened.snapshot.settings.smartListVisibility[.week])
+    }
+
+    // MARK: - Nested Edit Tag handoffs
+
+    func testEditHandoffResolvesCurrentSnapshotNeverStaleCapture() async throws {
+        // B1 regression: the pending child captures only the tag ID. While the
+        // dirty decision is pending, an external rename and then a delete land.
+        // The handoff must resolve the current document's own pair — never the
+        // stale captured snapshot under the fresh token — and refuse the
+        // missing tag.
+        let (root, workspace, settings) = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repo = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let external = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let opened = try await repo.load()
+        let tagID = try XCTUnwrap(opened.snapshot.workspace.tags.first?.id)
+        let stale = try XCTUnwrap(opened.snapshot.workspace.tags.first { $0.id == tagID })
+        var session = UnifiedManagementSession(settings: opened.snapshot.settings, revision: opened.revision)
+        session.stage { $0.smartListVisibility[.today] = .hidden }
+        XCTAssertTrue(session.isDirty)
+        var renamed = stale
+        renamed.name = "Neutral renamed"
+        guard case .saved = await external.apply(.save(renamed, creating: false), expected: opened.revision) else {
+            return XCTFail("External tag rename must save")
+        }
+        let latest = try await repo.load()
+        XCTAssertNotEqual(latest.revision, opened.revision)
+        guard let handoff = session.tagHandoff(tagID: tagID, in: latest) else {
+            return XCTFail("Renamed tag must still resolve")
+        }
+        XCTAssertEqual(handoff.tag.name, "Neutral renamed")
+        XCTAssertNotEqual(handoff.tag, stale)
+        XCTAssertEqual(handoff.revision, latest.revision)
+        XCTAssertEqual(handoff.tag, latest.snapshot.workspace.tags.first { $0.id == tagID })
+        guard case .saved = await external.apply(TagOrganizationCommand.delete(tagID), expected: latest.revision) else {
+            return XCTFail("External tag delete must save")
+        }
+        let afterDelete = try await repo.load()
+        XCTAssertNil(session.tagHandoff(tagID: tagID, in: afterDelete))
+        // The dirty parent still holds its original token and draft; the
+        // external tag changes were never folded into the staged settings.
+        XCTAssertEqual(session.baselineRevision, opened.revision)
+        XCTAssertTrue(session.isDirty)
+    }
+
+    func testChildCancelResolvesWithoutWriting() async throws {
+        // Resolving a handoff and then cancelling (dropping it without a
+        // command) must leave the revision and both files untouched.
+        let (root, workspace, settings) = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repo = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let opened = try await repo.load()
+        let session = UnifiedManagementSession(settings: opened.snapshot.settings, revision: opened.revision)
+        let tagID = try XCTUnwrap(opened.snapshot.workspace.tags.first?.id)
+        XCTAssertNotNil(session.tagHandoff(tagID: tagID, in: opened))
+        XCTAssertNil(session.tagHandoff(tagID: UUID(), in: opened))
+        let beforeWorkspace = try bytes(workspace)
+        let beforeSettings = try bytes(settings)
+        let reloaded = try await repo.load()
+        XCTAssertEqual(reloaded.revision, opened.revision)
+        XCTAssertEqual(try bytes(workspace), beforeWorkspace)
+        XCTAssertEqual(try bytes(settings), beforeSettings)
+    }
+
+    func testCleanAdoptFollowsWorkspaceOnlyChildChange() async throws {
+        // A workspace-only child change (tag create, settings untouched) moves
+        // the revision; a clean parent adopts the exact new document and a
+        // later staged save succeeds on it.
+        let (root, workspace, settings) = try fixture()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let repo = WorkspaceFileRepository(workspaceURL: workspace, settingsURL: settings)
+        let opened = try await repo.load()
+        var session = UnifiedManagementSession(settings: opened.snapshot.settings, revision: opened.revision)
+        guard case .saved = await repo.apply(.save(TaskTag(name: "Neutral adopted", color: "#526BF5"), creating: true),
+                                             expected: opened.revision) else {
+            return XCTFail("Child tag creation must save")
+        }
+        let latest = try await repo.load()
+        XCTAssertEqual(latest.snapshot.settings, opened.snapshot.settings)
+        XCTAssertTrue(session.adoptCleanBaseline(from: latest))
+        XCTAssertEqual(session.staged, session.baselineSettings)
+        session.stage { $0.smartListVisibility[.trash] = .hidden }
+        guard case .saved(let saved) = await repo.saveSmartLists(session.staged, expected: session.baselineRevision) else {
+            return XCTFail("Parent save on the adopted revision must succeed")
+        }
+        XCTAssertEqual(saved.snapshot.settings.smartListVisibility[.trash], .hidden)
     }
 
     func testStaleTagAndFilterWritesAreRefusedWithoutMutation() async throws {

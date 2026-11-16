@@ -2202,4 +2202,24 @@ T15/T16 tag behavior retained.
 | iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh` (Xcode 27.0 27A266a, Swift 6.4, simulator SDK 27.0, iOS 17.0 target, signing disabled). App, MobileContracts and MobileNavigation bundles plus the xctestrun manifest compiled, including `PhoneUnifiedManagement.swift` and `UnifiedManagementTests.swift` with zero file warnings/errors. One iOS-only closure fix (explicit binding parameter; Mobile sources sit outside the SwiftPM build). Logs `/tmp/mgmt-ios2/`. |
 | Native tests | **Prepared, NOT RUN** | 7 UITests cover tabs, staged visibility, real Add Tag/Add Filter save+relaunch, Keep Editing/Discard/Save gates, child Cancel and save-failure draft retention. Stale-write UI is unverified (`stale-save` injection covers only task/capture saves); CAS staleness is covered at repository level. Screenshots attach in-test for later export. |
 
-Independent review, native slot execution and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.
+### Review blockers fixed — 2026-11-16
+
+Independent review of `e1a2502` raised four data-safety blockers; all fixed with
+no other-tree changes (`main`/`origin/main` still at `b635613`, no integration
+needed). Pending Edit Tag intent now captures only the tag ID and resolves a
+`tagHandoff` from the single live document at handoff — a renamed tag opens
+current, a deleted tag refuses — instead of pairing a stale snapshot with a
+fresh token. Leaving the Smart Lists tab resets reorder mode. Failed
+Save-and-Continue clears the pending intent so a later Done retries the save
+rather than opening the stale child. Baseline adoption is the explicit
+`adoptCleanBaseline(from:)` on one exact document for any provenance while
+clean, refusing while dirty.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **893 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153 (17 `UnifiedManagementTests`: handoff rename/delete under dirty decision, cancel writes nothing, workspace-only child adoption, document-based clean/dirty adoption), Mac 55, Domain 154, Core 531. Full log `/tmp/mgmt2-swift-test.log`. A bare `.delete(tagID)` literal silently took the SavedFilterChange overload (filter delete → `.missing`); now `TagOrganizationCommand.delete(tagID)` per repo convention. |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/tmp/mgmt2-release.log`. |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | Same Xcode 27.0 toolchain. Zero warnings/errors in new/changed files; three pre-existing unused-`menu` warnings in `ReadOnlyNavigationTests.swift` untouched. Logs `/tmp/mgmt2-ios/`. |
+| Native tests | **Prepared (9), NOT RUN** | Adds reorder-reset-across-tabs and failed-save-then-Done-opens-nothing. External tag churn under the dirty gate and transient-failure recovery are UI-unreachable (modal sheet admits no second writer; `save-failure` QA is permanent), so B1/B3-full are repository-level plus boundary tests. Screenshots attach in-test for later export. |
+
+Independent rereview, native slot execution and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.

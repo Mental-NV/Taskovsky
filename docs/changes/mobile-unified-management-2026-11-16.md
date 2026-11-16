@@ -111,3 +111,22 @@ level instead. Screenshots attach in-test for later export.
 - Old checkouts `/private/tmp/TaskovskyUnifiedManagement` and
   `/private/tmp/TaskovskyUnifiedManagementVerify` were never read, listed or modified.
 - Exact-head hosted CI pending. No push/PR. No live TickTick, no personal data.
+
+## Independent-review blockers fixed — 2026-11-16
+
+The review of `e1a2502` raised four data-safety blockers; all are fixed on this
+branch with no other-tree changes. `main` and `origin/main` remain at `b635613`
+(the branch base), so no integration was required.
+
+| # | Blocker | Fix |
+| --- | --- | --- |
+| B1 | `pendingChild.editTag` captured a full `TaskTag` while `openChild` paired that stale snapshot with the latest revision after Save/Discard | Pending child now captures only the tag ID; `openChild` resolves `UnifiedManagementSession.tagHandoff(tagID:in:)` from the single live document and opens the editor with that exact pair, refusing with "That tag is no longer available." when the tag is gone |
+| B2 | Smart Lists reorder mode persisted across the Tags tab, hiding Finish while disabling Add Tag | Tab setter resets `reordering` when leaving Smart Lists; the invariant is reorder ⟹ Smart Lists tab |
+| B3 | Failed Save-and-Continue retained `pendingChild`, so a later ordinary Done could open the stale requested child | Failed boundary clears the pending intent; a later Done retries the save instead of navigating |
+| B4 | Blanket clean `.onChange` adoption accepted all external revisions, unlike the owned-child-only prose | Adoption is now the explicit `adoptCleanBaseline(from:)` on one exact document (settings+revision never paired across revisions), documented as safe for any provenance while clean and refusing while dirty; view routes through `adoptLatestDocumentIfClean()` |
+
+Regression tests: domain suite grew 14 → 17 (`testEditHandoffResolvesCurrentSnapshotNeverStaleCapture` renames then deletes the tag externally while the parent decision is dirty; `testChildCancelResolvesWithoutWriting`; `testCleanAdoptFollowsWorkspaceOnlyChildChange`; clean/dirty adoption now uses real documents). Native suite grew 7 → 9 prepared (reorder reset across tabs; failed-save-then-Done opens nothing). A bare `.delete(tagID)` literal in the new test silently resolved to the SavedFilterChange overload (filter delete → `.missing`); it now reads `TagOrganizationCommand.delete(tagID)` per repo convention — found by the test run, not by inspection.
+
+Limitations, stated honestly: external tag churn while the dirty gate is open is UI-unreachable (the modal sheet admits no second writer), so B1 is covered at repository level; the transient-failure-then-recovery variant of B3 is unstageable with the permanent-failure QA case, so the native test locks the failed boundary (error, no navigation, draft retained) and the clearing itself is review-verified; stale parent/child saves remain repository-level (the `stale-save` QA injection covers only task/capture saves).
+
+Verification after fixes: `swift test --disable-sandbox` 893 XCTest (Workspace 153, Mac 55, Domain 154, Core 531) + 38 Swift Testing, 0 failures, log `/tmp/mgmt2-swift-test.log`; `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0, log `/tmp/mgmt2-release.log`; `./scripts/build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED (same toolchain), zero warnings/errors in the new/changed files (three pre-existing unused-`menu` warnings in `ReadOnlyNavigationTests.swift` untouched), logs `/tmp/mgmt2-ios/`. Native tests prepared, NOT run.
