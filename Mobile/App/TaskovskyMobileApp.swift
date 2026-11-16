@@ -1383,26 +1383,48 @@ struct MobileRootView: View {
                         }.accessibilityLabel("Calendar view")
                             .popover(isPresented: $viewPicker, arrowEdge: .top) {
                                 VStack(spacing: 0) {
-                                    Button {
-                                        viewPicker = false
-                                        selectCalendarMode(.multiDay, at: focus, multiDayCount: 3)
-                                    } label: {
-                                        HStack {
-                                            Text("3 Day")
-                                            Spacer()
-                                            if options.mode == .multiDay && options.multiDayCount == 3 { Image(systemName: "checkmark") }
-                                        }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-                                    }.buttonStyle(.plain)
-                                        .accessibilityIdentifier("calendarThreeDay")
-                                        .accessibilityValue(options.mode == .multiDay && options.multiDayCount == 3 ? "Selected" : "")
-                                    ForEach(TaskCalendarMode.allCases, id: \.self) { mode in
-                                        Button { viewPicker = false; selectCalendarMode(mode, at: focus) } label: {
-                                            HStack { Text(mode.title); Spacer(); if options.mode == mode && !(mode == .multiDay && options.multiDayCount == 3) { Image(systemName: "checkmark") } }
-                                                .frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-                                        }.buttonStyle(.plain)
+                                    calendarModeRow("List", selected: options.mode == .agenda) {
+                                        selectCalendarMode(.agenda, at: focus)
+                                    }.accessibilityIdentifier("Agenda")
+                                    calendarModeRow("Year", selected: options.mode == .year) {
+                                        selectCalendarMode(.year, at: focus)
                                     }
+                                    calendarModeRow("Month", selected: options.mode == .month) {
+                                        selectCalendarMode(.month, at: focus)
+                                    }
+                                    calendarModeRow("Week", selected: options.mode == .week) {
+                                        selectCalendarMode(.week, at: focus)
+                                    }
+                                    calendarModeRow("3 Day", selected: options.mode == .multiDay && options.multiDayCount == 3) {
+                                        selectCalendarMode(.multiDay, at: focus, multiDayCount: 3)
+                                    }.accessibilityIdentifier("calendarThreeDay")
+                                    calendarModeRow("Day", selected: options.mode == .day) {
+                                        selectCalendarMode(.day, at: focus)
+                                    }
+                                    Divider().padding(.vertical, 4)
+                                    Text("More views").font(.caption).foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
+                                        .accessibilityIdentifier("calendarModeExtrasHeader")
+                                    calendarModeRow("Multi-Day", selected: options.mode == .multiDay && options.multiDayCount != 3) {
+                                        selectCalendarMode(.multiDay, at: focus)
+                                    }.accessibilityIdentifier("calendarModeMultiDay")
+                                    calendarModeRow("Multi-Week", selected: options.mode == .multiWeek) {
+                                        selectCalendarMode(.multiWeek, at: focus)
+                                    }.accessibilityIdentifier("calendarModeMultiWeek")
                                 }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
                             }
+    }
+
+    private func calendarModeRow(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            viewPicker = false
+            action()
+        } label: {
+            HStack {
+                Text(label); Spacer(); if selected { Image(systemName: "checkmark") }
+            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityValue(selected ? "Selected" : "")
     }
 
     private func calendarAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
