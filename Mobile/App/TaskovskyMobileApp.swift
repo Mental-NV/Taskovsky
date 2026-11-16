@@ -68,6 +68,10 @@ struct MobileRootView: View {
     @State private var manageLists = false
     @State private var smartListRequest: PhoneSmartListRequest?
     @State private var managementRequest: PhoneManagementRequest?
+    @State private var drawerAddExpanded = false
+    @State private var drawerListRequest: ListEditorRequest?
+    @State private var drawerFilterRequest: PhoneFilterRequest?
+    @State private var drawerTagRequest: PhoneTagRequest?
     @State private var manageFilters = false
     @State private var manageTags = false
     @State private var manageTemplates = false
@@ -325,19 +329,42 @@ struct MobileRootView: View {
                         .buttonStyle(.plain)
                         .accessibilityLabel("Close navigation")
                         .accessibilityIdentifier("drawerBackdrop")
+                        .accessibilityHidden(drawerAddExpanded)
                         navigation(model.document?.snapshot ?? snapshot)
                             // R08 calibration is approximate, not a measured live-device threshold.
                             .frame(width: min(geometry.size.width * 0.873, 440))
                             .background(PhoneStyle.indigo.ignoresSafeArea())
                             .accessibilityIdentifier("tasksDrawer")
                             .accessibilityAddTraits(.isModal)
+                            .accessibilityHidden(drawerAddExpanded)
                             .accessibilityAction(.escape) { drawer = false }
                             .transition(.move(edge: .leading))
+                        if drawerAddExpanded {
+                            ZStack(alignment: .bottomLeading) {
+                                Button { drawerAddExpanded = false } label: {
+                                    Color.black.opacity(0.001).ignoresSafeArea()
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Dismiss Add menu")
+                                .accessibilityIdentifier("drawerAddBackdrop")
+                                .transition(.opacity)
+                                drawerAddPopup
+                                    .padding(.leading, 20)
+                                    .padding(.bottom, 84)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                            }
+                            .accessibilityElement(children: .contain)
+                            .accessibilityAddTraits(.isModal)
+                            .accessibilityLabel("Add menu")
+                            .accessibilityIdentifier("drawerAddMenu")
+                            .accessibilityAction(.escape) { drawerAddExpanded = false }
+                        }
                     }
                 }
             }
         }
         .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: drawer)
+        .onChange(of: drawer) { _, open in if !open { drawerAddExpanded = false } }
         .onChange(of: visibility, initial: true) { prior, current in
             if !current.shows(destination), prior.shows(destination) || destination.smartKey != nil {
                 destination = current.fallback
@@ -1054,19 +1081,14 @@ struct MobileRootView: View {
                         Divider().overlay(.white.opacity(0.16)).padding(.top, 12)
                         ForEach(visibility.bottom, id: \.self) { item in navRow(item, data: data) }
                     }
-                    Button {
-                        guard let document = model.document else { return }
-                        managementRequest = PhoneManagementRequest(settings: document.snapshot.settings, revision: document.revision, initialTab: .smartLists)
-                    } label: {
-                        Label("Manage Smart Lists & Tags", systemImage: "rectangle.stack")
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("openManagement")
                     Button { manageTemplates = true } label: {
                         Label("Manage Templates", systemImage: "doc.on.doc")
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }.buttonStyle(.plain).padding(.top, 8).accessibilityIdentifier("manageTemplates")
                 }.padding(20)
-            }.background(PhoneStyle.indigo).foregroundStyle(.white)
+            }
+            .safeAreaInset(edge: .bottom) { drawerFooter }
+            .background(PhoneStyle.indigo).foregroundStyle(.white)
                 .toolbarBackground(PhoneStyle.indigo, for: .navigationBar)
                 .toolbarBackground(.visible, for: .navigationBar)
                 .toolbar {
@@ -1084,6 +1106,9 @@ struct MobileRootView: View {
                     }
                 }
         }
+        .sheet(item: $drawerListRequest) { PhoneListEditor(model: model, request: $0) }
+        .sheet(item: $drawerFilterRequest) { PhoneFilterEditor(model: model, request: $0) }
+        .sheet(item: $drawerTagRequest) { PhoneTagEditor(model: model, request: $0) }
         .sheet(isPresented: $manageLists) { PhoneListOrganization(model: model) }
         .sheet(item: $smartListRequest) { request in PhoneSmartListSettings(model: model, request: request) }
         .sheet(item: $managementRequest) { request in PhoneUnifiedManagement(model: model, request: request) }
@@ -1091,6 +1116,88 @@ struct MobileRootView: View {
         .sheet(isPresented: $manageTags) { PhoneTagManagement(model: model) }
         .sheet(isPresented: $manageTemplates) { PhoneTemplateManager(model: model) }
         .sheet(item: $localSettingsRequest) { request in PhoneLocalSettings(model: model, request: request) }
+    }
+
+    /// Bottom-anchored drawer footer (T07/T08): a direct Add popup on the
+    /// leading edge and unified Smart Lists/Tags management on the trailing
+    /// edge. The footer lives in a bottom safe-area inset of the drawer panel,
+    /// so it never overlaps scrolled content and stays reachable after any
+    /// scroll. Each Add row opens a blank creation editor directly with the
+    /// current revision; no draft, selection or management state is touched.
+    /// The popup is a custom anchored bubble (not a SwiftUI Menu: Menu
+    /// rendered its rows bottom-up on the owned Simulator, breaking the
+    /// observed List/Filter/Tag order) with an outside-tap backdrop that
+    /// returns to the drawer with no writes.
+    private var drawerFooter: some View {
+        HStack {
+            Button { drawerAddExpanded.toggle() } label: {
+                Label("Add", systemImage: "plus")
+                    .frame(minHeight: 44, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .disabled(!model.canBeginEditing)
+            .accessibilityIdentifier("drawerAdd")
+            Spacer()
+            Button {
+                guard let document = model.document else { return }
+                managementRequest = PhoneManagementRequest(settings: document.snapshot.settings, revision: document.revision, initialTab: .smartLists)
+            } label: {
+                Label("Manage", systemImage: "rectangle.stack")
+                    .frame(minHeight: 44, alignment: .trailing)
+            }.buttonStyle(.plain)
+                .accessibilityLabel("Manage Smart Lists & Tags")
+                .accessibilityIdentifier("openManagement")
+        }
+        .padding(.horizontal, 20).padding(.vertical, 8)
+        .background(PhoneStyle.indigo)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("drawerFooter")
+    }
+
+    private func openDrawerListCreate() {
+        guard model.canBeginEditing, let revision = model.document?.revision else { return }
+        drawerAddExpanded = false
+        drawerListRequest = ListEditorRequest(revision: revision, list: TaskList(name: "", color: "#4E64D8"), folder: nil, creating: true)
+    }
+
+    private func openDrawerFilterCreate() {
+        guard model.canBeginEditing, let revision = model.document?.revision else { return }
+        drawerAddExpanded = false
+        drawerFilterRequest = PhoneFilterRequest(filter: TaskFilter(name: ""), creating: true, revision: revision)
+    }
+
+    private func openDrawerTagCreate() {
+        guard model.canBeginEditing, let revision = model.document?.revision else { return }
+        drawerAddExpanded = false
+        drawerTagRequest = PhoneTagRequest(tag: TaskTag(name: "", color: "#4E64D8"), creating: true, revision: revision)
+    }
+
+    /// Anchored Add bubble (T08): List, Filter, Tag in the observed order.
+    /// Rows reuse the guarded creation helpers, and the bubble disables with
+    /// the workspace when editing is unavailable. Escape is handled by the
+    /// `drawerAddMenu` modal container.
+    private var drawerAddPopup: some View {
+        VStack(spacing: 0) {
+            Button { openDrawerListCreate() } label: {
+                Label("List", systemImage: "list.bullet")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }.buttonStyle(.plain).accessibilityIdentifier("drawerAddList")
+            Divider()
+            Button { openDrawerFilterCreate() } label: {
+                Label("Filter", systemImage: "line.3.horizontal.decrease.circle")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }.buttonStyle(.plain).accessibilityIdentifier("drawerAddFilter")
+            Divider()
+            Button { openDrawerTagCreate() } label: {
+                Label("Tag", systemImage: "tag")
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            }.buttonStyle(.plain).accessibilityIdentifier("drawerAddTag")
+        }
+        .padding(.horizontal, 12).padding(.vertical, 4)
+        .frame(width: 240)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        .disabled(!model.canBeginEditing)
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private var drawerUtilityButtons: some View {
