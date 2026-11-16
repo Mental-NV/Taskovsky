@@ -187,6 +187,40 @@ public struct TaskScheduleEdit: Sendable {
         manualReminders.sort()
     }
 
+    /// Observed all-day single-date preset menu. Manual dates remain absolute;
+    /// selecting a preset does not rewrite unrelated custom reminder timestamps.
+    public var supportsAllDayReminderPresets: Bool {
+        hasDate && schedule.duration == nil && !schedule.effectiveHasTime && hasKnownZone
+    }
+
+    public func reminderPresetDate(_ preset: AllDayReminder) -> Date? {
+        guard supportsAllDayReminderPresets, let days = preset.daysEarly else { return nil }
+        return AllDayReminderOffset.date(due: schedule.effectiveDue, weeks: false,
+                                         offset: days, hour: 9, minute: 0, calendar: calendar)
+    }
+
+    public func isReminderPresetSelected(_ preset: AllDayReminder, settings: AppSettings) -> Bool {
+        guard supportsAllDayReminderPresets else { return false }
+        let dates = usesAutomaticReminders ? automaticReminders(settings: settings) : manualReminders
+        if preset == .none { return dates.isEmpty }
+        return reminderPresetDate(preset).map { dates.contains($0) } ?? false
+    }
+
+    public mutating func toggleReminderPreset(_ preset: AllDayReminder, settings: AppSettings) {
+        guard supportsAllDayReminderPresets else { return }
+        if preset == .none {
+            usesAutomaticReminders = false
+            manualReminders = []
+            remindsAtEnd = false
+            return
+        }
+        guard let date = reminderPresetDate(preset) else { return }
+        var dates = usesAutomaticReminders ? automaticReminders(settings: settings) : manualReminders
+        if dates.contains(date) { dates.removeAll { $0 == date } } else { dates.append(date) }
+        usesAutomaticReminders = false
+        manualReminders = Array(Set(dates)).sorted()
+    }
+
     public func applying(to task: TaskItem, settings: AppSettings) throws -> TaskItem {
         guard task.id == taskID, CalendarScheduleSnapshot(task) == original else { throw TaskScheduleValidation.changedTask }
         if !hasDate {
@@ -276,5 +310,29 @@ public enum AllDayReminderOffset {
                   matchingPolicy: .strict, repeatedTimePolicy: .first, direction: .forward),
               calendar.isDate(candidate, inSameDayAs: day) else { return nil }
         return candidate
+    }
+}
+
+
+extension AllDayReminder {
+    public var presetTitle: String {
+        switch self {
+        case .none: "None"
+        case .onDay9: "On the day"
+        case .dayBefore9: "1 day early"
+        case .twoDaysBefore9: "2 days early"
+        case .threeDaysBefore9: "3 days early"
+        case .weekBefore9: "1 week early"
+        }
+    }
+    fileprivate var daysEarly: Int? {
+        switch self {
+        case .none: nil
+        case .onDay9: 0
+        case .dayBefore9: 1
+        case .twoDaysBefore9: 2
+        case .threeDaysBefore9: 3
+        case .weekBefore9: 7
+        }
     }
 }

@@ -307,6 +307,25 @@ struct PhoneScheduleSheet: View {
                 }
             }
             if edit.schedule.duration == nil && !edit.schedule.effectiveHasTime {
+                ForEach(AllDayReminder.allCases, id: \.self) { preset in
+                    let selected = edit.isReminderPresetSelected(preset, settings: settings)
+                    Button {
+                        edit.toggleReminderPreset(preset, settings: settings)
+                    } label: {
+                        HStack {
+                            Text(preset.presetTitle)
+                            Spacer()
+                            if selected { Image(systemName: "checkmark") }
+                        }
+                        .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(!edit.supportsAllDayReminderPresets || (preset != .none && edit.reminderPresetDate(preset) == nil))
+                    .accessibilityIdentifier("scheduleReminderPreset-" + preset.rawValue)
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityValue(selected ? "Selected" : "Not selected")
+                }
                 Button("Custom") { showCustomReminder = true }
                     .accessibilityIdentifier("scheduleCustomReminder")
                     .popover(isPresented: $showCustomReminder) {
