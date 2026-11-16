@@ -23,4 +23,13 @@ Other observed sort choices (Priority, Date, Tag, Created Time, Modified Time) a
 
 ## Verification
 
-Source review approved the pure projection/UI changes. Domain suite, release and iPhone compile are being collected; native checks and exact-head hosted CI are pending. This receipt is not completion evidence yet.
+Source review approved the pure projection/UI changes and test corrections. Final source `abd5b90` (production unchanged since `17198b2`):
+
+- Full suite: 903 XCTest and 38 Swift tests passed; release build passed.
+- iPhone build-for-testing passed; final native invocation compiled the test-only Today scope correction.
+- Owned iPhone 13 Pro Simulator, iOS 26.3.1: all four native tests passed, exit 0, complete parsable `KanbanGroupingNative3.xcresult`, zero failures/skips. Actual same-card Title reversal with lane retained, Created lane/count, selected Tag lane removal, real Date range move/Undo and List drag restoration verified.
+- Initial native attempt passed the existing move tests but failed new setup because All is hidden by default. Corrected tests use the observed Today scope, preserving exact seven dated-task counts and all behavior assertions. No production change was needed.
+- Corrected second run logged four passes but Xcode stalled finalizing its result bundle. The owned process was stopped and artifacts retained; this incomplete bundle was not accepted. One retry with supported `-collect-test-diagnostics never` completed all four tests and its bundle. Only optional verbose diagnostics disabled, not assertions or screenshot attachments.
+- Complete receipt contains four UIKit `_UIReparentingView` warnings from menu presentation. They are not claimed fixed; tested interactions passed.
+- Two actual neutral screenshots were inspected and added to the tracker. Created lane screenshot includes the existing floating add button overlay near the last card; final geometry/pixel polishing remains open.
+- Hosted CI for the published exact head remains required before merge.
