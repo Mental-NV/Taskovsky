@@ -89,5 +89,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual pixels inspected: neutral all-day preset rows and selected checks; no personal TickTick data",
     "historical": false
+  },
+  {
+    "state": "ROOT",
+    "file": "root-tasks-no-label.png",
+    "sha256": "08da29a51e616a5286d867fc2af493f85b1cbd4b62fdc83b5a15e223169dc2cf",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-remove-sample-label-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral QA fixture only, no informational label, no personal data",
+    "historical": false
+  },
+  {
+    "state": "ROOT",
+    "file": "root-calendar-no-label.png",
+    "sha256": "57df495e5b71a5bfa794a8ee499c50117787f9a296c6416316989de655583dee",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-remove-sample-label-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral QA fixture only, no informational label, no personal data",
+    "historical": false
   }
 ]
