@@ -236,22 +236,20 @@ struct PhoneCalendarPreferences: View {
         }
         VStack(alignment: .leading, spacing: 8) {
             Text("Additional styles").font(.caption).foregroundStyle(.secondary)
-            ForEach(CalendarItemStyle.legacyStyles, id: \.self) { style in
-                Button {
-                    draft.itemStyle = style
-                } label: {
-                    HStack {
-                        Text(style.displayTitle).foregroundStyle(.primary)
-                        Spacer()
-                        if draft.itemStyle == style {
-                            Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.accentColor)
-                        }
-                    }
+            // A standard menu picker, not bespoke row buttons: the bespoke
+            // rows deterministically delivered their tap one row low under
+            // automation (three native runs selected Outline for a Filled
+            // tap, verified against the screen recording), while every
+            // menu-driven control on this page works. Same staged draft,
+            // same honest labels, same save semantics.
+            Picker("Legacy style", selection: $draft.itemStyle) {
+                ForEach(CalendarItemStyle.legacyStyles, id: \.self) { style in
+                    Text(style.displayTitle).tag(style)
+                        .accessibilityIdentifier("calendarLegacyStyle-" + style.rawValue)
                 }
-                .accessibilityLabel(style.displayTitle + " style")
-                .accessibilityValue(draft.itemStyle == style ? "Selected" : "Not selected")
-                .accessibilityIdentifier("calendarItemStyle-" + style.rawValue)
             }
+            .pickerStyle(.menu)
+            .accessibilityIdentifier("calendarLegacyStyle")
         }
         Text("Previews show neutral tasks. Calendar events are not supported. Exact reference colors and borders remain uncertain.")
             .font(.caption).foregroundStyle(.secondary)

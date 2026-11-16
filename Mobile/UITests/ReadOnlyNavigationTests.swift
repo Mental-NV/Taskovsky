@@ -5124,7 +5124,12 @@ extension ReadOnlyNavigationTests {
         app.buttons["calendarColorMode-priority"].tap()
         calendarOptionsRoot(app)
         app.buttons["calendarStylePage"].tap()
-        app.buttons["calendarItemStyle-outline"].tap()
+        let legacyStyle = app.buttons["calendarLegacyStyle"]
+        reveal(legacyStyle, in: app)
+        legacyStyle.tap()
+        app.buttons["calendarLegacyStyle-outline"].tap()
+        let outlineNote = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Current saved style: Outline (Legacy)")).firstMatch
+        XCTAssertTrue(outlineNote.waitForExistence(timeout: 5))
         app.buttons["calendarYearStyle-hide"].tap()
         app.buttons["calendarIconsPage"].tap()
         setSwitch("calendarIcons", to: false, app: app)
@@ -5233,7 +5238,16 @@ extension ReadOnlyNavigationTests {
         app.buttons["calendarStylePage"].tap()
         XCTAssertEqual(app.buttons["calendarItemStyle-classic"].value as? String, "Selected")
         // A saved legacy style stays honest on reopen across relaunch.
-        app.buttons["calendarItemStyle-filled"].tap()
+        // The menu picker opens a fresh anchored menu, immune to the
+        // below-fold row-tap mis-delivery seen with bespoke buttons.
+        let legacy = app.buttons["calendarLegacyStyle"]
+        reveal(legacy, in: app)
+        legacy.tap()
+        app.buttons["calendarLegacyStyle-filled"].tap()
+        // The menu picker's staged choice surfaces in the honest saved-style
+        // note, which is the user-visible proof of the staged selection.
+        let stagedNote = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Current saved style: Filled (Legacy)")).firstMatch
+        XCTAssertTrue(stagedNote.waitForExistence(timeout: 5))
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
@@ -5243,7 +5257,8 @@ extension ReadOnlyNavigationTests {
         app.buttons["Calendar"].tap()
         openCalendarViewOptions(app)
         app.buttons["calendarStylePage"].tap()
-        XCTAssertEqual(app.buttons["calendarItemStyle-filled"].value as? String, "Selected")
+        let savedNote = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Current saved style: Filled (Legacy)")).firstMatch
+        XCTAssertTrue(savedNote.waitForExistence(timeout: 5))
         attach(app, "Legacy Filled style preserved across relaunch")
     }
 

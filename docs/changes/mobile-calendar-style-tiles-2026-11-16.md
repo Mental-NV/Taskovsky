@@ -52,9 +52,17 @@ Style page while preserving the old styles; Mac keeps its existing picker
   The Mac picker lists all four cases with honest display titles; the
   iPhone tiles enumerate primary + legacy explicitly.
 - Tile containers carry no accessibility identifier of their own, so only
-  the stable leaf IDs (`calendarItemStyle-modern/classic/filled/outline`,
-  `calendarYearStyle-hide/show`) are actionable; existing native callers
-  were updated to those leaf IDs.
+  the stable leaf IDs (`calendarItemStyle-modern/classic`,
+  `calendarYearStyle-hide/show`, `calendarLegacyStyle`,
+  `calendarLegacyStyle-filled/outline`) are actionable; existing native
+  callers were updated to those leaf IDs.
+- The legacy section uses a standard menu picker rather than bespoke row
+  buttons: three native runs deterministically selected Outline for a
+  Filled row tap (verified frame-by-frame against the device screen
+  recording, including a pre-tap Classic state and a post-tap Outline
+  state with no intervening draft write), while every menu-driven control
+  on the page works. Same staged draft, same honest labels, same save
+  semantics; the picked value is asserted staged and after relaunch.
 
 ## Verification
 
@@ -63,19 +71,46 @@ Style page while preserving the old styles; Mac keeps its existing picker
   round-trip, no silent migration, year mapping, projection/settings
   invariance, icon-switch independence) and the 13 existing
   `CalendarDisplayOptionsTests`.
-- `./scripts/build-app.sh`: macOS release build completed; ad hoc signature
-  verified (`local.taskovsky.mac`, `Signature=adhoc`).
+- Native acceptance ran on the owned simulator only (device B263E8E7,
+  "Taskovsky Menu QA 1114", iPhone 13 Pro, iOS 26.3.1, arm64), with
+  `-parallel-testing-enabled NO -collect-test-diagnostics never`,
+  `CODE_SIGNING_ALLOWED=NO`, a unique DerivedData/result bundle per run,
+  and no other native work concurrent. No user fixtures, settings, or
+  data were changed outside the disposable QA sessions.
+- Five runs were needed. Runs 1–3 failed only the new C10 test at the
+  legacy-Filled selection: the bespoke below-fold legacy Buttons
+  deterministically delivered the tap one row low (Outline selected for a
+  Filled tap, verified frame-by-frame against the device screen recording,
+  including a pre-tap Classic state and a post-tap Outline state with no
+  intervening draft write). A scroll-into-view plus settle-wait did not
+  help. Fix: the legacy section is now a standard menu picker
+  (`calendarLegacyStyle` with `calendarLegacyStyle-filled/outline`
+  options) on the same staged draft; the picked value is asserted via the
+  user-visible "Current saved style: …" note staged and after relaunch.
+  Run 4 then failed only on asserting the picker's XCUI `value` (a menu
+  Picker exposes no `value`; the selection itself worked, confirmed on the
+  device screenshot showing "Current saved style: Filled (Legacy)").
+  Run 5 (`/private/tmp/TaskovskyCalendarStyleNative5/`, `result.xcresult`,
+  `run.log`): **4 tests, 0 failures** —
+  `testCalendarStyleTilesSaveModernClassicAndLegacyAcrossRelaunch` (95s),
+  `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` (46s),
+  `testCalendarTimedResizeHandleMovesTheEnd` (21s),
+  `testCalendarChecklistMenuWorksWithHiddenIconsAndCompletedRows` (47s).
+- Pixel-inspected device screenshots (exported under the run directory's
+  `screenshots/` with stable names): neutral Style tiles (Modern pale
+  fill + stripe selected with blue check; Classic saturated unselected;
+  legacy menu row; Hide/Show month tiles), rendered Week under Modern
+  (pale all-day washes with leading stripes, pale timed card) and under
+  Classic (saturated solid blocks, dark text, no stripe), Year with Show
+  heatmap shading, Year with Hide standard dots, and the final legacy
+  Filled Style page. Tiles use the same shared policy values as the
+  production cards, not the same card renderer — no pixel-equivalence
+  claim between tiles and Week cards.
+- `swift test --disable-sandbox`: all suites pass, 0 failures.
+- `./scripts/build-app.sh`: macOS release build completed; ad hoc
+  signature verified (`local.taskovsky.mac`, `Signature=adhoc`).
 - `./scripts/build-ios-simulator-ci.sh`: iPhone app plus contract and
   navigation test bundles compiled (`TEST BUILD SUCCEEDED`); no tests
-  executed.
-- Native coverage is prepared but not run: the existing
-  `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` now taps the
-  `calendarItemStyle-outline` and `calendarYearStyle-hide` leaf tiles, and a
-  new `testCalendarStyleTilesSaveModernClassicAndLegacyAcrossRelaunch`
-  stages Modern/Show save + relaunch with the actual heatmap grid mode,
-  actual rendered Week screenshots under Modern and Classic, Back-retained
-  Classic draft, outer Cancel discard, Classic/Hide save with actual Year
-  Standard mode, and legacy Filled preservation across relaunches.
-  Screenshots and device results remain with the parent coordinator.
+  executed by that script.
 - No live TickTick, no personal data, no Codex. Fixtures are neutral QA
   samples only. No push or PR was made; the branch stays isolated.
