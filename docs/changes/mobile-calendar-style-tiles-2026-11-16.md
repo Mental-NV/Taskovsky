@@ -133,5 +133,11 @@ Style page while preserving the old styles; Mac keeps its existing picker
   `testCalendarChecklistMenuWorksWithHiddenIconsAndCompletedRows` (47s).
   Menu-build screenshots above were pixel-inspected from this run; no test
   or assertion was weakened, no user fixtures/settings/data touched.
+- The Native6 result bundle is not warning-free: it records two identical
+  SwiftUI runtime warnings ("Adding '_UIReparentingView' as a subview of
+  UIHostingController.view is not supported and may result in a broken view
+  hierarchy") alongside the 4 passing tests. They did not fail any test and
+  are recorded here rather than claimed away; root cause and any fix are
+  out of scope for this slice.
 - No live TickTick, no personal data, no Codex. Fixtures are neutral QA
   samples only. No push or PR was made; the branch stays isolated.
