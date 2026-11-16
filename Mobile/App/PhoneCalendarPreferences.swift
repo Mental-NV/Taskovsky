@@ -560,24 +560,173 @@ private struct PhoneCalendarHeatSample: View {
     }
 }
 
+/// C09 bounded parity: each source row pushes a Color Pick page bound to the
+/// same outer staged draft. Back keeps staged changes; outer Cancel discards
+/// them and outer Done commits them. The row keeps its accessible name and
+/// Default reset; the pick page stages palette, Default and Custom choices
+/// into the outer draft without touching list/tag records.
 private struct PhoneCalendarSourceColorRow: View {
     let row: CalendarColorSource.Swatch
     @Binding var colors: CalendarColorSource.Overrides
 
+    private var current: String? { colors[row.id] }
+
     var body: some View {
         HStack {
-            ColorPicker(row.name, selection: selection(for: row), supportsOpacity: false)
-                .accessibilityValue(colors[row.id] ?? "Default")
+            NavigationLink {
+                PhoneCalendarSourceColorPick(row: row, colors: $colors)
+            } label: {
+                HStack(spacing: 12) {
+                    Circle()
+                        .fill(PhoneEntityColor.read(current ?? row.defaultColor))
+                        .frame(width: 22, height: 22)
+                        .overlay { Circle().strokeBorder(.primary.opacity(0.18), lineWidth: 1) }
+                        .accessibilityHidden(true)
+                    Text(row.name)
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 8)
+                    Text(current ?? "Default")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier(row.name)
+            .accessibilityValue(current ?? "Default")
             Button("Default") { colors[row.id] = nil }
-                .buttonStyle(.borderless).disabled(colors[row.id] == nil)
+                .buttonStyle(.borderless).disabled(current == nil)
                 .accessibilityLabel("Use default color for " + row.name)
         }
     }
+}
 
-    private func selection(for row: CalendarColorSource.Swatch) -> Binding<Color> {
-        Binding(get: { PhoneEntityColor.read(colors[row.id] ?? row.defaultColor) }, set: { color in
-            if let hex = PhoneEntityColor.encode(color) { colors[row.id] = hex }
-        })
+/// C09 bounded Color Pick: the honest Taskovsky palette plus Default and a
+/// Custom native color editor. The reference named families are explicitly
+/// not reproduced (see the section footer). Every choice stages into the
+/// outer draft; nothing saves here. Arbitrary existing overrides are shown
+/// exactly as the current color and are never coerced toward the palette.
+private struct PhoneCalendarSourceColorPick: View {
+    let row: CalendarColorSource.Swatch
+    @Binding var colors: CalendarColorSource.Overrides
+
+    private var current: String? { colors[row.id] }
+    private var effective: String { current ?? row.defaultColor }
+    private var isCustom: Bool {
+        guard let current else { return false }
+        return !CalendarColorSource.taskovskyPalette.contains {
+            $0.caseInsensitiveCompare(current) == .orderedSame
+        }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 8)], spacing: 8) {
+                    defaultSwatch
+                    ForEach(CalendarColorSource.taskovskyPalette, id: \.self, content: paletteSwatch)
+                }
+                if let current, isCustom {
+                    currentRow(current)
+                }
+            } header: {
+                Text("Taskovsky colors")
+            } footer: {
+                Text("Only the Taskovsky colors are offered here. The reference Recommend, Macaron, Morandi, Rococo, Classic and Memphis families are not reproduced.")
+            }
+            Section {
+                ColorPicker("Custom color", selection: Binding(
+                    get: { PhoneEntityColor.read(effective) },
+                    set: { if let hex = PhoneEntityColor.encode($0) { colors[row.id] = hex } }
+                ), supportsOpacity: false)
+                .accessibilityIdentifier("calendarColorPickCustom")
+                .accessibilityValue(effective)
+            } header: {
+                Text("Custom")
+            } footer: {
+                Text("Opens the system color editor. Any custom color is kept exactly and follows this source only.")
+            }
+        }
+        .navigationTitle("Color Pick")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var defaultSwatch: some View {
+        let selected = current == nil
+        return Button {
+            colors[row.id] = nil
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(PhoneEntityColor.read(row.defaultColor))
+                    .frame(width: 28, height: 28)
+                Image(systemName: "slash")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+            .frame(width: 44, height: 44)
+            .contentShape(Rectangle())
+            .overlay {
+                if selected {
+                    Circle().strokeBorder(Color.accentColor, lineWidth: 2)
+                        .frame(width: 36, height: 36)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Default color")
+        .accessibilityValue(row.defaultColor)
+        .accessibilityIdentifier("calendarColorPick-default")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func paletteSwatch(_ hex: String) -> some View {
+        let selected = current?.caseInsensitiveCompare(hex) == .orderedSame
+        return Button {
+            colors[row.id] = hex
+        } label: {
+            Circle()
+                .fill(PhoneEntityColor.read(hex))
+                .frame(width: 28, height: 28)
+                .overlay {
+                    if selected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(.white)
+                            .accessibilityHidden(true)
+                    }
+                }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+                .overlay {
+                    if selected {
+                        Circle().strokeBorder(Color.accentColor, lineWidth: 2)
+                            .frame(width: 36, height: 36)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Color " + hex)
+        .accessibilityIdentifier("calendarColorPick-" + hex)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func currentRow(_ hex: String) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(PhoneEntityColor.read(hex))
+                .frame(width: 28, height: 28)
+                .overlay { Circle().strokeBorder(Color.accentColor, lineWidth: 2) }
+                .accessibilityHidden(true)
+            Text("Current color")
+                .foregroundStyle(.primary)
+            Spacer(minLength: 8)
+            Text(hex)
+                .foregroundStyle(.secondary)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("calendarColorPickCurrent")
+        .accessibilityLabel("Current color " + hex)
+        .accessibilityAddTraits(.isSelected)
     }
 }
 
