@@ -27,4 +27,6 @@ This slice adds those real choices to Taskovsky's existing Reminder page for **a
 
 ## Verification
 
-Pending final independent source review, full/release/iPhone compilation and complete native receipts. Acceptance covers calendar/DST math, staged defaults, unrelated reminders, None, excluded no-ops, actual multi-selection/save/relaunch/Cancel and existing Custom regressions. No screenshot or pixel-perfect claim until captured and inspected.
+Source checkpoint `1ef478f` independently reviewed. Full920 XCTest plus38 Swift Testing cases, release packaging and iPhone test compilation passed. Initial complete native receipt `ReminderPresetsNative.xcresult` ran four tests: both Custom regressions and None/outerCancel passed; the multi-toggle/save/relaunch test passed its interactions but failed four exact-date assertions because its expected localized strings used day-first formatting while the accessibility values were month-first. The dates and09:00 times were correct. Only those expected strings were corrected; exact day/month/year/time equality is retained. One focused native rerun remains required before publication.
+
+The unmodified1170×2532 neutral Simulator screenshot was inspected and is inline in the tracker. It shows all five selected blue/check rows and None unselected, with Custom/default/absolute compatibility controls below. No clipping or personal data. It documents this page, not anchored-menu/pixel equivalence.

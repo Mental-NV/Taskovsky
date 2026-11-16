@@ -9091,7 +9091,7 @@ extension ReadOnlyNavigationTests {
             XCTAssertEqual(row.value as? String, id == "dayBefore9" ? "Not selected" : "Selected")
         }
         // Actual stored absolute reminders retain the selected civil dates at09:00.
-        let expected = ["9 Nov 2026 at 09:00", "13 Nov 2026 at 09:00", "14 Nov 2026 at 09:00", "16 Nov 2026 at 09:00"]
+        let expected = ["Nov 9, 2026 at 9:00", "Nov 13, 2026 at 9:00", "Nov 14, 2026 at 9:00", "Nov 16, 2026 at 9:00"]
         for (index, value) in expected.enumerated() {
             let row = app.datePickers["scheduleManualReminder-\(index)"]; reveal(row, in: app)
             XCTAssertEqual(row.value as? String, value)
