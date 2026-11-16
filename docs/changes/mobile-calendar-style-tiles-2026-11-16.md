@@ -1,12 +1,10 @@
 # Calendar Style tiles structural parity (C10)
 
-Status: implemented candidate; local tests, macOS release build with
-signature, and iPhone compile passed. Native acceptance ran 4/4 on device
-with inspected screenshots; a post-acceptance source correction (legacy
-Menu replacing the invalid Picker binding) has since landed with all
-non-UI gates re-verified, and its final native revalidation is pending a
-separately authorized slot. This is not a pixel-parity claim, and exact-head
-hosted CI remains with the parent.
+Status: complete on the corrected Menu build — local tests, macOS
+release build with signature, and iPhone compile pass; final native
+revalidation ran 4/4 on device with inspected screenshots (run 6). This
+is not a pixel-parity claim, and exact-head hosted CI remains with the
+parent.
 
 The observed mobile inventory C10 places **Item Style** previews for
 **Modern ✓** and **Classic**, then **Show Item Icons**, on the pushed Style
@@ -97,18 +95,17 @@ Style page while preserving the old styles; Mac keeps its existing picker
   Picker exposes no `value`; the selection itself worked, confirmed on the
   device screenshot showing "Current saved style: Filled (Legacy)").
   Run 5 (`/private/tmp/TaskovskyCalendarStyleNative5/`, `result.xcresult`,
-  `run.log`): **4 tests, 0 failures** —
-  `testCalendarStyleTilesSaveModernClassicAndLegacyAcrossRelaunch` (95s),
-  `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` (46s),
-  `testCalendarTimedResizeHandleMovesTheEnd` (21s),
-  `testCalendarChecklistMenuWorksWithHiddenIconsAndCompletedRows` (47s).
-- Pixel-inspected device screenshots (exported under the run directory's
+  `run.log`): **4 tests, 0 failures** — same four tests as below (95s /
+  46s / 21s / 47s). Screenshots inspected as described below.
+- Pixel-inspected device screenshots (exported under each run directory's
   `screenshots/` with stable names): neutral Style tiles (Modern pale
   fill + stripe selected with blue check; Classic saturated unselected;
-  legacy menu row; Hide/Show month tiles), rendered Week under Modern
+  legacy control; Hide/Show month tiles), rendered Week under Modern
   (pale all-day washes with leading stripes, pale timed card) and under
   Classic (saturated solid blocks, dark text, no stripe), Year with Show
-  heatmap shading, Year with Hide standard dots, and the final legacy
+  heatmap shading (populated November strip visible at the grid bottom,
+  partly under the floating tab bar — the readily possible capture without
+  widening test scope), Year with Hide standard dots, and the final legacy
   Filled Style page. Tiles use the same shared policy values as the
   production cards, not the same card renderer — no pixel-equivalence
   claim between tiles and Week cards.
@@ -125,10 +122,16 @@ Style page while preserving the old styles; Mac keeps its existing picker
   assertions are unchanged in flow and kept at full strength. After the
   correction, `swift test --disable-sandbox` passes (all suites, 0
   failures), the macOS release build + ad hoc signature re-verified, and
-  the iPhone build-for-testing recompiled clean. Final native revalidation
-  is pending: the simulator is Kanban-owned, so no native test was run or
-  touched for this correction; the prepared four-test set (same selectors,
-  same staged-note and relaunch assertions) awaits a separately authorized
-  acceptance slot.
+  the iPhone build-for-testing recompiled clean.
+- Final native revalidation on the corrected Menu build, same owned device
+  and flags, fresh paths (`/private/tmp/TaskovskyCalendarStyleNative6/`,
+  `result.xcresult`, `run.log`), `xcodebuild` exit 0, **TEST SUCCEEDED**,
+  parsable result Passed: **4 tests, 0 failures, 0 skipped** —
+  `testCalendarStyleTilesSaveModernClassicAndLegacyAcrossRelaunch` (95s),
+  `testCalendarViewOptionsRenderAndPersistAcrossRelaunch` (46s),
+  `testCalendarTimedResizeHandleMovesTheEnd` (21s),
+  `testCalendarChecklistMenuWorksWithHiddenIconsAndCompletedRows` (47s).
+  Menu-build screenshots above were pixel-inspected from this run; no test
+  or assertion was weakened, no user fixtures/settings/data touched.
 - No live TickTick, no personal data, no Codex. Fixtures are neutral QA
   samples only. No push or PR was made; the branch stays isolated.
