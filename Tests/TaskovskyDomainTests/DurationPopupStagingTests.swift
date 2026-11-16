@@ -46,4 +46,16 @@ final class DurationPopupStagingTests: XCTestCase {
         XCTAssertFalse(nested.schedule.duration!.isAllDay)
         XCTAssertEqual(calendar.component(.hour, from: nested.schedule.duration!.start), 9)
     }
+    func testAllDayMovePreservesCivilSpanAcrossDST() {
+        var task = fixture()
+        let start = calendar.date(from: DateComponents(year: 2026, month: 3, day: 7))!
+        let end = calendar.date(from: DateComponents(year: 2026, month: 3, day: 9))!
+        task.scheduledDuration = TaskDurationRange(start: start, end: end, isAllDay: true)
+        task.dueDate = end; task.hasDueTime = false
+        var staged = TaskScheduleEdit(task: task, settings: AppSettings(), calendar: calendar, now: end)
+        staged.chooseDay(calendar.date(from: DateComponents(year: 2026, month: 3, day: 12))!)
+        XCTAssertEqual(staged.schedule.duration?.start, calendar.date(from: DateComponents(year: 2026, month: 3, day: 10)))
+        XCTAssertEqual(staged.schedule.duration?.end, calendar.date(from: DateComponents(year: 2026, month: 3, day: 12)))
+        XCTAssertEqual(task.scheduledDuration?.start, start)
+    }
 }

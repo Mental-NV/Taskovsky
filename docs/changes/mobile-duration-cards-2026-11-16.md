@@ -12,6 +12,7 @@ This slice implements cards and real transactional endpoint/calendar editors. Ti
 
 - Timed Date card displays the range end/due day, with explicit “End date · move whole range” caption. Its nested calendar calls existing `chooseDay`, preserving the range span rather than silently editing only one endpoint.
 - Timed Time card shows actual start/end wall time and elapsed duration. Nested Start/End tabs choose an endpoint; wheels call existing `setStart`/`setEnd` only on actual edits.
+- All-day ranges retain a separate “Move duration to another date” action using the same staged whole-range calendar; independent endpoints do not replace moving the entire span.
 - All Day inversely calls existing `setTime`. Existing midnight normalization and 09:00/one-hour conversion policy unchanged. Start/End cards show actual day and open the corresponding selected calendar tab.
 - Each presentation captures an exact value copy of the current outer `TaskScheduleEdit`. Opening/tab switching makes no setters. Cancel/outside dismissal discards; nested Done assigns only a valid range with known zone. Popover is modal on iPhone, preventing parent edits while its snapshot is open. Outer revision guards, Cancel, reconciliation and save-error behavior unchanged.
 - Range end remains due. Seconds and non-device zones are preserved on no-op. Invalid inversion is shown, not silently clamped; nested Done disabled until corrected. Existing manual/default/end reminders and recurrence fields remain in the copied draft.

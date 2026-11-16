@@ -235,6 +235,11 @@ struct PhoneScheduleSheet: View {
                             durationCard("Time", value: Self.timeLabel(range.start, calendar: calendar) + " – " + Self.timeLabel(range.end, calendar: calendar), caption: durationCaption(range), id: "scheduleDurationTime", kind: .time)
                         }
                     }
+                    if range.isAllDay {
+                        Button { durationPopup = PhoneDurationPopupRequest(edit: edit, kind: .moveDay) } label: {
+                            Text("Move duration to another date").frame(minHeight: 44)
+                        }.accessibilityIdentifier("scheduleDurationMove")
+                    }
                     Toggle("All Day", isOn: Binding(get: { !edit.schedule.effectiveHasTime }, set: { edit.setTime(!$0) }))
                         .accessibilityIdentifier("scheduleAllDay")
                     if range.validated(in: calendar) == nil {

@@ -2927,7 +2927,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(day.waitForExistence(timeout: 5), app.debugDescription); day.tap()
         app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
         XCTAssertNotEqual(date.value as? String, beforeDate)
-        XCTAssertTrue((date.value as? String ?? "").contains("10"))
+        XCTAssertEqual(date.value as? String, "Nov 10, 2026, End date · move whole range")
         XCTAssertEqual(time.value as? String, beforeTime)
         XCTAssertTrue((time.value as? String ?? "").contains("13:00"))
         XCTAssertTrue((time.value as? String ?? "").contains("14:00"))
@@ -8716,7 +8716,9 @@ extension ReadOnlyNavigationTests {
         let app = launch()
         _ = openSchedule(app, task: "Prepare the weekly plan")
         let original = app.buttons["scheduleDurationTime"].value as? String
-        app.switches["scheduleAllDay"].tap()
+        let allDay = app.switches["scheduleAllDay"]
+        allDay.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertEqual(allDay.value as? String, "1")
         let end = app.buttons["scheduleRangeEnd"]
         XCTAssertTrue(end.waitForExistence(timeout: 5))
         let before = end.value as? String
@@ -8727,7 +8729,14 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(end.value as? String, before)
         end.tap(); app.buttons["Tuesday, November 10"].tap()
         app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
-        XCTAssertNotEqual(end.value as? String, before)
+        XCTAssertEqual(end.value as? String, "Nov 10, 2026, End date")
+        XCTAssertEqual(app.buttons["scheduleRangeStart"].value as? String, "Nov 9, 2026, Start date")
+        app.buttons["scheduleDurationMove"].tap()
+        XCTAssertTrue(app.datePickers["scheduleMoveDurationDate"].waitForExistence(timeout: 5))
+        app.buttons["Thursday, November 12"].tap()
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertEqual(app.buttons["scheduleRangeStart"].value as? String, "Nov 11, 2026, Start date")
+        XCTAssertEqual(end.value as? String, "Nov 12, 2026, End date")
         attach(app, "All Day duration endpoint cards")
         app.buttons["scheduleCancel"].tap(); waitGone(app.buttons["scheduleDone"])
         app.buttons["editSchedule"].tap()
@@ -8758,7 +8767,10 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(time.waitForExistence(timeout: 5)); XCTAssertEqual(time.value as? String, before)
         time.tap(); XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
         app.pickerWheels.element(boundBy: 2).adjust(toPickerWheelValue: "15")
-        app.navigationBars["Schedule"].staticTexts["Schedule"].tap()
+        let popup = app.buttons["durationPopupDone"]
+        let outside = app.coordinate(withNormalizedOffset: CGVector(dx: 0.03, dy: 0.95))
+        XCTAssertTrue(popup.exists)
+        outside.tap()
         waitGone(app.buttons["durationPopupDone"])
         XCTAssertEqual(time.value as? String, before)
         app.buttons["scheduleCancel"].tap()
