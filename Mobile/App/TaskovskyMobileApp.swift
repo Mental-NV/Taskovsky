@@ -238,9 +238,6 @@ struct MobileRootView: View {
                         }
                     }
                 }.padding(.horizontal, 16)
-                if model.isQA || section != .tasks {
-                    Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice").accessibilityValue(model.timePrecisionEvidence)
-                }
                 if model.recoveredDraft != nil || model.activeDraft != nil {
                     Button(model.activeDraft != nil ? "Continue your edit" : "Resume saved edit", action: resumeEdit).frame(minHeight: 44)
                 }
@@ -312,6 +309,7 @@ struct MobileRootView: View {
                 }
             }.buttonStyle(.plain).padding(5).background(.regularMaterial, in: Capsule())
                 .overlay(Capsule().stroke(.primary.opacity(0.10), lineWidth: 0.5))
+                .accessibilityIdentifier("mobileRootReady")
                 .padding(.horizontal, 20).padding(.bottom, 8)
         }.tint(PhoneStyle.accent)
         .disabled(drawer)

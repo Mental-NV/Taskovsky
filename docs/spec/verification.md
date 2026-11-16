@@ -2231,3 +2231,28 @@ Failure-driven corrections, none weakening assertions: (1) a toolbar Manage entr
 Final gates on the corrected source: `swift test --disable-sandbox` 895 XCTest (153/55/156/531) + 38 Swift Testing, 0 failures; `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict` exit 0; iPhone `build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED. External tag churn under the dirty gate and transient-failure recovery remain repository-level (UI-unreachable). Exact-head CI remains pending.
 
 Independent rereview and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.
+
+## Mobile root informational-label removal — 2026-11-16
+
+[Bounded change](../changes/mobile-remove-sample-label-2026-11-16.md): the whole
+root header label is gone from `MobileRootView.shell`, both the QA
+(`Sample workspace · Local editing`) and ordinary (`Local workspace · Early
+development`) variants, with its `previewNotice` identifier and
+`timePrecisionEvidence` value. The genuine tab-bar container now carries
+`mobileRootReady`. All ~104 native readiness waits target it with unchanged
+timeouts; the two precision persistence checks re-open the schedule after
+relaunch and assert the visible `scheduleTime`/`scheduleDurationTime` value and
+`scheduleTimeZone` caption instead of the opaque label value. New
+`RootLabelRemovalTests` (2 tests) asserts no label string in any section and
+preserved Tasks/Calendar/Search navigation plus `Open navigation`,
+`openCapture`, `calendarJumpToDate`, `workspaceSearch` controls. Data, QA
+isolation, recovery warnings and editing behavior unchanged.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **915 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153, Mac 55, Domain 167, Core 540. Full log `/tmp/label-swift-test.log` (runner-local; not committed). |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/tmp/label-build-app.log` (runner-local). |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh` exit 0; app plus contract/navigation UI-test bundles (incl. new `RootLabelRemovalTests.swift`) compiled. Only pre-existing `menu` unused-variable warnings in `ReadOnlyNavigationTests.swift` plus toolchain AppIntents notes. Logs `/tmp/label-ci-ios/` (runner-local). |
+| Native tests | **Prepared, NOT RUN** | Simulator/UI execution explicitly deferred; awaiting parent-coordinated handoff. |
+
+No push/PR/merge, no Simulator/GUI session, no personal data, no screenshots.
