@@ -747,7 +747,9 @@ struct CalendarViewOptions: View {
                         CalendarSourceColorSettings(mode: options.colorBy, store: store)
                     }
             }
-            Picker("Style", selection: $options.itemStyle) { Text("Filled").tag(CalendarItemStyle.filled); Text("Outline").tag(CalendarItemStyle.outline) }
+            Picker("Style", selection: $options.itemStyle) {
+                ForEach(CalendarItemStyle.allCases, id: \.self) { Text($0.displayTitle).tag($0) }
+            }
             if options.mode == .year {
                 Picker("Year style", selection: $options.yearStyle) {
                     Text("Standard").tag(CalendarYearStyle.standard)
@@ -806,3 +808,4 @@ struct CalendarViewOptions: View {
             }
     }
 }
+

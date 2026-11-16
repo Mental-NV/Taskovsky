@@ -108,7 +108,90 @@ public enum CalendarColorSource: Hashable, Sendable {
         }
     }
 }
-public enum CalendarItemStyle: String, Codable, CaseIterable, Sendable { case filled, outline }
+public enum CalendarItemStyle: String, Codable, CaseIterable, Sendable { case modern, classic, filled, outline }
+
+/// Shared production rendering policy for Calendar item styles.
+///
+/// `filled` and `outline` are legacy Taskovsky styles with different
+/// semantics from the reference Modern/Classic pair: they are preserved
+/// verbatim (including their leading-stripe and outline treatments) so
+/// existing saved selections stay honest with no automatic migration.
+/// `modern` is a pale fill with a thin colored leading stripe; `classic`
+/// is a stronger saturated block fill with no distinct stripe. Text stays
+/// dark (primary) in both new styles. Exact reference colors, borders and
+/// any selection-driven saturation shift remain uncertain and are not
+/// claimed here; the opacities below are Taskovsky choices.
+extension CalendarItemStyle {
+    /// Primary reference-parity choices presented first in Style pages.
+    public static var primaryStyles: [Self] { [.modern, .classic] }
+    /// Preserved Taskovsky styles, always labeled as legacy in UI.
+    public static var legacyStyles: [Self] { [.filled, .outline] }
+
+    public var isLegacy: Bool { Self.legacyStyles.contains(self) }
+
+    /// Honest UI title: legacy values are never relabeled as Modern/Classic.
+    public var displayTitle: String {
+        switch self {
+        case .modern: "Modern"
+        case .classic: "Classic"
+        case .filled: "Filled (Legacy)"
+        case .outline: "Outline (Legacy)"
+        }
+    }
+
+    public struct Rendering: Equatable, Sendable {
+        public let fillOpacity: Double
+        public let completedFillOpacity: Double
+        public let showsStripe: Bool
+        public let showsOutline: Bool
+
+        public init(fillOpacity: Double, completedFillOpacity: Double, showsStripe: Bool, showsOutline: Bool) {
+            self.fillOpacity = fillOpacity
+            self.completedFillOpacity = completedFillOpacity
+            self.showsStripe = showsStripe
+            self.showsOutline = showsOutline
+        }
+    }
+
+    /// Single source of truth for both production cards and Style preview
+    /// tiles. Stored values round-trip unchanged; the fill/stripe/outline
+    /// literals below reproduce each platform's prior treatment (see the
+    /// platform mappings for the one completed-state difference).
+    public var rendering: Rendering {
+        switch self {
+        case .filled:
+            return Rendering(fillOpacity: 0.15, completedFillOpacity: 0.06, showsStripe: true, showsOutline: false)
+        case .outline:
+            return Rendering(fillOpacity: 0, completedFillOpacity: 0, showsStripe: true, showsOutline: true)
+        case .modern:
+            return Rendering(fillOpacity: 0.12, completedFillOpacity: 0.05, showsStripe: true, showsOutline: false)
+        case .classic:
+            return Rendering(fillOpacity: 0.55, completedFillOpacity: 0.28, showsStripe: false, showsOutline: false)
+        }
+    }
+
+    /// Mac card fill: completed rows dim the fill itself (prior Mac values).
+    public func macFillOpacity(completed: Bool) -> Double {
+        completed ? rendering.completedFillOpacity : rendering.fillOpacity
+    }
+
+    /// iPhone card fill: legacy styles keep their prior fill with the
+    /// platform overall opacity handling completed dimming (a completed
+    /// Filled card was and stays fill 0.15 under overall 0.58); new styles
+    /// use the shared policy value on both platforms.
+    public func phoneFillOpacity(completed: Bool) -> Double {
+        if isLegacy { return rendering.fillOpacity }
+        return completed ? rendering.completedFillOpacity : rendering.fillOpacity
+    }
+}
+
+extension CalendarYearStyle {
+    /// Reference wording for the Heatmap section tiles. Taskovsky retains
+    /// its own semantics: Hide keeps Standard dots, Show uses Heatmap
+    /// shading. The reference Hide state (fully plain dates) is not claimed.
+    public var heatmapTileTitle: String { self == .heatmap ? "Show" : "Hide" }
+    public var heatmapTileSubtitle: String { self == .heatmap ? "Heatmap shading" : "Standard dots" }
+}
 public enum CalendarYearStyle: String, Codable, CaseIterable, Sendable { case standard, heatmap }
 
 /// Local Calendar scope is independent of smart-list inclusion. Archived
@@ -567,6 +650,26 @@ public struct CalendarEntry: Identifiable, Equatable, Sendable {
     public var hasDuration: Bool = false
     public var color: String
     public var listID: UUID?
+    public init(id: String, taskID: UUID, checklistID: UUID? = nil, title: String,
+                start: Date, end: Date, due: Date, isAllDay: Bool, isProjected: Bool,
+                isCompleted: Bool, isNote: Bool, hasDuration: Bool = false,
+                color: String, listID: UUID? = nil) {
+        self.id = id
+        self.taskID = taskID
+        self.checklistID = checklistID
+        self.title = title
+        self.start = start
+        self.end = end
+        self.due = due
+        self.isAllDay = isAllDay
+        self.isProjected = isProjected
+        self.isCompleted = isCompleted
+        self.isNote = isNote
+        self.hasDuration = hasDuration
+        self.color = color
+        self.listID = listID
+    }
+
     public var canSchedule: Bool { !isProjected && checklistID == nil }
     public var canChangeCompletion: Bool { !isProjected && !isNote }
     public var canResizeAllDayRange: Bool { isAllDay && hasDuration && canSchedule }

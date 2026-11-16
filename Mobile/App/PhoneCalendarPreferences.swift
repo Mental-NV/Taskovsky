@@ -89,15 +89,16 @@ struct PhoneCalendarPreferences: View {
                 .accessibilityIdentifier("calendarColorPage")
             NavigationLink {
                 Form {
-                    Section("Item Style") { styleControls }
+                    Section("Item Style") { itemStyleTiles }
                     Section {
                         NavigationLink("Show Item Icons") {
                             Form { Section { iconControls } }
                                 .navigationTitle("Show Item Icons").navigationBarTitleDisplayMode(.inline)
                         }.accessibilityIdentifier("calendarIconsPage")
                     }
+                    Section("Heatmap") { heatmapTiles }
                 }.navigationTitle("Style").navigationBarTitleDisplayMode(.inline)
-            } label: { LabeledContent("Style", value: draft.itemStyle.rawValue.capitalized) }
+            } label: { LabeledContent("Style", value: draft.itemStyle.displayTitle) }
                 .accessibilityIdentifier("calendarStylePage")
         }
         Section {
@@ -218,13 +219,117 @@ struct PhoneCalendarPreferences: View {
         PhoneCalendarSourceColorRow(row: row, colors: $draft.sourceColors)
     }
 
-    @ViewBuilder private var styleControls: some View {
-        Picker("Style", selection: $draft.itemStyle) {
-            ForEach(CalendarItemStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-        }.accessibilityIdentifier("calendarStyle")
-        Picker("Year style", selection: $draft.yearStyle) {
-            ForEach(CalendarYearStyle.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-        }.accessibilityIdentifier("calendarYearStyle")
+    /// C10 structural parity: side-by-side Modern/Classic preview tiles with
+    /// a selected blue checked circle, plus clearly labeled legacy choices.
+    /// Tiles render through the shared `CalendarItemStyle.rendering` policy
+    /// with neutral task samples (calendar events are unsupported). Back
+    /// retains the outer staged draft; outer Done saves it.
+    @ViewBuilder private var itemStyleTiles: some View {
+        HStack(spacing: 12) {
+            ForEach(CalendarItemStyle.primaryStyles, id: \.self) { style in
+                itemTile(style)
+            }
+        }
+        if draft.itemStyle.isLegacy {
+            Text("Current saved style: \(draft.itemStyle.displayTitle). It stays unchanged until you pick another style.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Additional styles").font(.caption).foregroundStyle(.secondary)
+            // Saved Filled/Outline choices stay selectable here. The menu
+            // only assigns the tapped legacy value to the staged draft and
+            // never coerces a staged Modern/Classic choice, which simply
+            // shows as None until a legacy value is picked.
+            Menu {
+                ForEach(CalendarItemStyle.legacyStyles, id: \.self) { style in
+                    Button {
+                        draft.itemStyle = style
+                    } label: {
+                        HStack {
+                            Text(style.displayTitle)
+                            if draft.itemStyle == style {
+                                Image(systemName: "checkmark").accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .accessibilityLabel(style.displayTitle + " style")
+                    .accessibilityIdentifier("calendarLegacyStyle-" + style.rawValue)
+                    .accessibilityValue(draft.itemStyle == style ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(draft.itemStyle == style ? .isSelected : [])
+                }
+            } label: {
+                LabeledContent("Legacy style", value: draft.itemStyle.isLegacy ? draft.itemStyle.displayTitle : "None")
+            }
+            .accessibilityIdentifier("calendarLegacyStyle")
+            .accessibilityValue(draft.itemStyle.isLegacy ? draft.itemStyle.displayTitle : "None")
+        }
+        Text("Previews show neutral tasks. Calendar events are not supported. Exact reference colors and borders remain uncertain.")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
+    private func itemTile(_ style: CalendarItemStyle) -> some View {
+        let selected = draft.itemStyle == style
+        return Button {
+            draft.itemStyle = style
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                PhoneCalendarStyleSample(style: style)
+                HStack {
+                    Text(style.displayTitle).font(.caption).foregroundStyle(.primary)
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(Color(uiColor: .systemBackground))
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: selected ? 1.5 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(style.displayTitle + " style")
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityIdentifier("calendarItemStyle-" + style.rawValue)
+    }
+
+    /// Heatmap section with side-by-side Hide/Show month previews using the
+    /// existing Standard/Heatmap projection semantics and the current-day
+    /// marker. Hide keeps Standard dots; the reference fully-plain Hide
+    /// state is not claimed.
+    @ViewBuilder private var heatmapTiles: some View {
+        HStack(spacing: 12) {
+            ForEach([CalendarYearStyle.standard, CalendarYearStyle.heatmap], id: \.self) { style in
+                heatTile(style)
+            }
+        }
+        Text("Hide keeps Standard dots; Show shades dates by item count.")
+            .font(.caption).foregroundStyle(.secondary)
+    }
+
+    private func heatTile(_ style: CalendarYearStyle) -> some View {
+        let selected = draft.yearStyle == style
+        return Button {
+            draft.yearStyle = style
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                PhoneCalendarHeatSample(style: style)
+                HStack {
+                    Text(style.heatmapTileTitle).font(.caption).foregroundStyle(.primary)
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                }
+                Text(style.heatmapTileSubtitle).font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(Color(uiColor: .systemBackground))
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: selected ? 1.5 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Heatmap " + style.heatmapTileTitle)
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityIdentifier("calendarYearStyle-" + style.heatmapTileTitle.lowercased())
     }
 
     @ViewBuilder private var iconControls: some View {
@@ -349,6 +454,109 @@ struct PhoneCalendarPreferences: View {
             error = await model.saveCalendarOptions(draft, expected: route.expected)
             if error == nil { dismiss() }
         }
+    }
+}
+
+/// Neutral Style tile sample driven by the shared production rendering
+/// policy. Calendar events are unsupported, so both rows are tasks.
+private struct PhoneCalendarStyleSample: View {
+    var style: CalendarItemStyle
+
+    private func color(_ hex: String) -> Color {
+        let digits = hex.hasPrefix("#") ? String(hex.dropFirst()) : hex
+        guard digits.count == 6, let rgb = UInt32(digits, radix: 16) else { return .accentColor }
+        return Color(red: Double((rgb >> 16) & 255) / 255, green: Double((rgb >> 8) & 255) / 255, blue: Double(rgb & 255) / 255)
+    }
+
+    private func row(title: String, time: String, hex: String) -> some View {
+        let rendering = style.rendering
+        let tint = color(hex)
+        return HStack(spacing: 3) {
+            if rendering.showsStripe {
+                Rectangle().fill(tint).frame(width: 2)
+            }
+            Image(systemName: "square")
+                .font(.system(size: 8))
+                .foregroundStyle(style == .classic ? .primary : tint)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).font(.system(size: 11)).lineLimit(1).foregroundStyle(.primary)
+                Text(time).font(.system(size: 9)).lineLimit(1).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 4).padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(rendering.fillOpacity > 0 ? tint.opacity(rendering.fillOpacity) : .clear, in: RoundedRectangle(cornerRadius: 3))
+        .overlay {
+            if rendering.showsOutline {
+                RoundedRectangle(cornerRadius: 3).strokeBorder(tint.opacity(0.7))
+            }
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            row(title: "Prepare agenda", time: "09:00 – 09:30", hex: "#5B8DEF")
+            row(title: "Review notes", time: "14:00 – 14:30", hex: "#58A58B")
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// Neutral Heatmap tile sample using the same overlap-count rule and cell
+/// treatment as the production Year grid (Standard dots, Heatmap shading).
+private struct PhoneCalendarHeatSample: View {
+    var style: CalendarYearStyle
+
+    private var days: [Date] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        let month = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        let start = CalendarDates.weekStart(month, calendar: calendar)
+        return CalendarDates.days(from: start, count: 42, calendar: calendar)
+    }
+
+    private var counts: [Date: Int] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.firstWeekday = 2
+        let month = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) ?? Date()
+        let start = CalendarDates.weekStart(month, calendar: calendar)
+        func entry(offset: Int) -> CalendarEntry {
+            let day = calendar.date(byAdding: .day, value: offset, to: start) ?? start
+            let at = CalendarDates.instant(on: day, minute: 9 * 60, calendar: calendar)
+            return CalendarEntry(id: "heat-\(offset)", taskID: UUID(), title: "Sample task",
+                start: at, end: at, due: at, isAllDay: false, isProjected: false,
+                isCompleted: false, isNote: false, hasDuration: false, color: "#5B8DEF", listID: nil)
+        }
+        let entries = [entry(offset: 8), entry(offset: 8), entry(offset: 15)]
+        var result: [Date: Int] = [:]
+        for day in days {
+            let end = calendar.date(byAdding: .day, value: 1, to: day) ?? day
+            result[day] = entries.filter { $0.start < end && $0.end > day }.count
+        }
+        return result
+    }
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: 7), spacing: 1) {
+            ForEach(days, id: \.self) { day in
+                let count = counts[day, default: 0]
+                let heat = style == .heatmap && count > 0 ? Color.accentColor.opacity(min(0.7, 0.1 + Double(count) * 0.1)) : .clear
+                Text("\(Calendar(identifier: .gregorian).component(.day, from: day))")
+                    .font(.system(size: 7))
+                    .frame(maxWidth: .infinity, minHeight: 12)
+                    .background(heat, in: RoundedRectangle(cornerRadius: 2))
+                    .overlay(alignment: .bottom) {
+                        if style == .standard && count > 0 {
+                            Circle().fill(Color.accentColor).frame(width: 2, height: 2)
+                        }
+                    }
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
 
