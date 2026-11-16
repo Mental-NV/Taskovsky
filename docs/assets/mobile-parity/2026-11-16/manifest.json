@@ -50,5 +50,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual pixels inspected: neutral Today fixture only; no personal TickTick information",
     "historical": false
+  },
+  {
+    "state": "T04",
+    "file": "t04-kanban-menu-before.png",
+    "sha256": "d5a71eb07f607fa0c190590ed6a56c47106dd343a2b2422a28ac60a93d67ef2e",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-kanban-sheet-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected; neutral sample task data only. No personal TickTick screenshots.",
+    "historical": true
+  },
+  {
+    "state": "T04",
+    "file": "t04-kanban-sheet.png",
+    "sha256": "0087786cd4ff66950a45f66a4bbbb3a542ec51255459d0164a62d4467a943b83",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-kanban-sheet-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected; neutral sample task data only. No personal TickTick screenshots.",
+    "historical": false
   }
 ]

@@ -266,3 +266,53 @@ public struct TaskMetadataBoardProjection: Sendable {
         }.map(\.element)
     }
 }
+
+
+/// Session presentation policies for mobile Kanban; no task mutation or schema.
+public enum TaskBoardSortKind: String, CaseIterable, Sendable {
+    case date, createdTime, modifiedTime, title, tag, priority
+    public var title: String {
+        switch self {
+        case .date: "Date"
+        case .createdTime: "Created Time"
+        case .modifiedTime: "Modified Time"
+        case .title: "Title"
+        case .tag: "Tag"
+        case .priority: "Priority"
+        }
+    }
+}
+
+public enum TaskBoardOrdering {
+    public static func ordered(_ tasks: [TaskItem], kind: TaskBoardSortKind?, ascending: Bool,
+                               in data: WorkspaceData, calendar: Calendar) -> [TaskItem] {
+        guard let kind, kind != .tag else { return tasks }
+        func precedes(_ a: TaskItem, _ b: TaskItem) -> Bool {
+            switch kind {
+            case .date: (ascending ? TaskMetadataSort.dateAscending : .dateDescending).precedes(a, b, in: data, calendar: calendar)
+            case .createdTime: (ascending ? TaskTimestampSort.createdOldest : .createdNewest).precedes(a, b)
+            case .modifiedTime: (ascending ? TaskTimestampSort.modifiedOldest : .modifiedNewest).precedes(a, b)
+            case .title: (ascending ? TaskTitleSort.ascending : .descending).precedes(a, b)
+            case .priority: ascending ? a.priority.rank < b.priority.rank : a.priority.rank > b.priority.rank
+            case .tag: false
+            }
+        }
+        return tasks.enumerated().sorted {
+            if precedes($0.element, $1.element) { return true }
+            if precedes($1.element, $0.element) { return false }
+            return $0.offset < $1.offset
+        }.map(\.element)
+    }
+
+    /// Real within-lane sections, not a flat tag comparator. Primary known tag
+    /// and unchanged secondary row order are qualified Taskovsky policies.
+    public static func tagSections(_ tasks: [TaskItem], in data: WorkspaceData, ascending: Bool) -> [TaskOrganizationGroup] {
+        TaskOrganizationGroup.byTag(tasks, in: data).enumerated().sorted { a, b in
+            if a.element.id == .untagged { return false }
+            if b.element.id == .untagged { return true }
+            let order = a.element.title.compare(b.element.title, options: [.caseInsensitive, .diacriticInsensitive, .numeric], locale: Locale(identifier: "en_US_POSIX"))
+            if order == .orderedSame { return a.offset < b.offset }
+            return ascending ? order == .orderedAscending : order == .orderedDescending
+        }.map(\.element)
+    }
+}
