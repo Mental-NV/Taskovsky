@@ -2142,6 +2142,10 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 
 [Receipt](../changes/mobile-repeat-frequency-2026-11-15.md):851 XCTest+38 Swift/release, final iPhone compile/native4/4 and independent source/test review passed. Exact-head CI pending. Full interval model preserved by bounded wheel plus validated numeric fallback.
 
+## D12 Repeat preset menu — 2026-11-16
+
+[Receipt](../changes/mobile-repeat-menu-2026-11-16.md): reference-ordered preset menu with live-derived weekday/month/year labels, current-selection check, preset-tap return to the Schedule root and direct Custom route over unchanged recurrence/custom/end/outer-Cancel semantics. Full 929 XCTest + 38 Swift tests, macOS release/signature and iPhone build-for-testing passed. Six native XCUITests prepared for the later Simulator slot; exact-head hosted CI and native screenshots pending. Anchored placement, grid occurrence highlight, Repeat Ends root row and Custom toolbar icons remain open. No pixel-perfect or full-D12 claim.
+
 ## D14 Repeat Type —2026-11-15
 
 [Receipt](../changes/mobile-repeat-type-2026-11-15.md):852 XCTest+38 Swift/release/iPhone compile and independent review passed. Four initial native cases passed; specificDates AX-value failure fixed and final focused native passed after supported owned-Simulator boot/nonparallel launch. Exact CI pending. Neutral menu capture linked in tracker.
