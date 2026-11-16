@@ -2231,3 +2231,31 @@ Failure-driven corrections, none weakening assertions: (1) a toolbar Manage entr
 Final gates on the corrected source: `swift test --disable-sandbox` 895 XCTest (153/55/156/531) + 38 Swift Testing, 0 failures; `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict` exit 0; iPhone `build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED. External tag churn under the dirty gate and transient-failure recovery remain repository-level (UI-unreachable). Exact-head CI remains pending.
 
 Independent rereview and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.
+
+## Mobile root informational-label removal — 2026-11-16
+
+[Bounded change](../changes/mobile-remove-sample-label-2026-11-16.md): the whole
+root header label is gone from `MobileRootView.shell`, both the QA
+(`Sample workspace · Local editing`) and ordinary (`Local workspace · Early
+development`) variants, with its `previewNotice` identifier. The QA-only
+`timePrecisionEvidence` accessibility value moved unchanged onto the genuine
+tab-bar container, which carries `mobileRootReady` with
+`.accessibilityElement(children: .contain)` so child tab IDs are unaffected.
+All ~104 native readiness waits target it with unchanged timeouts; the two
+precision persistence checks keep their original exact assertions through that
+element (epoch-seconds/duration/reminder evidence, non-nil/non-empty fixture
+baseline, equality after relaunch). An interim revision using formatted visible
+schedule times was reverted per review: weaker evidence and popup-only zone
+reads while closed. New `RootLabelRemovalTests` (2 tests) asserts no label
+string in any section and preserved Tasks/Calendar/Search navigation plus
+`Open navigation`, `openCapture`, `calendarJumpToDate`, `workspaceSearch`
+controls. Data, QA isolation, recovery warnings and editing behavior unchanged.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **915 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153, Mac 55, Domain 167, Core 540. Full log `/tmp/label-swift-test.log` (runner-local; not committed). |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/tmp/label-build-app.log` (runner-local). |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh` exit 0; app plus contract/navigation UI-test bundles (incl. new `RootLabelRemovalTests.swift`) compiled. Only pre-existing `menu` unused-variable warnings in `ReadOnlyNavigationTests.swift` plus toolchain AppIntents notes. Logs `/tmp/label-ci-ios/` (runner-local). |
+| Native tests | **6/6 passed, 0 failures** | Owned slot `B263E8E7` (Taskovsky Menu QA 1114, iPhone 13 Pro, iOS 26.3.1), nonparallel, collect-test-diagnostics never. `label-removal.xcresult`: 4/4 (both `RootLabelRemovalTests`, time-precision and duration-precision exact-evidence persistence). `label-removal2.xcresult`: 2/2 strengthened rerun (marker uniqueness `count == 1` per section, label absence everywhere, full navigation/controls). Both inspected screenshots 1170x2532, neutral fixtures, label absent. Only benign AppIntents toolchain note. Logs/xcresults/screenshots: `/private/tmp/TaskovskyRemoveSampleNative/` (runner-local). |
+
+No push/PR/merge, no personal data. The handed-over Simulator was left booted as found; no resets, no settings changes, no other-device contact. Exact-head hosted CI and independent re-review remain pending.

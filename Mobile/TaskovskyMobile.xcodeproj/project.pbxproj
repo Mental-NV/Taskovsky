@@ -79,6 +79,7 @@
         "A00000000000000000000003",
         "B1A11CE00000000000000001",
         "B1A11CE00000000000000003",
+        "C1A11CE00000000000000001",
       );
     };
     "000000000000000000000003" = {
@@ -383,6 +384,16 @@
     "B1A11CE00000000000000004" = {
       "isa" = "PBXBuildFile";
       "fileRef" = "B1A11CE00000000000000003";
+    };
+    "C1A11CE00000000000000001" = {
+      "path" = "UITests/RootLabelRemovalTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "C1A11CE00000000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "C1A11CE00000000000000001";
     };
     "000000000000000000000016" = {
       "isa" = "PBXFrameworksBuildPhase";
@@ -806,6 +817,7 @@
       "files" = (
         "00000000000000000000002E",
         "B1A11CE00000000000000004",
+        "C1A11CE00000000000000002",
       );
       "runOnlyForDeploymentPostprocessing" = "0";
     };

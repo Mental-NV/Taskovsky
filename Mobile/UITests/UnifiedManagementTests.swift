@@ -16,7 +16,7 @@ final class UnifiedManagementTests: XCTestCase {
         let session = XCTAttachment(string: id); session.name = "QA session"; session.lifetime = .keepAlways
         add(session)
         app.launch()
-        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
         return app
     }
 
@@ -99,7 +99,7 @@ final class UnifiedManagementTests: XCTestCase {
         app.buttons["managementDone"].tap()
         waitGone(app.segmentedControls["managementTabs"])
         app.terminate(); app.launch()
-        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
         openManagement(app)
         selectTab("Tags", in: app)
         XCTAssertTrue(app.staticTexts["Neutral unified tag"].waitForExistence(timeout: 5))
@@ -143,7 +143,7 @@ final class UnifiedManagementTests: XCTestCase {
         XCTAssertTrue(app.buttons["Neutral unified filter"].waitForExistence(timeout: 5))
         attach(app, "Drawer Filters section after Add Filter save")
         app.terminate(); app.launch()
-        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
         app.buttons["Open navigation"].tap()
         XCTAssertTrue(app.buttons["Neutral unified filter"].waitForExistence(timeout: 5))
     }
