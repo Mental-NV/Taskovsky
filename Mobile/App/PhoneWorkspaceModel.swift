@@ -4,7 +4,7 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, taskDisplay = "task-display", timePrecision = "time-precision", calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, arrangeOptions = "arrange-options", shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", legacyActions = "legacy-actions", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, taskDisplay = "task-display", timePrecision = "time-precision", calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, arrangeOptions = "arrange-options", arrangeHierarchy = "arrange-hierarchy", shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", legacyActions = "legacy-actions", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
 
 enum PhoneTaskGrouping: String {
     case standard, creationDate, dueDate, priority, list, tag, ungrouped
@@ -399,6 +399,44 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[2].priority = .high
                 data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
                 data.tasks[3].recurrence = .weekly
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .arrangeHierarchy {
+                // Neutral hierarchy content: a same-list parent with two
+                // children, plus a child whose parent is scheduled (and so
+                // not an eligible candidate) to prove orphans stay visible.
+                var data = initial.workspace
+                guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
+                let now = MobilePreviewFixture.now
+                let areaTag = data.tags.first
+                data.tasks[0].dueDate = now.addingTimeInterval(60 * 86_400)
+                data.tasks[1].title = "Neutral arrange parent"
+                data.tasks[1].dueDate = nil
+                data.tasks[1].scheduledDuration = nil
+                data.tasks[1].hasDueTime = false
+                data.tasks[1].tagIDs = []
+                data.tasks[1].listID = work.id
+                data.tasks[1].parentID = nil
+                data.tasks[1].priority = .none
+                data.tasks[5].title = "Neutral arrange child one"
+                data.tasks[5].dueDate = nil
+                data.tasks[5].listID = work.id
+                data.tasks[5].parentID = data.tasks[1].id
+                data.tasks[5].priority = .none
+                data.tasks[5].tagIDs = []
+                data.tasks[7].title = "Neutral arrange child two"
+                data.tasks[7].dueDate = nil
+                data.tasks[7].listID = work.id
+                data.tasks[7].parentID = data.tasks[1].id
+                data.tasks[7].priority = .high
+                data.tasks[7].tagIDs = areaTag.map { [$0.id] } ?? []
+                data.tasks[3].title = "Neutral excluded parent"
+                data.tasks[3].dueDate = now.addingTimeInterval(7 * 86_400)
+                data.tasks[3].listID = work.id
+                data.tasks[4].title = "Neutral orphan child"
+                data.tasks[4].dueDate = nil
+                data.tasks[4].listID = work.id
+                data.tasks[4].parentID = data.tasks[3].id
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && (qaCase == .occurrence || qaCase == .skipOccurrence || qaCase == .skipOccurrenceSaveFailure) {
