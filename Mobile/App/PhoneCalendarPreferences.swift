@@ -66,7 +66,11 @@ struct PhoneCalendarPreferences: View {
                         Button("Cancel") { dismiss() }.disabled(model.isBusy).accessibilityIdentifier("calendarPreferencesCancel")
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") { save() }.disabled(model.isBusy).accessibilityIdentifier("calendarPreferencesDone")
+                        Button { save() } label: {
+                            Image(systemName: "checkmark.circle.fill").font(.system(size: 25, weight: .regular)).frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).foregroundStyle(Color.accentColor).frame(minWidth: 44, minHeight: 44)
+                        .disabled(model.isBusy).accessibilityLabel("Done").accessibilityIdentifier("calendarPreferencesDone")
                     }
                 }
             }
@@ -102,9 +106,6 @@ struct PhoneCalendarPreferences: View {
                 .accessibilityIdentifier("calendarStylePage")
         }
         Section {
-            Toggle("Show Completed", isOn: $draft.showCompleted).accessibilityIdentifier("calendarCompleted")
-            Toggle("Show Checklist Items", isOn: $draft.showChecklistItems).accessibilityIdentifier("calendarChecklist")
-            Toggle("Show All Repeat Cycles", isOn: $draft.showRepeatCycles).accessibilityIdentifier("calendarRepeats")
             Toggle(isOn: $draft.showDetails) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Show Details")
@@ -112,8 +113,16 @@ struct PhoneCalendarPreferences: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }.accessibilityIdentifier("calendarDetails")
+            Toggle("Show Completed", isOn: $draft.showCompleted).accessibilityIdentifier("calendarCompleted")
+            Toggle("Show Checklist Item", isOn: $draft.showChecklistItems).accessibilityIdentifier("calendarChecklist")
+            Toggle("Show All Repeat Cycles", isOn: $draft.showRepeatCycles).accessibilityIdentifier("calendarRepeats")
         } header: { Text("Visible Items") } footer: { Text("Future repeats are previews. Open the repeating task to edit its schedule.") }
-        Section("Range") {
+        Section {
+            Button { showZones = true } label: {
+                LabeledContent("Additional Time Zone", value: draft.showAdditionalTimeZones ? "On" : "Off")
+            }.accessibilityIdentifier("calendarZoneSettings")
+        } header: { Text("Time Zone Rulers") } footer: { Text("Secondary rulers appear in Day, Week, and Multi-Day.") }
+        Section {
             Stepper("Multi-Day: \(draft.multiDayCount) days", value: $draft.multiDayCount, in: 2...14)
             Stepper("Multi-Week: \(draft.multiWeekCount) weeks", value: $draft.multiWeekCount, in: 2...6)
             Picker("All-day rows", selection: $draft.allDayRows) {
@@ -122,13 +131,6 @@ struct PhoneCalendarPreferences: View {
                     Text(rows == 1 ? "1 row" : "\(rows) rows").tag(Optional(rows))
                 }
             }.pickerStyle(.navigationLink).accessibilityIdentifier("calendarAllDayRows")
-        }
-        Section {
-            Button { showZones = true } label: {
-                LabeledContent("Additional Time Zone", value: draft.showAdditionalTimeZones ? "On" : "Off")
-            }.accessibilityIdentifier("calendarZoneSettings")
-        } header: { Text("Time Zone Rulers") } footer: { Text("Secondary rulers appear in Day, Week, and Multi-Day.") }
-        Section {
             ForEach(CalendarHourBand.allCases, id: \.self) { band in
                 let value = draft.foldedHours
                 Picker(band.cutoffTitle, selection: Binding(
@@ -140,7 +142,7 @@ struct PhoneCalendarPreferences: View {
                 .accessibilityIdentifier("calendarFoldPreference-" + band.rawValue)
             }
             Button("Reset Folded Hours") { draft.foldedHours = .init() }.disabled(draft.foldedHours == .init())
-        } header: { Text("Folded Hours") } footer: { Text("Expand both bands to drag their boundaries in the timeline.") }
+        } header: { Text("Taskovsky Extras") } footer: { Text("Adjust ranges and all-day rows here. Expand both time bands to drag their boundaries in the timeline.") }
     }
 
     /// C07/C08 structural parity: the Color page carries the anchored
