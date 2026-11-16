@@ -4371,10 +4371,14 @@ extension ReadOnlyNavigationTests {
         attach(app, "Calendar item icons page")
     }
 
+    /// C09 Color Pick: real palette swatch clicks with the selected ring, Back
+    /// summaries, staged Default reset, outer Cancel revert, outer Done plus
+    /// relaunch persistence, and arbitrary custom colors kept exactly.
     @MainActor func testCalendarSourceColorSavesAndResetCanBeCancelled() {
         let app = launch(qaCase: "calendar-options")
         app.buttons["Calendar"].tap()
         let nav = app.navigationBars["Color"]
+        let pickNav = app.navigationBars["Color Pick"]
         let reset = app.buttons["Use default color for Inbox"]
         let inboxColor = app.buttons["Inbox"]
         func listColors() {
@@ -4384,57 +4388,173 @@ extension ReadOnlyNavigationTests {
             XCTAssertTrue(inboxColor.waitForExistence(timeout: 5))
         }
         func back(_ bar: XCUIElement) { bar.buttons.firstMatch.tap(); waitGone(bar) }
-        func pick(_ button: XCUIElement, from original: String, to color: String) {
-            button.tap()
-            let sliders = app.buttons["Sliders"]
-            XCTAssertTrue(sliders.waitForExistence(timeout: 5))
-            sliders.tap()
-            let hex = app.textFields.matching(NSPredicate(format: "value == %@", original)).firstMatch
-            XCTAssertTrue(hex.waitForExistence(timeout: 5))
-            hex.tap()
-            hex.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + color + "\n")
-            app.buttons["close"].tap()
-            XCTAssertEqual(button.value as? String, "#" + color)
+        func openPick(_ row: XCUIElement) {
+            reveal(row, in: app)
+            row.tap()
+            XCTAssertTrue(pickNav.waitForExistence(timeout: 5))
         }
         listColors()
+        XCTAssertEqual(inboxColor.value as? String, "Default")
         XCTAssertFalse(reset.isEnabled)
-        pick(inboxColor, from: "7C6CF2", to: "1C62AE")
+        // The pushed page offers Default, the honest Taskovsky palette and a
+        // Custom editor.
+        openPick(inboxColor)
+        let chosen = app.buttons["calendarColorPick-#58A58B"]
+        let otherPalette = app.buttons["calendarColorPick-#EC6574"]
+        XCTAssertTrue(app.buttons["calendarColorPick-default"].isSelected)
+        XCTAssertFalse(chosen.isSelected)
+        XCTAssertTrue(app.buttons["calendarColorPickCustom"].waitForExistence(timeout: 5))
+        // An actual swatch click selects with the ring; Back keeps the staged summary.
+        chosen.tap()
+        XCTAssertTrue(chosen.isSelected)
+        XCTAssertFalse(app.buttons["calendarColorPick-default"].isSelected)
+        attach(app, "Color Pick palette selected")
+        back(pickNav)
+        XCTAssertEqual(inboxColor.value as? String, "#58A58B")
         XCTAssertTrue(reset.isEnabled)
-        XCTAssertEqual(inboxColor.value as? String, "#1C62AE")
-        back(nav)
+        // Outer Done commits; relaunch shows the saved color.
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         app.terminate(); app.launch()
         app.buttons["Calendar"].tap()
         listColors()
-        XCTAssertEqual(inboxColor.value as? String, "#1C62AE")
+        XCTAssertEqual(inboxColor.value as? String, "#58A58B")
         XCTAssertTrue(reset.isEnabled)
+        // A palette pick on the new page stages; outer Cancel discards it.
+        openPick(inboxColor)
+        otherPalette.tap()
+        XCTAssertTrue(otherPalette.isSelected)
+        XCTAssertFalse(chosen.isSelected)
+        back(pickNav)
+        XCTAssertEqual(inboxColor.value as? String, "#EC6574")
+        calendarOptionsRoot(app)
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        listColors()
+        XCTAssertEqual(inboxColor.value as? String, "#58A58B")
+        XCTAssertTrue(reset.isEnabled)
+        // Default reset stages; outer Cancel discards it.
         reset.tap()
         XCTAssertFalse(reset.isEnabled)
+        XCTAssertEqual(inboxColor.value as? String, "Default")
         back(nav)
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesCancel"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
         listColors()
+        XCTAssertEqual(inboxColor.value as? String, "#58A58B")
         XCTAssertTrue(reset.isEnabled)
         attach(app, "Saved Inbox Calendar color")
-        reset.tap()
-        XCTAssertFalse(reset.isEnabled)
-        app.buttons["calendarColor"].tap()
-        app.buttons["calendarColorMode-priority"].tap()
-        XCTAssertFalse(app.buttons["Inbox"].exists)
-        XCTAssertTrue(app.staticTexts["Priority uses its fixed Calendar colors. There is nothing to customize."].waitForExistence(timeout: 5))
-        app.buttons["calendarColor"].tap()
-        app.buttons["calendarColorMode-tag"].tap()
-        let planning = app.buttons["Planning"]
-        XCTAssertTrue(planning.waitForExistence(timeout: 5))
-        pick(planning, from: "E6A53A", to: "008122")
-        XCTAssertTrue(app.buttons["Use default color for Planning"].isEnabled)
-        attach(app, "Custom Calendar tag color")
+        // Arbitrary colors round-trip through the Custom editor, never the palette.
+        openPick(inboxColor)
+        let custom = app.buttons["calendarColorPickCustom"]
+        XCTAssertEqual(custom.value as? String, "#58A58B")
+        custom.tap()
+        let sliders = app.buttons["Sliders"]
+        XCTAssertTrue(sliders.waitForExistence(timeout: 5))
+        sliders.tap()
+        let hex = app.textFields.matching(NSPredicate(format: "value == %@", "58A58B")).firstMatch
+        XCTAssertTrue(hex.waitForExistence(timeout: 5))
+        hex.tap()
+        hex.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "008122\n")
+        app.buttons["close"].tap()
+        XCTAssertEqual(custom.value as? String, "#008122")
+        let current = app.descendants(matching: .any)["calendarColorPickCurrent"]
+        XCTAssertTrue(current.waitForExistence(timeout: 5))
+        XCTAssertTrue(current.isSelected)
+        XCTAssertFalse(chosen.isSelected)
+        attach(app, "Custom Calendar color")
+        back(pickNav)
+        XCTAssertEqual(inboxColor.value as? String, "#008122")
         back(nav)
         calendarOptionsRoot(app)
         app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        // The arbitrary custom color persists; reopening shows its exact hex
+        // with the selected Current marker and no palette selection.
+        app.terminate(); app.launch()
+        app.buttons["Calendar"].tap()
+        listColors()
+        XCTAssertEqual(inboxColor.value as? String, "#008122")
+        XCTAssertTrue(reset.isEnabled)
+        openPick(inboxColor)
+        XCTAssertEqual(app.buttons["calendarColorPickCustom"].value as? String, "#008122")
+        let reopened = app.descendants(matching: .any)["calendarColorPickCurrent"]
+        XCTAssertTrue(reopened.waitForExistence(timeout: 5))
+        XCTAssertTrue(reopened.isSelected)
+        XCTAssertFalse(chosen.isSelected)
+        XCTAssertFalse(app.buttons["calendarColorPick-default"].isSelected)
+        // A Default tap on the new page stages; outer Done plus relaunch persist it.
+        app.buttons["calendarColorPick-default"].tap()
+        XCTAssertTrue(app.buttons["calendarColorPick-default"].isSelected)
+        back(pickNav)
+        XCTAssertEqual(inboxColor.value as? String, "Default")
+        XCTAssertFalse(reset.isEnabled)
+        calendarOptionsRoot(app)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        app.terminate(); app.launch()
+        app.buttons["Calendar"].tap()
+        listColors()
+        XCTAssertEqual(inboxColor.value as? String, "Default")
+        XCTAssertFalse(reset.isEnabled)
+    }
+
+    /// C09 Color Pick across modes: staged palette picks survive Back, List
+    /// and Tag overrides stay separate, and outer Done commits both.
+    @MainActor func testCalendarColorPickKeepsListAndTagOverridesSeparate() {
+        let app = launch(qaCase: "calendar-filter-hierarchy")
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        app.buttons["calendarColorPage"].tap()
+        let nav = app.navigationBars["Color"]
+        let pickNav = app.navigationBars["Color Pick"]
+        XCTAssertTrue(nav.waitForExistence(timeout: 5))
+        func back(_ bar: XCUIElement) { bar.buttons.firstMatch.tap(); waitGone(bar) }
+        // List mode: a real swatch click stages; Back shows the new summary.
+        let work = app.buttons["Work"]
+        XCTAssertTrue(work.waitForExistence(timeout: 5))
+        XCTAssertEqual(work.value as? String, "Default")
+        work.tap()
+        XCTAssertTrue(pickNav.waitForExistence(timeout: 5))
+        let workBlue = app.buttons["calendarColorPick-#526BF5"]
+        workBlue.tap()
+        XCTAssertTrue(workBlue.isSelected)
+        back(pickNav)
+        XCTAssertEqual(work.value as? String, "#526BF5")
+        // Tag mode stages independently; returning keeps the list override.
+        app.buttons["calendarColor"].tap()
+        app.buttons["calendarColorMode-tag"].tap()
+        XCTAssertEqual(app.buttons["calendarColor"].value as? String, "Tag")
+        let planning = app.buttons["Planning"]
+        XCTAssertTrue(planning.waitForExistence(timeout: 5))
+        XCTAssertEqual(planning.value as? String, "Default")
+        planning.tap()
+        XCTAssertTrue(pickNav.waitForExistence(timeout: 5))
+        let tagRose = app.buttons["calendarColorPick-#EC6574"]
+        tagRose.tap()
+        XCTAssertTrue(tagRose.isSelected)
+        back(pickNav)
+        XCTAssertEqual(planning.value as? String, "#EC6574")
+        app.buttons["calendarColor"].tap()
+        app.buttons["calendarColorMode-list"].tap()
+        XCTAssertEqual(work.value as? String, "#526BF5")
+        attach(app, "Calendar Color Pick staged across modes")
+        // Outer Done commits both modes; reopening shows both.
+        calendarOptionsRoot(app)
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        openCalendarViewOptions(app)
+        app.buttons["calendarColorPage"].tap()
+        XCTAssertTrue(nav.waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["Work"].value as? String, "#526BF5")
+        app.buttons["calendarColor"].tap()
+        app.buttons["calendarColorMode-tag"].tap()
+        XCTAssertEqual(app.buttons["Planning"].value as? String, "#EC6574")
+        back(nav)
+        calendarOptionsRoot(app)
+        app.buttons["calendarPreferencesCancel"].tap()
         waitGone(app.buttons["calendarPreferencesDone"])
     }
 

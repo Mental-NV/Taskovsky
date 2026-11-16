@@ -127,6 +127,19 @@ final class CalendarDisplayOptionsTests: XCTestCase {
                        [.inbox, .list(work.id), .list(home.id), .list(later.id), .list(orphan.id)])
     }
 
+    func testTaskovskyPaletteMatchesDocumentedDesktopColorsAndStoresExactly() {
+        // The iPhone Color Pick page offers only these existing desktop user
+        // colors; the reference named families are not reproduced here.
+        XCTAssertEqual(CalendarColorSource.taskovskyPalette,
+                       ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"])
+        for hex in CalendarColorSource.taskovskyPalette {
+            XCTAssertEqual(CalendarColorSource.Overrides.normalizedHex(hex), hex)
+        }
+        var options = TaskCalendarOptions()
+        options.sourceColors[.inbox] = CalendarColorSource.taskovskyPalette[3]
+        XCTAssertEqual(options.sourceColors[.inbox], "#58A58B")
+    }
+
     func testCalendarListColorOverridesSurviveArchivedAndMissingSources() throws {
         let list = TaskList(name: "Work", color: "#123456")
         let archived = TaskList(name: "Old", color: "#654321", isArchived: true)
