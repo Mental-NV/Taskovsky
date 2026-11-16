@@ -8780,7 +8780,6 @@ extension ReadOnlyNavigationTests {
 extension ReadOnlyNavigationTests {
     @MainActor func testScopedKanbanTagAndTitleDirectionPreserveLane() {
         let app = launch()
-        goTo("All", in: app)
         selectScopedView("Kanban View", in: app)
         selectScopedGrouping("Tag", in: app)
         let planning = app.buttons["scopedBoardColumn-0"]
@@ -8789,7 +8788,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(planning.label, "Planning")
         XCTAssertEqual(planning.value as? String, "1")
         XCTAssertEqual(noTags.label, "No Tags")
-        XCTAssertEqual(noTags.value as? String, "7")
+        XCTAssertEqual(noTags.value as? String, "6")
         noTags.tap()
         selectScopedGrouping("Title · Ascending", in: app)
         XCTAssertTrue(noTags.isSelected)
@@ -8809,7 +8808,7 @@ extension ReadOnlyNavigationTests {
         XCTAssertFalse(app.otherElements["Drag Review the project outline"].exists)
         attach(app, "Kanban Tag lanes with descending Title")
         selectScopedGrouping("Created Time", in: app)
-        XCTAssertEqual(app.buttons["scopedBoardColumn-0"].value as? String, "8")
+        XCTAssertEqual(app.buttons["scopedBoardColumn-0"].value as? String, "7")
         XCTAssertFalse(app.buttons["scopedBoardColumn-1"].exists)
         XCTAssertTrue(outline.exists)
         attach(app, "Kanban Created Time lane")
@@ -8821,7 +8820,6 @@ extension ReadOnlyNavigationTests {
 
     @MainActor func testScopedKanbanTagLaneRemovalFallsBackToNoTags() {
         let app = launch()
-        goTo("All", in: app)
         selectScopedView("Kanban View", in: app)
         selectScopedGrouping("Tag", in: app)
         let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
@@ -8836,7 +8834,7 @@ extension ReadOnlyNavigationTests {
         let lane = app.buttons["scopedBoardColumn-0"]
         XCTAssertTrue(lane.waitForExistence(timeout: 5))
         XCTAssertEqual(lane.label, "No Tags")
-        XCTAssertEqual(lane.value as? String, "8")
+        XCTAssertEqual(lane.value as? String, "7")
         XCTAssertFalse(app.buttons["scopedBoardColumn-1"].exists)
         XCTAssertTrue(card.exists)
         selectScopedGrouping("Date", in: app)
