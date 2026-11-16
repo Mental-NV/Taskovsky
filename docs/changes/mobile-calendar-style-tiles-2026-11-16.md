@@ -1,9 +1,12 @@
 # Calendar Style tiles structural parity (C10)
 
 Status: implemented candidate; local tests, macOS release build with
-signature, and iPhone compile passed. Native execution, screenshots, and
-exact-head hosted CI remain with the parent; this is not a pixel-parity or
-verified-native claim.
+signature, and iPhone compile passed. Native acceptance ran 4/4 on device
+with inspected screenshots; a post-acceptance source correction (legacy
+Menu replacing the invalid Picker binding) has since landed with all
+non-UI gates re-verified, and its final native revalidation is pending a
+separately authorized slot. This is not a pixel-parity claim, and exact-head
+hosted CI remains with the parent.
 
 The observed mobile inventory C10 places **Item Style** previews for
 **Modern ✓** and **Classic**, then **Show Item Icons**, on the pushed Style
@@ -26,7 +29,7 @@ Style page while preserving the old styles; Mac keeps its existing picker
 | Show Item Icons route to a separate page | iPhone keeps the existing `Show Item Icons` pushed page untouched (master + task/note switches); Mac keeps its existing icon toggles | No Focus/Calendar icon toggles are invented; the C11 four-switch inventory stays out of scope | Reference Task/Calendar/Note/Focus rows remain unverified |
 | Heatmap section, side-by-side Hide/Show month previews | The iPhone Style page shows Hide (Standard) and Show (Heatmap) tiles using the same overlap-count rule and cell treatment as the production Year grid (dots vs shading); Mac keeps its existing Standard/Heatmap picker | Hide keeps Standard dots; Show shades dates by item count via the existing count rule | Reference Hide is fully plain dates while Taskovsky Hide keeps Standard dots — an explicit non-equivalence, not a parity claim; exact reference shade scale is unverified |
 | Back retains the draft into View Options; outer check applies | Unchanged staged-draft contract on both platforms: Back pops to View Options with the draft intact, outer Done runs the existing revision-checked save, outer Cancel discards | Dismissing the sheet with changed options and no explicit check is not an observed path, so the existing staged Cancel/Done contract is retained rather than reinterpreted | The reference outer-check glyph semantics were not independently exercised |
-| Legacy Filled/Outline | New `modern`/`classic` cases added; `filled`/`outline` decode, encode, defaults and card treatments are byte-identical to before, always labeled "Filled (Legacy)" / "Outline (Legacy)" | Existing saved selections stay honest with no automatic migration; a saved legacy style shows a "Current saved style" note until changed | None; covered by round-trip tests |
+| Legacy Filled/Outline | New `modern`/`classic` cases added; `filled`/`outline` decode, encode and defaults round-trip unchanged, always labeled "Filled (Legacy)" / "Outline (Legacy)". The iPhone "Additional styles" control is an explicit Menu of legacy Buttons on the same staged draft (a Picker bound to the full draft with only legacy tags was an invalid selection under Modern/Classic and was removed); it assigns only the tapped legacy value, shows None under a staged Modern/Classic choice, and never coerces it | Existing saved selections stay honest with no automatic migration; a saved legacy style shows a "Current saved style" note until changed | None; covered by round-trip tests plus staged-note and relaunch assertions |
 
 ## Data and compatibility
 
@@ -56,13 +59,16 @@ Style page while preserving the old styles; Mac keeps its existing picker
   `calendarYearStyle-hide/show`, `calendarLegacyStyle`,
   `calendarLegacyStyle-filled/outline`) are actionable; existing native
   callers were updated to those leaf IDs.
-- The legacy section uses a standard menu picker rather than bespoke row
-  buttons: three native runs deterministically selected Outline for a
-  Filled row tap (verified frame-by-frame against the device screen
-  recording, including a pre-tap Classic state and a post-tap Outline
-  state with no intervening draft write), while every menu-driven control
-  on the page works. Same staged draft, same honest labels, same save
-  semantics; the picked value is asserted staged and after relaunch.
+- The legacy section uses an explicit Menu of legacy Buttons rather than
+  bespoke row buttons: three native runs deterministically selected
+  Outline for a Filled row tap (verified frame-by-frame against the device
+  screen recording), while every menu-driven control on the page works.
+  Each option assigns only its own tapped value to the staged draft, shows
+  a checkmark only when it matches, and the menu displays None while a
+  Modern/Classic choice is staged — so a non-legacy draft is never an
+  invalid selection and is never coerced. Same staged draft, same honest
+  labels, same save semantics; the picked value is asserted via the
+  user-visible "Current saved style: …" note staged and after relaunch.
 
 ## Verification
 
@@ -112,5 +118,17 @@ Style page while preserving the old styles; Mac keeps its existing picker
 - `./scripts/build-ios-simulator-ci.sh`: iPhone app plus contract and
   navigation test bundles compiled (`TEST BUILD SUCCEEDED`); no tests
   executed by that script.
+- Post-acceptance correction (independent review must-fix): the interim
+  legacy control was a Picker bound to the full staged draft with only
+  legacy tags, an invalid selection under a staged Modern/Classic choice.
+  Replaced with the explicit Menu above; staged-note and relaunch test
+  assertions are unchanged in flow and kept at full strength. After the
+  correction, `swift test --disable-sandbox` passes (all suites, 0
+  failures), the macOS release build + ad hoc signature re-verified, and
+  the iPhone build-for-testing recompiled clean. Final native revalidation
+  is pending: the simulator is Kanban-owned, so no native test was run or
+  touched for this correction; the prepared four-test set (same selectors,
+  same staged-note and relaunch assertions) awaits a separately authorized
+  acceptance slot.
 - No live TickTick, no personal data, no Codex. Fixtures are neutral QA
   samples only. No push or PR was made; the branch stays isolated.

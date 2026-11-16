@@ -236,20 +236,32 @@ struct PhoneCalendarPreferences: View {
         }
         VStack(alignment: .leading, spacing: 8) {
             Text("Additional styles").font(.caption).foregroundStyle(.secondary)
-            // A standard menu picker, not bespoke row buttons: the bespoke
-            // rows deterministically delivered their tap one row low under
-            // automation (three native runs selected Outline for a Filled
-            // tap, verified against the screen recording), while every
-            // menu-driven control on this page works. Same staged draft,
-            // same honest labels, same save semantics.
-            Picker("Legacy style", selection: $draft.itemStyle) {
+            // Saved Filled/Outline choices stay selectable here. The menu
+            // only assigns the tapped legacy value to the staged draft and
+            // never coerces a staged Modern/Classic choice, which simply
+            // shows as None until a legacy value is picked.
+            Menu {
                 ForEach(CalendarItemStyle.legacyStyles, id: \.self) { style in
-                    Text(style.displayTitle).tag(style)
-                        .accessibilityIdentifier("calendarLegacyStyle-" + style.rawValue)
+                    Button {
+                        draft.itemStyle = style
+                    } label: {
+                        HStack {
+                            Text(style.displayTitle)
+                            if draft.itemStyle == style {
+                                Image(systemName: "checkmark").accessibilityHidden(true)
+                            }
+                        }
+                    }
+                    .accessibilityLabel(style.displayTitle + " style")
+                    .accessibilityIdentifier("calendarLegacyStyle-" + style.rawValue)
+                    .accessibilityValue(draft.itemStyle == style ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(draft.itemStyle == style ? .isSelected : [])
                 }
+            } label: {
+                LabeledContent("Legacy style", value: draft.itemStyle.isLegacy ? draft.itemStyle.displayTitle : "None")
             }
-            .pickerStyle(.menu)
             .accessibilityIdentifier("calendarLegacyStyle")
+            .accessibilityValue(draft.itemStyle.isLegacy ? draft.itemStyle.displayTitle : "None")
         }
         Text("Previews show neutral tasks. Calendar events are not supported. Exact reference colors and borders remain uncertain.")
             .font(.caption).foregroundStyle(.secondary)
