@@ -4408,6 +4408,7 @@ extension ReadOnlyNavigationTests {
         chosen.tap()
         XCTAssertTrue(chosen.isSelected)
         XCTAssertFalse(app.buttons["calendarColorPick-default"].isSelected)
+        attach(app, "Color Pick palette selected")
         back(pickNav)
         XCTAssertEqual(inboxColor.value as? String, "#58A58B")
         XCTAssertTrue(reset.isEnabled)

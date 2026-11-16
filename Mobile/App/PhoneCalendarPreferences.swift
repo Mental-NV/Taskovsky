@@ -651,23 +651,23 @@ private struct PhoneCalendarSourceColorPick: View {
         return Button {
             colors[row.id] = nil
         } label: {
-            ZStack {
-                Circle()
-                    .fill(PhoneEntityColor.read(row.defaultColor))
-                    .frame(width: 28, height: 28)
-                Image(systemName: "slash")
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-            }
-            .frame(width: 44, height: 44)
-            .contentShape(Rectangle())
-            .overlay {
-                if selected {
-                    Circle().strokeBorder(Color.accentColor, lineWidth: 2)
-                        .frame(width: 36, height: 36)
+            Circle()
+                .fill(PhoneEntityColor.read(row.defaultColor))
+                .frame(width: 28, height: 28)
+                .overlay {
+                    PhoneDefaultSlash()
+                        .stroke(Color.white, lineWidth: 2.5)
+                        .frame(width: 20, height: 20)
+                        .accessibilityHidden(true)
                 }
-            }
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+                .overlay {
+                    if selected {
+                        Circle().strokeBorder(Color.accentColor, lineWidth: 2)
+                            .frame(width: 36, height: 36)
+                    }
+                }
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Default color")
@@ -716,6 +716,17 @@ private struct PhoneCalendarSourceColorPick: View {
         .accessibilityIdentifier("calendarColorPickCurrent")
         .accessibilityLabel("Current color " + hex)
         .accessibilityAddTraits(.isSelected)
+    }
+}
+
+/// Drawn Default slash: a plain diagonal line. An earlier SF Symbol glyph
+/// did not survive pixel inspection on device, so the mark is geometry.
+private struct PhoneDefaultSlash: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        return path
     }
 }
 

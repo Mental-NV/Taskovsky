@@ -1,8 +1,7 @@
 # Bounded C09 Calendar Color Pick (Taskovsky palette)
 
-Status: implemented candidate; full `swift test`, macOS release/signature and
-iPhone compile-only checks recorded below. Native Simulator execution,
-screenshots and independent review remain with the parent.
+Status: implemented and natively verified for the three bounded Color tests;
+independent review, exact-head hosted CI and merge remain with the parent.
 
 The observed reference inventory (C09) pushes **Color Pick** from a source
 swatch with six named families (Recommend/Macaron/Morandi/Rococo/Classic/
@@ -81,11 +80,68 @@ alternative, this slice does **not** reproduce the named families.
 - Native Simulator execution was not run in this session (coordinate later);
   the cases above are prepared and compile-verified only.
 
+## Native run (owned device only)
+
+- Device: the owned, already-booted simulator
+  `B263E8E7-F1A5-4407-894D-23FC224B1013` ("Taskovsky Menu QA 1114"),
+  destination pinned by ID. A second booted simulator (iPhone 13 Pro
+  `ED2459ED`) was present but never targeted. No named/default or personal
+  device was used, no personal data or settings, no Codex, no live TickTick.
+- Command: `xcodebuild test` on `Mobile/TaskovskyMobile.xcodeproj`, scheme
+  `TaskovskyMobile`, `-parallel-testing-enabled NO -collect-test-diagnostics
+  never CODE_SIGNING_ALLOWED=NO`, with fresh DerivedData, result bundle and
+  log per run. The iPhone compile gate was re-verified after the slash
+  correction (TEST BUILD SUCCEEDED, no tests executed); the full `swift
+  test` suite (541 tests, 0 failures) and macOS release/signature build
+  remain green on identical SPM/Mac sources — the correction touches only
+  the Xcode-only Mobile target.
+- Run 1 (`/private/tmp/TaskovskyCalendarColorPickNative/`, log `run.log`,
+  result `result.xcresult`): **3 tests, 0 failures in 175.9s** —
+  `testCalendarSourceColorSavesAndResetCanBeCancelled` (106.4s),
+  `testCalendarColorPickKeepsListAndTagOverridesSeparate` (46.1s),
+  `testCalendarColorPageShowsFolderHierarchyAndModeSwitch` (23.4s).
+  `xcodebuild` exit 0, `TEST SUCCEEDED`, 0 errors in the log. The bundle
+  parses; `issues` holds 0 errors and 0 failures plus 2 benign runtime
+  `_UIReparentingView` warnings with no failure association.
+- Pixel inspection of the 5 exported attachments found one real defect: the
+  Default option's SF Symbol slash did not render (magnified crop shows a
+  solid swatch). Bounded correction: the slash is now drawn geometry
+  (`PhoneDefaultSlash`, white 2.5pt diagonal), selected palette swatches
+  keep the observed thin ring only, no checkmark was added.
+- Run 2 (`/private/tmp/TaskovskyCalendarColorPickPalette2/`, fresh
+  DerivedData/bundle/log): the single
+  `testCalendarSourceColorSavesAndResetCanBeCancelled` (with one added
+  `attach`, no assertion change) **passed in 106.3s**, exit 0,
+  `TEST SUCCEEDED`, 0 log errors. The re-captured pick page shows the white
+  diagonal slash on the Default swatch, the thin blue ring on the selected
+  `#58A58B` swatch, and no checkmark.
+- Published captures (all inspected at pixel level, neutral QA fixtures
+  only, no personal data): pick page with selected palette swatch and
+  visible Default slash
+  (`assets/mobile-parity/2026-11-16/c09-color-pick-palette.png`), pick page
+  with selected Current `#008122` custom row
+  (`assets/mobile-parity/2026-11-16/c09-current-custom.png`), saved source
+  summary with Inbox `#58A58B`
+  (`assets/mobile-parity/2026-11-16/c09-color-summary.png`). The earlier
+  hierarchy, Color By menu and staged-across-modes attachments remain in
+  their result bundles as run evidence; the C07/C08 rows keep their prior
+  checkpoint images.
+
+## Fidelity limitations (explicit, not claims)
+
+- The reference named families (Recommend, Macaron, Morandi, Rococo,
+  Classic, Memphis) are not reproduced; only `#35D870` was ever read
+  exactly from the reference and no family palette is invented.
+- Our staged semantics differ from the reference on purpose: picks stage
+  into the outer draft (Back keeps, outer Cancel discards, outer Done
+  commits) instead of the reference's unknown savepoint. This difference is
+  kept explicit rather than weakening Taskovsky cancellation.
+- Exact reference swatch geometry, ring weight and typography remain
+  unverified; this is structural parity, not a pixel-perfect claim.
+
 ## Open items
 
-- Native Simulator runs of the three Calendar color tests, inspected
-  screenshots, VoiceOver/reduced-motion checks and independent review remain
-  with the parent.
-- Exact-head hosted CI is still required before merge.
-- Reference pixel matching (swatch geometry, ring weight, Custom row layout)
-  remains unverified; this is structural parity, not a pixel claim.
+- VoiceOver and reduced-motion checks, exact-head hosted CI and merge
+  remain with the parent.
+- No further native execution is planned on this worker; the Simulator is
+  released after this verified run.
