@@ -1,10 +1,10 @@
 # Taskovsky
 
-Taskovsky is a local macOS task and notes application inspired by TickTick's task workspace. It uses SwiftUI and AppKit, with a Swift package core and no third-party dependencies. The current package targets macOS 14 or later, uses Swift tools 6, and compiles in Swift 5 language mode. It does not yet contain an iPhone application.
+Taskovsky is a local task and notes application inspired by TickTick's task workspace, with a macOS app and a separate iPhone target. It uses SwiftUI and AppKit, with a Swift package core and no third-party dependencies. The current package targets macOS 14 or later, uses Swift tools 6, and compiles in Swift 5 language mode.
 
 ## Mobile visual parity
 
-See the [46-state mobile visual parity tracker](docs/mobile-visual-parity.md) for Tasks and Calendar: inline screenshot comparison cells, general-similarity status, remaining gaps and explicitly missing evidence. The opening overview above predates the current iPhone implementation; use the tracker and [documentation index](docs/README.md) for current mobile work.
+See the [46-state mobile visual parity tracker](docs/mobile-visual-parity.md) for Tasks and Calendar: inline screenshot comparison cells, general-similarity status, remaining gaps and explicitly missing evidence.
 
 ## Build and run
 

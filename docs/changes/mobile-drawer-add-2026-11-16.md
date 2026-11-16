@@ -200,3 +200,27 @@ observation, no external-agent or Computer Use contact. The owned simulator was
 left booted and otherwise untouched.
 
 Publication receipt: tested behavioral source committed as `dcc0d44`; subsequent edits only clarify test comments/evidence. Both placed Final2 PNGs were independently pixel-inspected, neutral fixtures only. All20 manifest hashes/dimensions validated after correcting a one-character hash transcription error. Source/evidence review passed; exact-head hosted CI pending.
+
+## Main integration revalidation — November 16
+
+Integrated main `6e94f067a3bf4fb4daf7cbec23eb140a7d3bd2fb` (PR159)
+into drawer head `be884c3`. Drawer source/tests and the incoming T10
+source/tests are unchanged from their respective parents. Both evidence
+histories and screenshots remain; combined illustrated coverage is **42/46**.
+All **21** current manifest hashes, dimensions and receipt paths validate.
+README now accurately states that a separate iPhone target exists.
+
+Independent merge/source/documentation review found no blockers. Fresh
+integrated validation passed: 934 XCTest plus 38 Swift Testing tests,
+macOS release build, strict deep signature verification, iPhone Simulator
+CI compile, and **21/21** combined DrawerAddTests (7) and
+UnifiedManagementTests (14), zero failures. Native run used only the owned
+QA Simulator, neutral fixtures, serial testing and no diagnostic collection.
+Logs and `Combined.xcresult` are retained in
+`/private/tmp/TaskovskyDrawerIntegrationNative/`.
+
+These selected integration tests do not close the prior intermittent
+pin-switch failure or unrelated Calendar baseline failures. Earlier
+accessibility, geometry and deferred appearance limits remain. Hosted CI
+must pass on the new exact head before merge; earlier capacity-cancelled
+runs are not successful validation.

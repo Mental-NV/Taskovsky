@@ -2308,3 +2308,16 @@ Still unverified: matched reference typography/geometry, dark appearance (deferr
 | Screenshots | **6 inspected, 2 placed** | Unmodified 1170×2532 exports from the final-source run in `/private/tmp/TaskovskyDrawerAddNative/screens-final2/` (footer, Add popup List/Filter/Tag order, blank Add List / Normal Filter / Add Tag with disabled Done, footer after scrolling; neutral fixtures only), agent pixel-inspected, placed as `t07-drawer-footer.png` / `t08-add-popup.png` with manifest SHA-256 entries. Tracker now 41/46 with screenshots. |
 
 Still unverified: matched anchored-popup geometry and reference typography, physical-device/locale-specific rendering, VoiceOver focus traversal/focus transfer and Escape behavior, the mid-session read-only/busy transition while the popup is open (guarded in source, no UI-test injection path), dark appearance (deferred), exact-head hosted CI and independent re-review. The fold-cutoff adjacent failure and the two PR156 baseline failures were not rerun here and stay open. No commit/push/PR/merge, no personal data, no live TickTick observation, no external-agent or Computer Use contact. The owned simulator was left booted and otherwise untouched; no other simulator, device, signing setting, reset, or settings change was touched.
+
+## Phone Smart-list visibility popup (T10) — 2026-11-16
+
+[Receipt](../changes/mobile-visibility-popup-2026-11-16.md), source `5dff850`: independent review approved. Full934 XCTest+38 Swift Testing, signed release and iPhone compile passed. Owned Simulator native16/16 passed (14 unified management including5 new popup tests +2 adjacent), zero failures. Logs/xcresult retained in `/private/tmp/TaskovskyVisibilityPopupNative/`; final Today/Tags popup pixels independently inspected, neutral fixtures only; one1170×2532 T10 capture placed with verified hash. Tests cover order/check/backdrop, repeat/selected-row dismissal, staged Cancel/Done/relaunch, Tags/Filters, nested dirty guards and reorder. Large-text fit, VoiceOver traversal/focus/Escape and state changes while open remain unverified. Prior baseline failures remain open; no full-parity claim. Exact-head hosted CI pending. The T07/T08 drawer work above is integrated with this T10 change by the current merge; combined verification follows in the integration record below.
+
+### Drawer Add / visibility popup integration — November 16
+
+PR158 integrates PR159 main `6e94f06` with preserved source and both evidence
+histories. Independent review approved; 934 XCTest + 38 Swift Testing,
+release/signature, iPhone compile and combined native drawer/management
+**21/21** passed. Manifest21 entries validate; tracker42/46 illustrated states.
+Prior flaky/baseline and manual limits remain. Exact-head hosted CI pending.
+See [integration receipt](../changes/mobile-drawer-add-2026-11-16.md#main-integration-revalidation--november-16).
