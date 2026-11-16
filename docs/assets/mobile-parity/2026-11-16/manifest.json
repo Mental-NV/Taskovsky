@@ -1,0 +1,28 @@
+[
+  {
+    "state": "D08",
+    "file": "d08-duration-all-day.png",
+    "sha256": "3d9642824ed12b08f219b3ecf29a26eb3fb651f083aeb55d55a050e94f1e6ec3",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-duration-cards-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral schedule fixture only, no personal TickTick data",
+    "historical": false
+  },
+  {
+    "state": "D08",
+    "file": "d08-duration-timed.png",
+    "sha256": "30b7a87e08668ed3237888650d514c48062e82233c54080fdd515331c795e94c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-duration-cards-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral schedule fixture only, no personal TickTick data",
+    "historical": false
+  }
+]

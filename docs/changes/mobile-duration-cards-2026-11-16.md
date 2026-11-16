@@ -1,6 +1,6 @@
 # D08 Duration cards and nested transactions
 
-Status: In implementation. Base `0dac439`. User-directed mobile broad similarity before final pixel polish.
+Status: Implemented; exact-head CI pending. Base `0dac439`. User-directed mobile broad similarity before final pixel polish.
 
 ## Reference and bounded scope
 
@@ -20,4 +20,10 @@ This slice implements cards and real transactional endpoint/calendar editors. Ti
 
 ## Verification gates
 
-Source compile passed; final fixture/tests compile, full/release and independent source review underway. Native slot reserved by management; no native claim yet. Required cases: no-op seconds/zone/reminders save-relaunch, actual endpoint edits/cancel, whole-range move+outer Cancel, all-day endpoint tabs, and Date/Duration conversion regression. Exact-head CI and neutral inspected screenshots before merge.
+Source `2fef8e9` independently rereviewed and approved. Full suite: 882 XCTest plus 38 Swift tests passed; release build and iPhone compilation passed. Corrected native run: seven tests passed, zero failures/skips/runtime warnings, process exit 0, complete `DurationCardsCorrected.xcresult` summary parsed. Simulator released after completion. Exact-head hosted CI remains required.
+
+Initial run had five passes/two failures: test tap selected the All Day container rather than its trailing switch, and outside-dismiss target fell inside the popup. Corrected tests assert switch value and actual backdrop dismissal without weakening state checks. Independent review also caught the removed all-day whole-range move route; restored before final native pass. Exact Nov 9–10 to Nov 11–12 movement verifies both bounds, not just a date fragment.
+
+Final cases cover original Date/Duration and Date Time popup regression; timed whole-range move with outer Cancel; all-day endpoint cancel and whole-range move; real start/end edits with save/relaunch; invalid range disabled until correction; nested Cancel/outside dismissal; nonzero seconds and non-device-zone no-op save/relaunch with manual/end reminders preserved.
+
+Actual unmodified neutral screenshots inspected for readable layout and privacy: [timed cards](../assets/mobile-parity/2026-11-16/d08-duration-timed.png), [all-day cards](../assets/mobile-parity/2026-11-16/d08-duration-all-day.png). Reference-specific timeline/relative date captions, floating-time policy and final calibrated spacing remain explicitly unverified or deferred, not a pixel-perfect claim.
