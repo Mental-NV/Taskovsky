@@ -46,3 +46,9 @@ Exact font rendering/color values and unobserved Tag secondary/multi-tag semanti
 ### Integration with PR150
 
 Merged current main `d41ee5f` into this branch at `c9e6072`. Independent actual integration review verified unchanged Kanban production source, preservation of both native test groups, C10/T04 tracker rows, receipts, manifests and assets. Calendar style changes are separate; no additional native rerun was required solely for the merge. Integrated full suite passed 915 XCTest plus 38 Swift tests; release and iPhone build-for-testing passed (all completed, exit 0). Refreshed exact-head hosted CI remains required.
+
+### Hosted CI expiry-test correction
+
+Run `43808356909` on `57fc736` passed iPhone compilation and release/signature checks but failed both Swift-test attempts only at the preexisting `DesktopNoticeTests.testSuccessExpiresAutomatically` fixed 100 ms wait. Its 20 ms expiry runs in a separately scheduled MainActor task, so the fixed wait races task startup under load. No Kanban assertion failed. The test now observes the real published transition to nil with a bounded five-second expectation; it never calls expire/dismiss itself, and still asserts nil. Production notice timing and all mobile source remain unchanged.
+
+Affected DesktopNotice tests passed 6/6 and the full local suite passed 915 XCTest plus 38 Swift Testing cases after this test-only correction. The integrated release/iPhone build and complete six-test native receipt above remain applicable because no production/native source changed. Refreshed exact-head hosted CI is required before merge; the failed run is not treated as passing.
