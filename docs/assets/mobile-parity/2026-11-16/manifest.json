@@ -232,5 +232,18 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual final Run2 pixels inspected: neutral calendar-options fixture only; corrected useful extras guidance; no personal data",
     "historical": false
+  },
+  {
+    "state": "T10",
+    "file": "t10-visibility-popup.png",
+    "sha256": "3daa9a874ed957b10cb2f46f14d5759dc5cd6211763c96241c000d28f3fd8e60",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-visibility-popup-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral management fixture only, fixed Show/Show if not empty/Hidden order and current check; no personal data",
+    "historical": false
   }
 ]
