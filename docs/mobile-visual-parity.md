@@ -20,7 +20,7 @@ Follow the [element and behavior contract](changes/mobile-live-parity-plan-2026-
 
 ## Reading the comparison
 
-Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cells. Existing genuine captures render inline at 180 px wide; click for full resolution. Empty cells explicitly name the missing evidence. No reference images or substitute mockups have been invented. The gallery below retains per-capture provenance.
+Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cells. Existing genuine captures render inline at 180 px wide; click for full resolution. Empty cells explicitly name the missing evidence. No reference images or substitute mockups have been invented. The provenance table below retains per-capture source, receipt and limits.
 
 ## Evidence coverage and limits
 
@@ -30,6 +30,8 @@ The real TickTick images from the original audit remain in its Computer Use trac
 
 The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14.md) remains the work queue. Additional known modes outside the original 46 must be tracked separately rather than silently changing this denominator.
 
+A [live textual audit (local 2026-11-17 / UTC 2026-11-16)](ticktick-spec/mobile-live-audit-2026-11-16.md) records all 46 states with corrected in-repo Taskovsky links and explicit mismatched-state limits (historical Taskovsky images, different fixtures/keyboard/viewport; Add List More unverified). Its [next-gap plan](changes/mobile-reference-next-plan-2026-11-16.md) prioritizes Week geometry, anchored reminder/repeat presentation, Color Pick hierarchy, and matched-keyboard quick-add after an evidence refresh (C13/D03 missing shots; T02/T03 outcome mismatch). Actual portable screenshot refresh is blocked pending privacy-safe export; coverage stays **42/46 Taskovsky and 0/46 portable reference**.
+
 ## Calendar
 
 | ID | Form / state | General similarity | Biggest remaining gap | TickTick reference | Taskovsky screenshot |
@@ -38,7 +40,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | C02 | Calendar mode menu | Similar | Observed primary order List/Year/Month/Week/3 Day/Day with List naming and separated Multi-Day/Multi-Week extras; single-check, choice/selected-row dismissal and Year relaunch covered — backdrop dismissal and List relaunch persistence not tested. Matched visual acceptance pending. [Receipt](changes/mobile-week-header-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/c02-mode-menu.png" width="180" alt="Taskovsky mode menu with observed order">](assets/mobile-parity/2026-11-16/c02-mode-menu.png)<br>New 2026-11-16 capture at source `52cd9af`; [capture details](#evidence-c02) |
 | C03 | Week overview | Similar | Mini-month, seven tiles and Day/Back implemented; geometry remains approximate. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/c03-week-overview.png"><img src="assets/mobile-parity/2026-11-15/c03-week-overview.png" width="180" alt="Taskovsky C03 historical Simulator QA screenshot"></a><br>[PR #112](https://github.com/Mental-NV/Taskovsky/pull/112) · [Capture details](#evidence-c03)<br>Historical QA; not current-main capture. |
 | C04 | Calendar overflow menu | Partial | Core routes exist; subscriptions excluded and Share/Print deferred. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png"><img src="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png" width="180" alt="Taskovsky C04 historical Simulator QA screenshot"></a><br>[PR #103](https://github.com/Mental-NV/Taskovsky/pull/103) · [Capture details](#evidence-c04)<br>Historical QA; not current-main capture. |
-| C05 | Filter View Range | Partial | Compact continuous source list aligned to live Mirroring observations; exact typography/colors, non-All reference states and unsupported sources remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/c05-compact-layout.png" width="180" alt="Taskovsky Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-compact-layout.png)<br>[Receipt](changes/mobile-calendar-filter-layout-2026-11-15.md) |
+| C05 | Filter View Range | Partial | Compact continuous source list aligned to live Mirroring observations; exact typography/colors, non-All reference states and unsupported sources remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/c05-compact-layout.png" width="180" alt="Taskovsky Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-compact-layout.png)<br>[<img src="assets/mobile-parity/2026-11-15/c05-source-hierarchy.png" width="180" alt="Taskovsky earlier Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-source-hierarchy.png)<br>Earlier hierarchy capture; [details](#evidence-c05)<br>[Receipt](changes/mobile-calendar-filter-layout-2026-11-15.md) |
 | C06 | View Options | Partial | Primary order Color, Style, Show Details, Show Completed, Show Checklist Item (singular), Show All Repeat Cycles, Additional Time Zone; checkmark Done with Done label and retained Cancel; staged save/Cancel across toggles and nested pages; Taskovsky extras (ranges, all-day rows, folded hours) separated below. Declined/focus/health excluded; matched visual acceptance pending. [Receipt](changes/mobile-calendar-view-options-c06-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/c06-view-options-primary.png" width="180" alt="Taskovsky View Options primary order">](assets/mobile-parity/2026-11-16/c06-view-options-primary.png)<br>[<img src="assets/mobile-parity/2026-11-16/c06-view-options-extras.png" width="180" alt="Taskovsky View Options Taskovsky extras">](assets/mobile-parity/2026-11-16/c06-view-options-extras.png)<br>New 2026-11-16 capture on this branch; [capture details](#evidence-c06) |
 | C07 | Color settings | Partial | Inline Inbox/list/folder swatches, real Calendar-only overrides/reset and staged save/Cancel; named palettes and matched visual acceptance remain. [Receipt](changes/mobile-calendar-color-page-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/c07-calendar-color.png" width="180" alt="Calendar Color page">](assets/mobile-parity/2026-11-15/c07-calendar-color.png) |
 | C08 | Color By menu | Similar | Anchored List/Tag/Priority menu, selected check and actual mode change verified; matched visual acceptance pending. [Receipt](changes/mobile-calendar-color-page-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/c08-color-by.png" width="180" alt="Calendar Color By menu">](assets/mobile-parity/2026-11-15/c08-color-by.png) |
@@ -61,7 +63,7 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | D05 | Priority popup | Partial | Anchored four-choice popup with exact labels/order, current check and real saves; reference timing and calibrated geometry unverified. | **Reference withheld for privacy** | [<img src="assets/mobile-parity/2026-11-15/d05-priority-popup.png" width="180" alt="Neutral Priority popup">](assets/mobile-parity/2026-11-15/d05-priority-popup.png)<br>[Receipt](changes/mobile-detail-priority-popup-2026-11-15.md) |
 | D06 | Move to list | Partial | Search, folder hierarchy, current checkmark and Add List implemented; exact layout and reference creation follow-up remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/d06-move-hierarchy.png" width="180" alt="Taskovsky Move to hierarchy">](assets/mobile-parity/2026-11-15/d06-move-hierarchy.png)<br>[Receipt](changes/mobile-move-hierarchy-2026-11-15.md) |
 | D07 | Schedule Date | Partial | Tabs and month grid implemented; outer and nested presentation still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/d07-schedule-date.png"><img src="assets/mobile-parity/2026-11-15/d07-schedule-date.png" width="180" alt="Taskovsky D07 historical Simulator QA screenshot"></a><br>[PR #114](https://github.com/Mental-NV/Taskovsky/pull/114) · [Capture details](#evidence-d07)<br>Historical QA; not current-main capture. |
-| D08 | Duration | Partial | Timed Date/Time and all-day Start/End cards with true nested Cancel/Done; range moves and existing conversions preserved. Timeline handles/floating policy and final styling remain. [Receipt](changes/mobile-duration-cards-2026-11-16.md). | **Private reference withheld**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <img src="assets/mobile-parity/2026-11-16/d08-duration-timed.png" width="180" alt="Taskovsky timed Duration"><br><img src="assets/mobile-parity/2026-11-16/d08-duration-all-day.png" width="180" alt="Taskovsky all-day Duration"> |
+| D08 | Duration | Partial | Timed Date/Time and all-day Start/End cards with true nested Cancel/Done; range moves and existing conversions preserved. Timeline handles/floating policy and final styling remain. [Receipt](changes/mobile-duration-cards-2026-11-16.md). | **Private reference withheld**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <img src="assets/mobile-parity/2026-11-16/d08-duration-timed.png" width="180" alt="Taskovsky timed Duration"><br><img src="assets/mobile-parity/2026-11-16/d08-duration-all-day.png" width="180" alt="Taskovsky all-day Duration"><br>[<img src="assets/mobile-parity/2026-11-15/d08-schedule-duration.png" width="180" alt="Taskovsky historical Duration state">](assets/mobile-parity/2026-11-15/d08-schedule-duration.png)<br>Historical PR #114 capture; [details](#evidence-d08) |
 | D09 | Time wheel | Partial | Compact wheel popup, zone caption, staged removal and cancellation implemented; exact reference geometry/default time unverified. | **Reference withheld for privacy** | [<img src="assets/mobile-parity/2026-11-15/d09-time-popup.png" width="180" alt="Neutral Time popup">](assets/mobile-parity/2026-11-15/d09-time-popup.png)<br>[Receipt](changes/mobile-time-popup-2026-11-15.md) |
 | D10 | Reminder menu | Partial | [Real all-day single-date multi-select09:00 presets and None](changes/mobile-reminder-presets-2026-11-16.md); absolute/default editors retained. Anchored menu placement and timed/duration presets remain open. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <img src="assets/mobile-parity/2026-11-16/d10-reminder-presets.png" width="180" alt="Taskovsky neutral all-day Reminder preset choices"> |
 | D11 | Custom Reminder | Partial | [All-day single-date Day/Week offset/time wheels](changes/mobile-custom-reminder-2026-11-15.md), staged Add/Cancel and expired validation. Anchored placement, timed/duration extension and reference defaults remain unmatched. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <img src="assets/mobile-parity/2026-11-15/d11-custom-reminder.png" width="180" alt="Taskovsky neutral Custom Reminder wheels"> |
@@ -91,177 +93,37 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | T16 | Parent Tag | Partial | Explicit None/radio choices and cycle-safe staged selection implemented; exact geometry/order unverified. | **Screenshot missing**<br>[Reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/t16-parent-tag.png" width="180" alt="Taskovsky Parent Tag cycle-safe None choice">](assets/mobile-parity/2026-11-15/t16-parent-tag.png)<br>[Receipt](changes/mobile-parent-tag-2026-11-15.md) |
 | T17 | Quick-add composer | Partial | Compact core actions and More→advanced form; keyboard/height and fine layout still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png" width="180" alt="Taskovsky compact composer">](#evidence-t17)<br>[Receipt](changes/mobile-compact-capture-2026-11-15.md) |
 
-## Screenshot gallery
-
-Click an image for original resolution. [Machine-readable provenance and SHA-256 manifest](assets/mobile-parity/2026-11-15/manifest.json). Capture runtime metadata is limited to what the linked QA receipt records; no unrecorded device, build or scale is inferred.
-
-<a id="evidence-c01"></a>
-
-### C01: Hourly Week
-
-New 2026-11-16 capture at source `52cd9af` ([receipt](changes/mobile-week-header-2026-11-16.md)). Actual owned Simulator QA screenshot (1170×2532) on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral fixture: hourly Week with the weekday strip Mon 9 through a partially clipped Sun 15, GMT+3 gutter and a tall all-day band. Not pixel certification; these layout limitations remain open and density/overlap/gesture parity is unclaimed — this slice is header timezone formatting, not Week geometry.
-
-[<img src="assets/mobile-parity/2026-11-16/c01-week.png" width="250" alt="Taskovsky Simulator QA hourly Week">](assets/mobile-parity/2026-11-16/c01-week.png)
-
-<a id="evidence-c02"></a>
-
-### C02: Calendar mode menu
-
-New 2026-11-16 capture at source `52cd9af` ([receipt](changes/mobile-week-header-2026-11-16.md)). Actual owned Simulator QA screenshot (1170×2532) on `B263E8E7`, neutral fixture: primary order List, Year, Month, Week (checked), 3 Day, Day with the separated More views Multi-Day/Multi-Week extras. Companion captures from the same run (Year, List, generic Multi-Day, Multi-Week states) remain in the native log directory `/private/tmp/TaskovskyWeekHeaderNative/screenshots/`. Not pixel certification; matched anchored-menu acceptance remains open.
-
-[<img src="assets/mobile-parity/2026-11-16/c02-mode-menu.png" width="250" alt="Taskovsky Simulator QA Calendar mode menu">](assets/mobile-parity/2026-11-16/c02-mode-menu.png)
-
-<a id="evidence-c03"></a>
-
-### C03: Week overview
-
-Historical [PR #112](https://github.com/Mental-NV/Taskovsky/pull/112) QA capture; [verification receipt](changes/mobile-week-overview-2026-11-15.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/c03-week-overview.png" width="250" alt="Taskovsky Simulator QA: Week overview">](assets/mobile-parity/2026-11-15/c03-week-overview.png)
-
-<a id="evidence-c04"></a>
-
-### C04: Calendar overflow menu
-
-Historical [PR #103](https://github.com/Mental-NV/Taskovsky/pull/103) QA capture; [verification receipt](changes/mobile-calendar-header-2026-11-14.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png" width="250" alt="Taskovsky Simulator QA: Calendar overflow menu">](assets/mobile-parity/2026-11-15/c04-calendar-overflow.png)
-
-<a id="evidence-c10"></a>
-
-### C10: Style
-
-Historical [PR #115](https://github.com/Mental-NV/Taskovsky/pull/115) QA capture; [verification receipt](changes/mobile-calendar-options-navigation-2026-11-15.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/c10-calendar-style.png" width="250" alt="Taskovsky Simulator QA: Style">](assets/mobile-parity/2026-11-15/c10-calendar-style.png)
-
-<a id="evidence-c11"></a>
-
-### C11: Show Item Icons
-
-Historical [PR #115](https://github.com/Mental-NV/Taskovsky/pull/115) QA capture; [verification receipt](changes/mobile-calendar-options-navigation-2026-11-15.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/c11-calendar-icons.png" width="250" alt="Taskovsky Simulator QA: Show Item Icons">](assets/mobile-parity/2026-11-15/c11-calendar-icons.png)
-
-<a id="evidence-c15"></a>
-
-### C15: Arrange Filter
-
-Historical [PR #113](https://github.com/Mental-NV/Taskovsky/pull/113) QA capture; [verification receipt](changes/mobile-arrange-filter-2026-11-15.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/c15-arrange-filter.png" width="250" alt="Taskovsky Simulator QA: Arrange Filter">](assets/mobile-parity/2026-11-15/c15-arrange-filter.png)
-
-<a id="evidence-d07"></a>
-
-### D07: Schedule Date
-
-Historical [PR #114](https://github.com/Mental-NV/Taskovsky/pull/114) QA capture; [verification receipt](changes/mobile-schedule-tabs-2026-11-15.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/d07-schedule-date.png" width="250" alt="Taskovsky Simulator QA: Schedule Date">](assets/mobile-parity/2026-11-15/d07-schedule-date.png)
-
-<a id="evidence-d08"></a>
-
-### D08: Duration
-
-Historical [PR #114](https://github.com/Mental-NV/Taskovsky/pull/114) QA capture; [verification receipt](changes/mobile-schedule-tabs-2026-11-15.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/d08-schedule-duration.png" width="250" alt="Taskovsky Simulator QA: Duration">](assets/mobile-parity/2026-11-15/d08-schedule-duration.png)
-
-<a id="evidence-t01"></a>
-
-### T01: Today / List
-
-Historical [PR #102](https://github.com/Mental-NV/Taskovsky/pull/102) QA capture; [verification receipt](changes/mobile-list-row-density-2026-11-14.md). 1170 × 2532 pixels.
-
-[<img src="assets/mobile-parity/2026-11-15/t01-today-list.png" width="250" alt="Taskovsky Simulator QA: Today / List">](assets/mobile-parity/2026-11-15/t01-today-list.png)
-
-
-<a id="evidence-d01"></a>
-
-### D01: Empty task description
-
-[PR116](https://github.com/Mental-NV/Taskovsky/pull/116) native source checkpoint `68e6b23`; [receipt](changes/mobile-empty-description-2026-11-15.md). 1170 × 2532 pixels, neutral created QA task. Not a matched TickTick capture.
-
-[<img src="assets/mobile-parity/2026-11-15/d01-empty-description.png" width="250" alt="Taskovsky empty task detail">](assets/mobile-parity/2026-11-15/d01-empty-description.png)
-
-<a id="evidence-t17"></a>
-
-### T17: Compact capture shell without recovery success area
-
-Follow-up source `a8731b6`; [notice-removal receipt](changes/mobile-capture-notice-2026-11-15.md). Prior [PR120](https://github.com/Mental-NV/Taskovsky/pull/120) compact shell remains partial. 1170 × 2532 pixels. Neutral fixture, real software keyboard. Not a matched reference capture or exact low-sheet geometry.
-
-[<img src="assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png" width="250" alt="Taskovsky compact composer">](assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png)
-
-<a id="evidence-t07"></a>
-
-### T07 — Tasks drawer footer
-
-New 2026-11-16 captures on this branch ([receipt](changes/mobile-drawer-add-2026-11-16.md)). Actual owned Simulator QA screenshots (1170×2532) on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral fixture: indigo drawer with the bottom-anchored Add (left) and unified-management (right) footer, reachable after scrolling. No account, share, print, or background controls. Not pixel certification; matched reference typography/geometry acceptance remains open.
-
-[<img src="assets/mobile-parity/2026-11-16/t07-drawer-footer.png" width="250" alt="Taskovsky drawer with Add and Manage footer">](assets/mobile-parity/2026-11-16/t07-drawer-footer.png)
-
-<a id="evidence-t08"></a>
-
-### T08 — Drawer Add popup
-
-New 2026-11-16 capture on this branch ([receipt](changes/mobile-drawer-add-2026-11-16.md)). Actual owned Simulator QA screenshot (1170×2532) on `B263E8E7`, neutral fixture: anchored Add bubble with List, Filter, Tag in the observed reference order, each opening a blank creation editor directly. Backdrop tap returns to the drawer with no writes. Not pixel certification; matched anchored-popup geometry remains unverified.
-
-[<img src="assets/mobile-parity/2026-11-16/t08-add-popup.png" width="250" alt="Taskovsky drawer Add popup">](assets/mobile-parity/2026-11-16/t08-add-popup.png)
-
-Schedule Reminder/Repeat images show dedicated staged pages, not the reference anchored preset menus. D12 now has ordered derived presets, selection marks and verified staged/reload behavior; both states remain partial.
-
-
-<a id="evidence-d06"></a>
-### D06 — Move to hierarchy
-
-Source checkpoint `8b6da8b`; actual owned Simulator QA screenshot (1170×2532), neutral move-hierarchy fixture after creating Neutral destination. Five native regressions and full 835 XCTest + 38 Swift Testing passed; release/signature passed. Matched TickTick layout and its Add List follow-up remain unverified. This is not pixel certification.
-
-[<img src="assets/mobile-parity/2026-11-15/d06-move-hierarchy.png" width="250" alt="Taskovsky Simulator QA Move to hierarchy">](assets/mobile-parity/2026-11-15/d06-move-hierarchy.png)
-
-<a id="evidence-d04"></a>
-### D04 — Assigned Tags picker
-
-Source checkpoint `9459da6`; actual owned Simulator QA screenshot (1170×2532), neutral assigned-tags fixture. Two native regression tests passed; full 835 XCTest + 38 Swift Testing, release and signature verification passed. Assigned section structure is implemented; this is not matched TickTick visual acceptance or pixel certification.
-
-[<img src="assets/mobile-parity/2026-11-15/d04-assigned-tags.png" width="250" alt="Taskovsky Simulator QA assigned Tags">](assets/mobile-parity/2026-11-15/d04-assigned-tags.png)
-
-
-<a id="evidence-t12"></a>
-### T12 — Add List view previews
-
-Actual 1170×2532 owned Simulator capture at checkpoint `9b8896b`, neutral project name, keyboard dismissed. Focused capture run 48511 passed; production source unchanged from tested creation candidate. List/Kanban/Timeline choices are backed by atomic initial mode creation. Color palette and matched reference layout remain partial, not pixel certification.
-
-[<img src="assets/mobile-parity/2026-11-15/t12-list-creation.png" width="250" alt="Taskovsky Simulator QA Add List">](assets/mobile-parity/2026-11-15/t12-list-creation.png)
-
-
-<a id="evidence-c05"></a>
-### C05 — Calendar source hierarchy
-
-Actual 1170×2532 owned Simulator capture, neutral calendar-filter-hierarchy fixture. Source `77d6801`, integrated checkpoint `024417d`. Expanded Tags and Projects folder show unchanged staged source selection semantics. Exact reference layout/options are not certified; lower bulk row extends below this viewport.
-
-[<img src="assets/mobile-parity/2026-11-15/c05-source-hierarchy.png" width="250" alt="Taskovsky Simulator QA Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-source-hierarchy.png)
-
-
-### C05 — live-observed compact layout follow-up
-
-[Receipt](changes/mobile-calendar-filter-layout-2026-11-15.md). One continuous source surface, 50 pt row pitch, leading gray icons and blue checkmarks reduce the observed PR130 gaps. Cancel, More and long-press Only intentionally preserve Taskovsky capabilities. Approximate reference measurements are not calibrated pixel-perfect certification; no personal TickTick capture is public.
-
-[<img src="assets/mobile-parity/2026-11-15/c05-compact-layout.png" width="250" alt="Neutral Taskovsky compact Calendar source layout">](assets/mobile-parity/2026-11-15/c05-compact-layout.png)
-
-
-<a id="evidence-c06"></a>
-
-### C06: View Options
-
-New 2026-11-16 captures at source `a638aed` (base `5803158`; [receipt](changes/mobile-calendar-view-options-c06-2026-11-16.md)). Actual owned Simulator QA screenshots (1170×2532) on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral `calendar-options` fixture. Primary capture: Cancel plus checkmark Done, Appearance (Color List, Style), Visible Items in Details/Completed/Checklist Item (singular)/Repeats order with Details helper and repeats footer, Time Zone Rulers with Additional Time Zone Off, and the Taskovsky Extras header. Extras capture (staged checklist-on state): Multi-Day 5 days, Multi-Week 2 weeks, All-day rows Automatic, Early 07:00, Late 21:00, disabled Reset, and the guidance footer ("Adjust ranges and all-day rows here. Expand both time bands to drag their boundaries in the timeline."). No declined/focus/health/calendar rows exist in the sheet. Not pixel certification; matched reference typography/geometry acceptance remains open.
-
-[<img src="assets/mobile-parity/2026-11-16/c06-view-options-primary.png" width="250" alt="Taskovsky Simulator QA View Options primary order">](assets/mobile-parity/2026-11-16/c06-view-options-primary.png)
-[<img src="assets/mobile-parity/2026-11-16/c06-view-options-extras.png" width="250" alt="Taskovsky Simulator QA View Options Taskovsky extras">](assets/mobile-parity/2026-11-16/c06-view-options-extras.png)
+## Capture provenance
+
+Click a table image for original resolution. [Machine-readable provenance and SHA-256 manifest](assets/mobile-parity/2026-11-15/manifest.json). Capture runtime metadata is limited to what the linked QA receipt records; no unrecorded device, build or scale is inferred. Every entry below is an owned Simulator QA screenshot (1170×2532) with a neutral fixture; none is pixel certification.
+
+| ID | Capture source | Receipt / record | Limits |
+|---|---|---|---|
+| <a id="evidence-c01"></a>C01 | 2026-11-16 capture at source `52cd9af` on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1) | [Receipt](changes/mobile-week-header-2026-11-16.md) | Clipped Sunday column, tall all-day band; header-formatting slice, not Week geometry |
+| <a id="evidence-c02"></a>C02 | Same run, source and device as C01 | [Receipt](changes/mobile-week-header-2026-11-16.md) | Companion Year/List/Multi-Day/Multi-Week captures remain in `/private/tmp/TaskovskyWeekHeaderNative/screenshots/`; anchored-menu acceptance open |
+| <a id="evidence-c03"></a>C03 | Historical [PR #112](https://github.com/Mental-NV/Taskovsky/pull/112) QA | [Receipt](changes/mobile-week-overview-2026-11-15.md) | Not a current-main capture |
+| <a id="evidence-c04"></a>C04 | Historical [PR #103](https://github.com/Mental-NV/Taskovsky/pull/103) QA | [Receipt](changes/mobile-calendar-header-2026-11-14.md) | Predates subsequent Calendar layout changes; not a current-main capture |
+| <a id="evidence-c05"></a>C05 | Hierarchy capture at source `77d6801` (integrated `024417d`); compact follow-up rendered in-row | [Receipt](changes/mobile-calendar-filter-layout-2026-11-15.md) | Hierarchy viewport cuts the lower bulk row; compact layout is approximate, not calibrated |
+| <a id="evidence-c06"></a>C06 | 2026-11-16 captures at source `a638aed` (base `5803158`) on `B263E8E7`, neutral `calendar-options` fixture | [Receipt](changes/mobile-calendar-view-options-c06-2026-11-16.md) | Extras capture is a staged checklist-on state; declined/focus/health rows absent by scope |
+| <a id="evidence-c10"></a>C10 | Historical [PR #115](https://github.com/Mental-NV/Taskovsky/pull/115) QA | [Receipt](changes/mobile-calendar-options-navigation-2026-11-15.md) | Six further captures (tiles, Week Modern/Classic, Year Show/Hide, legacy Filled) are linked from the C10 row; see also the [style-tiles receipt](changes/mobile-calendar-style-tiles-2026-11-16.md) |
+| <a id="evidence-c11"></a>C11 | Historical [PR #115](https://github.com/Mental-NV/Taskovsky/pull/115) QA | [Receipt](changes/mobile-calendar-options-navigation-2026-11-15.md) | Not a current-main capture |
+| <a id="evidence-c15"></a>C15 | Historical [PR #113](https://github.com/Mental-NV/Taskovsky/pull/113) QA | [Receipt](changes/mobile-arrange-filter-2026-11-15.md) | Not a current-main capture |
+| <a id="evidence-d01"></a>D01 | [PR116](https://github.com/Mental-NV/Taskovsky/pull/116) checkpoint `68e6b23` | [Receipt](changes/mobile-empty-description-2026-11-15.md) | Neutral created QA task; not a matched TickTick capture |
+| <a id="evidence-d04"></a>D04 | Checkpoint `9459da6` | [Receipt](changes/mobile-assigned-tags-2026-11-15.md) | Two native regressions passed; full 835 XCTest + 38 Swift Testing, release and signature passed; not matched visual acceptance |
+| <a id="evidence-d06"></a>D06 | Checkpoint `8b6da8b` | [Receipt](changes/mobile-move-hierarchy-2026-11-15.md) | Five native regressions and full 835 XCTest + 38 Swift Testing passed; release/signature passed; matched layout and Add List follow-up unverified |
+| <a id="evidence-d07"></a>D07 | Historical [PR #114](https://github.com/Mental-NV/Taskovsky/pull/114) QA | [Receipt](changes/mobile-schedule-tabs-2026-11-15.md) | Not a current-main capture |
+| <a id="evidence-d08"></a>D08 | Historical [PR #114](https://github.com/Mental-NV/Taskovsky/pull/114) QA | [Receipt](changes/mobile-schedule-tabs-2026-11-15.md) | Superseded in-row by staged timed/all-day cards; [new receipt](changes/mobile-duration-cards-2026-11-16.md) |
+| D10–D13 | Staged pages as rendered in-row | — | Dedicated staged pages, not anchored preset menus; D12 carries ordered derived presets with staged/reload behavior verified; all remain partial |
+| <a id="evidence-t01"></a>T01 | Historical [PR #102](https://github.com/Mental-NV/Taskovsky/pull/102) QA | [Receipt](changes/mobile-list-row-density-2026-11-14.md) | Not a current-main capture |
+| <a id="evidence-t07"></a>T07 | 2026-11-16 captures on this branch, `B263E8E7` | [Receipt](changes/mobile-drawer-add-2026-11-16.md) | No account, share, print or background controls; reference typography/geometry open |
+| <a id="evidence-t08"></a>T08 | 2026-11-16 capture on this branch, `B263E8E7` | [Receipt](changes/mobile-drawer-add-2026-11-16.md) | Backdrop tap returns with no writes; anchored-popup geometry unverified |
+| <a id="evidence-t12"></a>T12 | Checkpoint `9b8896b`, keyboard dismissed, neutral name | [Receipt](changes/mobile-list-creation-2026-11-15.md) | Focused run 48511 passed; production source unchanged from tested candidate |
+| <a id="evidence-t17"></a>T17 | Follow-up source `a8731b6`; prior [PR120](https://github.com/Mental-NV/Taskovsky/pull/120) shell partial | [Receipt](changes/mobile-compact-capture-2026-11-15.md) · [notice-removal receipt](changes/mobile-capture-notice-2026-11-15.md) | Real software keyboard; not a matched reference capture or exact low-sheet geometry |
+
+### Auxiliary captures outside the 46
 
 <a id="evidence-root-label-removal"></a>
-### ROOT — Mobile root informational-label removal (outside the 46)
 
-[Receipt](changes/mobile-remove-sample-label-2026-11-16.md). Actual 1170×2532 owned Simulator captures on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral QA fixtures. Neither the QA (`Sample workspace · Local editing`) nor the ordinary (`Local workspace · Early development`) header label renders in any section; the header closes up by one caption row. Not a parity state and not counted in the 46-state denominator; no existing row changed.
-
-[<img src="assets/mobile-parity/2026-11-16/root-tasks-no-label.png" width="250" alt="Taskovsky Tasks root without informational label">](assets/mobile-parity/2026-11-16/root-tasks-no-label.png)
-[<img src="assets/mobile-parity/2026-11-16/root-calendar-no-label.png" width="250" alt="Taskovsky Calendar root without informational label">](assets/mobile-parity/2026-11-16/root-calendar-no-label.png)
+| Capture | Source and limits |
+|---|---|
+| [<img src="assets/mobile-parity/2026-11-16/root-tasks-no-label.png" width="180" alt="Taskovsky Tasks root without informational label">](assets/mobile-parity/2026-11-16/root-tasks-no-label.png)<br>[<img src="assets/mobile-parity/2026-11-16/root-calendar-no-label.png" width="180" alt="Taskovsky Calendar root without informational label">](assets/mobile-parity/2026-11-16/root-calendar-no-label.png) | ROOT label removal ([receipt](changes/mobile-remove-sample-label-2026-11-16.md)); neutral QA fixtures on `B263E8E7`; neither the QA nor the ordinary header label renders and the header closes up by one caption row. Not a parity state and not counted in the 46-state denominator; no existing row changed. |
