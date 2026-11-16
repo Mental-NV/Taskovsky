@@ -199,8 +199,9 @@ struct PhoneTaskBoard: View {
 
 // Mobile-only presentation choices; do not expand the shared Mac grouping menu.
 enum PhoneScopedBoardGrouping: String, CaseIterable {
-    case date, list, priority
-    var title: String { rawValue.capitalized }
+    case list, date, createdTime, tag, priority
+    var title: String { self == .createdTime ? "Created Time" : rawValue.capitalized }
+    var supportsMoves: Bool { self == .date || self == .list }
     static func defaultGrouping(for destination: TaskDestination) -> Self {
         ScopedBoardProjection.defaultGrouping(for: destination) == .date ? .date : .list
     }
@@ -208,7 +209,7 @@ enum PhoneScopedBoardGrouping: String, CaseIterable {
 
 private struct PhoneScopedBoardProjection {
     struct Column: Identifiable {
-        enum ID: Hashable { case existing(ScopedBoardColumn.ID), priority(TaskPriority) }
+        enum ID: Hashable { case existing(ScopedBoardColumn.ID), priority(TaskPriority), metadata(TaskMetadataBoardProjection.Column.ID) }
         let id: ID
         let title: String
         let tasks: [TaskItem]
@@ -217,17 +218,25 @@ private struct PhoneScopedBoardProjection {
     private let existing: ScopedBoardProjection?
 
     init(destination: TaskDestination, grouping: PhoneScopedBoardGrouping, in data: WorkspaceData,
-         now: Date, calendar: Calendar) {
+         now: Date, calendar: Calendar, titleSort: TaskTitleSort?) {
+        let unsorted: [Column]
         if grouping == .priority {
             existing = nil
-            columns = PriorityBoardProjection(destination: destination, in: data, now: now, calendar: calendar)
+            unsorted = PriorityBoardProjection(destination: destination, in: data, now: now, calendar: calendar)
                 .columns.map { Column(id: .priority($0.id), title: $0.title, tasks: $0.tasks) }
+        } else if grouping == .tag || grouping == .createdTime {
+            existing = nil
+            unsorted = TaskMetadataBoardProjection(destination: destination,
+                grouping: grouping == .tag ? .tag : .createdTime, in: data, now: now, calendar: calendar)
+                .columns.map { Column(id: .metadata($0.id), title: $0.title, tasks: $0.tasks) }
         } else {
             let projection = ScopedBoardProjection(destination: destination, grouping: grouping == .date ? .date : .list,
                                                     in: data, now: now, calendar: calendar)
             existing = projection
-            columns = projection.columns.map { Column(id: .existing($0.id), title: $0.title, tasks: $0.tasks) }
+            unsorted = projection.columns.map { Column(id: .existing($0.id), title: $0.title, tasks: $0.tasks) }
         }
+        columns = unsorted.map { Column(id: $0.id, title: $0.title,
+            tasks: TaskMetadataBoardProjection.ordered($0.tasks, title: titleSort)) }
     }
 
     func move(_ id: UUID, to target: Column.ID) -> ScopedBoardProjection.Move? {
@@ -243,12 +252,13 @@ struct PhoneScopedTaskBoard: View {
     let open: (UUID) -> Void
     let schedule: (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool
     @Binding var grouping: PhoneScopedBoardGrouping
+    let titleSort: TaskTitleSort?
     @State private var selected: PhoneScopedBoardProjection.Column.ID?
     @State private var targeted: PhoneScopedBoardProjection.Column.ID?
     @State private var dragSession = UUID()
     @State private var choosingTask: (id: UUID, revision: WorkspaceRevision)?
 
-    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData, grouping: Binding<PhoneScopedBoardGrouping>,
+    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData, grouping: Binding<PhoneScopedBoardGrouping>, titleSort: TaskTitleSort?,
          open: @escaping (UUID) -> Void, schedule: @escaping (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool) {
         self.model = model
         self.destination = destination
@@ -256,11 +266,12 @@ struct PhoneScopedTaskBoard: View {
         self.open = open
         self.schedule = schedule
         _grouping = grouping
+        self.titleSort = titleSort
     }
 
     private func projection(in workspace: WorkspaceData) -> PhoneScopedBoardProjection {
         PhoneScopedBoardProjection(destination: destination, grouping: grouping, in: workspace,
-                              now: model.now, calendar: model.calendar)
+                              now: model.now, calendar: model.calendar, titleSort: titleSort)
     }
 
     var body: some View {
@@ -301,6 +312,7 @@ struct PhoneScopedTaskBoard: View {
             }
         }
         .onChange(of: grouping) { _, _ in
+            choosingTask = nil
             selected = nil
             targeted = nil
             dragSession = UUID()
@@ -331,7 +343,7 @@ struct PhoneScopedTaskBoard: View {
         }.buttonStyle(.plain).accessibilityLabel(column.title).accessibilityValue(column.tasks.count.formatted())
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityIdentifier("scopedBoardColumn-\(index)")
-        if grouping == .priority {
+        if !grouping.supportsMoves {
             tab
         } else {
             tab.dropDestination(for: PhoneBoardDrag.self) { payloads, _ in

@@ -8776,3 +8776,68 @@ extension ReadOnlyNavigationTests {
         app.buttons["scheduleCancel"].tap()
     }
 }
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testScopedKanbanTagAndTitleDirectionPreserveLane() {
+        let app = launch()
+        selectScopedView("Kanban View", in: app)
+        selectScopedGrouping("Tag", in: app)
+        let planning = app.buttons["scopedBoardColumn-0"]
+        let noTags = app.buttons["scopedBoardColumn-1"]
+        XCTAssertTrue(planning.waitForExistence(timeout: 5))
+        XCTAssertEqual(planning.label, "Planning")
+        XCTAssertEqual(planning.value as? String, "1")
+        XCTAssertEqual(noTags.label, "No Tags")
+        XCTAssertEqual(noTags.value as? String, "6")
+        noTags.tap()
+        selectScopedGrouping("Title · Ascending", in: app)
+        XCTAssertTrue(noTags.isSelected)
+        let arrange = app.buttons["boardCard-00000000-0000-0000-0000-000000000004"]
+        let book = app.buttons["boardCard-00000000-0000-0000-0000-000000000007"]
+        XCTAssertTrue(arrange.waitForExistence(timeout: 5)); XCTAssertTrue(book.exists)
+        XCTAssertLessThan(arrange.frame.minY, book.frame.minY)
+        let outline = app.buttons["boardCard-00000000-0000-0000-0000-000000000001"]
+        let draft = app.buttons["boardCard-00000000-0000-0000-0000-000000000008"]
+        XCTAssertTrue(outline.exists); XCTAssertTrue(draft.exists)
+        XCTAssertLessThan(draft.frame.minY, outline.frame.minY)
+        selectScopedGrouping("Title · Descending", in: app)
+        XCTAssertTrue(noTags.isSelected)
+        XCTAssertTrue(outline.waitForExistence(timeout: 5)); XCTAssertTrue(draft.exists)
+        XCTAssertLessThan(outline.frame.minY, draft.frame.minY)
+        XCTAssertFalse(app.buttons["Move Review the project outline"].exists)
+        XCTAssertFalse(app.otherElements["Drag Review the project outline"].exists)
+        attach(app, "Kanban Tag lanes with descending Title")
+        selectScopedGrouping("Created Time", in: app)
+        XCTAssertEqual(app.buttons["scopedBoardColumn-0"].value as? String, "7")
+        XCTAssertFalse(app.buttons["scopedBoardColumn-1"].exists)
+        XCTAssertTrue(outline.exists)
+        attach(app, "Kanban Created Time lane")
+        selectScopedGrouping("List", in: app)
+        XCTAssertEqual(app.buttons["scopedBoardColumn-0"].label, "Inbox")
+        selectScopedView("List View", in: app)
+        XCTAssertTrue(app.buttons["Review the project outline"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testScopedKanbanTagLaneRemovalFallsBackToNoTags() {
+        let app = launch()
+        selectScopedView("Kanban View", in: app)
+        selectScopedGrouping("Tag", in: app)
+        let card = app.buttons["boardCard-00000000-0000-0000-0000-000000000002"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5)); card.tap()
+        openTaskMetadata("editTaskTags", in: app)
+        let tag = app.buttons["taskTag-00000000-0000-0000-0000-000000000200"]
+        XCTAssertEqual(tag.value as? String, "Selected")
+        tag.tap()
+        app.buttons["taskMetadataDone"].tap()
+        waitGone(app.buttons["taskMetadataCancel"])
+        app.buttons["taskDetailDone"].tap()
+        let lane = app.buttons["scopedBoardColumn-0"]
+        XCTAssertTrue(lane.waitForExistence(timeout: 5))
+        XCTAssertEqual(lane.label, "No Tags")
+        XCTAssertEqual(lane.value as? String, "7")
+        XCTAssertFalse(app.buttons["scopedBoardColumn-1"].exists)
+        XCTAssertTrue(card.exists)
+        selectScopedGrouping("Date", in: app)
+        XCTAssertTrue(app.buttons["scopedBoardColumn-0"].exists)
+    }
+}
