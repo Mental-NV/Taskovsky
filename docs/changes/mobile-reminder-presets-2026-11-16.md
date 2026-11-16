@@ -1,0 +1,30 @@
+# D10 all-day Reminder presets
+
+## Contract and evidence
+
+The November 16 bounded live TickTick audit observed independently selectable On the day, 1 day early, 2 days early, 3 days early and 1 week early presets at09:00, a None action clearing selection, selected blue rows/trailing checks, and a menu remaining open across choices. The original reference state was restored. Personal reference captures are not published.
+
+This slice adds those real choices to Taskovsky's existing Reminder page for **all-day single-date schedules only**, before Custom. It retains default reminders and the existing absolute-date editor below them. The page remains open after each selection; the outer Schedule Done/Cancel and revision guards still own persistence. The reference anchored popup placement and timed/duration/constant reminder forms are not matched or certified by this slice.
+
+## Behavior and safety
+
+- Presets are calculated at09:00 in the staged schedule calendar/time zone using civil-day offsets0/1/2/3/7, not elapsed24-hour subtraction. Existing strict local-time resolution rejects a nonexistent candidate, disabling only its row; no invented fallback time.
+- Selection compares exact absolute timestamps in the effective staged automatic/manual reminder dates. Opening the page does not mutate or normalize a draft.
+- Explicit preset toggle materializes **current staged** default dates first, then adds/removes only that timestamp; unrelated custom dates are retained. The result is sorted and deduplicated. No alias to a single default setting.
+- None explicitly disables automatic reminders and clears all manual reminders and any latent at-end flag. Empty effective defaults display None selected, but tapping it deliberately manualizes the empty selection.
+- Existing manual dates remain absolute when schedule date/zone changes. Presets are not stored as new relative rules and no persistence migration is introduced.
+- Unknown zones, no date, timed schedules and durations are refused by the helper. Existing excluded-form behavior is unchanged.
+- No future-only restriction is guessed from the reference's past-date UI; presets preserve existing manual reminder acceptance. Notification delivery/OS permissions and exact reference save/delivery policies are not claimed tested.
+
+## Element inventory
+
+| Order | Element | Wording and behavior |
+|---|---|---|
+|1|None|Clear all; selected when effective reminder set empty|
+|2–6|Preset buttons|On the day / 1 day early / 2 days early / 3 days early / 1 week early; independent toggles, trailing check, selected trait,44pt row|
+|7|Custom|Existing Day/Week/time popup and validation retained|
+|Following|Taskovsky compatibility controls|Use default reminders, absolute dates/Add/removal remain available; not claimed present in reference menu|
+
+## Verification
+
+Pending final independent source review, full/release/iPhone compilation and complete native receipts. Acceptance covers calendar/DST math, staged defaults, unrelated reminders, None, excluded no-ops, actual multi-selection/save/relaunch/Cancel and existing Custom regressions. No screenshot or pixel-perfect claim until captured and inspected.
