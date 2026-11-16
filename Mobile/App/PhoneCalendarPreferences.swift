@@ -600,10 +600,9 @@ private struct PhoneCalendarSourceColorRow: View {
 }
 
 /// C09 bounded Color Pick: the honest Taskovsky palette plus Default and a
-/// Custom native color editor. The reference named families are explicitly
-/// not reproduced (see the section footer). Every choice stages into the
-/// outer draft; nothing saves here. Arbitrary existing overrides are shown
-/// exactly as the current color and are never coerced toward the palette.
+/// Custom native color editor. Every choice stages into the outer draft;
+/// nothing saves here. Arbitrary existing overrides are shown exactly as
+/// the current color and are never coerced toward the palette.
 private struct PhoneCalendarSourceColorPick: View {
     let row: CalendarColorSource.Swatch
     @Binding var colors: CalendarColorSource.Overrides
@@ -629,8 +628,6 @@ private struct PhoneCalendarSourceColorPick: View {
                 }
             } header: {
                 Text("Taskovsky colors")
-            } footer: {
-                Text("Only the Taskovsky colors are offered here. The reference Recommend, Macaron, Morandi, Rococo, Classic and Memphis families are not reproduced.")
             }
             Section {
                 ColorPicker("Custom color", selection: Binding(
@@ -687,14 +684,6 @@ private struct PhoneCalendarSourceColorPick: View {
             Circle()
                 .fill(PhoneEntityColor.read(hex))
                 .frame(width: 28, height: 28)
-                .overlay {
-                    if selected {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(.white)
-                            .accessibilityHidden(true)
-                    }
-                }
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
                 .overlay {

@@ -23,17 +23,19 @@ alternative, this slice does **not** reproduce the named families.
   slash option (the source's own default color with a slash, ring-selected
   when no override is staged) plus the seven existing desktop user colors
   `#526BF5`, `#EC6574`, `#E7A548`, `#58A58B`, `#9C7BD5`, `#5BA7CC`,
-  `#8A8F98` as circular swatches. The staged choice carries the selected
-  ring, checkmark and `isSelected` trait.
+  `#8A8F98` as circular swatches. The staged choice carries the observed
+  thin selected ring and the `isSelected` trait; no extra checkmark is
+  invented.
 - A separate **Custom** row hosts the native `ColorPicker` (system
   Grid/Spectrum/Sliders). Arbitrary existing overrides are represented
   exactly: the Custom editor opens at the true current color, a selected
   **Current color `#HEX`** row appears for values outside the palette, and
   nothing is coerced toward the palette on open.
-- Missing reference families are explicitly documented, not faked: the
-  palette section footer states that only Taskovsky colors are offered and
-  names the six unreproduced reference families. No decorative family buttons
-  exist.
+- Missing reference families are documented in this receipt and the C09
+  tracker row, never in the product UI: no in-app footer discusses the
+  reference families, and no decorative family buttons exist. The six
+  unreproduced reference families are Recommend, Macaron, Morandi, Rococo,
+  Classic and Memphis.
 - Staging follows the outer draft only: picks write into
   `draft.sourceColors` (`CalendarColorSource.Overrides`, same source IDs and
   defaults). Pick-page Back keeps staged changes; outer Cancel discards them;
@@ -54,11 +56,15 @@ alternative, this slice does **not** reproduce the named families.
   `Overrides`, and a palette pick stores exactly.
 - Native `testCalendarSourceColorSavesAndResetCanBeCancelled`
   (`Mobile/UITests/ReadOnlyNavigationTests.swift`, `calendar-options`
-  fixture): Default state, pick-page Default selection, palette disclosure
-  note, a real `#58A58B` swatch click with selected ring, Back summary,
-  outer Done, relaunch persistence, staged Default reset reverted by outer
-  Cancel, then an arbitrary `#008122` custom round-trip through the native
-  Sliders editor with the selected Current row, Back summary and outer Done.
+  fixture): Default state, pick-page Default selection, a real `#58A58B`
+  swatch click with selected ring, Back summary, outer Done, relaunch
+  persistence, a staged `#EC6574` palette pick reverted by outer Cancel, a
+  staged row-Default reset reverted by outer Cancel, then an arbitrary
+  `#008122` custom round-trip through the native Sliders editor with the
+  selected Current row, Back summary, outer Done, relaunch persistence of the
+  exact hex with the selected Current marker and no palette selection, and
+  finally a Default-swatch tap staged on the new page, verified through Back,
+  outer Done and relaunch.
 - Native `testCalendarColorPickKeepsListAndTagOverridesSeparate` (same file,
   `calendar-filter-hierarchy` fixture): real List (`Work` → `#526BF5`) and
   Tag (`Planning` → `#EC6574`) swatch clicks with rings, Back summaries,
