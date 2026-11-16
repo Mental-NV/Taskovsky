@@ -8797,10 +8797,12 @@ extension ReadOnlyNavigationTests {
         let book = app.buttons["boardCard-00000000-0000-0000-0000-000000000007"]
         XCTAssertTrue(arrange.waitForExistence(timeout: 5)); XCTAssertTrue(book.exists)
         XCTAssertLessThan(arrange.frame.minY, book.frame.minY)
-        selectScopedGrouping("Title · Descending", in: app)
-        XCTAssertTrue(noTags.isSelected)
         let outline = app.buttons["boardCard-00000000-0000-0000-0000-000000000001"]
         let draft = app.buttons["boardCard-00000000-0000-0000-0000-000000000008"]
+        XCTAssertTrue(outline.exists); XCTAssertTrue(draft.exists)
+        XCTAssertLessThan(draft.frame.minY, outline.frame.minY)
+        selectScopedGrouping("Title · Descending", in: app)
+        XCTAssertTrue(noTags.isSelected)
         XCTAssertTrue(outline.waitForExistence(timeout: 5)); XCTAssertTrue(draft.exists)
         XCTAssertLessThan(outline.frame.minY, draft.frame.minY)
         XCTAssertFalse(app.buttons["Move Review the project outline"].exists)
