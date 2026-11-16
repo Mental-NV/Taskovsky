@@ -8278,7 +8278,7 @@ extension ReadOnlyNavigationTests {
         let original = openSchedule(app, task: task)
         app.buttons["scheduleDay-7"].tap()
         openScheduleOptions("scheduleReminderOptions", in: app)
-        app.buttons["scheduleCustomReminder"].tap()
+        reveal(app.buttons["scheduleCustomReminder"], in: app); app.buttons["scheduleCustomReminder"].tap()
         let preview = app.staticTexts["customReminderPreview"]
         XCTAssertTrue(preview.waitForExistence(timeout: 5))
         func selectCustomTime() {
@@ -8297,7 +8297,7 @@ extension ReadOnlyNavigationTests {
         attach(app, "Custom Reminder Day and time wheels")
         app.buttons["customReminderCancel"].tap()
         waitGone(app.buttons["customReminderAdd"])
-        app.buttons["scheduleCustomReminder"].tap()
+        reveal(app.buttons["scheduleCustomReminder"], in: app); app.buttons["scheduleCustomReminder"].tap()
         selectCustomTime()
         app.buttons["customReminderAdd"].tap()
         waitGone(app.buttons["customReminderAdd"])
@@ -8309,7 +8309,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["editSchedule"].tap()
         app.buttons["scheduleDay-7"].tap()
         openScheduleOptions("scheduleReminderOptions", in: app)
-        app.buttons["scheduleCustomReminder"].tap(); selectCustomTime(); app.buttons["customReminderAdd"].tap()
+        reveal(app.buttons["scheduleCustomReminder"], in: app); app.buttons["scheduleCustomReminder"].tap(); selectCustomTime(); app.buttons["customReminderAdd"].tap()
         waitGone(app.buttons["customReminderAdd"])
         scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
         app.terminate(); app.launch()
@@ -8322,7 +8322,7 @@ extension ReadOnlyNavigationTests {
         let app = launch()
         _ = openSchedule(app, task: "Review the project outline")
         openScheduleOptions("scheduleReminderOptions", in: app)
-        app.buttons["scheduleCustomReminder"].tap()
+        reveal(app.buttons["scheduleCustomReminder"], in: app); app.buttons["scheduleCustomReminder"].tap()
         XCTAssertTrue(app.staticTexts["customReminderExpired"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["customReminderAdd"].isEnabled)
         app.buttons["customReminderCancel"].tap()
@@ -9056,5 +9056,75 @@ extension ReadOnlyNavigationTests {
         planning.tap()
         XCTAssertTrue(app.buttons["boardCard-00000000-0000-0000-0000-000000000001"].exists)
         attach(app,"Kanban real Tag subsections")
+    }
+}
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testReminderPresetsToggleIndependentlyAndPersistWithoutMovingDate() {
+        let app = launch(), title = "Review the project outline"
+        _ = openSchedule(app, task: title)
+        app.buttons["scheduleDay-7"].tap()
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        let ids = ["onDay9", "dayBefore9", "twoDaysBefore9", "threeDaysBefore9", "weekBefore9"]
+        let labels = ["On the day", "1 day early", "2 days early", "3 days early", "1 week early"]
+        func preset(_ id: String) -> XCUIElement { app.buttons["scheduleReminderPreset-" + id] }
+        for (id, label) in zip(ids, labels) {
+            let row = preset(id); reveal(row, in: app)
+            XCTAssertEqual(row.label, label)
+            row.tap()
+            XCTAssertEqual(row.value as? String, "Selected")
+            XCTAssertTrue(app.navigationBars["Reminder"].exists)
+        }
+        reveal(preset("none"), in: app)
+        XCTAssertEqual(preset("none").value as? String, "Not selected")
+        attach(app, "All-day Reminder presets selected")
+        preset("dayBefore9").tap()
+        XCTAssertEqual(preset("dayBefore9").value as? String, "Not selected")
+        XCTAssertEqual(preset("onDay9").value as? String, "Selected")
+        scheduleRoot(app)
+        XCTAssertEqual(app.buttons["scheduleReminderOptions"].value as? String, "4 reminders")
+        app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        let savedSchedule = app.buttons["editSchedule"].label
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app)
+        XCTAssertEqual(openSchedule(app, task: title), savedSchedule)
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        for id in ids {
+            let row = preset(id); reveal(row, in: app)
+            XCTAssertEqual(row.value as? String, id == "dayBefore9" ? "Not selected" : "Selected")
+        }
+        // Actual stored absolute reminders retain the selected civil dates at09:00.
+        let expected = ["Nov 9, 2026 at 9:00", "Nov 13, 2026 at 9:00", "Nov 14, 2026 at 9:00", "Nov 16, 2026 at 9:00"]
+        for (index, value) in expected.enumerated() {
+            let row = app.datePickers["scheduleManualReminder-\(index)"]; reveal(row, in: app)
+            XCTAssertEqual(row.value as? String, value)
+        }
+    }
+
+    @MainActor func testReminderPresetNoneAndOuterCancelPreserveSavedReminders() {
+        let app = launch(), title = "Review the project outline"
+        let original = openSchedule(app, task: title)
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        let onDay = app.buttons["scheduleReminderPreset-onDay9"], none = app.buttons["scheduleReminderPreset-none"]
+        onDay.tap(); XCTAssertEqual(onDay.value as? String, "Selected")
+        none.tap(); XCTAssertEqual(none.value as? String, "Selected")
+        XCTAssertEqual(onDay.value as? String, "Not selected")
+        onDay.tap()
+        scheduleRoot(app); app.buttons["scheduleCancel"].tap(); waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.buttons["editSchedule"].label, original)
+        app.buttons["editSchedule"].tap(); openScheduleOptions("scheduleReminderOptions", in: app)
+        XCTAssertEqual(none.value as? String, "Selected")
+        XCTAssertEqual(onDay.value as? String, "Not selected")
+        onDay.tap(); scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap(); openScheduleOptions("scheduleReminderOptions", in: app)
+        XCTAssertEqual(onDay.value as? String, "Selected")
+        none.tap(); scheduleRoot(app); app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        goTo("Inbox", in: app); XCTAssertEqual(openSchedule(app, task: title), original)
+        openScheduleOptions("scheduleReminderOptions", in: app)
+        XCTAssertEqual(none.value as? String, "Selected")
+        XCTAssertEqual(onDay.value as? String, "Not selected")
     }
 }

@@ -78,6 +78,19 @@
     "historical": false
   },
   {
+    "state": "D10",
+    "file": "d10-reminder-presets.png",
+    "sha256": "50a6338fe342a9b2ed52d8f7a1cc602eca7b5f6d3b1bf080879debb3a60ab92c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-reminder-presets-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral all-day preset rows and selected checks; no personal TickTick data",
+    "historical": false
+  },
+  {
     "state": "ROOT",
     "file": "root-tasks-no-label.png",
     "sha256": "08da29a51e616a5286d867fc2af493f85b1cbd4b62fdc83b5a15e223169dc2cf",
