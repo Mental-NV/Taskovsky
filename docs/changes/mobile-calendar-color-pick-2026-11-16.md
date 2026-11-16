@@ -77,8 +77,10 @@ alternative, this slice does **not** reproduce the named families.
   QA cases already carry non-palette colors (Inbox `#7C6CF2`, Work
   `#4670FA`, Personal `#30A77A`, Planning `#E6A53A`), so
   custom/arbitrary preservation is exercised with no new fixture.
-- Native Simulator execution was not run in this session (coordinate later);
-  the cases above are prepared and compile-verified only.
+- Historical (pre-Run 1; superseded by the native runs below): at the time
+  this line was written, Native Simulator execution was not run in this
+  session (coordinate later); the cases above were prepared and
+  compile-verified only.
 
 ## Native run (owned device only)
 
@@ -92,9 +94,14 @@ alternative, this slice does **not** reproduce the named families.
   never CODE_SIGNING_ALLOWED=NO`, with fresh DerivedData, result bundle and
   log per run. The iPhone compile gate was re-verified after the slash
   correction (TEST BUILD SUCCEEDED, no tests executed); the full `swift
-  test` suite (541 tests, 0 failures) and macOS release/signature build
-  remain green on identical SPM/Mac sources — the correction touches only
-  the Xcode-only Mobile target.
+  test` gate as observed by the integrator after the merge (exact head
+  `693eb55`, recorded in
+  `/private/tmp/TaskovskyCalendarColorPick.integrate.log`, not rerun by
+  this worker) was 109 suites passed / 0 failed with 921 test cases passed
+  and 0 failures/errors — the `541 tests, 0 failures` figure quoted earlier
+  is only that log's grand-rollup line, not the complete multi-suite total.
+  The macOS release/signature build remains green on identical SPM/Mac
+  sources — the correction touches only the Xcode-only Mobile target.
 - Run 1 (`/private/tmp/TaskovskyCalendarColorPickNative/`, log `run.log`,
   result `result.xcresult`): **3 tests, 0 failures in 175.9s** —
   `testCalendarSourceColorSavesAndResetCanBeCancelled` (106.4s),
@@ -104,6 +111,18 @@ alternative, this slice does **not** reproduce the named families.
   parses; `issues` holds 0 errors and 0 failures, with 2 recorded
   `_UIReparentingView` runtime warnings that carry no failure association.
   All 3 tests passed.
+- Run 3 — final (`/private/tmp/TaskovskyC09Final/`, fresh DerivedData,
+  log `run.log`, bundle `result.xcresult`, this worker, exact head
+  `693eb55`): **3 tests, 0 failures in 176.095s** on the owned simulator
+  `B263E8E7-F1A5-4407-894D-23FC224B1013` ("Taskovsky Menu QA 1114") —
+  `testCalendarSourceColorSavesAndResetCanBeCancelled` (106.942s),
+  `testCalendarColorPickKeepsListAndTagOverridesSeparate` (45.763s),
+  `testCalendarColorPageShowsFolderHierarchyAndModeSwitch` (23.390s).
+  `xcodebuild` exit 0, `** TEST SUCCEEDED **`, 0 errors in the log; the
+  xcresult summary independently reports `passedTests 3, failedTests 0`,
+  result `Passed`, with the same 2 recorded `_UIReparentingView` runtime
+  warnings that carry no failure association. No screenshots were
+  re-exported; the published captures keep their Palette2 provenance below.
 - Pixel inspection of the 5 exported attachments found one real defect: the
   Default option's SF Symbol slash did not render (magnified crop shows a
   solid swatch). Bounded correction: the slash is now drawn geometry
