@@ -3553,6 +3553,9 @@ extension ReadOnlyNavigationTests {
 
     @MainActor func testCalendarArrangeChildScheduleDonePersistsOnlyChild() {
         let app = launch(qaCase: "arrange-hierarchy")
+        // Launch lands on Today, which hides undated rows: open the Work
+        // list for every detail read below.
+        goTo("Work", in: app)
         // Pre-state: the child is unscheduled, like its parent.
         var row = app.buttons["Neutral arrange child one"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
@@ -3583,6 +3586,7 @@ extension ReadOnlyNavigationTests {
         // Only the child's date changed: its detail now carries an actual
         // schedule while the parent stays unscheduled.
         app.buttons["Tasks"].tap()
+        goTo("Work", in: app)
         row = app.buttons["Neutral arrange child one"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
@@ -3609,6 +3613,7 @@ extension ReadOnlyNavigationTests {
 
         // The exact staged schedule survived relaunch; the parent is untouched.
         app.buttons["Tasks"].tap()
+        goTo("Work", in: app)
         row = app.buttons["Neutral arrange child one"]
         XCTAssertTrue(row.waitForExistence(timeout: 5))
         row.tap()
