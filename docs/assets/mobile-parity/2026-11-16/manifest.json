@@ -115,5 +115,44 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual pixels inspected: neutral QA fixture only, no informational label, no personal data",
     "historical": false
+  },
+  {
+    "state": "C09",
+    "file": "c09-color-pick-palette.png",
+    "sha256": "fc19fe506264c8ec290e22fedf8e48b4b2da206fcfcadee82fa051f1fb2c8621",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-pick-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected (Color Pick with selected palette swatch and drawn Default slash): neutral calendar fixtures only, no personal data; fixed-build run with drawn Default slash",
+    "historical": false
+  },
+  {
+    "state": "C09",
+    "file": "c09-current-custom.png",
+    "sha256": "a9cf5009004c9662d0bbd048cfd654a97e81dbdb4082effff60f79f5ca1b387d",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-pick-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected (Color Pick with selected Current custom color #008122): neutral calendar fixtures only, no personal data; fixed-build run with drawn Default slash",
+    "historical": false
+  },
+  {
+    "state": "C09",
+    "file": "c09-color-summary.png",
+    "sha256": "8ca56592c8f8b5c9d21d0e600380ceb7e408b763e35daddc9c8b42e58ce2361a",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-pick-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected (Saved Calendar color source summary with Inbox #58A58B): neutral calendar fixtures only, no personal data; fixed-build run with drawn Default slash",
+    "historical": false
   }
 ]

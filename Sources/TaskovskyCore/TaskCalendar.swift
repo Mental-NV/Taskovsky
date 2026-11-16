@@ -14,6 +14,12 @@ public enum CalendarColorMode: String, Codable, CaseIterable, Sendable { case li
 public enum CalendarColorSource: Hashable, Sendable {
     case inbox, list(UUID), tag(UUID)
 
+    /// Honest Taskovsky palette for the iPhone Calendar Color Pick page.
+    /// These are the existing desktop user colors (see docs/spec/ui-ux.md);
+    /// the reference named families (Recommend/Macaron/Morandi/Rococo/
+    /// Classic/Memphis) are not reproduced and must not be invented here.
+    public static let taskovskyPalette = ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"]
+
     private var storageKey: String {
         switch self {
         case .inbox: "inbox"
