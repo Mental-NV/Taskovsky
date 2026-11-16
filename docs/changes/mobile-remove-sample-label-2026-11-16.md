@@ -95,7 +95,9 @@ popup-only element while closed — both reverted.
   runner-local at `/private/tmp/TaskovskyRemoveSampleNative/screenshots/`):
   `tasks-root-no-label.png` and `calendar-root-no-label.png`, 1170x2532,
   neutral QA fixtures — header shows navigation/title/overflow only, no
-  informational label in either section.
+  informational label in either section. Published under
+  `docs/assets/mobile-parity/2026-11-16/` and linked from the
+  [visual tracker](../mobile-visual-parity.md#evidence-root-label-removal).
 - `swift test --disable-sandbox`: 915 XCTest + 38 Swift Testing, 0 failures.
   `./scripts/build-app.sh` + `codesign --verify --deep --strict`: pass.
   iPhone `build-ios-simulator-ci.sh`: TEST BUILD SUCCEEDED (final UI-test
