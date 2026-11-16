@@ -232,5 +232,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual final Run2 pixels inspected: neutral calendar-options fixture only; corrected useful extras guidance; no personal data",
     "historical": false
+  },
+  {
+    "state": "T07",
+    "file": "t07-drawer-footer.png",
+    "sha256": "5bfdc9bc5f180af1cd16c688f6df94b4d25fb54c910bb5e09ad7253c53ede5f4",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-drawer-add-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral fixture, drawer with bottom-anchored Add and Manage footer; no personal data",
+    "historical": false
+  },
+  {
+    "state": "T08",
+    "file": "t08-add-popup.png",
+    "sha256": "67944e42010ffd9c31481afaeecb7f70571be348cd1fbe5e45d81399b2d208ff",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-drawer-add-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: anchored Add bubble with List, Filter, Tag in reference order; neutral fixture, no personal data",
+    "historical": false
   }
 ]

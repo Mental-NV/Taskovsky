@@ -2,7 +2,7 @@
 
 Updated: **2026-11-16**. Assessment baseline: main `0cbe459` (includes PR115 and scope PR117; plus PR116 empty-description delta). **General similarity, not pixel certification.**
 
-This tracks all **46 original observed states**: 15 Calendar, 14 detail/scheduling, 17 Tasks. **11 broadly similar (10 Similar plus T04's qualified Similar-structure state), 33 partial, 2 explicitly deferred.** None is certified pixel-perfect. A counterpart existing does not mean its layout or behavior is complete.
+This tracks all **46 original observed states**: 15 Calendar, 14 detail/scheduling, 17 Tasks. **11 broadly similar (10 Similar plus T04's qualified Similar-structure state), 33 partial, 2 explicitly deferred.** None is certified pixel-perfect. T07/T08 keep their Similar assessments with new Taskovsky screenshots; only coverage counts change. A counterpart existing does not mean its layout or behavior is complete.
 
 ## How to read and maintain
 
@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**39/46 states have an attached Taskovsky screenshot; 7/46 await one. 0/46 have a portable TickTick reference image attached here.** The attached assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. C01/C02 images are from the week-header candidate at source `52cd9af`; C06 images are new from the View Options candidate at source `a638aed` (base `5803158`); other captures are earlier feature checkpoints, **not fresh current-main captures**. C04 in particular predates subsequent Calendar layout changes. Native runs are not all green: the fold-cutoffs adjacent case fails identically on this branch and the untouched base, and the two PR156 baseline failures stay open — see the C06 receipt.
+**41/46 states have an attached Taskovsky screenshot; 5/46 await one. 0/46 have a portable TickTick reference image attached here.** The attached assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. C01/C02 images are from the week-header candidate at source `52cd9af`; C06 images are new from the View Options candidate at source `a638aed` (base `5803158`); other captures are earlier feature checkpoints, **not fresh current-main captures**. C04 in particular predates subsequent Calendar layout changes. Native runs are not all green: the fold-cutoffs adjacent case fails identically on this branch and the untouched base, and the two PR156 baseline failures stay open — see the C06 receipt.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -79,8 +79,8 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 | T04 | Group & Sort | Similar structure; semantics qualified | Scoped Kanban now has the observed 5-group/6-sort pill sheet, immediate selection/direction, backdrop dismissal and real Tag subsections. No invented None/Existing Order/Done. List choices remain separate; exact multi-tag/secondary order and calibrated pixel polish remain open. | **Private reference withheld**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/t04-kanban-sheet.png" width="180" alt="Taskovsky Kanban Group and Sort sheet">](assets/mobile-parity/2026-11-16/t04-kanban-sheet.png)<br>[Before/after and verification](changes/mobile-kanban-sheet-2026-11-16.md) · [List choices](assets/mobile-parity/2026-11-15/t04-complete-choices.png) |
 | T05 | Share / Print | Deferred | Explicitly deferred until core features are finished. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T06 | Background chooser | Deferred | Explicitly deferred until core features are finished. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
-| T07 | Tasks drawer | Similar | Indigo navigation implemented; account, utilities and hierarchy differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
-| T08 | Drawer Add | Similar | List/filter/tag routes exist; popup options differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| T07 | Tasks drawer | Similar | Bottom-anchored Add and unified-management footer implemented; account/utility placement and hierarchy differ, matched visual acceptance pending. [Receipt](changes/mobile-drawer-add-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/t07-drawer-footer.png" width="180" alt="Taskovsky drawer with Add and Manage footer">](assets/mobile-parity/2026-11-16/t07-drawer-footer.png)<br>New 2026-11-16 capture on this branch; [capture details](#evidence-t07) |
+| T08 | Drawer Add | Similar | Anchored List/Filter/Tag popup in exact reference order with direct blank routes implemented; matched visual acceptance pending. [Receipt](changes/mobile-drawer-add-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/t08-add-popup.png" width="180" alt="Taskovsky drawer Add popup">](assets/mobile-parity/2026-11-16/t08-add-popup.png)<br>New 2026-11-16 capture on this branch; [capture details](#evidence-t08) |
 | T09 | Smart Lists management | Partial | Unified Smart Lists/Tags tabs, staged visibility/order and safe nested editors implemented; exact layout/checkmark and unsupported external sources remain. | **Reference withheld for privacy** | [<img src="assets/mobile-parity/2026-11-15/t09-unified-smartlists.png" width="180" alt="Neutral unified Smart Lists management">](assets/mobile-parity/2026-11-15/t09-unified-smartlists.png)<br>[Receipt](changes/mobile-unified-management-2026-11-16.md) |
 | T10 | Smart-list visibility popup | Similar | Show / Show if not empty / Hidden choices exist; visual match pending. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
 | T11 | Management Tags tab | Partial | Tags visibility, Add Tag and existing editable tags share unified staged management. Existing standalone tools retained; layout not pixel-certified. | **Reference withheld for privacy** | [<img src="assets/mobile-parity/2026-11-15/t11-unified-tags.png" width="180" alt="Neutral unified Tags management">](assets/mobile-parity/2026-11-15/t11-unified-tags.png)<br>[Receipt](changes/mobile-unified-management-2026-11-16.md) |
@@ -191,6 +191,22 @@ Historical [PR #102](https://github.com/Mental-NV/Taskovsky/pull/102) QA capture
 Follow-up source `a8731b6`; [notice-removal receipt](changes/mobile-capture-notice-2026-11-15.md). Prior [PR120](https://github.com/Mental-NV/Taskovsky/pull/120) compact shell remains partial. 1170 × 2532 pixels. Neutral fixture, real software keyboard. Not a matched reference capture or exact low-sheet geometry.
 
 [<img src="assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png" width="250" alt="Taskovsky compact composer">](assets/mobile-parity/2026-11-15/t17-composer-without-recovery-notice.png)
+
+<a id="evidence-t07"></a>
+
+### T07 — Tasks drawer footer
+
+New 2026-11-16 captures on this branch ([receipt](changes/mobile-drawer-add-2026-11-16.md)). Actual owned Simulator QA screenshots (1170×2532) on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral fixture: indigo drawer with the bottom-anchored Add (left) and unified-management (right) footer, reachable after scrolling. No account, share, print, or background controls. Not pixel certification; matched reference typography/geometry acceptance remains open.
+
+[<img src="assets/mobile-parity/2026-11-16/t07-drawer-footer.png" width="250" alt="Taskovsky drawer with Add and Manage footer">](assets/mobile-parity/2026-11-16/t07-drawer-footer.png)
+
+<a id="evidence-t08"></a>
+
+### T08 — Drawer Add popup
+
+New 2026-11-16 capture on this branch ([receipt](changes/mobile-drawer-add-2026-11-16.md)). Actual owned Simulator QA screenshot (1170×2532) on `B263E8E7`, neutral fixture: anchored Add bubble with List, Filter, Tag in the observed reference order, each opening a blank creation editor directly. Backdrop tap returns to the drawer with no writes. Not pixel certification; matched anchored-popup geometry remains unverified.
+
+[<img src="assets/mobile-parity/2026-11-16/t08-add-popup.png" width="250" alt="Taskovsky drawer Add popup">](assets/mobile-parity/2026-11-16/t08-add-popup.png)
 
 Schedule Reminder/Repeat images show dedicated staged pages, not the reference anchored preset menus. D12 now has ordered derived presets, selection marks and verified staged/reload behavior; both states remain partial.
 
