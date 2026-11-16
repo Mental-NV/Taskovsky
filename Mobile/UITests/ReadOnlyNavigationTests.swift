@@ -2809,12 +2809,12 @@ extension ReadOnlyNavigationTests {
         type.buttons["Duration"].tap()
         XCTAssertTrue(type.buttons["Duration"].isSelected)
         XCTAssertFalse(app.datePickers["scheduleDateGrid"].exists)
-        XCTAssertEqual(app.switches["scheduleTime"].value as? String, "0")
-        let move = app.buttons["Move duration to another date"]
-        XCTAssertTrue(move.exists)
-        move.tap()
-        XCTAssertTrue(app.descendants(matching: .any)["scheduleMoveDurationDate"].firstMatch.waitForExistence(timeout: 5))
-        move.tap()
+        XCTAssertEqual(app.switches["scheduleAllDay"].value as? String, "1")
+        app.buttons["scheduleRangeStart"].tap()
+        XCTAssertTrue(app.datePickers["durationEndpointDate"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.segmentedControls["durationEndpoint"].buttons["Start"].isSelected)
+        app.buttons["durationPopupCancel"].tap()
+        waitGone(app.buttons["durationPopupDone"])
         attach(app, "Schedule Duration tab preserves all-day draft")
         type.buttons["Date"].tap()
         XCTAssertTrue(type.buttons["Date"].isSelected)
@@ -2901,10 +2901,10 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(type.waitForExistence(timeout: 5))
         XCTAssertTrue(type.buttons["Date"].isSelected)
         type.buttons["Duration"].tap()
-        XCTAssertTrue(app.switches["scheduleTime"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.descendants(matching: .any)["scheduleRangeStart"].firstMatch.exists)
-        XCTAssertTrue(app.descendants(matching: .any)["scheduleRangeEnd"].firstMatch.exists)
-        attach(app, "Duration editor unchanged after Time popup save")
+        XCTAssertTrue(app.switches["scheduleAllDay"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["scheduleDurationDate"].exists)
+        XCTAssertTrue(app.buttons["scheduleDurationTime"].exists)
+        attach(app, "Duration cards after Time popup save")
         type.buttons["Date"].tap()
         XCTAssertNotEqual(app.buttons["scheduleTime"].value as? String, "None")
         app.buttons["scheduleTimeRemove"].tap()
@@ -2918,34 +2918,21 @@ extension ReadOnlyNavigationTests {
     @MainActor func testScheduleDurationDateMoveRemainsAvailableAndCancels() {
         let app = launch()
         let original = openSchedule(app, task: "Prepare the weekly plan")
-        let type = app.segmentedControls["scheduleType"]
-        XCTAssertTrue(type.waitForExistence(timeout: 5))
-        XCTAssertTrue(type.buttons["Duration"].isSelected)
-        let start = app.descendants(matching: .any)["scheduleRangeStart"].firstMatch
-        let end = app.descendants(matching: .any)["scheduleRangeEnd"].firstMatch
-        XCTAssertTrue(start.waitForExistence(timeout: 5)); XCTAssertTrue(end.exists)
-        let tree = XCTAttachment(string: app.debugDescription); tree.name = "Duration controls hierarchy"; tree.lifetime = .keepAlways; add(tree)
-        let startValue = start.buttons["Date and Time Picker"], endValue = end.buttons["Date and Time Picker"]
-        let beforeStart = startValue.value as? String, beforeEnd = endValue.value as? String
-        XCTAssertNotNil(beforeStart); XCTAssertNotNil(beforeEnd)
-        app.buttons["Move duration to another date"].tap()
-        let move = app.descendants(matching: .any)["scheduleMoveDurationDate"].firstMatch
-        XCTAssertTrue(move.waitForExistence(timeout: 5))
-        move.tap()
+        let date = app.buttons["scheduleDurationDate"], time = app.buttons["scheduleDurationTime"]
+        XCTAssertTrue(date.waitForExistence(timeout: 5))
+        let beforeDate = date.value as? String, beforeTime = time.value as? String
+        date.tap()
+        XCTAssertTrue(app.datePickers["scheduleMoveDurationDate"].waitForExistence(timeout: 5))
         let day = app.buttons["Tuesday, November 10"]
-        XCTAssertTrue(day.waitForExistence(timeout: 5), app.debugDescription)
-        day.tap()
-        if app.buttons["PopoverDismissRegion"].exists { app.buttons["PopoverDismissRegion"].tap() }
-        app.buttons["Move duration to another date"].tap()
-        XCTAssertTrue(start.exists); XCTAssertTrue(end.exists)
-        XCTAssertNotNil(startValue.value as? String); XCTAssertNotNil(endValue.value as? String)
-        XCTAssertEqual(startValue.value as? String, "13:00, 10 Nov 2026")
-        XCTAssertNotEqual(startValue.value as? String, beforeStart)
-        XCTAssertEqual(endValue.value as? String, "14:00, 10 Nov 2026")
-        XCTAssertNotEqual(endValue.value as? String, beforeEnd)
-        XCTAssertEqual(app.switches["scheduleTime"].value as? String, "1")
-        app.buttons["scheduleCancel"].tap()
-        waitGone(app.buttons["scheduleDone"])
+        XCTAssertTrue(day.waitForExistence(timeout: 5), app.debugDescription); day.tap()
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertNotEqual(date.value as? String, beforeDate)
+        XCTAssertTrue((date.value as? String ?? "").contains("10"))
+        XCTAssertEqual(time.value as? String, beforeTime)
+        XCTAssertTrue((time.value as? String ?? "").contains("13:00"))
+        XCTAssertTrue((time.value as? String ?? "").contains("14:00"))
+        XCTAssertEqual(app.switches["scheduleAllDay"].value as? String, "0")
+        app.buttons["scheduleCancel"].tap(); waitGone(app.buttons["scheduleDone"])
         XCTAssertEqual(app.buttons["editSchedule"].label, original)
     }
 
@@ -8675,5 +8662,105 @@ extension ReadOnlyNavigationTests {
         app.buttons["taskDetailDone"].tap()
         toggleTaskDisplay("taskDisplayDetails", in: app)
         XCTAssertEqual(card.frame.height, compact, accuracy: 1)
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testDurationCardsNoOpPreservesSecondsZoneAcrossSave() {
+        let app = launch(qaCase: "duration-precision")
+        let evidence = app.staticTexts["previewNotice"].value as? String
+        XCTAssertTrue(evidence?.contains("Pacific/Kiritimati") == true)
+        _ = openSchedule(app, task: "Review the project outline")
+        app.buttons["scheduleDurationTime"].tap()
+        XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
+        app.segmentedControls["durationEndpoint"].buttons["End"].tap()
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        app.buttons["scheduleDurationDate"].tap()
+        XCTAssertTrue(app.datePickers["scheduleMoveDurationDate"].waitForExistence(timeout: 5))
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        attach(app, "Duration cards in non-device zone")
+        app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.staticTexts["previewNotice"].value as? String, evidence)
+    }
+    @MainActor func testDurationCardsEndpointEditsNestedCancelSaveAndRelaunch() {
+        let app = launch()
+        _ = openSchedule(app, task: "Prepare the weekly plan")
+        let time = app.buttons["scheduleDurationTime"]
+        let before = time.value as? String
+        time.tap(); XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
+        app.pickerWheels.element(boundBy: 2).adjust(toPickerWheelValue: "15")
+        app.buttons["durationPopupCancel"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertEqual(time.value as? String, before)
+        time.tap(); XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
+        app.pickerWheels.element(boundBy: 2).adjust(toPickerWheelValue: "15")
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertTrue((time.value as? String ?? "").contains("13:15"))
+        XCTAssertTrue((time.value as? String ?? "").contains("14:00"))
+        time.tap(); app.segmentedControls["durationEndpoint"].buttons["End"].tap()
+        app.pickerWheels.element(boundBy: 2).adjust(toPickerWheelValue: "30")
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertTrue((time.value as? String ?? "").contains("14:30"))
+        let changed = time.value as? String
+        attach(app, "Duration cards with edited endpoints")
+        app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.buttons["taskDetailDone"].tap(); app.terminate(); app.launch()
+        XCTAssertTrue(app.staticTexts["previewNotice"].waitForExistence(timeout: 10))
+        _ = openSchedule(app, task: "Prepare the weekly plan")
+        XCTAssertEqual(time.value as? String, changed)
+        app.buttons["scheduleCancel"].tap()
+    }
+    @MainActor func testDurationAllDayEndpointTabsAndNestedCancel() {
+        let app = launch()
+        _ = openSchedule(app, task: "Prepare the weekly plan")
+        let original = app.buttons["scheduleDurationTime"].value as? String
+        app.switches["scheduleAllDay"].tap()
+        let end = app.buttons["scheduleRangeEnd"]
+        XCTAssertTrue(end.waitForExistence(timeout: 5))
+        let before = end.value as? String
+        end.tap()
+        XCTAssertTrue(app.segmentedControls["durationEndpoint"].buttons["End"].isSelected)
+        app.buttons["Tuesday, November 10"].tap()
+        app.buttons["durationPopupCancel"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertEqual(end.value as? String, before)
+        end.tap(); app.buttons["Tuesday, November 10"].tap()
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertNotEqual(end.value as? String, before)
+        attach(app, "All Day duration endpoint cards")
+        app.buttons["scheduleCancel"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(app.buttons["scheduleDurationTime"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["scheduleDurationTime"].value as? String, original)
+        app.buttons["scheduleCancel"].tap()
+    }
+}
+
+
+extension ReadOnlyNavigationTests {
+    @MainActor func testDurationEndpointInvalidRangeCorrectionAndOuterCancel() {
+        let app = launch()
+        _ = openSchedule(app, task: "Prepare the weekly plan")
+        let time = app.buttons["scheduleDurationTime"]
+        let before = time.value as? String
+        time.tap(); XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
+        app.pickerWheels.element(boundBy: 1).adjust(toPickerWheelValue: "15")
+        XCTAssertFalse(app.buttons["durationPopupDone"].isEnabled)
+        app.segmentedControls["durationEndpoint"].buttons["End"].tap()
+        app.pickerWheels.element(boundBy: 1).adjust(toPickerWheelValue: "16")
+        XCTAssertTrue(app.buttons["durationPopupDone"].isEnabled)
+        app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
+        XCTAssertTrue((time.value as? String ?? "").contains("15:00"))
+        XCTAssertTrue((time.value as? String ?? "").contains("16:00"))
+        app.buttons["scheduleCancel"].tap(); waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(time.waitForExistence(timeout: 5)); XCTAssertEqual(time.value as? String, before)
+        time.tap(); XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
+        app.pickerWheels.element(boundBy: 2).adjust(toPickerWheelValue: "15")
+        app.navigationBars["Schedule"].staticTexts["Schedule"].tap()
+        waitGone(app.buttons["durationPopupDone"])
+        XCTAssertEqual(time.value as? String, before)
+        app.buttons["scheduleCancel"].tap()
     }
 }
