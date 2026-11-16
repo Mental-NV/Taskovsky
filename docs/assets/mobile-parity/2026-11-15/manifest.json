@@ -301,6 +301,32 @@
     "historical": true
   },
   {
+    "state": "C14",
+    "file": "c14-arrange-hierarchy-expanded.png",
+    "sha256": "eb6a10f16e94a8cb6838222b04322d516eab2de325206ad445a0c499d2ac5c8c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-arrange-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral arrange-hierarchy fixture only (Neutral arrange parent/children/orphan, Read a chapter); no personal account/task data. Parent trailing disclosure, indented children, Work count 4.",
+    "source_commit": "3cc4027"
+  },
+  {
+    "state": "C14",
+    "file": "c14-arrange-hierarchy-collapsed.png",
+    "sha256": "04fe8768bc08000a977eaf230e69bc8761f893f73c303e56633cf3fea95882b3",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-arrange-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral arrange-hierarchy fixture only; no personal account/task data. Collapsed parent with trailing chevron, children hidden, Work count unchanged at 4.",
+    "source_commit": "3cc4027"
+  },
+  {
     "state": "D11",
     "file": "d11-custom-reminder.png",
     "sha256": "caf375650a76a7bc897577f426ae6fc6b8c91bd824617943abb770360f4cbf8e",

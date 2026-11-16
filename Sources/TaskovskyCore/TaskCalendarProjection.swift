@@ -172,6 +172,39 @@ public enum TaskCalendarProjection {
         return groups.keys.sorted().map { ($0, groups[$0] ?? []) }
     }
 
+    /// One visible Arrange row. `depth` is the nesting depth inside its own
+    /// group; `hasChildren` marks a disclosure. Rows never carry records that
+    /// were not in the supplied slice: eligibility (undated/overdue/notes,
+    /// sources, recurrence) is settled by `arrangementTasks` before grouping.
+    public struct ArrangementRow: Sendable, Equatable {
+        public let task: TaskItem
+        public let depth: Int
+        public let hasChildren: Bool
+        public init(task: TaskItem, depth: Int, hasChildren: Bool) {
+            self.task = task; self.depth = depth; self.hasChildren = hasChildren
+        }
+    }
+
+    /// Bounded hierarchy rows for one already-grouped slice. Only List
+    /// grouping nests, and only within the slice: a task whose parent is in
+    /// another group — or is not an eligible candidate at all — renders as a
+    /// root, and collapsing never changes the group count. Tag and Priority
+    /// grouping keep the exact incoming flat order. Cycle-safe by
+    /// construction (shared `TaskHierarchy.listRows`); every branch keeps
+    /// stable unique identifiers by rendering the first occurrence of a
+    /// duplicate identifier once, so no eligible row vanishes.
+    public static func arrangementRows(for tasks: [TaskItem], grouping: CalendarColorMode,
+                                       showHierarchy: Bool, collapsed: Set<UUID>) -> [ArrangementRow] {
+        var seen = Set<UUID>()
+        let unique = tasks.filter { seen.insert($0.id).inserted }
+        guard showHierarchy, grouping == .list else {
+            return unique.map { ArrangementRow(task: $0, depth: 0, hasChildren: false) }
+        }
+        return TaskHierarchy.listRows(unique, collapsed: collapsed).map {
+            ArrangementRow(task: $0.task, depth: $0.depth, hasChildren: $0.hasChildren)
+        }
+    }
+
 }
 
 public struct CalendarDayPreview: Identifiable, Sendable {
