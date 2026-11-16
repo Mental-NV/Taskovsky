@@ -2,7 +2,7 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private struct PhoneTagRequest: Identifiable {
+struct PhoneTagRequest: Identifiable {
     let id = UUID()
     let tag: TaskTag
     let creating: Bool
@@ -105,7 +105,7 @@ struct PhoneTagManagement: View {
     }
 }
 
-private struct PhoneTagEditor: View {
+struct PhoneTagEditor: View {
     private enum Confirmation: String, Identifiable {
         case discard, delete, merge
         var id: Self { self }

@@ -483,5 +483,33 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
     "historical": false
+  },
+  {
+    "state": "T09",
+    "file": "t09-unified-smartlists.png",
+    "sha256": "11165c24c2ab2a50cb975282439063381f8e1a47a221b83349c69ab968c2e50b",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "capture_source": "ed2113e",
+    "receipt": "../../../changes/mobile-unified-management-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Independently inspected neutral fixture; no personal task/account data",
+    "historical": false
+  },
+  {
+    "state": "T11",
+    "file": "t11-unified-tags.png",
+    "sha256": "f1059b261cfd710ccb7d4a7682a16406fa500a54d536d5f4b256f0e48755246e",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "capture_source": "ed2113e",
+    "receipt": "../../../changes/mobile-unified-management-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Independently inspected neutral fixture; no personal task/account data",
+    "historical": false
   }
 ]
