@@ -304,6 +304,8 @@ Leading-panel/backdrop shell implementation replaces the large navigation sheet,
 
 - D10/D12 Schedule options candidate: compact root summaries and pushed supported-control pages, no new reminder or repeat semantics. Validation pending; reference anchored-popup presentation remains open. [Scope](changes/mobile-schedule-options-2026-11-15.md).
 
+- D12 Repeat preset menu candidate: reference-ordered rows with live-derived weekday/month/year labels, current check, tap-to-stage-and-return and direct Custom route; recurrence, custom, end-condition and outer Cancel/Done semantics unchanged. Local tests/release/iPhone compile passed; native Simulator slot and exact-head CI pending. Anchored placement, grid highlight and Repeat Ends root row remain open. [Scope](changes/mobile-repeat-menu-2026-11-16.md).
+
 ## Composer recovery notice
 
 [User-requested removal](changes/mobile-capture-notice-2026-11-15.md) hides normal recovery status/gap, not recovery storage; actual warnings remain. Local full tests/release/review and bounded native checks passed; exact-head CI pending.

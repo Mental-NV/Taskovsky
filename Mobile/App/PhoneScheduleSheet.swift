@@ -64,6 +64,7 @@ struct PhoneScheduleSheet: View {
     @State private var skipOccurrence = false
     @State private var showZones = false
     @State private var showCustom = false
+    @State private var showRepeatMenu = false
     @State private var showReplace = false
     @State private var showTimePopover = false
     @State private var showCustomReminder = false
@@ -110,10 +111,9 @@ struct PhoneScheduleSheet: View {
                                     .navigationTitle("Reminder").navigationBarTitleDisplayMode(.inline)
                             } label: { LabeledContent("Reminder", value: reminderSummary) }
                                 .accessibilityIdentifier("scheduleReminderOptions").accessibilityValue(reminderSummary)
-                            NavigationLink {
-                                Form { repeatSection }
-                                    .navigationTitle("Repeat").navigationBarTitleDisplayMode(.inline)
-                            } label: { LabeledContent("Repeat", value: repeatSummary) }
+                            Button { showRepeatMenu = true } label: {
+                                LabeledContent("Repeat", value: repeatSummary)
+                            }
                                 .accessibilityIdentifier("scheduleRepeatOptions").accessibilityValue(repeatSummary)
                         }
                         if canSkipOccurrence {
@@ -136,6 +136,7 @@ struct PhoneScheduleSheet: View {
                         .accessibilityIdentifier("scheduleError")
                 }
             }
+            .navigationDestination(isPresented: $showRepeatMenu) { repeatPage }
             .navigationTitle("Schedule")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -292,7 +293,13 @@ struct PhoneScheduleSheet: View {
 
     private var repeatSummary: String {
         if let custom = edit.customRule { return custom.isValid ? custom.shortLabel(calendar: calendar) : "Invalid custom repeat" }
-        return edit.repeatRule == .none ? "None" : edit.repeatRule.rawValue.capitalized
+        return RepeatPreset(rawValue: edit.repeatRule.rawValue)
+            .map { $0.draftSummary(due: due, calendar: calendar) } ?? edit.repeatRule.rawValue.capitalized
+    }
+
+    private var repeatPage: some View {
+        Form { repeatSection }
+            .navigationTitle("Repeat").navigationBarTitleDisplayMode(.inline)
     }
 
     private var reminderSection: some View {
@@ -375,20 +382,46 @@ struct PhoneScheduleSheet: View {
                 Button("Edit custom repeat") { showCustom = true }.accessibilityIdentifier("scheduleCustom")
                 Button("Replace with simple repeat") { showReplace = true }
             } else {
-                Picker("Repeat", selection: Binding(get: { edit.repeatRule }, set: { edit.selectSimpleRepeat($0) })) {
-                    ForEach(RepeatRule.allCases, id: \.self) { rule in
-                        Text(rule == .none ? "None" : rule.rawValue.capitalized).tag(rule)
+                ForEach(RepeatPreset.menuCases, id: \.self) { preset in
+                    if preset == .custom {
+                        Button { showCustom = true } label: {
+                            HStack {
+                                Text("Custom")
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
+                        .accessibilityIdentifier("scheduleCustom")
+                    } else if let rule = preset.repeatRule {
+                        let selected = RepeatPreset.current(repeatRule: edit.repeatRule, customRule: edit.customRule) == preset
+                        Button {
+                            edit.selectSimpleRepeat(rule)
+                            showRepeatMenu = false
+                        } label: {
+                            HStack {
+                                Text(preset.menuLabel(due: due, calendar: calendar))
+                                Spacer()
+                                if selected { Image(systemName: "checkmark") }
+                            }
+                            .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("scheduleRepeatPreset-" + preset.rawValue)
+                        .accessibilityAddTraits(selected ? .isSelected : [])
+                        .accessibilityValue(selected ? "Selected" : "Not selected")
                     }
                 }
-                .accessibilityIdentifier("scheduleSimpleRepeat")
                 if edit.repeatRule != .none {
                     Toggle("End by date", isOn: Binding(get: { edit.repeatEnd != nil }, set: { edit.repeatEnd = $0 ? calendar.startOfDay(for: due) : nil }))
+                        .accessibilityIdentifier("scheduleRepeatEnd")
                     if edit.repeatEnd != nil {
                         DatePicker("Last day", selection: Binding(get: { edit.repeatEnd ?? due }, set: { edit.repeatEnd = calendar.startOfDay(for: $0) }),
                                    displayedComponents: .date)
+                            .accessibilityIdentifier("scheduleRepeatEndDate")
                     }
                 }
-                Button("Custom repeat") { showCustom = true }.accessibilityIdentifier("scheduleCustom")
             }
         }
     }

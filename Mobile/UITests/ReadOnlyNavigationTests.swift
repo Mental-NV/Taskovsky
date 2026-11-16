@@ -3061,6 +3061,185 @@ extension ReadOnlyNavigationTests {
         XCTAssertEqual(app.buttons["editSchedule"].label, "Schedule")
     }
 
+    @MainActor private func repeatPresetIDs() -> [String] {
+        ["scheduleRepeatPreset-none", "scheduleRepeatPreset-daily", "scheduleRepeatPreset-weekly",
+         "scheduleRepeatPreset-monthly", "scheduleRepeatPreset-yearly", "scheduleRepeatPreset-weekdays",
+         "scheduleCustom"]
+    }
+
+    @MainActor private func expectedWeeklySummary(fromWeeklyLabel label: String) -> String {
+        // "Weekly (Thursday)" -> "Every week on Thu" with test-side en_US symbols.
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US")
+        let name = label.replacingOccurrences(of: "Weekly (", with: "").replacingOccurrences(of: ")", with: "")
+        let index = formatter.weekdaySymbols.firstIndex(of: name) ?? 4
+        return "Every week on " + formatter.shortWeekdaySymbols[index]
+    }
+
+    @MainActor func testRepeatMenuShowsDerivedLabelsInReferenceOrderWithCheck() {
+        let app = launch()
+        _ = openSchedule(app, task: "Review the project outline")
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        let ids = repeatPresetIDs()
+        let rows = ids.map { app.buttons[$0] }
+        for row in rows { XCTAssertTrue(row.waitForExistence(timeout: 5)) }
+        reveal(rows.last!, in: app)
+        for index in 0..<(rows.count - 1) {
+            XCTAssertLessThan(rows[index].frame.minY, rows[index + 1].frame.minY)
+        }
+        XCTAssertEqual(rows[0].label, "None")
+        XCTAssertEqual(rows[1].label, "Daily")
+        XCTAssertTrue(rows[2].label.hasPrefix("Weekly (") && rows[2].label.hasSuffix(")"))
+        XCTAssertTrue(rows[3].label.hasPrefix("Monthly (the ") && rows[3].label.hasSuffix(" day)"))
+        XCTAssertTrue(rows[4].label.hasPrefix("Yearly ("))
+        let formatter = DateFormatter(); formatter.locale = Locale(identifier: "en_US")
+        XCTAssertEqual(rows[5].label, "Every Weekday (\(formatter.shortWeekdaySymbols[1]) - \(formatter.shortWeekdaySymbols[5]))")
+        XCTAssertEqual(rows[6].label, "Custom")
+        XCTAssertTrue(rows[0].isSelected)
+        XCTAssertEqual(rows[0].value as? String, "Selected")
+        for row in rows.dropFirst() where row.identifier != "scheduleCustom" {
+            XCTAssertFalse(row.isSelected)
+        }
+        attach(app, "Repeat preset menu with derived labels and None checked")
+        scheduleRoot(app)
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testRepeatPresetSelectionPopsUpdatesSummaryAndSurvivesRelaunch() {
+        let app = launch(), task = "Review the project outline"
+        _ = openSchedule(app, task: task)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        let weekly = app.buttons["scheduleRepeatPreset-weekly"]
+        reveal(weekly, in: app)
+        let expected = expectedWeeklySummary(fromWeeklyLabel: weekly.label)
+        weekly.tap()
+        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, expected)
+        attach(app, "Weekly preset staged from the Repeat menu")
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(app.buttons["scheduleDone"].waitForExistence(timeout: 5))
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        XCTAssertTrue(app.buttons["scheduleRepeatPreset-weekly"].isSelected)
+        scheduleRoot(app)
+        app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        let reloadedSchedule = openSchedule(app, task: task)
+        XCTAssertNotEqual(reloadedSchedule, "Schedule")
+        let reloadedRepeat = app.buttons["scheduleRepeatOptions"]
+        reveal(reloadedRepeat, in: app)
+        XCTAssertEqual(reloadedRepeat.value as? String, expected)
+        app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testRepeatMenuDismissalAndOuterCancelDiscardStagedPreset() {
+        let app = launch(), task = "Review the project outline"
+        let original = openSchedule(app, task: task)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        XCTAssertTrue(app.buttons["scheduleRepeatPreset-none"].isSelected)
+        scheduleRoot(app)
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        let weekly = app.buttons["scheduleRepeatPreset-weekly"]
+        reveal(weekly, in: app)
+        weekly.tap()
+        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertNotEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.buttons["editSchedule"].label, original)
+    }
+
+    @MainActor func testRepeatCustomCancelKeepsPriorPreset() {
+        let app = launch()
+        _ = openSchedule(app, task: "Review the project outline")
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        XCTAssertTrue(app.buttons["scheduleRepeatPreset-none"].isSelected)
+        let custom = app.buttons["scheduleCustom"]
+        reveal(custom, in: app)
+        custom.tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        app.buttons["customRepeatCancel"].tap()
+        waitGone(app.buttons["customRepeatDone"])
+        XCTAssertTrue(app.buttons["scheduleRepeatPreset-none"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["scheduleRepeatPreset-none"].isSelected)
+        XCTAssertFalse(app.staticTexts["scheduleCustomRule"].exists)
+        scheduleRoot(app)
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        app.buttons["scheduleCancel"].tap()
+    }
+
+    @MainActor func testRepeatExistingCustomRuleOpensPreserved() {
+        let app = launch()
+        _ = openSchedule(app, task: "Review the project outline")
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        let custom = app.buttons["scheduleCustom"]
+        reveal(custom, in: app)
+        custom.tap()
+        XCTAssertTrue(app.buttons["customRepeatDone"].waitForExistence(timeout: 5))
+        app.buttons["customRepeatDone"].tap()
+        waitGone(app.buttons["customRepeatDone"])
+        let rule = app.staticTexts["scheduleCustomRule"]
+        XCTAssertTrue(rule.waitForExistence(timeout: 5))
+        let expectedRule = rule.label
+        XCTAssertFalse(expectedRule.isEmpty)
+        XCTAssertFalse(app.buttons["scheduleRepeatPreset-weekly"].exists)
+        scheduleRoot(app)
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, expectedRule)
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.buttons["editSchedule"].tap()
+        XCTAssertTrue(app.buttons["scheduleDone"].waitForExistence(timeout: 5))
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        XCTAssertTrue(app.staticTexts["scheduleCustomRule"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["scheduleRepeatPreset-weekly"].exists)
+        scheduleRoot(app)
+        app.buttons["scheduleCancel"].tap()
+        waitGone(app.buttons["scheduleDone"])
+    }
+
+    @MainActor func testRepeatEndDateSurvivesPresetSwitchAndNoneClears() {
+        let app = launch(), task = "Review the project outline"
+        _ = openSchedule(app, task: task)
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        let weekly = app.buttons["scheduleRepeatPreset-weekly"]
+        reveal(weekly, in: app)
+        weekly.tap()
+        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 5))
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        let end = app.switches["scheduleRepeatEnd"]
+        reveal(end, in: app)
+        XCTAssertEqual(end.value as? String, "0")
+        end.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+        XCTAssertEqual(end.value as? String, "1")
+        XCTAssertTrue(app.datePickers["scheduleRepeatEndDate"].waitForExistence(timeout: 5))
+        let monthly = app.buttons["scheduleRepeatPreset-monthly"]
+        reveal(monthly, in: app)
+        monthly.tap()
+        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 5))
+        openScheduleOptions("scheduleRepeatOptions", in: app)
+        XCTAssertEqual(app.switches["scheduleRepeatEnd"].value as? String, "1")
+        let none = app.buttons["scheduleRepeatPreset-none"]
+        reveal(none, in: app, towardTop: true)
+        none.tap()
+        XCTAssertTrue(app.navigationBars["Schedule"].waitForExistence(timeout: 5))
+        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        app.buttons["scheduleDone"].tap()
+        waitGone(app.buttons["scheduleDone"])
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        _ = openSchedule(app, task: task)
+        let reloadedRepeat = app.buttons["scheduleRepeatOptions"]
+        reveal(reloadedRepeat, in: app)
+        XCTAssertEqual(reloadedRepeat.value as? String, "None")
+        app.buttons["scheduleCancel"].tap()
+    }
+
     @MainActor func testScheduleZoneAndManualReminderPreserveTimedWindow() {
         let app = launch(), task = "Prepare the weekly plan"
         let original = openSchedule(app, task: task)

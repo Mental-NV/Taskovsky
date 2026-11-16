@@ -14,6 +14,7 @@ let domainSources = [
     "RichDescriptionPreview.swift",
     "RichBodyEdit.swift",
     "CustomRecurrence.swift",
+    "RepeatPreset.swift",
     "TaskCalendar.swift",
     "TaskDueCountdown.swift",
     "TaskCalendarProjection.swift",
