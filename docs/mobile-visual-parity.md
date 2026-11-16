@@ -24,7 +24,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 ## Evidence coverage and limits
 
-**36/46 states have an attached Taskovsky screenshot; 10/46 await one. 0/46 have a portable TickTick reference image attached here.** The attached assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. C09's three captures are new 2026-11-16 images on this branch; the rest are historical feature-checkpoint images, **not a new capture of baseline main**. C04 in particular predates subsequent Calendar layout changes.
+**38/46 states have an attached Taskovsky screenshot; 8/46 await one. 0/46 have a portable TickTick reference image attached here.** The attached assets are unmodified, pixel-inspected owned Simulator QA captures with neutral sample content or settings. C01/C02 new images are from this candidate at source `52cd9af`; other captures are earlier feature checkpoints, **not fresh current-main captures**. C04 in particular predates subsequent Calendar layout changes.
 
 The real TickTick images from the original audit remain in its Computer Use trace, not as durable publishable PNGs. See the [reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) for observed hierarchy and trace locators. Do not infer visual equality from a missing reference image. Future reference attachments require a matched safe fixture and privacy review; no personal task/account screenshots are published here.
 
@@ -34,8 +34,8 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 
 | ID | Form / state | General similarity | Biggest remaining gap | TickTick reference | Taskovsky screenshot |
 |---|---|---|---|---|---|
-| C01 | Hourly Week | Partial | Header, density, overlaps and gestures still need matched comparison. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
-| C02 | Calendar mode menu | Similar | Core chooser and 3 Day exist; naming and order still differ. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | **Screenshot missing**<br>Awaiting an inspected capture. |
+| C01 | Hourly Week | Partial | Weekday strip now formats in the Calendar zone at midnight boundaries; the capture shows a partially clipped Sunday column and a tall all-day band, and density, overlaps and gestures still need matched comparison — this slice is header timezone formatting, not Week geometry. [Receipt](changes/mobile-week-header-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/c01-week.png" width="180" alt="Taskovsky neutral hourly Week">](assets/mobile-parity/2026-11-16/c01-week.png)<br>New 2026-11-16 capture at source `52cd9af`; [capture details](#evidence-c01) |
+| C02 | Calendar mode menu | Similar | Observed primary order List/Year/Month/Week/3 Day/Day with List naming and separated Multi-Day/Multi-Week extras; single-check, choice/selected-row dismissal and Year relaunch covered — backdrop dismissal and List relaunch persistence not tested. Matched visual acceptance pending. [Receipt](changes/mobile-week-header-2026-11-16.md) | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-16/c02-mode-menu.png" width="180" alt="Taskovsky mode menu with observed order">](assets/mobile-parity/2026-11-16/c02-mode-menu.png)<br>New 2026-11-16 capture at source `52cd9af`; [capture details](#evidence-c02) |
 | C03 | Week overview | Similar | Mini-month, seven tiles and Day/Back implemented; geometry remains approximate. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/c03-week-overview.png"><img src="assets/mobile-parity/2026-11-15/c03-week-overview.png" width="180" alt="Taskovsky C03 historical Simulator QA screenshot"></a><br>[PR #112](https://github.com/Mental-NV/Taskovsky/pull/112) · [Capture details](#evidence-c03)<br>Historical QA; not current-main capture. |
 | C04 | Calendar overflow menu | Partial | Core routes exist; subscriptions excluded and Share/Print deferred. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | <a href="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png"><img src="assets/mobile-parity/2026-11-15/c04-calendar-overflow.png" width="180" alt="Taskovsky C04 historical Simulator QA screenshot"></a><br>[PR #103](https://github.com/Mental-NV/Taskovsky/pull/103) · [Capture details](#evidence-c04)<br>Historical QA; not current-main capture. |
 | C05 | Filter View Range | Partial | Compact continuous source list aligned to live Mirroring observations; exact typography/colors, non-All reference states and unsupported sources remain unverified. | **Screenshot missing**<br>[Observed reference inventory](ticktick-spec/mobile-surface-inventory-2026-11-14.md) | [<img src="assets/mobile-parity/2026-11-15/c05-compact-layout.png" width="180" alt="Taskovsky Calendar source hierarchy">](assets/mobile-parity/2026-11-15/c05-compact-layout.png)<br>[Receipt](changes/mobile-calendar-filter-layout-2026-11-15.md) |
@@ -94,6 +94,22 @@ The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14
 ## Screenshot gallery
 
 Click an image for original resolution. [Machine-readable provenance and SHA-256 manifest](assets/mobile-parity/2026-11-15/manifest.json). Capture runtime metadata is limited to what the linked QA receipt records; no unrecorded device, build or scale is inferred.
+
+<a id="evidence-c01"></a>
+
+### C01: Hourly Week
+
+New 2026-11-16 capture at source `52cd9af` ([receipt](changes/mobile-week-header-2026-11-16.md)). Actual owned Simulator QA screenshot (1170×2532) on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral fixture: hourly Week with the weekday strip Mon 9 through a partially clipped Sun 15, GMT+3 gutter and a tall all-day band. Not pixel certification; these layout limitations remain open and density/overlap/gesture parity is unclaimed — this slice is header timezone formatting, not Week geometry.
+
+[<img src="assets/mobile-parity/2026-11-16/c01-week.png" width="250" alt="Taskovsky Simulator QA hourly Week">](assets/mobile-parity/2026-11-16/c01-week.png)
+
+<a id="evidence-c02"></a>
+
+### C02: Calendar mode menu
+
+New 2026-11-16 capture at source `52cd9af` ([receipt](changes/mobile-week-header-2026-11-16.md)). Actual owned Simulator QA screenshot (1170×2532) on `B263E8E7`, neutral fixture: primary order List, Year, Month, Week (checked), 3 Day, Day with the separated More views Multi-Day/Multi-Week extras. Companion captures from the same run (Year, List, generic Multi-Day, Multi-Week states) remain in the native log directory `/private/tmp/TaskovskyWeekHeaderNative/screenshots/`. Not pixel certification; matched anchored-menu acceptance remains open.
+
+[<img src="assets/mobile-parity/2026-11-16/c02-mode-menu.png" width="250" alt="Taskovsky Simulator QA Calendar mode menu">](assets/mobile-parity/2026-11-16/c02-mode-menu.png)
 
 <a id="evidence-c03"></a>
 
