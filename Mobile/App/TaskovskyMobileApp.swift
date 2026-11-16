@@ -59,6 +59,7 @@ struct MobileRootView: View {
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
     @State private var boardGroupings: [TaskDestination: PhoneScopedBoardGrouping] = [:]
+    @State private var boardTitleSorts: [TaskDestination: TaskTitleSort] = [:]
     @State private var capturePresented = false
     @State private var drawer = false
     @State private var manageLists = false
@@ -538,8 +539,15 @@ struct MobileRootView: View {
                         scopedViewMenu(data)
                         if alternateModes[destination] == .board {
                             Menu {
-                                Picker("Group board by", selection: scopedBoardGrouping) {
+                                Picker("Group by", selection: scopedBoardGrouping) {
                                     ForEach(PhoneScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
+                                }
+                                Picker("Sort by", selection: Binding<TaskTitleSort?>(
+                                    get: { boardTitleSorts[destination] },
+                                    set: { boardTitleSorts[destination] = $0; showTaskActions = false })) {
+                                    Text("Existing Order").tag(Optional<TaskTitleSort>.none)
+                                    Text("Title · Ascending").tag(Optional(TaskTitleSort.ascending))
+                                    Text("Title · Descending").tag(Optional(TaskTitleSort.descending))
                                 }
                             } label: {
                                 Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
@@ -643,7 +651,7 @@ struct MobileRootView: View {
             case .timeline:
                 if let scope { taskTimeline(scope, data: data) }
             case .board:
-                PhoneScopedTaskBoard(model: model, destination: destination, data: data, grouping: scopedBoardGrouping,
+                PhoneScopedTaskBoard(model: model, destination: destination, data: data, grouping: scopedBoardGrouping, titleSort: boardTitleSorts[destination],
                                      open: { selectedTask = PhoneTaskRoute(id: $0) },
                                      schedule: scheduleFromScopedBoard).id(destination)
             default:
