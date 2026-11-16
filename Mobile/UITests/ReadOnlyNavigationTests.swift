@@ -3130,7 +3130,9 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
         let reloadedSchedule = openSchedule(app, task: task)
         XCTAssertNotEqual(reloadedSchedule, "Schedule")
-        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, expected)
+        let reloadedRepeat = app.buttons["scheduleRepeatOptions"]
+        reveal(reloadedRepeat, in: app)
+        XCTAssertEqual(reloadedRepeat.value as? String, expected)
         app.buttons["scheduleCancel"].tap()
     }
 
@@ -3232,7 +3234,9 @@ extension ReadOnlyNavigationTests {
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
         _ = openSchedule(app, task: task)
-        XCTAssertEqual(app.buttons["scheduleRepeatOptions"].value as? String, "None")
+        let reloadedRepeat = app.buttons["scheduleRepeatOptions"]
+        reveal(reloadedRepeat, in: app)
+        XCTAssertEqual(reloadedRepeat.value as? String, "None")
         app.buttons["scheduleCancel"].tap()
     }
 

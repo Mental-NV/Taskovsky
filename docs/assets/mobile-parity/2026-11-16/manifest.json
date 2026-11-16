@@ -154,5 +154,31 @@
     "kind": "Unmodified owned Simulator QA screenshot",
     "review": "Actual pixels inspected (Saved Calendar color source summary with Inbox #58A58B): neutral calendar fixtures only, no personal data; fixed-build run with drawn Default slash",
     "historical": false
+  },
+  {
+    "state": "D12",
+    "file": "d12-repeat-presets.png",
+    "sha256": "6cef69067bce5c7fa357cc9be4dbdff2e7d9d06fdf5ad86e5d31ecfd0d6035d1",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-repeat-menu-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral schedule fixture only; no personal TickTick information",
+    "historical": false
+  },
+  {
+    "state": "D12",
+    "file": "d12-weekly-summary.png",
+    "sha256": "24ee90e5507180be8797e9f7f8c7c31024938f0798567d8e5aad1cd548be1b4c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-repeat-menu-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Actual pixels inspected: neutral schedule fixture only; no personal TickTick information",
+    "historical": false
   }
 ]

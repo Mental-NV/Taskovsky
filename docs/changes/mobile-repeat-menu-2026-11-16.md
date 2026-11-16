@@ -3,7 +3,7 @@
 ## Identity and decision
 
 - Change ID and title: D12 Repeat preset menu, Schedule Date tab.
-- Status: In implementation.
+- Status: Implemented; eight bounded native cases passed. Exact-head hosted CI and merge pending.
 - Owner or requesting instruction: D12 slice of the 46-form mobile Tasks/Calendar parity plan; user priority is light-theme broad structural similarity before pixel polish.
 - Approval source and date: Task instruction November 16, 2026 (live TickTick observation of Schedule > Date > Repeat on an all-day task dated Thursday November 12; no pixel-calibrated image supplied).
 - Base commit and affected platforms: `feat/mobile-repeat-menu` on main `4275fa9`; iPhone presentation plus a pure shared-domain preset helper. No macOS UI change.
@@ -19,7 +19,7 @@ Non-goals (explicitly unchanged): no anchored-popup geometry (the pushed Repeat 
 
 ## Current behavior and intended delta
 
-Current source: `PhoneScheduleSheet.repeatSection` (`Mobile/App/PhoneScheduleSheet.swift`) shows an inline `Picker` over `RepeatRule.allCases` (order none, daily, weekdays, weekly, monthly, yearly) plus an End-by-date toggle and a `Custom repeat` button. The Repeat summary is the capitalized raw value (`Weekly`). The Repeat page is pushed from a `NavigationLink`.
+Pre-change source at `4275fa9`: `PhoneScheduleSheet.repeatSection` (`Mobile/App/PhoneScheduleSheet.swift`) shows an inline `Picker` over `RepeatRule.allCases` (order none, daily, weekdays, weekly, monthly, yearly) plus an End-by-date toggle and a `Custom repeat` button. The Repeat summary is the capitalized raw value (`Weekly`). The Repeat page is pushed from a `NavigationLink`.
 
 Intended delta:
 
@@ -61,13 +61,23 @@ Unobserved and not claimed: saving over an existing custom rule via a preset (th
 ## Verification and release
 
 - Domain: new `Tests/TaskovskyDomainTests/RepeatPresetTests.swift` (order, derivation, ordinals, summary, selection round-trip, custom-preservation detection, save/reload through `TaskScheduleEdit.applying`); full `swift test --disable-sandbox`, `./scripts/build-app.sh`, and the existing recurrence suites must stay green.
-- iPhone: `scripts/build-ios-simulator-ci.sh` with a unique output directory; new XCUITests in `Mobile/UITests/ReadOnlyNavigationTests.swift` covering Repeat-01 through Repeat-08 run by the later native slot (C09 owns the Simulator; no app launches, Computer Use, live TickTick or personal data in this slice).
+- iPhone: `scripts/build-ios-simulator-ci.sh` with a unique output directory; six new XCUITests plus two existing custom/nested-cancel regressions passed in the final owned Simulator run below. The Custom cancellation case starts from None; the observed Weekly-to-Custom seed is not separately certified by this run.
 - Docs: this receipt, the D12 tracker row and verification pointers update in the same commit; no pixel-perfect or full-D12 claim. No push, PR or merge.
 
 ## Completion record
 
-Source on `feat/mobile-repeat-menu` (commit pending): `Sources/TaskovskyCore/RepeatPreset.swift` + `Package.swift` registration, `Mobile/App/PhoneScheduleSheet.swift` menu rewrite, `Tests/TaskovskyDomainTests/RepeatPresetTests.swift` (9 tests), six XCUITests in `Mobile/UITests/ReadOnlyNavigationTests.swift` prepared for the later native slot.
+Implementation `5040487` was corrected in `311e4f5` after independent review found an Optional `.none` mapping that hid None, a duplicate Custom route, and an invalid native assertion comparing a full schedule label with a Repeat summary. Regression coverage now explicitly unwraps every simple preset mapping. Integration `4d92691` preserves main/C09 `d7ea3396` and passed independent source review.
 
-Local verification: full `swift test --disable-sandbox` green — 153 + 55 + 181 + 540 = 929 XCTest with 0 failures plus 38 Swift Testing passed; `./scripts/build-app.sh` release/signature passed; `scripts/build-ios-simulator-ci.sh /private/tmp/TaskovskyRepeatMenu-ios` build-for-testing succeeded (app + MobileContracts/MobileNavigation bundles, no tests executed). Two self-authored test bugs (ordinal 31, Optional `.none` ambiguity) were caught by the new tests and fixed in this slice.
+The original implementation worker reported 929 XCTest with 0 failures plus 38 Swift Testing passed, macOS release/signature passed, and iPhone build-for-testing succeeded. These are local pre-integration receipts, not a fresh hosted exact-head claim. Final hosted CI remains required.
 
-Not run: Simulator execution of the new XCUITests (C09 owns the slot), exact-head hosted CI, native screenshots. No pixel-perfect or full-D12 claim. No push, PR or merge.
+### Native acceptance, November 16
+
+Final Run 3 tested production `4d92691` plus a test-only correction revealing the virtualized Repeat row before two post-relaunch value assertions. No product code changed for this correction. `xcodebuild test` completed with exit 0 and **8 tests passed, 0 failures, 0 skipped** in 281.795 seconds. The xcresult summary reports Passed and no runtime warnings. Device: owned iPhone 13 Pro Simulator, iOS 26.3.1, `B263E8E7-F1A5-4407-894D-23FC224B1013`; native slot released afterward. Explicit nonparallel execution and disabled diagnostic collection; no other device or personal data used.
+
+Evidence: `/private/tmp/TaskovskyRepeatMenuNative/run3.log` and `D12RepeatMenuRun3.xcresult` in that directory. Six new cases cover menu ordering/derived labels/None check, Weekly selection and reload, menu dismissal/outer Cancel, Custom cancel from None, saved custom preservation, and repeat-end preservation/None clearing. Existing custom creation/removal and nested/outer cancellation cases also passed.
+
+Earlier Run 1 had six passes and two failures at off-screen post-relaunch summary queries. Run 2 added an incorrect wait before scrolling and regressed to seven failures. Both bundles remain preserved. The final correction restores the existing scrolling helper and reveals the two actual target rows before retaining their exact value assertions. It does not weaken persistence checks or modify product behavior.
+
+Final neutral screenshots were exported unchanged from Run 3 and inspected at actual pixels: [preset page](../assets/mobile-parity/2026-11-16/d12-repeat-presets.png), [staged Weekly summary](../assets/mobile-parity/2026-11-16/d12-weekly-summary.png). The fixture is Monday November 9, so its derived labels intentionally differ from the Thursday November 12 reference observation. Hashes/dimensions are in the adjacent manifest.
+
+Still unverified: matched anchored geometry, date-grid recurrence highlights, Repeat Ends root row, reference Custom toolbar icons, Weekly-to-Custom seed in this native batch, and physical-device/locale-specific fidelity. D12 stays Partial; this is not pixel-perfect or full-parity acceptance.

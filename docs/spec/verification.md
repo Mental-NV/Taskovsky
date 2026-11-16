@@ -2144,7 +2144,7 @@ Candidate checks in progress for nested/outer Cancel, custom rule creation/remov
 
 ## D12 Repeat preset menu — 2026-11-16
 
-[Receipt](../changes/mobile-repeat-menu-2026-11-16.md): reference-ordered preset menu with live-derived weekday/month/year labels, current-selection check, preset-tap return to the Schedule root and direct Custom route over unchanged recurrence/custom/end/outer-Cancel semantics. Full 929 XCTest + 38 Swift tests, macOS release/signature and iPhone build-for-testing passed. Six native XCUITests prepared for the later Simulator slot; exact-head hosted CI and native screenshots pending. Anchored placement, grid occurrence highlight, Repeat Ends root row and Custom toolbar icons remain open. No pixel-perfect or full-D12 claim.
+[Receipt](../changes/mobile-repeat-menu-2026-11-16.md): reference-ordered preset menu with live-derived weekday/month/year labels, current-selection check, preset-tap return to the Schedule root and direct Custom route over unchanged recurrence/custom/end/outer-Cancel semantics. Full 929 XCTest + 38 Swift tests, macOS release/signature and iPhone build-for-testing passed. Final Run 3 passed six new native cases plus two existing custom/nested-cancel regressions (8/8, no runtime warnings); final neutral screenshots and failed-run history are recorded in the receipt. Exact-head hosted CI pending. Anchored placement, grid occurrence highlight, Repeat Ends root row and Custom toolbar icons remain open. No pixel-perfect or full-D12 claim.
 
 ## D14 Repeat Type —2026-11-15
 
