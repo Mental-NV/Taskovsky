@@ -88,6 +88,29 @@ final class RepeatPresetTests: XCTestCase {
         XCTAssertEqual(RepeatPreset.current(repeatRule: reopened.repeatRule, customRule: reopened.customRule), .weekly)
     }
 
+    func testEverySimplePresetMappingUnwrapsAndNoneStagesClear() throws {
+        let c = calendar(), due = date(c)
+        let expected: [(RepeatPreset, RepeatRule)] = [
+            (.none, .none), (.daily, .daily), (.weekly, .weekly),
+            (.monthly, .monthly), (.yearly, .yearly), (.weekdays, .weekdays),
+        ]
+        for (preset, rule) in expected {
+            let mapped = try XCTUnwrap(preset.repeatRule, "preset \(preset.rawValue) must map to a simple rule")
+            XCTAssertEqual(mapped, rule)
+        }
+        XCTAssertNil(RepeatPreset.custom.repeatRule)
+        var task = TaskItem(title: "Neutral", dueDate: due)
+        task.recurrence = .weekly
+        task.recurrenceEndDate = c.startOfDay(for: due)
+        var edit = TaskScheduleEdit(task: task, settings: AppSettings(), calendar: c, now: due)
+        XCTAssertEqual(edit.repeatRule, .weekly)
+        XCTAssertNotNil(edit.repeatEnd)
+        let noneRule = try XCTUnwrap(RepeatPreset.none.repeatRule)
+        edit.selectSimpleRepeat(noneRule)
+        XCTAssertEqual(edit.repeatRule, .none)
+        XCTAssertNil(edit.repeatEnd)
+    }
+
     func testSelectingNoneClearsStagedEnd() {
         let c = calendar(), due = date(c)
         var task = TaskItem(title: "Neutral", dueDate: due)

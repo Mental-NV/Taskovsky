@@ -22,12 +22,12 @@ public enum RepeatPreset: String, CaseIterable, Sendable {
     /// rule: it opens the existing custom sheet instead.
     public var repeatRule: RepeatRule? {
         switch self {
-        case .none: return .none
-        case .daily: return .daily
-        case .weekly: return .weekly
-        case .monthly: return .monthly
-        case .yearly: return .yearly
-        case .weekdays: return .weekdays
+        case .none: return RepeatRule.none
+        case .daily: return RepeatRule.daily
+        case .weekly: return RepeatRule.weekly
+        case .monthly: return RepeatRule.monthly
+        case .yearly: return RepeatRule.yearly
+        case .weekdays: return RepeatRule.weekdays
         case .custom: return nil
         }
     }

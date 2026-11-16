@@ -422,7 +422,6 @@ struct PhoneScheduleSheet: View {
                             .accessibilityIdentifier("scheduleRepeatEndDate")
                     }
                 }
-                Button("Custom repeat") { showCustom = true }.accessibilityIdentifier("scheduleCustom")
             }
         }
     }
