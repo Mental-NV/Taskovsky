@@ -425,9 +425,9 @@ private struct MobileCalendarContent: View {
             if hasCompletionButton, let completion {
                 Button { completion(entry) } label: {
                     Image(systemName: completionSymbol(entry))
-                        .font(.system(size: 15)).foregroundStyle(color)
+                        .font(.system(size: 15)).foregroundStyle(options.itemStyle == .classic ? .primary : color)
                         .frame(width: 44, height: 44)
-                        .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 2).allowsHitTesting(false) }
+                        .overlay(alignment: .leading) { if options.itemStyle.rendering.showsStripe { Rectangle().fill(color).frame(width: 2).allowsHitTesting(false) } }
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
@@ -453,9 +453,9 @@ private struct MobileCalendarContent: View {
             }
         }
         .frame(minHeight: 17, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
-        .background(options.itemStyle == .filled ? color.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 3))
+        .background(Self.cardFillOpacity(options.itemStyle, entry: entry) > 0 ? color.opacity(Self.cardFillOpacity(options.itemStyle, entry: entry)) : .clear, in: RoundedRectangle(cornerRadius: 3))
         .overlay {
-            if options.itemStyle == .outline {
+            if options.itemStyle.rendering.showsOutline {
                 RoundedRectangle(cornerRadius: 3).strokeBorder(color.opacity(0.7)).allowsHitTesting(false)
             }
         }
@@ -465,6 +465,10 @@ private struct MobileCalendarContent: View {
             }
         }
         .opacity(entry.isCompleted ? 0.58 : entry.isProjected ? 0.72 : 1)
+    }
+
+    private static func cardFillOpacity(_ style: CalendarItemStyle, entry: CalendarEntry) -> Double {
+        style.phoneFillOpacity(completed: entry.isCompleted)
     }
 
     private func cardColor(_ hex: String) -> Color {
@@ -486,10 +490,12 @@ private struct MobileCalendarContent: View {
         let button = Button { open(entry.taskID) } label: {
             HStack(alignment: detailedMonthCard ? .top : .center, spacing: clipsTitle ? 1 : 3) {
                 if !hasCompletionButton {
-                    Rectangle().fill(color).frame(width: 2)
+                    if options.itemStyle.rendering.showsStripe {
+                        Rectangle().fill(color).frame(width: 2)
+                    }
                     if options.showsIcon(for: entry) {
                         Image(systemName: entry.isProjected ? "repeat" : entry.isNote ? "doc.text" : completionSymbol(entry))
-                            .font(.system(size: 8)).foregroundStyle(color).accessibilityHidden(true)
+                            .font(.system(size: 8)).foregroundStyle(options.itemStyle == .classic ? .primary : color).accessibilityHidden(true)
                     }
                 }
                 if clipsTitle {
