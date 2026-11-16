@@ -747,12 +747,9 @@ struct CalendarViewOptions: View {
                         CalendarSourceColorSettings(mode: options.colorBy, store: store)
                     }
             }
-            Picker("Style", selection: $options.itemStyle) { Text("Filled").tag(CalendarItemStyle.filled); Text("Outline").tag(CalendarItemStyle.outline) }
+            CalendarItemStylePicker(selection: $options.itemStyle, calendar: calendar)
             if options.mode == .year {
-                Picker("Year style", selection: $options.yearStyle) {
-                    Text("Standard").tag(CalendarYearStyle.standard)
-                    Text("Heatmap").tag(CalendarYearStyle.heatmap)
-                }
+                CalendarYearStylePicker(selection: $options.yearStyle, calendar: calendar)
             } else {
                 Toggle("Show Item Icons", isOn: $options.showItemIcons)
                 Group {
@@ -804,5 +801,166 @@ struct CalendarViewOptions: View {
             .onChange(of: options.showAdditionalTimeZones) { _, enabled in
                 if enabled && options.additionalTimeZones.isEmpty { timeZoneSettings = true }
             }
+    }
+}
+
+/// Item Style picker with side-by-side Modern/Classic preview tiles plus
+/// clearly labeled legacy choices. Preview cards render through the real
+/// production `CalendarEntryView` and shared `CalendarItemStyle.rendering`
+/// policy, using neutral task samples (calendar events are unsupported).
+private struct CalendarItemStylePicker: View {
+    @Binding var selection: CalendarItemStyle
+    var calendar: Calendar
+
+    private func sampleEntry(title: String, color: String, hour: Int) -> CalendarEntry {
+        let day = calendar.startOfDay(for: Date())
+        let start = CalendarDates.instant(on: day, minute: hour * 60, calendar: calendar)
+        let end = CalendarDates.instant(on: day, minute: hour * 60 + 30, calendar: calendar)
+        return CalendarEntry(id: "preview-" + title, taskID: UUID(), title: title,
+            start: start, end: end, due: end, isAllDay: false, isProjected: false,
+            isCompleted: false, isNote: false, hasDuration: true, color: color, listID: nil)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Item Style").fontWeight(.semibold)
+            HStack(spacing: 12) {
+                ForEach(CalendarItemStyle.primaryStyles, id: \.self) { style in
+                    itemTile(style)
+                }
+            }
+            if selection.isLegacy {
+                Text("Current saved style: \(selection.displayTitle). It stays unchanged until you pick another style.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                Text("Additional styles").foregroundStyle(.secondary)
+                ForEach(CalendarItemStyle.legacyStyles, id: \.self) { style in
+                    Button(style.displayTitle) { selection = style }
+                        .buttonStyle(.plain).foregroundStyle(selection == style ? CalendarAppearance.accent : .primary)
+                        .fontWeight(selection == style ? .semibold : .regular)
+                        .accessibilityLabel(style.displayTitle + " style")
+                        .accessibilityValue(selection == style ? "Selected" : "Not selected")
+                        .accessibilityIdentifier("calendarItemStyle-" + style.rawValue)
+                }
+            }.font(.caption)
+            Text("Previews show neutral tasks. Calendar events are not supported. Exact reference colors and borders remain uncertain.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func itemTile(_ style: CalendarItemStyle) -> some View {
+        let selected = selection == style
+        return Button { selection = style } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                CalendarEntryView(entry: sampleEntry(title: "Prepare agenda", color: "#5B8DEF", hour: 9),
+                    style: style, calendar: calendar, showItemIcons: true, compact: true,
+                    open: { _ in }, complete: { _ in }, edit: { _ in })
+                    .allowsHitTesting(false)
+                CalendarEntryView(entry: sampleEntry(title: "Review notes", color: "#58A58B", hour: 14),
+                    style: style, calendar: calendar, showItemIcons: true, compact: true,
+                    open: { _ in }, complete: { _ in }, edit: { _ in })
+                    .allowsHitTesting(false)
+                HStack {
+                    Text(style.displayTitle).fontWeight(selected ? .semibold : .regular)
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                }.font(.caption)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(Color(nsColor: .textBackgroundColor))
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: selected ? 1.5 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(style.displayTitle + " style")
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityIdentifier("calendarItemStyle-" + style.rawValue)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+}
+
+/// Year Heatmap picker with side-by-side Hide/Show month previews. Both
+/// tiles use the real `CalendarDayCounts` projection and the same cell
+/// treatment as the Year grid (Standard dots, Heatmap shading), with the
+/// current-day blue marker unchanged. Hide keeps Standard dots; the
+/// reference fully-plain Hide state is not claimed.
+private struct CalendarYearStylePicker: View {
+    @Binding var selection: CalendarYearStyle
+    var calendar: Calendar
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Heatmap").fontWeight(.semibold)
+            HStack(spacing: 12) {
+                yearTile(.standard)
+                yearTile(.heatmap)
+            }
+            Text("Hide keeps Standard dots; Show shades dates by item count. The current-day blue marker is unchanged.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private func sampleCounts(days: [Date]) -> [Date: Int] {
+        let base = calendar.startOfDay(for: Date())
+        let first = days.first ?? base
+        func entry(on offset: Int, at hour: Int) -> CalendarEntry {
+            let day = calendar.date(byAdding: .day, value: offset, to: first) ?? first
+            let start = CalendarDates.instant(on: day, minute: hour * 60, calendar: calendar)
+            return CalendarEntry(id: "heatmap-\(offset)-\(hour)", taskID: UUID(), title: "Sample task",
+                start: start, end: start, due: start, isAllDay: false, isProjected: false,
+                isCompleted: false, isNote: false, hasDuration: false, color: "#5B8DEF", listID: nil)
+        }
+        let entries = [entry(on: 2, at: 9), entry(on: 2, at: 10), entry(on: 5, at: 9)]
+        return CalendarDayCounts.count(entries, days: days, calendar: calendar)
+    }
+
+    private func yearTile(_ style: CalendarYearStyle) -> some View {
+        let selected = selection == style
+        let month = CalendarDates.monthStart(Date(), calendar: calendar)
+        let days = CalendarDates.days(from: CalendarDates.weekStart(month, calendar: calendar), count: 42, calendar: calendar)
+        let counts = sampleCounts(days: days)
+        return Button { selection = style } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 1), count: 7), spacing: 1) {
+                    ForEach(days, id: \.self) { day in
+                        let today = calendar.isDateInToday(day)
+                        let count = counts[day, default: 0]
+                        ZStack(alignment: .bottom) {
+                            Text("\(calendar.component(.day, from: day))")
+                                .font(.system(size: 7))
+                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            if style == .standard && count > 0 && !today {
+                                Circle().fill(CalendarAppearance.accent).frame(width: 2, height: 2).padding(.bottom, 0.5)
+                            }
+                        }
+                        .frame(height: 12)
+                        .foregroundStyle(today ? Color.white : calendar.isDate(day, equalTo: month, toGranularity: .month) ? Color.primary : Color.secondary.opacity(0.5))
+                        .background {
+                            if today { CalendarAppearance.accent }
+                            else if style == .heatmap && count > 0 { CalendarAppearance.accent.opacity(min(0.7, 0.1 + Double(count) * 0.1)) }
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
+                HStack {
+                    Text(style.heatmapTileTitle).fontWeight(selected ? .semibold : .regular)
+                    Spacer(minLength: 4)
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color.accentColor : Color.secondary)
+                }.font(.caption)
+                Text(style.heatmapTileSubtitle).font(.caption2).foregroundStyle(.secondary)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background(Color(nsColor: .textBackgroundColor))
+            .overlay { RoundedRectangle(cornerRadius: 8).stroke(selected ? Color.accentColor : Color.primary.opacity(0.15), lineWidth: selected ? 1.5 : 1) }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Heatmap " + style.heatmapTileTitle)
+        .accessibilityValue(selected ? "Selected" : "Not selected")
+        .accessibilityIdentifier("calendarYearStyle-" + style.heatmapTileTitle.lowercased())
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
