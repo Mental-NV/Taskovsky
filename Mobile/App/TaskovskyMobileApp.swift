@@ -53,6 +53,9 @@ struct MobileRootView: View {
     @State private var initialized = false
     @State private var section: PhoneSection = .tasks
     @State private var destination: TaskDestination = .today
+    @State private var detailDestinations: Set<TaskDestination> = []
+    @State private var hiddenCompletedDestinations: Set<TaskDestination> = []
+    @State private var collapsedCompletedDestinations: Set<TaskDestination> = []
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
     @State private var boardGroupings: [TaskDestination: PhoneScopedBoardGrouping] = [:]
@@ -260,6 +263,7 @@ struct MobileRootView: View {
                             .accessibilityIdentifier("taskOrderNotice")
                     }
                     taskDestination(snapshot.workspace)
+                        .environment(\.phoneTaskDetails, detailDestinations.contains(destination) && supportsTaskDisplay(snapshot.workspace) ? PhoneTaskDetailsContext(data: snapshot.workspace, calendar: calendar) : nil)
                 case .calendar:
                     if let batchNotice = model.batchNotice {
                         Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
@@ -475,13 +479,61 @@ struct MobileRootView: View {
         }.accessibilityIdentifier("taskDestinationViewMode")
     }
 
+    private func supportsTaskDisplay(_ data: WorkspaceData) -> Bool {
+        switch destination {
+        case .all, .today, .tomorrow, .week, .inbox, .notes, .list, .folder, .tag: break
+        default: return false
+        }
+        if case .list(let id) = destination, let list = data.lists.first(where: { $0.id == id }) {
+            return !list.isArchived && list.viewMode != .timeline
+        }
+        return alternateModes[destination] != .timeline
+    }
+    private func supportsCompletedDisplay(_ data: WorkspaceData) -> Bool {
+        guard supportsTaskDisplay(data) else { return false }
+        if case .list(let id) = destination { return data.lists.first(where: { $0.id == id })?.viewMode == .list }
+        return alternateModes[destination] != .board
+    }
+    private func displayProjection(_ tasks: [TaskItem]) -> TaskDisplayProjection {
+        TaskDisplayProjection(tasks, showCompleted: !hiddenCompletedDestinations.contains(destination))
+    }
+    private func toggleDestination(_ set: inout Set<TaskDestination>) {
+        if set.contains(destination) { set.remove(destination) } else { set.insert(destination) }
+    }
+    @ViewBuilder private func completedRows(_ tasks: [TaskItem], lists: [TaskList]) -> some View {
+        if !tasks.isEmpty {
+            Button { toggleDestination(&collapsedCompletedDestinations) } label: {
+                HStack {
+                    Image(systemName: collapsedCompletedDestinations.contains(destination) ? "chevron.right" : "chevron.down")
+                    Text("Completed").font(.headline)
+                    Text("\(tasks.count)").foregroundStyle(.secondary)
+                    Spacer()
+                }.frame(minHeight: 44).padding(.horizontal, 16)
+            }.buttonStyle(.plain).accessibilityIdentifier("taskCompletedDisclosure")
+                .accessibilityValue(collapsedCompletedDestinations.contains(destination) ? "Collapsed" : "Expanded")
+            if !collapsedCompletedDestinations.contains(destination) {
+                taskRows(tasks, lists: lists, searchQuery: nil)
+            }
+        }
+    }
     private func taskActions(_ data: WorkspaceData, showsSelection: Bool) -> some View {
-        let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        let matched = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        let tasks = supportsCompletedDisplay(data) ? displayProjection(matched).visible(completedExpanded: !collapsedCompletedDestinations.contains(destination)) : matched
         return circle("Tasks actions", symbol: "ellipsis") { showTaskActions = true }
             .accessibilityIdentifier("taskListActions")
             .accessibilityValue(supportsScopedViewMenu(data) ? (alternateModes[destination] == .board ? "Kanban View" : alternateModes[destination] == .timeline ? "Timeline View" : "List View") : "")
             .popover(isPresented: $showTaskActions, arrowEdge: .top) {
                 VStack(alignment: .leading, spacing: 0) {
+                    if supportsTaskDisplay(data) {
+                        Button { toggleDestination(&detailDestinations); showTaskActions = false } label: {
+                            Label(detailDestinations.contains(destination) ? "Hide Details" : "Show Details", systemImage: "text.alignleft").frame(minHeight: 44)
+                        }.accessibilityIdentifier("taskDisplayDetails")
+                    }
+                    if supportsCompletedDisplay(data) {
+                        Button { toggleDestination(&hiddenCompletedDestinations); showTaskActions = false } label: {
+                            Label(hiddenCompletedDestinations.contains(destination) ? "Show Completed" : "Hide Completed", systemImage: "checkmark.circle").frame(minHeight: 44)
+                        }.accessibilityIdentifier("taskDisplayCompleted")
+                    }
                     if supportsScopedViewMenu(data) {
                         scopedViewMenu(data)
                         if alternateModes[destination] == .board {
@@ -657,7 +709,8 @@ struct MobileRootView: View {
     private func sectionedPhoneRows(_ list: TaskList, data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
         let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
-        let rows = PinnedGrouping.partition(ordered)
+        let projection = displayProjection(ordered)
+        let rows = PinnedGrouping.partition(supportsCompletedDisplay(data) ? projection.ordinary : ordered)
         let editable = !list.isArchived && model.canBeginEditing
         return ScrollView {
             if let sectionMoveNotice {
@@ -688,6 +741,7 @@ struct MobileRootView: View {
                     }
                 taskRows(group.tasks, lists: data.lists, searchQuery: nil, sectionList: list)
             }
+            if supportsCompletedDisplay(data) { completedRows(projection.completed, lists: data.lists) }
             Color.clear.frame(height: 90)
         }
     }
@@ -699,7 +753,9 @@ struct MobileRootView: View {
     }
 
     private func taskList(_ tasks: [TaskItem], data: WorkspaceData, searchQuery: String? = nil) -> some View {
-        let groups = PinnedGrouping.partition(tasks)
+        let usesDisplay = searchQuery == nil && supportsCompletedDisplay(data)
+        let projection = displayProjection(tasks)
+        let groups = PinnedGrouping.partition(usesDisplay ? projection.ordinary : tasks)
         let separateHistory = searchQuery != nil || ![.completed, .wontDo, .trash].contains(destination)
         let completed = separateHistory ? groups.rest.filter { $0.deletedAt == nil && $0.completedAt != nil } : []
         let abandoned = separateHistory ? groups.rest.filter { $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt != nil } : []
@@ -707,7 +763,7 @@ struct MobileRootView: View {
             ? groups.rest.filter { $0.deletedAt != nil || ($0.completedAt == nil && $0.wontDoAt == nil) }
             : groups.rest
         return ScrollView {
-            if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
+            if (usesDisplay ? projection.ordinary.isEmpty && projection.completed.isEmpty : tasks.isEmpty) { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
             taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
             if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .list {
                 ForEach(TaskOrganizationGroup.byList(ordinary, in: data)) { group in
@@ -734,7 +790,8 @@ struct MobileRootView: View {
             } else {
                 taskRows(ordinary, lists: data.lists, searchQuery: searchQuery)
             }
-            taskGroup("Completed", tasks: completed, lists: data.lists, searchQuery: searchQuery)
+            if usesDisplay { completedRows(projection.completed, lists: data.lists) }
+            else { taskGroup("Completed", tasks: completed, lists: data.lists, searchQuery: searchQuery) }
             taskGroup("Won't Do", tasks: abandoned, lists: data.lists, searchQuery: searchQuery)
             Color.clear.frame(height: 90)
         }
@@ -787,6 +844,9 @@ struct MobileRootView: View {
                                     if let searchQuery {
                                         PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
                                     }
+                                    if searchQuery == nil, detailDestinations.contains(destination), let data = model.document?.snapshot.workspace, supportsTaskDisplay(data) {
+                                        PhoneTaskDetails(task: task, context: PhoneTaskDetailsContext(data: data, calendar: calendar))
+                                    }
                                     if !switchesDate, let due, !compactDate {
                                         taskDateText(due, displayCalendar: displayCalendar)
                                     }
@@ -803,7 +863,7 @@ struct MobileRootView: View {
                             .frame(minHeight: switchesDate ? 24 : compactDate ? 44 : 48).padding(.trailing, 18).padding(.vertical, 3)
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityLabel(task.title)
-                            .accessibilityValue(due.map { taskDateCaption($0, displayCalendar: displayCalendar) } ?? "")
+                            .accessibilityValue(searchQuery == nil && detailDestinations.contains(destination) && model.document.map { supportsTaskDisplay($0.snapshot.workspace) } == true ? model.document.map { PhoneTaskDetails.summary(task, context: PhoneTaskDetailsContext(data: $0.snapshot.workspace, calendar: calendar)) } ?? "" : due.map { taskDateCaption($0, displayCalendar: displayCalendar) } ?? "")
                             .background {
                                 if !actions.0.isEmpty || !actions.1.isEmpty { gesture }
                             }
