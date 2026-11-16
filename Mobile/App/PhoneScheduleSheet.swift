@@ -67,6 +67,7 @@ struct PhoneScheduleSheet: View {
     @State private var showReplace = false
     @State private var showTimePopover = false
     @State private var showCustomReminder = false
+    @State private var durationPopup: PhoneDurationPopupRequest?
 
     private var settings: AppSettings { request.document.snapshot.settings }
     private var due: Date { edit.schedule.effectiveDue }
@@ -161,6 +162,10 @@ struct PhoneScheduleSheet: View {
         .environment(\.calendar, calendar)
         .environment(\.timeZone, calendar.timeZone)
         .interactiveDismissDisabled(model.isBusy)
+        .popover(item: $durationPopup) { popup in
+            PhoneDurationPopup(request: popup) { staged in edit = staged }
+                .presentationCompactAdaptation(.popover)
+        }
         .sheet(isPresented: $showZones) {
             PhoneScheduleZoneSheet(current: edit.zoneID) { edit.setZone($0) }
         }
@@ -176,6 +181,25 @@ struct PhoneScheduleSheet: View {
         } message: {
             Text("This removes the custom rule and its series position when you save. You can then choose a simple repeat.")
         }
+    }
+
+    private func durationDate(_ date: Date) -> String {
+        date.formatted(Date.FormatStyle(date: .abbreviated, calendar: calendar, timeZone: calendar.timeZone))
+    }
+    private func durationCaption(_ range: TaskDurationRange) -> String {
+        guard range.elapsed >= 0 else { return "Invalid duration" }
+        return "Duration · " + Duration.seconds(range.elapsed).formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated))
+    }
+    private func durationCard(_ title: String, value: String, caption: String, id: String, kind: PhoneDurationPopupRequest.Kind) -> some View {
+        Button { durationPopup = PhoneDurationPopupRequest(edit: edit, kind: kind) } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title).font(.subheadline).foregroundStyle(.secondary)
+                Text(value).font(.headline)
+                Text(caption).font(.caption).foregroundStyle(.secondary)
+            }.frame(maxWidth: .infinity, minHeight: 88, alignment: .leading).padding(12)
+                .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        }.buttonStyle(.plain).accessibilityLabel(title).accessibilityValue(value + ", " + caption)
+            .accessibilityIdentifier(id)
     }
 
     private var dateSection: some View {
@@ -200,21 +224,24 @@ struct PhoneScheduleSheet: View {
                     DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .accessibilityIdentifier("scheduleDateGrid")
-                } else {
-                    DisclosureGroup("Move duration to another date") {
-                        DatePicker("Date", selection: Binding(get: { due }, set: { edit.chooseDay($0) }), displayedComponents: .date)
-                            .accessibilityIdentifier("scheduleMoveDurationDate")
-                    }
                 }
                 if let range = edit.schedule.duration {
-                    Toggle("Time", isOn: Binding(get: { edit.schedule.effectiveHasTime }, set: { edit.setTime($0) }))
-                        .accessibilityIdentifier("scheduleTime")
-                    let components: DatePickerComponents = range.isAllDay ? .date : [.date, .hourAndMinute]
-                    DatePicker("Start", selection: Binding(get: { edit.schedule.duration?.start ?? range.start },
-                                                            set: { edit.setStart($0) }), displayedComponents: components)
-                        .accessibilityIdentifier("scheduleRangeStart")
-                    DatePicker("End", selection: Binding(get: { due }, set: { edit.setEnd($0) }), displayedComponents: components)
-                        .accessibilityIdentifier("scheduleRangeEnd")
+                    HStack(alignment: .top, spacing: 12) {
+                        if range.isAllDay {
+                            durationCard("Start", value: durationDate(range.start), caption: "Start date", id: "scheduleRangeStart", kind: .startDay)
+                            durationCard("End", value: durationDate(range.end), caption: "End date", id: "scheduleRangeEnd", kind: .endDay)
+                        } else {
+                            durationCard("Date", value: durationDate(range.end), caption: "End date · move whole range", id: "scheduleDurationDate", kind: .moveDay)
+                            durationCard("Time", value: Self.timeLabel(range.start, calendar: calendar) + " – " + Self.timeLabel(range.end, calendar: calendar), caption: durationCaption(range), id: "scheduleDurationTime", kind: .time)
+                        }
+                    }
+                    if range.isAllDay {
+                        Button { durationPopup = PhoneDurationPopupRequest(edit: edit, kind: .moveDay) } label: {
+                            Text("Move duration to another date").frame(minHeight: 44)
+                        }.accessibilityIdentifier("scheduleDurationMove")
+                    }
+                    Toggle("All Day", isOn: Binding(get: { !edit.schedule.effectiveHasTime }, set: { edit.setTime(!$0) }))
+                        .accessibilityIdentifier("scheduleAllDay")
                     if range.validated(in: calendar) == nil {
                         Text("The end must be on or after the start.").font(.footnote).foregroundStyle(.red)
                     }
@@ -782,5 +809,66 @@ private struct PhoneAllDayReminderDialog: View {
             }
         }.padding(16).frame(width: 310)
             .onChange(of: candidate) { _, _ in expiredOnAdd = false }
+    }
+}
+
+
+/// A new value copy is captured for every presentation. No mutation on opening,
+/// closing, or switching endpoint tabs; nested Done is the only commit point.
+private struct PhoneDurationPopupRequest: Identifiable {
+    enum Kind { case moveDay, time, startDay, endDay }
+    let id = UUID()
+    let edit: TaskScheduleEdit
+    let kind: Kind
+}
+private struct PhoneDurationPopup: View {
+    @Environment(\.dismiss) private var dismiss
+    let request: PhoneDurationPopupRequest
+    let commit: (TaskScheduleEdit) -> Void
+    @State private var staged: TaskScheduleEdit
+    @State private var endpoint: Int
+
+    init(request: PhoneDurationPopupRequest, commit: @escaping (TaskScheduleEdit) -> Void) {
+        self.request = request; self.commit = commit
+        _staged = State(initialValue: request.edit)
+        _endpoint = State(initialValue: request.kind == .endDay ? 1 : 0)
+    }
+    private var calendar: Calendar { staged.calendar }
+    private var valid: Bool { staged.hasKnownZone && staged.schedule.duration?.validated(in: calendar) != nil }
+    private var selected: Binding<Date> {
+        Binding(get: { endpoint == 0 ? staged.schedule.duration?.start ?? staged.schedule.effectiveDue : staged.schedule.effectiveDue },
+                set: { if endpoint == 0 { staged.setStart($0) } else { staged.setEnd($0) } })
+    }
+    var body: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Button { dismiss() } label: { Text("Cancel").frame(minWidth: 44, minHeight: 44) }
+                    .accessibilityIdentifier("durationPopupCancel")
+                Spacer()
+                Text(request.kind == .time ? "Time" : "Date").font(.headline)
+                Spacer()
+                Button { commit(staged); dismiss() } label: { Text("Done").frame(minWidth: 44, minHeight: 44) }
+                    .disabled(!valid).accessibilityIdentifier("durationPopupDone")
+            }
+            if request.kind == .moveDay {
+                Text("Move the whole range by its end date").font(.caption).foregroundStyle(.secondary)
+                DatePicker("Date", selection: Binding(get: { staged.schedule.effectiveDue }, set: { staged.chooseDay($0) }), displayedComponents: .date)
+                    .datePickerStyle(.graphical).accessibilityIdentifier("scheduleMoveDurationDate")
+            } else {
+                Picker("Endpoint", selection: $endpoint) {
+                    Text("Start").tag(0); Text("End").tag(1)
+                }.pickerStyle(.segmented).accessibilityIdentifier("durationEndpoint")
+                if request.kind == .time {
+                    DatePicker(endpoint == 0 ? "Start" : "End", selection: selected, displayedComponents: [.date, .hourAndMinute])
+                        .datePickerStyle(.wheel).labelsHidden().accessibilityIdentifier("durationEndpointWheels")
+                    Text("Endpoint editor · " + calendar.timeZone.identifier).font(.caption).foregroundStyle(.secondary)
+                } else {
+                    DatePicker(endpoint == 0 ? "Start" : "End", selection: selected, displayedComponents: .date)
+                        .datePickerStyle(.graphical).accessibilityIdentifier("durationEndpointDate")
+                }
+            }
+            if !valid { Text("Choose a supported time zone and an end on or after the start.").font(.caption).foregroundStyle(.red) }
+        }.padding().frame(idealWidth: 350)
+            .environment(\.calendar, calendar).environment(\.timeZone, calendar.timeZone)
     }
 }
