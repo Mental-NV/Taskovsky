@@ -79,8 +79,27 @@ popup-only element while closed — both reverted.
 - New regression: `Mobile/UITests/RootLabelRemovalTests.swift` (2 tests),
   registered in `Mobile/TaskovskyMobile.xcodeproj` (file ref
   `C1A11CE00000000000000001`, build file `C1A11CE00000000000000002`).
-- Simulator/UI tests: NOT RUN here by explicit instruction — no Simulator or UI
-  session was started. Awaiting parent-coordinated handoff.
-- `swift test --disable-sandbox`, `./scripts/build-app.sh`, and iPhone
-  compile results: recorded at commit time (see commit message / ledger entry).
-- No push/PR/merge performed; no personal data or screenshots introduced.
+- Native QA (owned Simulator slot, explicitly handed over): **6/6 passed,
+  0 failures** across two runs on `B263E8E7` (Taskovsky Menu QA 1114,
+  iPhone 13 Pro, iOS 26.3.1), nonparallel, collect-test-diagnostics never.
+  Run 1 (`label-removal.xcresult`): both `RootLabelRemovalTests` plus
+  `testTimePrecisionZoneAndOutsideDismissal` and
+  `testDurationCardsNoOpPreservesSecondsZoneAcrossSave` — exact evidence
+  equality across relaunch verified. Run 2 (`label-removal2.xcresult`):
+  strengthened `RootLabelRemovalTests` rerun — `mobileRootReady` uniqueness
+  (`count == 1`) in Tasks/Calendar/Search, no label strings in any section,
+  Tasks/Calendar/Search navigation plus `Open navigation`, `openCapture`,
+  `calendarJumpToDate`, `workspaceSearch` all working. Only benign toolchain
+  AppIntents metadata note; no test errors or failures.
+- Screenshots (exported from `label-removal2.xcresult`, visually inspected,
+  runner-local at `/private/tmp/TaskovskyRemoveSampleNative/screenshots/`):
+  `tasks-root-no-label.png` and `calendar-root-no-label.png`, 1170x2532,
+  neutral QA fixtures — header shows navigation/title/overflow only, no
+  informational label in either section.
+- `swift test --disable-sandbox`: 915 XCTest + 38 Swift Testing, 0 failures.
+  `./scripts/build-app.sh` + `codesign --verify --deep --strict`: pass.
+  iPhone `build-ios-simulator-ci.sh`: TEST BUILD SUCCEEDED (final UI-test
+  source also compiled cleanly inside the native runs).
+- No push/PR/merge performed; no personal data introduced. The handed-over
+  Simulator was left booted as found; no resets, no settings changes, no
+  other-device contact.

@@ -23,17 +23,32 @@ final class RootLabelRemovalTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Local workspace · Early development"].exists)
     }
 
+    @MainActor private func assertUniqueRootMarker(in app: XCUIApplication) {
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "mobileRootReady").count, 1)
+    }
+
+    @MainActor private func attach(_ app: XCUIApplication, _ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot()); attachment.name = name; attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @MainActor func testRootShowsNoInformationalLabelInAnySection() {
         let app = launch()
+        assertUniqueRootMarker(in: app)
         assertNoRootLabel(in: app)
+        attach(app, "Tasks root without informational label")
         app.buttons["Calendar"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 5))
+        assertUniqueRootMarker(in: app)
         assertNoRootLabel(in: app)
+        attach(app, "Calendar root without informational label")
         app.buttons["Search"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 5))
+        assertUniqueRootMarker(in: app)
         assertNoRootLabel(in: app)
         app.buttons["Tasks"].tap()
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 5))
+        assertUniqueRootMarker(in: app)
         assertNoRootLabel(in: app)
     }
 
