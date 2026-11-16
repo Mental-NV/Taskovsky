@@ -63,6 +63,7 @@ struct MobileRootView: View {
     @State private var drawer = false
     @State private var manageLists = false
     @State private var smartListRequest: PhoneSmartListRequest?
+    @State private var managementRequest: PhoneManagementRequest?
     @State private var manageFilters = false
     @State private var manageTags = false
     @State private var manageTemplates = false
@@ -1025,10 +1026,17 @@ struct MobileRootView: View {
                         Divider().overlay(.white.opacity(0.16)).padding(.top, 12)
                         ForEach(visibility.bottom, id: \.self) { item in navRow(item, data: data) }
                     }
+                    Button {
+                        guard let document = model.document else { return }
+                        managementRequest = PhoneManagementRequest(settings: document.snapshot.settings, revision: document.revision, initialTab: .smartLists)
+                    } label: {
+                        Label("Manage Smart Lists & Tags", systemImage: "rectangle.stack")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("openManagement")
                     Button { manageTemplates = true } label: {
                         Label("Manage Templates", systemImage: "doc.on.doc")
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("manageTemplates")
+                    }.buttonStyle(.plain).padding(.top, 8).accessibilityIdentifier("manageTemplates")
                 }.padding(20)
             }.background(PhoneStyle.indigo).foregroundStyle(.white)
                 .toolbarBackground(PhoneStyle.indigo, for: .navigationBar)
@@ -1050,6 +1058,7 @@ struct MobileRootView: View {
         }
         .sheet(isPresented: $manageLists) { PhoneListOrganization(model: model) }
         .sheet(item: $smartListRequest) { request in PhoneSmartListSettings(model: model, request: request) }
+        .sheet(item: $managementRequest) { request in PhoneUnifiedManagement(model: model, request: request) }
         .sheet(isPresented: $manageFilters) { PhoneSavedFilters(model: model) }
         .sheet(isPresented: $manageTags) { PhoneTagManagement(model: model) }
         .sheet(isPresented: $manageTemplates) { PhoneTemplateManager(model: model) }
