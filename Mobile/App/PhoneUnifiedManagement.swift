@@ -103,11 +103,13 @@ struct PhoneUnifiedManagement: View {
             Button("Discard Changes", role: .destructive) { dismiss() }
             Button("Keep Editing", role: .cancel) {}
         }
-        .confirmationDialog("Unsaved visibility changes", isPresented: $confirmChild, titleVisibility: .visible) {
+        // An alert, not a confirmation dialog: presented from inside this sheet,
+        // a dialog renders as a popover sheet whose cancel button is not
+        // exposed, leaving Keep Editing unreachable. The alert keeps all three
+        // choices explicit, matching the existing discard alert below.
+        .alert("Unsaved visibility changes", isPresented: $confirmChild) {
             Button("Save Changes") { saveAndThenContinue() }
-                .accessibilityIdentifier("managementSaveAndContinue")
             Button("Discard Changes", role: .destructive) { discardThenOpen() }
-                .accessibilityIdentifier("managementDiscardAndContinue")
             Button("Keep Editing", role: .cancel) { pendingChild = nil }
         } message: {
             Text("Save or discard the staged Smart List visibility before adding or editing.")
@@ -305,10 +307,15 @@ struct PhoneUnifiedManagement: View {
     private func discardThenOpen() {
         guard let child = pendingChild else { return }
         pendingChild = nil
+        confirmChild = false
         session.discardStaged()
         if let document = model.document {
             _ = session.adoptCleanBaseline(from: document)
         }
-        openChild(child)
+        // Present after the alert dismisses: opening the child sheet in the
+        // same transaction as the alert dismissal no-ops the handoff (the
+        // gate is still marked open) and can swallow the sheet. The save path
+        // already presents post-await for the same reason.
+        Task { @MainActor in openChild(child) }
     }
 }

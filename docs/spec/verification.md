@@ -2222,4 +2222,12 @@ clean, refusing while dirty.
 | iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | Same Xcode 27.0 toolchain. Zero warnings/errors in new/changed files; three pre-existing unused-`menu` warnings in `ReadOnlyNavigationTests.swift` untouched. Logs `/tmp/mgmt2-ios/`. |
 | Native tests | **Prepared (9), NOT RUN** | Adds reorder-reset-across-tabs and failed-save-then-Done-opens-nothing. External tag churn under the dirty gate and transient-failure recovery are UI-unreachable (modal sheet admits no second writer; `save-failure` QA is permanent), so B1/B3-full are repository-level plus boundary tests. Screenshots attach in-test for later export. |
 
-Independent rereview, native slot execution and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.
+### Upstream PR146 integration and native execution — 2026-11-16
+
+Merged `origin/main` `0dac439` (PR146 task display) as `addebf6`: clean merge, no conflicts, both T02 display and unified-management hunks present, no T02 reversal. Native slot on the owned simulator only (Taskovsky Menu QA 1114, `B263E8E7`, iPhone 13 Pro iOS 26.3.1), nonparallel, collect-test-diagnostics never, unique dir `/private/tmp/TaskovskyManagementTabsNative/`; no user-QA changes, no resets, no desktop input.
+
+Failure-driven corrections, none weakening assertions: (1) a toolbar Manage entry collapsed all drawer utilities into overflow — entry moved to the drawer body, existing tests untouched; (2) the nested-sheet confirmation dialog dropped its cancel button from the AX tree — gate is now an alert; (3) Discard-then-open ran synchronously inside the alert action while the gate was still open and no-opped — deferred to the next MainActor turn. Final run: **11/11 passed, exit 0** (9 unified + 2 existing no-regression witnesses); xcresult independently records 11 passed, 0 failed, 0 skipped on `B263E8E7`. Screenshots exported and visually inspected (Smart Lists tab, Tags tab, drawer Filters after Add Filter, both failed-save states; neutral fixture content).
+
+Final gates on the corrected source: `swift test --disable-sandbox` 895 XCTest (153/55/156/531) + 38 Swift Testing, 0 failures; `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict` exit 0; iPhone `build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED. External tag churn under the dirty gate and transient-failure recovery remain repository-level (UI-unreachable). Exact-head CI remains pending.
+
+Independent rereview and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.

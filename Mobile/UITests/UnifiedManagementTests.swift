@@ -24,6 +24,7 @@ final class UnifiedManagementTests: XCTestCase {
         app.buttons["Open navigation"].tap()
         let manage = app.buttons["openManagement"]
         XCTAssertTrue(manage.waitForExistence(timeout: 5))
+        reveal(manage, in: app)
         manage.tap()
         XCTAssertTrue(app.segmentedControls["managementTabs"].waitForExistence(timeout: 5))
     }
@@ -147,14 +148,19 @@ final class UnifiedManagementTests: XCTestCase {
         XCTAssertTrue(app.buttons["Neutral unified filter"].waitForExistence(timeout: 5))
     }
 
+    @MainActor private func gateAlert(in app: XCUIApplication) -> XCUIElement {
+        app.alerts["Unsaved visibility changes"]
+    }
+
     @MainActor func testDirtyGateKeepEditingThenDiscardThenChildCancel() {
         let app = launch()
         openManagement(app)
         stageTomorrowVisible(in: app)
         selectTab("Tags", in: app)
         app.buttons["newTag"].tap()
-        XCTAssertTrue(app.buttons["Save Changes"].waitForExistence(timeout: 5))
-        app.buttons["Keep Editing"].tap()
+        let gate = gateAlert(in: app)
+        XCTAssertTrue(gate.buttons["Save Changes"].waitForExistence(timeout: 5))
+        gate.buttons["Keep Editing"].tap()
         XCTAssertTrue(app.buttons["newTag"].exists)
         XCTAssertFalse(app.textFields["tagName"].exists)
         // The staged parent draft is intact: Cancel still offers to discard it.
@@ -163,19 +169,20 @@ final class UnifiedManagementTests: XCTestCase {
         app.buttons["Keep Editing"].tap()
         // Discard the parent draft and continue into the child editor.
         app.buttons["newTag"].tap()
-        XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
-        app.buttons["managementDiscardAndContinue"].tap()
+        XCTAssertTrue(gate.buttons["Discard Changes"].waitForExistence(timeout: 5))
+        gate.buttons["Discard Changes"].tap()
         let name = app.textFields["tagName"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap()
         name.typeText("Neutral discarded tag")
         app.buttons["tagCancel"].tap()
-        XCTAssertTrue(app.buttons["Keep Editing"].waitForExistence(timeout: 5))
-        app.buttons["Keep Editing"].tap()
+        let tagGate = app.alerts["Discard changes?"]
+        XCTAssertTrue(tagGate.buttons["Keep Editing"].waitForExistence(timeout: 5))
+        tagGate.buttons["Keep Editing"].tap()
         XCTAssertEqual(name.value as? String, "Neutral discarded tag")
         app.buttons["tagCancel"].tap()
-        XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
-        app.buttons["Discard Changes"].tap()
+        XCTAssertTrue(tagGate.buttons["Discard Changes"].waitForExistence(timeout: 5))
+        tagGate.buttons["Discard Changes"].tap()
         XCTAssertTrue(app.buttons["newTag"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.staticTexts["Neutral discarded tag"].exists)
         // The parent was discarded clean, so Cancel closes without a prompt.
@@ -189,8 +196,9 @@ final class UnifiedManagementTests: XCTestCase {
         stageTomorrowVisible(in: app)
         selectTab("Tags", in: app)
         app.buttons["newTag"].tap()
-        XCTAssertTrue(app.buttons["Save Changes"].waitForExistence(timeout: 5))
-        app.buttons["managementSaveAndContinue"].tap()
+        let gate = gateAlert(in: app)
+        XCTAssertTrue(gate.buttons["Save Changes"].waitForExistence(timeout: 5))
+        gate.buttons["Save Changes"].tap()
         let name = app.textFields["tagName"]
         XCTAssertTrue(name.waitForExistence(timeout: 5))
         name.tap()
@@ -227,8 +235,9 @@ final class UnifiedManagementTests: XCTestCase {
         stageTomorrowVisible(in: app)
         selectTab("Tags", in: app)
         app.buttons["newTag"].tap()
-        XCTAssertTrue(app.buttons["Save Changes"].waitForExistence(timeout: 5))
-        app.buttons["managementSaveAndContinue"].tap()
+        let gate = gateAlert(in: app)
+        XCTAssertTrue(gate.buttons["Save Changes"].waitForExistence(timeout: 5))
+        gate.buttons["Save Changes"].tap()
         XCTAssertTrue(app.staticTexts["managementError"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.textFields["tagName"].exists)
         app.buttons["managementDone"].tap()
