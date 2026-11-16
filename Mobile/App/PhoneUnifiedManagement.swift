@@ -38,6 +38,7 @@ struct PhoneUnifiedManagement: View {
     @State private var pendingChild: ManagementPendingChild?
     @State private var tagRequest: PhoneTagRequest?
     @State private var filterRequest: PhoneFilterRequest?
+    @State private var visibilityPopupKey: SmartListKey?
     @State private var error: String?
 
     init(model: PhoneWorkspaceModel, request: PhoneManagementRequest) {
@@ -168,13 +169,35 @@ struct PhoneUnifiedManagement: View {
         }
     }
 
+    /// T10 anchored visibility popup: one Button row opens a native popover
+    /// with the reference order Show / Show if not empty / Hidden and a check
+    /// on the staged value. A choice stages into the shared draft only (outer
+    /// Cancel discards, outer Done saves); a backdrop tap dismisses with no
+    /// staging at all. The popover modifier lives on the row so the anchor is
+    /// the tapped row, matching the D05 priority popup policy.
     private func visibility(_ key: SmartListKey) -> some View {
-        Picker(key.phoneLabel, selection: Binding(get: { session.staged.smartListVisibility[key] ?? .show },
-                                                  set: { option in session.stage { $0.smartListVisibility[key] = option } })) {
-            ForEach(SmartListVisibility.allCases, id: \.self) { option in
-                Text(option.phoneLabel).tag(option)
+        let current = session.staged.smartListVisibility[key] ?? .show
+        return Button {
+            visibilityPopupKey = key
+        } label: {
+            HStack {
+                Text(key.phoneLabel)
+                Spacer()
+                Text(current.phoneLabel).foregroundStyle(.secondary)
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption).foregroundStyle(.secondary).accessibilityHidden(true)
+            }.frame(minHeight: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityLabel(key.phoneLabel).accessibilityValue(current.phoneLabel)
+            .accessibilityIdentifier("smartListVisibility-" + key.rawValue)
+            .popover(isPresented: Binding(get: { visibilityPopupKey == key },
+                                          set: { if !$0 { visibilityPopupKey = nil } })) {
+                ManagementVisibilityPopup(key: key, current: session.staged.smartListVisibility[key] ?? .show,
+                                          isBusy: model.isBusy) { option in
+                    session.stage { $0.smartListVisibility[key] = option }
+                    visibilityPopupKey = nil
+                }.presentationCompactAdaptation(.popover)
             }
-        }.pickerStyle(.navigationLink).accessibilityIdentifier("smartListVisibility-" + key.rawValue)
     }
 
     private func move(_ key: SmartListKey, neighbor: SmartListKey?, down: Bool) -> some View {
@@ -317,5 +340,45 @@ struct PhoneUnifiedManagement: View {
         // gate is still marked open) and can swallow the sheet. The save path
         // already presents post-await for the same reason.
         Task { @MainActor in openChild(child) }
+    }
+}
+
+/// T10 anchored visibility choices (Show / Show if not empty / Hidden).
+///
+/// Reference order is explicit here because `SmartListVisibility.allCases`
+/// enumerates show/hidden/showIfNotEmpty, which would misorder the second and
+/// third rows. Tapping a choice stages it into the shared draft and dismisses;
+/// tapping the already-checked row still dismisses, and `stage` with an
+/// unchanged value keeps the draft clean, so neither path mutates. A backdrop
+/// tap never reaches `onSelect`, leaving the draft untouched on the same tab.
+private struct ManagementVisibilityPopup: View {
+    let key: SmartListKey
+    let current: SmartListVisibility
+    let isBusy: Bool
+    let onSelect: (SmartListVisibility) -> Void
+    private let order: [SmartListVisibility] = [.show, .showIfNotEmpty, .hidden]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(order, id: \.self) { option in
+                Button {
+                    guard !isBusy else { return }
+                    onSelect(option)
+                } label: {
+                    HStack(spacing: 12) {
+                        Text(option.phoneLabel)
+                        Spacer(minLength: 12)
+                        if option == current {
+                            Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                        }
+                    }.padding(.horizontal, 16).frame(minHeight: 48).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(option.phoneLabel)
+                    .accessibilityIdentifier("visibilityOption-" + key.rawValue + "-" + option.rawValue)
+                    .accessibilityAddTraits(option == current ? .isSelected : [])
+                    .disabled(isBusy)
+            }
+        }.frame(minWidth: 250)
+            .interactiveDismissDisabled(isBusy)
     }
 }

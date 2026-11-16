@@ -35,14 +35,36 @@ final class UnifiedManagementTests: XCTestCase {
         tabs.buttons[name].tap()
     }
 
+    /// T10 popup flow: tap the row, tap the anchored choice, the popup
+    /// dismisses itself. No pushed page and no back navigation remain.
     @MainActor private func stageTomorrowVisible(in app: XCUIApplication) {
         let row = app.buttons["smartListVisibility-tomorrow"]
         reveal(row, in: app)
         row.tap()
-        let option = app.buttons["Show"]
+        let option = app.buttons["visibilityOption-tomorrow-show"]
         XCTAssertTrue(option.waitForExistence(timeout: 5))
         option.tap()
-        app.navigationBars.buttons.firstMatch.tap()
+        waitGone(option)
+        XCTAssertTrue(app.segmentedControls["managementTabs"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor private func openVisibilityPopup(_ key: String, in app: XCUIApplication) {
+        let row = app.buttons["smartListVisibility-" + key]
+        reveal(row, in: app)
+        row.tap()
+        XCTAssertTrue(app.buttons["visibilityOption-" + key + "-show"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor private func popupOptions(_ key: String, in app: XCUIApplication) -> [XCUIElement] {
+        ["show", "showIfNotEmpty", "hidden"].map { app.buttons["visibilityOption-" + key + "-" + $0] }
+    }
+
+    /// Dismissing the management sheet returns to the still-open drawer, so
+    /// reopening taps the drawer entry directly instead of the hamburger.
+    @MainActor private func reopenManagement(_ app: XCUIApplication) {
+        let manage = app.buttons["openManagement"]
+        reveal(manage, in: app)
+        manage.tap()
         XCTAssertTrue(app.segmentedControls["managementTabs"].waitForExistence(timeout: 5))
     }
 
@@ -251,6 +273,166 @@ final class UnifiedManagementTests: XCTestCase {
         XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
         app.buttons["Keep Editing"].tap()
         XCTAssertTrue(app.segmentedControls["managementTabs"].exists)
+    }
+
+    // MARK: - T10 anchored visibility popup
+
+    @MainActor func testVisibilityPopupOrderCheckAndBackdropDismiss() {
+        let app = launch()
+        openManagement(app)
+        // Today is shown in the neutral fixture: the check sits on Show.
+        openVisibilityPopup("today", in: app)
+        let options = popupOptions("today", in: app)
+        for option in options { XCTAssertTrue(option.exists) }
+        XCTAssertTrue(options[0].label.contains("Show"))
+        XCTAssertTrue(options[1].label.contains("Show if not empty"))
+        XCTAssertTrue(options[2].label.contains("Hidden"))
+        XCTAssertLessThan(options[0].frame.minY, options[1].frame.minY)
+        XCTAssertLessThan(options[1].frame.minY, options[2].frame.minY)
+        XCTAssertGreaterThanOrEqual(options[0].frame.height, 44)
+        XCTAssertTrue(options[0].isSelected)
+        XCTAssertFalse(options[1].isSelected)
+        XCTAssertFalse(options[2].isSelected)
+        attach(app, "Visibility popup exact order and check")
+        // Backdrop tap: the navigation title is outside the anchored popup
+        // and performs no management action.
+        app.navigationBars.firstMatch.tap()
+        waitGone(options[0])
+        // Same Smart Lists tab, no mutation staged: Cancel closes directly.
+        XCTAssertTrue(app.segmentedControls["managementTabs"].buttons["Smart Lists"].isSelected)
+        XCTAssertTrue(app.buttons["smartListVisibility-today"].exists)
+        app.buttons["managementCancel"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+    }
+
+    @MainActor func testVisibilityChoiceStagesCancelDiscardsDoneSaves() {
+        let app = launch()
+        openManagement(app)
+        openVisibilityPopup("tomorrow", in: app)
+        let options = popupOptions("tomorrow", in: app)
+        XCTAssertTrue(options[2].isSelected)
+        options[0].tap()
+        waitGone(options[0])
+        // The row detail reflects the staged choice while nothing is saved.
+        XCTAssertEqual(app.buttons["smartListVisibility-tomorrow"].value as? String, "Show")
+        // The staged choice survives a tab switch and back.
+        selectTab("Tags", in: app)
+        XCTAssertTrue(app.buttons["newTag"].exists)
+        selectTab("Smart Lists", in: app)
+        XCTAssertEqual(app.buttons["smartListVisibility-tomorrow"].value as? String, "Show")
+        // Cancel discards: the row returns to the persisted value.
+        app.buttons["managementCancel"].tap()
+        XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
+        app.buttons["Discard Changes"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+        reopenManagement(app)
+        XCTAssertEqual(app.buttons["smartListVisibility-tomorrow"].value as? String, "Hidden")
+        // Restage and save with Done; the value persists across relaunch and
+        // the drawer shows Tomorrow after saving Show.
+        openVisibilityPopup("tomorrow", in: app)
+        app.buttons["visibilityOption-tomorrow-show"].tap()
+        waitGone(app.buttons["visibilityOption-tomorrow-show"])
+        app.buttons["managementDone"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        openManagement(app)
+        XCTAssertEqual(app.buttons["smartListVisibility-tomorrow"].value as? String, "Show")
+        app.buttons["managementCancel"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+        app.buttons["Open navigation"].tap()
+        XCTAssertTrue(app.buttons["smartDrawer-tomorrow"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor func testVisibilityPopupRepeatedOpenAndSelectedRowDismiss() {
+        let app = launch()
+        openManagement(app)
+        // Open and dismiss via the already-selected row twice: no mutation.
+        for _ in 0..<2 {
+            openVisibilityPopup("today", in: app)
+            let options = popupOptions("today", in: app)
+            XCTAssertTrue(options[0].isSelected)
+            options[0].tap()
+            waitGone(options[0])
+        }
+        app.buttons["managementCancel"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+        // A different choice from the same popup saves through Done.
+        reopenManagement(app)
+        openVisibilityPopup("today", in: app)
+        let options = popupOptions("today", in: app)
+        options[2].tap()
+        waitGone(options[0])
+        XCTAssertEqual(app.buttons["smartListVisibility-today"].value as? String, "Hidden")
+        app.buttons["managementDone"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+        reopenManagement(app)
+        XCTAssertEqual(app.buttons["smartListVisibility-today"].value as? String, "Hidden")
+        app.buttons["managementCancel"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+    }
+
+    @MainActor func testTagsAndFiltersVisibilityRowsUsePopup() {
+        let app = launch()
+        openManagement(app)
+        // Drawer-sections Filters row uses the same anchored popup.
+        openVisibilityPopup("filters", in: app)
+        var options = popupOptions("filters", in: app)
+        XCTAssertTrue(options[0].isSelected)
+        XCTAssertLessThan(options[0].frame.minY, options[1].frame.minY)
+        XCTAssertLessThan(options[1].frame.minY, options[2].frame.minY)
+        options[2].tap()
+        waitGone(options[2])
+        XCTAssertEqual(app.buttons["smartListVisibility-filters"].value as? String, "Hidden")
+        // Tags tab Tags row: same three choices with the current check.
+        selectTab("Tags", in: app)
+        openVisibilityPopup("tags", in: app)
+        options = popupOptions("tags", in: app)
+        for option in options { XCTAssertTrue(option.exists) }
+        XCTAssertTrue(options[0].isSelected)
+        attach(app, "Tags visibility popup")
+        // Backdrop dismiss keeps the staged Filters edit intact.
+        app.navigationBars.firstMatch.tap()
+        waitGone(options[0])
+        selectTab("Smart Lists", in: app)
+        XCTAssertEqual(app.buttons["smartListVisibility-filters"].value as? String, "Hidden")
+        // Cancel discards both staged rows without a save.
+        app.buttons["managementCancel"].tap()
+        XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
+        app.buttons["Discard Changes"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
+    }
+
+    @MainActor func testVisibilityPopupKeepsNestedGuardsAndReorder() {
+        let app = launch()
+        openManagement(app)
+        stageTomorrowVisible(in: app)
+        // The dirty gate still guards nested entry after a popup-staged edit.
+        selectTab("Tags", in: app)
+        app.buttons["newTag"].tap()
+        XCTAssertTrue(gateAlert(in: app).buttons["Save Changes"].waitForExistence(timeout: 5))
+        gateAlert(in: app).buttons["Keep Editing"].tap()
+        XCTAssertEqual(app.buttons["smartListVisibility-tags"].value as? String, "Show")
+        selectTab("Smart Lists", in: app)
+        XCTAssertEqual(app.buttons["smartListVisibility-tomorrow"].value as? String, "Show")
+        // Reorder mode still replaces popup rows with move controls.
+        app.buttons["managementReorder"].tap()
+        XCTAssertFalse(app.buttons["smartListVisibility-tomorrow"].exists)
+        XCTAssertTrue(app.buttons["smartListUp-tomorrow"].exists)
+        app.buttons["managementReorder"].tap()
+        // The popup still opens after leaving reorder mode; dismiss it via
+        // the already-checked row with no further mutation.
+        openVisibilityPopup("tomorrow", in: app)
+        let dismissOptions = popupOptions("tomorrow", in: app)
+        XCTAssertTrue(dismissOptions[0].isSelected)
+        dismissOptions[0].tap()
+        waitGone(dismissOptions[0])
+        XCTAssertEqual(app.buttons["smartListVisibility-tomorrow"].value as? String, "Show")
+        // Discard the staged popup choice; Cancel then closes cleanly.
+        app.buttons["managementCancel"].tap()
+        XCTAssertTrue(app.buttons["Discard Changes"].waitForExistence(timeout: 5))
+        app.buttons["Discard Changes"].tap()
+        waitGone(app.segmentedControls["managementTabs"])
     }
 
     @MainActor private func waitGone(_ element: XCUIElement) {
