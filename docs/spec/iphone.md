@@ -1013,3 +1013,7 @@ Reminder and Repeat appear as summary rows opening dedicated pages over the same
 ## Real mobile organization grouping and sorting — 2026-11-15
 
 [Contract](../changes/mobile-group-sort-complete-2026-11-15.md) defines distinct List/Tag/None, metadata-aware Date/Tag sorting and unchanged compatibility/reset boundaries. Checks pending; exact unobserved reference semantics not claimed.
+
+### Smart-list visibility popup (T10)
+
+Unified management uses a row-anchored Show / Show if not empty / Hidden popover with the current staged check. Selection changes only the management draft; backdrop leaves it untouched, Cancel discards and Done saves through the existing revision guard. Smart Lists, Tags and Filters use the same control. Legacy standalone Smart List settings retain their navigation pickers. [Verification and limits](../changes/mobile-visibility-popup-2026-11-16.md).
