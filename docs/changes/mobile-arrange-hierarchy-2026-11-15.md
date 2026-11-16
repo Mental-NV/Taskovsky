@@ -29,3 +29,7 @@ not a reference claim.
 ## Screenshot review limit
 
 The neutral expanded/collapsed captures were independently inspected. Narrow Arrange rows still wrap long titles heavily, with the parent disclosure consuming additional width. This is a remaining layout-density gap, not pixel parity. The real drag/Undo regression passed on unchanged production source after the four hierarchy/scope cases. Full final logs show 876 XCTest plus 38 Swift Testing cases (the initial summary counted four zero-test bundle reports as tests; corrected in the verification ledger).
+
+## Child Done follow-up
+
+The final focused native regression passed on test-only `1b777d2` with production unchanged: actual child editor identity, Done, child-only removal from eligible undated rows, parent remaining unscheduled, sibling/orphan eligibility retained, and the saved child schedule summary unchanged after relaunch. This supersedes the earlier untested-Done limit; it does not assert every unrelated field or exact pre-Done timestamp. Complete xcresult and process exit 0 verified.
