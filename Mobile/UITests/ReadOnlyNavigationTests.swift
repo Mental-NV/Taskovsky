@@ -5464,6 +5464,103 @@ extension ReadOnlyNavigationTests {
         XCTAssertTrue(app.descendants(matching: .any)["calendarHourlyGrid"].firstMatch.waitForExistence(timeout: 5))
     }
 
+    /// C06 View Options primary structure: supported rows read Color, Style,
+    /// Show Details, Show Completed, Show Checklist Item (singular), Show All
+    /// Repeat Cycles, Additional Time Zone strictly top-to-bottom with no
+    /// declined/focus/health/calendar rows; the top-right control is a
+    /// checkmark with the Done label and Cancel is retained; staged toggles
+    /// discard on Cancel and commit on Done; an unchanged Style visit plus
+    /// Back retains the staged toggles (combined nested-change plus toggle
+    /// commit is covered by the existing adjacent style/render tests, not
+    /// this one); saved values survive reopen, repeated presentation and
+    /// relaunch; the Taskovsky extras stay directly reachable on the same
+    /// sheet.
+    @MainActor func testCalendarViewOptionsPrimaryOrderStagingAndExtras() {
+        let app = launch(qaCase: "calendar-options")
+        app.buttons["Calendar"].tap()
+        openCalendarViewOptions(app)
+        let color = app.buttons["calendarColorPage"]
+        let style = app.buttons["calendarStylePage"]
+        let details = app.switches["calendarDetails"]
+        let completed = app.switches["calendarCompleted"]
+        let checklist = app.switches["calendarChecklist"]
+        let repeats = app.switches["calendarRepeats"]
+        let zones = app.buttons["calendarZoneSettings"]
+        XCTAssertTrue(color.waitForExistence(timeout: 5))
+        // Strict top-to-bottom primary order; each reveal keeps earlier frames comparable.
+        for (first, second) in [(color, style), (style, details), (details, completed),
+                                (completed, checklist), (checklist, repeats), (repeats, zones)] as [(XCUIElement, XCUIElement)] {
+            reveal(second, in: app)
+            XCTAssertLessThan(first.frame.minY, second.frame.minY)
+        }
+        XCTAssertEqual(checklist.label, "Show Checklist Item")
+        XCTAssertEqual(app.buttons["calendarPreferencesDone"].label, "Done")
+        XCTAssertTrue(app.buttons["calendarPreferencesCancel"].exists)
+        for absent in ["Show Declined Events", "Show Focus Records", "Apple Health Data", "Show Habit", "Show Countdown"] {
+            XCTAssertFalse(app.switches[absent].exists)
+            XCTAssertFalse(app.buttons[absent].exists)
+            XCTAssertFalse(app.staticTexts[absent].exists)
+        }
+        let originalCompleted = completed.value as? String
+        let originalChecklist = checklist.value as? String
+        XCTAssertNotNil(originalCompleted)
+        XCTAssertNotNil(originalChecklist)
+        attach(app, "Calendar View Options primary order")
+        // Staged toggles discard on Cancel.
+        setSwitch("calendarCompleted", to: originalCompleted != "1", app: app)
+        setSwitch("calendarChecklist", to: originalChecklist != "1", app: app)
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        openCalendarViewOptions(app)
+        XCTAssertEqual(app.switches["calendarCompleted"].value as? String, originalCompleted)
+        XCTAssertEqual(app.switches["calendarChecklist"].value as? String, originalChecklist)
+        // Staged toggles survive an unchanged nested-page visit plus Back, then commit on checkmark Done.
+        setSwitch("calendarCompleted", to: false, app: app)
+        setSwitch("calendarChecklist", to: true, app: app)
+        app.buttons["calendarStylePage"].tap()
+        XCTAssertTrue(app.navigationBars["Style"].waitForExistence(timeout: 5))
+        app.navigationBars["Style"].buttons.firstMatch.tap()
+        calendarOptionsRoot(app)
+        XCTAssertEqual(app.switches["calendarCompleted"].value as? String, "0")
+        XCTAssertEqual(app.switches["calendarChecklist"].value as? String, "1")
+        app.buttons["calendarPreferencesDone"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        XCTAssertTrue(app.buttons["Review the first step"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Arrange the studio"].exists)
+        // Reopen shows the saved state; repeated Cancel keeps it.
+        openCalendarViewOptions(app)
+        XCTAssertEqual(app.switches["calendarCompleted"].value as? String, "0")
+        XCTAssertEqual(app.switches["calendarChecklist"].value as? String, "1")
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        openCalendarViewOptions(app)
+        XCTAssertEqual(app.switches["calendarCompleted"].value as? String, "0")
+        // Taskovsky extras stay directly reachable on the same sheet.
+        let rows = app.buttons["calendarAllDayRows"]
+        let early = app.buttons["calendarFoldPreference-early"]
+        let late = app.buttons["calendarFoldPreference-late"]
+        reveal(rows, in: app)
+        XCTAssertTrue(rows.isHittable)
+        reveal(early, in: app)
+        XCTAssertTrue(early.isHittable)
+        reveal(late, in: app)
+        XCTAssertTrue(late.isHittable)
+        attach(app, "Calendar View Options Taskovsky extras")
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+        // Interruption keeps the saved Done state, not the discarded draft.
+        app.terminate(); app.launch()
+        XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
+        app.buttons["Calendar"].tap()
+        XCTAssertTrue(app.buttons["Review the first step"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Arrange the studio"].exists)
+        openCalendarViewOptions(app)
+        XCTAssertEqual(app.switches["calendarCompleted"].value as? String, "0")
+        XCTAssertEqual(app.switches["calendarChecklist"].value as? String, "1")
+        app.buttons["calendarPreferencesCancel"].tap()
+        waitGone(app.buttons["calendarPreferencesDone"])
+    }
+
     @MainActor func testCalendarYearDayPreviewStaysInYearAndCanOpenWeek() {
         let app = launch()
         app.buttons["Calendar"].tap()
