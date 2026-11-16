@@ -418,5 +418,44 @@
     "review": "Pixels inspected: neutral Inbox/Personal/Projects/Work fixture only; no personal account/task data",
     "capture_source": "d25580b with screenshot-only native attachment addition committed as 8b0e625",
     "historical": false
+  },
+  {
+    "state": "T02",
+    "file": "t02-list-details.png",
+    "sha256": "b0a624ff1492a0cc5972b8886b82fd97f53a4454430f79c0c95dec1781bf2e6c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-task-display-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
+    "historical": false
+  },
+  {
+    "state": "T02",
+    "file": "t02-kanban-details.png",
+    "sha256": "8640abade57e83681ca26a7145acd28f6d38ec3cf8e756003e310aab38c3f6da",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-task-display-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
+    "historical": false
+  },
+  {
+    "state": "T02",
+    "file": "t02-completed-section.png",
+    "sha256": "041cc3835312f2901f09a50e5933437bcc8885d86ad9276011c59151c5bc196c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-task-display-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
+    "historical": false
   }
 ]

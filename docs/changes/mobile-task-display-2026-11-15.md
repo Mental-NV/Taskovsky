@@ -1,6 +1,6 @@
 # T02 Tasks display controls
 
-Status: In implementation. Base `410b23d`. User-approved wide-first mobile parity; independent design review before implementation.
+Status: Implemented; exact-head hosted CI pending. Base `410b23d`. User-approved wide-first mobile parity; independent design review before implementation.
 
 ## Observed reference and scope
 
@@ -19,6 +19,8 @@ Implement Details for ordinary List/Kanban routes. Completed control is restrict
 
 ## Verification
 
-Local full suite passed: 868 XCTest plus 38 Swift tests. Release build and iPhone build-for-testing passed. Regression fixture is neutral and isolated. Native checks are queued behind the previously reserved Simulator session; no native pass or screenshot is claimed yet. Independent final source review, completed native result bundle, final changed-test compile and exact-head hosted CI remain gates before merge.
+Local full suite passed: 868 XCTest plus 38 Swift tests. Release build and iPhone build-for-testing passed. Regression fixture is neutral and isolated. Independent final source review approved. Native on source `3a9594e`: three tests passed, zero failures/skips; process exit 0 and completed `TaskDisplayNative.xcresult` summary independently parsed. Cases cover Inbox hide/collapse and batch positive/negative inclusion, sectioned List details/history, and Kanban metadata/task opening. Native build compiled the strengthened test delta. One UIKit `_UIReparentingView` runtime warning occurred during Kanban popup presentation; interactions and inspected layout passed, not claimed warning-free. Simulator released after verified completion. Exact-head hosted CI remains a merge gate.
+
+Actual unmodified screenshots inspected for content/privacy and readable layout: [List details](../assets/mobile-parity/2026-11-15/t02-list-details.png), [Kanban details](../assets/mobile-parity/2026-11-15/t02-kanban-details.png), [Completed section](../assets/mobile-parity/2026-11-15/t02-completed-section.png). These show resulting display states, not the overflow menu itself. No calibrated pixel-perfect claim; tag chip styling and reference-specific truncation/spacing remain final polish.
 
 Acceptance: ordinary Inbox and sectioned List hide/show/collapse, pinned completion once, Won't Do retained, batch exclusion, List and Kanban expanded details, task opening, excluded history controls; pure projection tests preserve bytes/order/membership/active counts. Existing accessibility support retained, expanded metadata has an accessible value. Accessibility-specific layout, dark theme and final calibrated pixel polish are deferred.
