@@ -101,8 +101,9 @@ alternative, this slice does **not** reproduce the named families.
   `testCalendarColorPickKeepsListAndTagOverridesSeparate` (46.1s),
   `testCalendarColorPageShowsFolderHierarchyAndModeSwitch` (23.4s).
   `xcodebuild` exit 0, `TEST SUCCEEDED`, 0 errors in the log. The bundle
-  parses; `issues` holds 0 errors and 0 failures plus 2 benign runtime
-  `_UIReparentingView` warnings with no failure association.
+  parses; `issues` holds 0 errors and 0 failures, with 2 recorded
+  `_UIReparentingView` runtime warnings that carry no failure association.
+  All 3 tests passed.
 - Pixel inspection of the 5 exported attachments found one real defect: the
   Default option's SF Symbol slash did not render (magnified crop shows a
   solid swatch). Bounded correction: the slash is now drawn geometry
@@ -116,16 +117,20 @@ alternative, this slice does **not** reproduce the named families.
   diagonal slash on the Default swatch, the thin blue ring on the selected
   `#58A58B` swatch, and no checkmark.
 - Published captures (all inspected at pixel level, neutral QA fixtures
-  only, no personal data): pick page with selected palette swatch and
-  visible Default slash
+  only, no personal data): all three are byte-identical exports from the
+  fixed-build run (`Palette2`, 09:38–09:39 captures, drawn slash present) —
+  pick page with selected palette swatch and visible Default slash
   (`assets/mobile-parity/2026-11-16/c09-color-pick-palette.png`), pick page
   with selected Current `#008122` custom row
   (`assets/mobile-parity/2026-11-16/c09-current-custom.png`), saved source
   summary with Inbox `#58A58B`
-  (`assets/mobile-parity/2026-11-16/c09-color-summary.png`). The earlier
-  hierarchy, Color By menu and staged-across-modes attachments remain in
-  their result bundles as run evidence; the C07/C08 rows keep their prior
-  checkpoint images.
+  (`assets/mobile-parity/2026-11-16/c09-color-summary.png`). The initial
+  run's pre-fix attachments (including its palette/current/summary shots
+  without the drawn slash) remain only as run evidence under
+  `/private/tmp/TaskovskyCalendarColorPickNative/` and are not published.
+  The hierarchy, Color By menu and staged-across-modes attachments remain
+  in their result bundles as run evidence; the C07/C08 rows keep their
+  prior checkpoint images.
 
 ## Fidelity limitations (explicit, not claims)
 

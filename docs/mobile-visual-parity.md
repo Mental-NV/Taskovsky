@@ -220,7 +220,7 @@ Actual 1170×2532 owned Simulator capture, neutral calendar-filter-hierarchy fix
 <a id="evidence-root-label-removal"></a>
 ### ROOT — Mobile root informational-label removal (outside the 46)
 
-[Receipt](changes/mobile-remove-sample-label-2026-11-16.md). Actual 1170×2532 owned Simulator captures on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral QA fixtures. Neither the QA (`Sample workspace · Local editing`) nor the ordinary (`Local workspace · Early development`) header label renders in any section; the header closes up by one caption row. Not a parity state and not counted in the 28/46 denominator; no existing row changed.
+[Receipt](changes/mobile-remove-sample-label-2026-11-16.md). Actual 1170×2532 owned Simulator captures on `B263E8E7` (iPhone 13 Pro, iOS 26.3.1), neutral QA fixtures. Neither the QA (`Sample workspace · Local editing`) nor the ordinary (`Local workspace · Early development`) header label renders in any section; the header closes up by one caption row. Not a parity state and not counted in the 46-state denominator; no existing row changed.
 
 [<img src="assets/mobile-parity/2026-11-16/root-tasks-no-label.png" width="250" alt="Taskovsky Tasks root without informational label">](assets/mobile-parity/2026-11-16/root-tasks-no-label.png)
 [<img src="assets/mobile-parity/2026-11-16/root-calendar-no-label.png" width="250" alt="Taskovsky Calendar root without informational label">](assets/mobile-parity/2026-11-16/root-calendar-no-label.png)
