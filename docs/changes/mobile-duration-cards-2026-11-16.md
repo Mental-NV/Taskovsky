@@ -27,3 +27,7 @@ Initial run had five passes/two failures: test tap selected the All Day containe
 Final cases cover original Date/Duration and Date Time popup regression; timed whole-range move with outer Cancel; all-day endpoint cancel and whole-range move; real start/end edits with save/relaunch; invalid range disabled until correction; nested Cancel/outside dismissal; nonzero seconds and non-device-zone no-op save/relaunch with manual/end reminders preserved.
 
 Actual unmodified neutral screenshots inspected for readable layout and privacy: [timed cards](../assets/mobile-parity/2026-11-16/d08-duration-timed.png), [all-day cards](../assets/mobile-parity/2026-11-16/d08-duration-all-day.png). Reference-specific timeline/relative date captions, floating-time policy and final calibrated spacing remain explicitly unverified or deferred, not a pixel-perfect claim.
+
+## Management integration
+
+Merged current main `ec88bcf` at `c573731` without conflicts. Independent actual integration review confirmed D08 source/native bodies unchanged, management tests and both manifests/receipts/tracker rows preserved; no extra native rerun required from the separate management change. Integrated validation completed exit 0: 899 XCTest plus 38 Swift tests, release build and iPhone build-for-testing passed. Original seven-test native receipt remains applicable to unchanged D08 source. Refreshed exact-head hosted CI is still required before merge.
