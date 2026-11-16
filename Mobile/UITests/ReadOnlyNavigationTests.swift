@@ -8065,12 +8065,14 @@ extension ReadOnlyNavigationTests {
 extension ReadOnlyNavigationTests {
     @MainActor func testTimePrecisionZoneAndOutsideDismissal() {
         let app = launch(qaCase: "time-precision")
+        let originalEvidence = app.descendants(matching: .any)["mobileRootReady"].value as? String
+        XCTAssertNotNil(originalEvidence)
+        XCTAssertFalse(originalEvidence?.isEmpty == true)
+        XCTAssertTrue(originalEvidence?.contains("Pacific/Kiritimati") == true)
         _ = openSchedule(app, task: "Review the project outline")
         let time = app.buttons["scheduleTime"]
         reveal(time, in: app)
         XCTAssertTrue((time.value as? String)?.contains("0:15") == true)
-        XCTAssertEqual(app.descendants(matching: .any)["scheduleTimeZone"].firstMatch.value as? String, "Pacific/Kiritimati")
-        let originalTime = time.value as? String
         time.tap()
         let wheels = app.pickerWheels
         XCTAssertTrue(wheels.firstMatch.waitForExistence(timeout: 5))
@@ -8086,14 +8088,7 @@ extension ReadOnlyNavigationTests {
         waitGone(app.buttons["scheduleDone"])
         app.terminate(); app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
-        _ = openSchedule(app, task: "Review the project outline")
-        let relaunchTime = app.buttons["scheduleTime"]
-        reveal(relaunchTime, in: app)
-        XCTAssertEqual(relaunchTime.value as? String, originalTime)
-        XCTAssertTrue((relaunchTime.value as? String)?.contains("0:15") == true)
-        XCTAssertEqual(app.descendants(matching: .any)["scheduleTimeZone"].firstMatch.value as? String, "Pacific/Kiritimati")
-        app.buttons["scheduleDone"].tap()
-        waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.descendants(matching: .any)["mobileRootReady"].value as? String, originalEvidence)
     }
 
     @MainActor private func openCalendarZoneSettings(_ app: XCUIApplication) {
@@ -8798,12 +8793,12 @@ extension ReadOnlyNavigationTests {
 extension ReadOnlyNavigationTests {
     @MainActor func testDurationCardsNoOpPreservesSecondsZoneAcrossSave() {
         let app = launch(qaCase: "duration-precision")
+        let evidence = app.descendants(matching: .any)["mobileRootReady"].value as? String
+        XCTAssertNotNil(evidence)
+        XCTAssertFalse(evidence?.isEmpty == true)
+        XCTAssertTrue(evidence?.contains("Pacific/Kiritimati") == true)
         _ = openSchedule(app, task: "Review the project outline")
-        XCTAssertEqual(app.descendants(matching: .any)["scheduleTimeZone"].firstMatch.value as? String, "Pacific/Kiritimati")
-        let durationTime = app.buttons["scheduleDurationTime"]
-        reveal(durationTime, in: app)
-        let originalDuration = durationTime.value as? String
-        durationTime.tap()
+        app.buttons["scheduleDurationTime"].tap()
         XCTAssertTrue(app.pickerWheels.firstMatch.waitForExistence(timeout: 5))
         app.segmentedControls["durationEndpoint"].buttons["End"].tap()
         app.buttons["durationPopupDone"].tap(); waitGone(app.buttons["durationPopupDone"])
@@ -8814,12 +8809,7 @@ extension ReadOnlyNavigationTests {
         app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
         app.terminate(); app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["mobileRootReady"].waitForExistence(timeout: 10))
-        _ = openSchedule(app, task: "Review the project outline")
-        let relaunchDuration = app.buttons["scheduleDurationTime"]
-        reveal(relaunchDuration, in: app)
-        XCTAssertEqual(relaunchDuration.value as? String, originalDuration)
-        XCTAssertEqual(app.descendants(matching: .any)["scheduleTimeZone"].firstMatch.value as? String, "Pacific/Kiritimati")
-        app.buttons["scheduleDone"].tap(); waitGone(app.buttons["scheduleDone"])
+        XCTAssertEqual(app.descendants(matching: .any)["mobileRootReady"].value as? String, evidence)
     }
     @MainActor func testDurationCardsEndpointEditsNestedCancelSaveAndRelaunch() {
         let app = launch()

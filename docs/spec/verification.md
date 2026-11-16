@@ -2237,16 +2237,19 @@ Independent rereview and exact-head hosted CI remain pending. No push/PR, no liv
 [Bounded change](../changes/mobile-remove-sample-label-2026-11-16.md): the whole
 root header label is gone from `MobileRootView.shell`, both the QA
 (`Sample workspace · Local editing`) and ordinary (`Local workspace · Early
-development`) variants, with its `previewNotice` identifier and
-`timePrecisionEvidence` value. The genuine tab-bar container now carries
-`mobileRootReady`. All ~104 native readiness waits target it with unchanged
-timeouts; the two precision persistence checks re-open the schedule after
-relaunch and assert the visible `scheduleTime`/`scheduleDurationTime` value and
-`scheduleTimeZone` caption instead of the opaque label value. New
-`RootLabelRemovalTests` (2 tests) asserts no label string in any section and
-preserved Tasks/Calendar/Search navigation plus `Open navigation`,
-`openCapture`, `calendarJumpToDate`, `workspaceSearch` controls. Data, QA
-isolation, recovery warnings and editing behavior unchanged.
+development`) variants, with its `previewNotice` identifier. The QA-only
+`timePrecisionEvidence` accessibility value moved unchanged onto the genuine
+tab-bar container, which carries `mobileRootReady` with
+`.accessibilityElement(children: .contain)` so child tab IDs are unaffected.
+All ~104 native readiness waits target it with unchanged timeouts; the two
+precision persistence checks keep their original exact assertions through that
+element (epoch-seconds/duration/reminder evidence, non-nil/non-empty fixture
+baseline, equality after relaunch). An interim revision using formatted visible
+schedule times was reverted per review: weaker evidence and popup-only zone
+reads while closed. New `RootLabelRemovalTests` (2 tests) asserts no label
+string in any section and preserved Tasks/Calendar/Search navigation plus
+`Open navigation`, `openCapture`, `calendarJumpToDate`, `workspaceSearch`
+controls. Data, QA isolation, recovery warnings and editing behavior unchanged.
 
 | Check | Result | Coverage |
 | --- | --- | --- |

@@ -309,7 +309,9 @@ struct MobileRootView: View {
                 }
             }.buttonStyle(.plain).padding(5).background(.regularMaterial, in: Capsule())
                 .overlay(Capsule().stroke(.primary.opacity(0.10), lineWidth: 0.5))
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("mobileRootReady")
+                .accessibilityValue(model.timePrecisionEvidence)
                 .padding(.horizontal, 20).padding(.bottom, 8)
         }.tint(PhoneStyle.accent)
         .disabled(drawer)

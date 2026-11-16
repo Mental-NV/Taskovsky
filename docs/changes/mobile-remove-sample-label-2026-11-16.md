@@ -16,10 +16,11 @@
 
 The mobile root no longer renders any informational header label. Both variants are
 gone by construction: the entire conditional `Text` block (including the
-`previewNotice` accessibility identifier and its `timePrecisionEvidence` value)
-was deleted from `MobileRootView.shell`, not just reworded. The tab bar now
-carries a genuine readiness identifier (`mobileRootReady`) on the real,
-always-rendered section switcher.
+`previewNotice` accessibility identifier) was deleted from
+`MobileRootView.shell`, not just reworded. The QA-only
+`timePrecisionEvidence` accessibility value moved unchanged onto the genuine
+tab-bar container. The tab bar now carries the readiness identifier
+(`mobileRootReady`) on the real, always-rendered section switcher.
 
 Explicitly unchanged: workspace data and persistence, QA isolation
 (`PhoneWorkspaceModel.isQA`, `--qa-session` fixtures, per-QA storage keys),
@@ -40,19 +41,25 @@ After: the block is deleted; `shell` (rendered only after the workspace
 document loads) exposes `mobileRootReady` on the bottom tab bar. All native
 readiness waits now target `app.descendants(matching: .any)["mobileRootReady"]`
 — the same timeouts, no weakened assertions, no hidden text. The two
-time/duration-precision persistence checks now prove the point through genuine
-schedule UI instead of the opaque label value: they capture the visible
-`scheduleTime` / `scheduleDurationTime` value and the `scheduleTimeZone`
-caption before save and re-open the schedule after relaunch to assert the same
-visible values.
+time/duration-precision persistence checks keep their original precise
+assertions through that same element: they capture `mobileRootReady.value`
+(the relocated QA-only evidence preserving epoch seconds, duration start,
+reminders and endReminder), assert it is non-nil/non-empty with the
+`Pacific/Kiritimati` fixture baseline, and assert exact equality after
+relaunch. Correction (same day): an interim revision had replaced these with
+formatted visible schedule times; review found that weaker (labels drop the
+epoch/reminder fields) and its added `scheduleTimeZone` reads queried a
+popup-only element while closed — both reverted.
 
 ## UI contract notes
 
 - Layout: header rows close up by one caption row; no replacement element.
 - Accessibility: one identifier removed (`previewNotice`), one added on visible
-  navigation (`mobileRootReady`). No hidden accessible text introduced.
-- Time-precision evidence (`PhoneWorkspaceModel.timePrecisionEvidence`) is now
-  unreferenced by UI; the model property itself is untouched.
+  navigation (`mobileRootReady`) with `.accessibilityElement(children: .contain)`
+  so the child tab IDs are unaffected — the identifier does not overwrite child
+  IDs by inheritance. The pre-existing QA-only `timePrecisionEvidence`
+  accessibility value moved unchanged onto that container; no new visible or
+  hidden text. The model property itself is untouched.
 
 ## Acceptance cases
 
@@ -65,7 +72,7 @@ visible values.
 - Invalid-isolation launches still show the invalid-workspace notice and no
   `mobileRootReady` element.
 - Time-precision and duration-precision saves still persist across relaunch
-  (rewritten assertions on visible schedule UI).
+  (exact evidence equality plus non-nil/non-empty fixture baseline).
 
 ## Verification and release
 
