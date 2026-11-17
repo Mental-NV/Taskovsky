@@ -350,6 +350,20 @@
     "state": "T06"
   },
   {
+    "file": "t09-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Smart Lists management in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "59c6fb3f898a58d089d79b76e6c004e297b0fef542a498b291ab33516473e6a9",
+    "state": "T09"
+  },
+  {
     "file": "t12-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
