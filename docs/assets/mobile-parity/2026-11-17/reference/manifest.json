@@ -28,6 +28,20 @@
     "state": "C07"
   },
   {
+    "file": "c08-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Color By menu in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "4aaa489941db7534aab6cdd938a91bc8bd2d994a23b2c7dc04ed7ee0e32d5cde",
+    "state": "C08"
+  },
+  {
     "file": "d01-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
