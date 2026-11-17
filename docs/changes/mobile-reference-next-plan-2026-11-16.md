@@ -4,12 +4,12 @@ Docs-only follow-up to the [live textual audit](../ticktick-spec/mobile-live-aud
 
 ## Prerequisite: evidence refresh (do first)
 
-The live run reached all 46 states textually but produced **0 portable TickTick reference images** (dated observation from that run); support-export investigation continues separately. Follow-up 2026-11-17: one owner-supplied manual T01 window capture was published ([reference manifest](../assets/mobile-parity/2026-11-17/reference/manifest.json); device/scale unknown, no pixel certification), so portable coverage is now **1/46 with 45 missing**. Prior autonomous attempts failed (Preview capture timed out; Shift-Cmd-5 showed no toolbar); the owner image does not prove autonomous capture works. Actual further screenshot refresh stays **blocked** until a privacy-safe export exists. Do not claim matched visual acceptance from this text pass.
+The live run inspected all 46 states without saving screenshot files. The November 17 follow-up saved 34 TickTick references, including the owner’s Today image. Twelve states still need privacy-safe captures. Matched visual acceptance remains open. [Reference manifest](../assets/mobile-parity/2026-11-17/reference/manifest.json)
 
 - **C13 / D03 have no dedicated Taskovsky state shots.** C13 is currently covered only by adjacent C14 hierarchy images; D03 has no counterpart image. Capture neutral staged shots before comparing geometry.
 - **T02 / T03 are outcome mismatches, not menu matches.** The tracker holds resulting display states (T02) and board lanes (T03); the live reference is the open anchored menus. Direct menu-geometry comparison is pending.
 - Any future reference capture needs a matching device/theme/fixture set (same viewport, light theme, neutral synthetic lists/tags/Week, matched keyboard state for T17) plus full-frame privacy review including sheet backdrops.
-- Counts: **42/46 Taskovsky, 1/46 portable TickTick reference (T01 owner-supplied manual capture, 2026-11-17; 45 states still missing).**
+- The tracker has **42/46 Taskovsky captures and 34/46 portable TickTick references**.
 
 Deferred scope stays deferred: **T05 Share / Print, T06 Background chooser**, and Dark appearance. This plan does not revive them.
 
