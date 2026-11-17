@@ -1,0 +1,16 @@
+[
+  {
+    "file": "t01-ticktick-owner.png",
+    "historical": false,
+    "kind": "Unmodified owner-supplied manual window capture",
+    "pixels": [
+      315,
+      656
+    ],
+    "provenance": "Owner-supplied manual window capture of the actual observed TickTick Today/List (T01), supplied 2026-11-17. Light appearance; six QA-named tasks; no personal account/tasks visible; narrow desktop wallpaper border. Device and scale unknown. Not a matched fixture; no pixel certification.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual pixels inspected: Today list with six QA-named rows, checkboxes, trailing dates and list-color accents, floating add, five bottom icons; no personal account/task data observed. Copied byte-identical from owner original; original local input and metadata preserved outside the repository.",
+    "sha256": "5c4ab38aac0473c22b7e0f3e0139a637e18df6f5ca81809c2f865aef333ecd5e",
+    "state": "T01"
+  }
+]
