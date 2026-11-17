@@ -42,6 +42,20 @@
     "state": "C08"
   },
   {
+    "file": "c09-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Color Pick/palette in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "d02f3788c377ad351c053f7908a0258afee5dd90989d85e7fbc25813f6042452",
+    "state": "C09"
+  },
+  {
     "file": "d01-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
