@@ -168,6 +168,20 @@
     "state": "T06"
   },
   {
+    "file": "t12-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Add List in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "55d8d75b24b17df626f026392d6dc81bbe099b9ff2e7d1a22bdd9ad7c153b2a8",
+    "state": "T12"
+  },
+  {
     "file": "t17-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
