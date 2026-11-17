@@ -126,6 +126,20 @@
     "state": "D10"
   },
   {
+    "file": "d11-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Custom Reminder in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "2a5c7179a951a3562e4f9f7f4385e72aaa055e69b6d19f060218f77122b2694d",
+    "state": "D11"
+  },
+  {
     "file": "t01-ticktick-owner.png",
     "historical": false,
     "kind": "Unmodified owner-supplied manual window capture",
