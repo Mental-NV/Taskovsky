@@ -12,5 +12,19 @@
     "review": "Actual pixels inspected: Today list with six QA-named rows, checkboxes, trailing dates and list-color accents, floating add, five bottom icons; no personal account/task data observed. Copied byte-identical from owner original; original local input and metadata preserved outside the repository.",
     "sha256": "5c4ab38aac0473c22b7e0f3e0139a637e18df6f5ca81809c2f865aef333ecd5e",
     "state": "T01"
+  },
+  {
+    "file": "t17-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Blank Quick Add in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "94d2e52148817f33e0e06b3b814668bc6ac67bab8be794eaab0d56b955792d5d",
+    "state": "T17"
   }
 ]
