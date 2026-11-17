@@ -112,6 +112,20 @@
     "state": "D08"
   },
   {
+    "file": "d10-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Reminder menu in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "7c9848932a85f6e952e210cca9a7b6d176f1fb9a981ca50a391ef360f32f4d36",
+    "state": "D10"
+  },
+  {
     "file": "t01-ticktick-owner.png",
     "historical": false,
     "kind": "Unmodified owner-supplied manual window capture",
