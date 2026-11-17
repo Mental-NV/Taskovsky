@@ -448,6 +448,20 @@
     "state": "T15"
   },
   {
+    "file": "t16-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Parent Tag in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "3ad6599e9b7913a171eb9d212afce94bef87df9db657ce13ecb1d43c77370141",
+    "state": "T16"
+  },
+  {
     "file": "t17-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
