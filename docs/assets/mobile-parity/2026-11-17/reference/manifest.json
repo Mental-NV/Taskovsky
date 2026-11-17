@@ -364,6 +364,20 @@
     "state": "T09"
   },
   {
+    "file": "t10-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Smart-list visibility popup in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "95541607672ac682fdd41662289efb8f375f9421ad27a8f7348e6d442ba6b06f",
+    "state": "T10"
+  },
+  {
     "file": "t12-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
