@@ -70,6 +70,20 @@
     "state": "T05"
   },
   {
+    "file": "t06-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Background chooser in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "994f6810735511d3d22f5ad0188e6e9d41aa722ff091b87c01f069aaec01d175",
+    "state": "T06"
+  },
+  {
     "file": "t17-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
