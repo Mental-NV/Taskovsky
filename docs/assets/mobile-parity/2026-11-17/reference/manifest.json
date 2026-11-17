@@ -70,6 +70,20 @@
     "state": "C10"
   },
   {
+    "file": "c11-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Show Item Icons in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "943e318a3bde2b3eae78f3d0988e802a9fbb1ae09af04d19b25a620642400134",
+    "state": "C11"
+  },
+  {
     "file": "d01-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
