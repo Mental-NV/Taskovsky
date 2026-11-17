@@ -168,6 +168,20 @@
     "state": "D13"
   },
   {
+    "file": "d14-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Repeat Type in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "f0666aa134f2a09b395f78c2125092583efb1a0f38b31476f7a565536d34955b",
+    "state": "D14"
+  },
+  {
     "file": "t01-ticktick-owner.png",
     "historical": false,
     "kind": "Unmodified owner-supplied manual window capture",
