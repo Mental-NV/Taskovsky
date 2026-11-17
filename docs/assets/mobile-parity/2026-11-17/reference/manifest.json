@@ -406,6 +406,20 @@
     "state": "T13"
   },
   {
+    "file": "t14-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Advanced Filter in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "67e8414495eebd3896ff3f3e025396e57194163ba1c5b4cd45baa8729ee81925",
+    "state": "T14"
+  },
+  {
     "file": "t17-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
