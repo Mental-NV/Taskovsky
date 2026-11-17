@@ -1,5 +1,19 @@
 [
   {
+    "file": "c06-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick View Options in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "49c617b671495eba6469a7f6a8b90f4849895aa319886473f5b2603a94f90638",
+    "state": "C06"
+  },
+  {
     "file": "d01-ticktick.png",
     "historical": false,
     "kind": "Unmodified macOS window capture",
