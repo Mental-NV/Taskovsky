@@ -1,0 +1,934 @@
+[
+  {
+    "file": "c01-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Hourly Week in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            167,
+            624,
+            71,
+            28
+          ],
+          "category": "Personal calendar event text"
+        },
+        {
+          "xywh": [
+            445,
+            915,
+            79,
+            28
+          ],
+          "category": "Personal calendar event text"
+        }
+      ]
+    },
+    "sha256": "21a3ca9502a1f68a62713ddab2bfc105e26cde089a1a71d39a912ae5996eb8ad",
+    "state": "C01"
+  },
+  {
+    "file": "c02-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Calendar mode menu in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            168,
+            625,
+            68,
+            28
+          ],
+          "category": "Personal calendar event text"
+        },
+        {
+          "xywh": [
+            445,
+            915,
+            79,
+            27
+          ],
+          "category": "Personal calendar event text"
+        }
+      ]
+    },
+    "sha256": "da1b63afdf2c918004d0fc8d20d5dd3fef342dd7881db411da1f912f8fc62286",
+    "state": "C02"
+  },
+  {
+    "file": "c03-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Week overview in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            324,
+            284,
+            278,
+            32
+          ],
+          "category": "Personal calendar event title and time"
+        },
+        {
+          "xywh": [
+            29,
+            540,
+            273,
+            31
+          ],
+          "category": "Personal calendar event title and time"
+        },
+        {
+          "xywh": [
+            28,
+            787,
+            272,
+            33
+          ],
+          "category": "Personal calendar event title and time"
+        },
+        {
+          "xywh": [
+            28,
+            1047,
+            273,
+            33
+          ],
+          "category": "Personal calendar event title and time"
+        },
+        {
+          "xywh": [
+            324,
+            1047,
+            278,
+            33
+          ],
+          "category": "Personal calendar event title and time"
+        }
+      ]
+    },
+    "sha256": "f1dff77a044a7caebe20a76bc5a8502f905cc0b1b10dc4ff19a2499ce72428fb",
+    "state": "C03"
+  },
+  {
+    "file": "c04-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Calendar overflow menu in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            168,
+            625,
+            68,
+            28
+          ],
+          "category": "Personal calendar event text"
+        },
+        {
+          "xywh": [
+            445,
+            915,
+            79,
+            27
+          ],
+          "category": "Personal calendar event text"
+        }
+      ]
+    },
+    "sha256": "7cba024414c912e0839812962c87247507184d3bf44dd6b88f7ddb78ca921fb1",
+    "state": "C04"
+  },
+  {
+    "file": "c05-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Filter View Range in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            109,
+            1288,
+            324,
+            38
+          ],
+          "category": "Calendar account address"
+        }
+      ]
+    },
+    "sha256": "5055f8a213411fdc3f87095b4aeb264a93665ddd5ba8e893f4a3e5246a374009",
+    "state": "C05"
+  },
+  {
+    "file": "c06-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick View Options in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "49c617b671495eba6469a7f6a8b90f4849895aa319886473f5b2603a94f90638",
+    "state": "C06"
+  },
+  {
+    "file": "c07-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Color settings in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "5d232901461825b95d4770f14fccacf1ef78378b9d6e2f5cb8c5e62f58a926ab",
+    "state": "C07"
+  },
+  {
+    "file": "c08-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Color By menu in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "4aaa489941db7534aab6cdd938a91bc8bd2d994a23b2c7dc04ed7ee0e32d5cde",
+    "state": "C08"
+  },
+  {
+    "file": "c09-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Color Pick/palette in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "d02f3788c377ad351c053f7908a0258afee5dd90989d85e7fbc25813f6042452",
+    "state": "C09"
+  },
+  {
+    "file": "c10-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Style in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "fb34283f76f990ff2e7d687198255ed90565a71e37fe468027bcf8018257462d",
+    "state": "C10"
+  },
+  {
+    "file": "c11-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Show Item Icons in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "943e318a3bde2b3eae78f3d0988e802a9fbb1ae09af04d19b25a620642400134",
+    "state": "C11"
+  },
+  {
+    "file": "c12-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Time Zone Settings in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            58,
+            483,
+            170,
+            36
+          ],
+          "category": "Configured time zone"
+        }
+      ]
+    },
+    "sha256": "cc1fd74d79645871d6d9d448523f0610e3ee5d2a6a9c2801b64423bd40ddda11",
+    "state": "C12"
+  },
+  {
+    "file": "c13-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Arrange Tasks panel in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "63dec5e181cb6c8853a277b5d38a8ca5488afb1ed40ef3f43d145cdb0b636055",
+    "state": "C13"
+  },
+  {
+    "file": "c14-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Arrange overflow in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "116f08aa75000dcacec6feca5a4c49aaf79ab15c0f926c06f822626b71bf6740",
+    "state": "C14"
+  },
+  {
+    "file": "c15-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Arrange Filter in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "0d30a20aeb22a56ae33a00ba652a60b0cdc67fea9c9b728503f7185e8f341e22",
+    "state": "C15"
+  },
+  {
+    "file": "d01-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Task detail in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "d7400f7f1362ad3941c0beb6b879688928eadda512e24d172e0371a86937dea9",
+    "state": "D01"
+  },
+  {
+    "file": "d02-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Actions sheet in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "f302dd7ab951aea9ef0540a9003a770ca2cca2f168a82f964c2a6a5163bfc993",
+    "state": "D02"
+  },
+  {
+    "file": "d03-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Actions More in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "ee6f2ff322176f3d47eac780bc938f85aa9ca0ca848d6134ffbcf229b46c85a4",
+    "state": "D03"
+  },
+  {
+    "file": "d04-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Tags picker opened from Task Actions in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "1c83207203278bf0ec784edcf420d9efc15bbca828332894f32e2fd901328a57",
+    "state": "D04"
+  },
+  {
+    "file": "d05-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Priority popup in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "e2b7fdb2ee606ec177620c809424513ada72716390ae8d408c2bbe62a213c5ec",
+    "state": "D05"
+  },
+  {
+    "file": "d06-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Move to list in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "a9e7ff9c854fc325d3df2d7458c5ee556fa2aec2e71fd74ec0678100a0081eb4",
+    "state": "D06"
+  },
+  {
+    "file": "d07-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Schedule Date in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "836d04a50508b11d42949c03fc807fef5d2d097bfbfb2cc2301cad7df30fda3a",
+    "state": "D07"
+  },
+  {
+    "file": "d08-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick All-day Duration in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "611aeb398369eb13da5b5f843eb3aefd13516fc5a06513ce442789efe1c39654",
+    "state": "D08"
+  },
+  {
+    "file": "d09-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Time wheel in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            308,
+            894,
+            203,
+            41
+          ],
+          "category": "Configured time zone"
+        }
+      ]
+    },
+    "sha256": "8f3ef8be19b07a11d01e84118e38c52f266b90514f523be7f54e2a93536f57ae",
+    "state": "D09"
+  },
+  {
+    "file": "d10-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Reminder menu in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "7c9848932a85f6e952e210cca9a7b6d176f1fb9a981ca50a391ef360f32f4d36",
+    "state": "D10"
+  },
+  {
+    "file": "d11-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Custom Reminder in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "2a5c7179a951a3562e4f9f7f4385e72aaa055e69b6d19f060218f77122b2694d",
+    "state": "D11"
+  },
+  {
+    "file": "d12-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Repeat menu in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "08d2cee53145727a617edf368b38882e963a34c8b3b228086f40e96c6eef9291",
+    "state": "D12"
+  },
+  {
+    "file": "d13-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Custom Repeat in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "a26522b5d7a37c3cb0da9f6e224bd8d2744b90c0d75ca462bde2299dd19605f8",
+    "state": "D13"
+  },
+  {
+    "file": "d14-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Repeat Type in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "f0666aa134f2a09b395f78c2125092583efb1a0f38b31476f7a565536d34955b",
+    "state": "D14"
+  },
+  {
+    "file": "t01-ticktick-owner.png",
+    "historical": false,
+    "kind": "Unmodified owner-supplied manual window capture",
+    "pixels": [
+      315,
+      656
+    ],
+    "provenance": "Owner-supplied manual window capture of the actual observed TickTick Today/List (T01), supplied 2026-11-17. Light appearance; six QA-named tasks; no personal account/tasks visible; narrow desktop wallpaper border. Device and scale unknown. Not a matched fixture; no pixel certification.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual pixels inspected: Today list with six QA-named rows, checkboxes, trailing dates and list-color accents, floating add, five bottom icons; no personal account/task data observed. Copied byte-identical from owner original; original local input and metadata preserved outside the repository.",
+    "sha256": "5c4ab38aac0473c22b7e0f3e0139a637e18df6f5ca81809c2f865aef333ecd5e",
+    "state": "T01"
+  },
+  {
+    "file": "t02-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Tasks overflow in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "123589f3939c4db38c23dfa966492bf7caa0e154fe889fade0769d76bf3ce882",
+    "state": "T02"
+  },
+  {
+    "file": "t03-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick List / Kanban submenu in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "57a38f9f2feb4c9d78ea561cb5cd8a179d0b1ca1078f41125b72a1018dbd7bc5",
+    "state": "T03"
+  },
+  {
+    "file": "t04-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Group & Sort in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "1144d0a5b55f9cfcc8265ea1297d1c2c605da06a95652a1c4d501360dd4d338d",
+    "state": "T04"
+  },
+  {
+    "file": "t05-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Share / Print in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "2c8aa6b32616be34baf4dbff35705b1e63cf5c2765b08d91917c8fd021529236",
+    "state": "T05"
+  },
+  {
+    "file": "t06-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Background chooser in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "994f6810735511d3d22f5ad0188e6e9d41aa722ff091b87c01f069aaec01d175",
+    "state": "T06"
+  },
+  {
+    "file": "t07-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Tasks drawer in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            37,
+            161,
+            74,
+            78
+          ],
+          "category": "Account avatar"
+        },
+        {
+          "xywh": [
+            112,
+            183,
+            168,
+            41
+          ],
+          "category": "Account name or account label"
+        },
+        {
+          "xywh": [
+            107,
+            938,
+            107,
+            35
+          ],
+          "category": "Personal list, folder, or archived label"
+        },
+        {
+          "xywh": [
+            158,
+            1155,
+            219,
+            38
+          ],
+          "category": "Personal list, folder, or archived label"
+        },
+        {
+          "xywh": [
+            143,
+            1232,
+            67,
+            33
+          ],
+          "category": "Personal list, folder, or archived label"
+        },
+        {
+          "xywh": [
+            158,
+            1303,
+            260,
+            40
+          ],
+          "category": "Personal list, folder, or archived label"
+        }
+      ]
+    },
+    "sha256": "6a686ee4612abfe3afe72d4cb1c702c03200e935c51c3ebcf1f6859c5ee824dc",
+    "state": "T07"
+  },
+  {
+    "file": "t08-ticktick.png",
+    "historical": false,
+    "kind": "Privacy-redacted macOS window capture",
+    "pixels": [
+      628,
+      1382
+    ],
+    "provenance": "Actual TickTick Drawer Add in iPhone Mirroring, captured 2026-11-17 Moscow time in the light appearance and deterministically masked. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Final saved pixels inspected. Visual comparison is limited inside the documented rectangles. Decoded pixels outside the rectangles match the original.",
+    "redaction": {
+      "method": "Opaque solid fill #1f2430",
+      "coordinates": "Top left pixel origin, [x, y, width, height]",
+      "masks": [
+        {
+          "xywh": [
+            37,
+            161,
+            74,
+            78
+          ],
+          "category": "Account avatar"
+        },
+        {
+          "xywh": [
+            112,
+            183,
+            168,
+            41
+          ],
+          "category": "Account name or account label"
+        },
+        {
+          "xywh": [
+            107,
+            936,
+            110,
+            39
+          ],
+          "category": "Personal list, folder, or archived label"
+        },
+        {
+          "xywh": [
+            158,
+            1155,
+            219,
+            35
+          ],
+          "category": "Personal list, folder, or archived label"
+        },
+        {
+          "xywh": [
+            143,
+            1231,
+            67,
+            20
+          ],
+          "category": "Personal list, folder, or archived label"
+        },
+        {
+          "xywh": [
+            160,
+            1307,
+            258,
+            34
+          ],
+          "category": "Personal list, folder, or archived label"
+        }
+      ]
+    },
+    "sha256": "503da7dc20f1947e0ad8a8d9cac6f68b77487f6a9cd80312cd8cddee49ef0322",
+    "state": "T08"
+  },
+  {
+    "file": "t09-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Smart Lists management in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "59c6fb3f898a58d089d79b76e6c004e297b0fef542a498b291ab33516473e6a9",
+    "state": "T09"
+  },
+  {
+    "file": "t10-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Smart-list visibility popup in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "95541607672ac682fdd41662289efb8f375f9421ad27a8f7348e6d442ba6b06f",
+    "state": "T10"
+  },
+  {
+    "file": "t11-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Management Tags tab in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "61694d376d89bf195528ce4ba1ed5dbfd7c99b5710ca36775da0acc2867fce0f",
+    "state": "T11"
+  },
+  {
+    "file": "t12-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Add List in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "55d8d75b24b17df626f026392d6dc81bbe099b9ff2e7d1a22bdd9ad7c153b2a8",
+    "state": "T12"
+  },
+  {
+    "file": "t13-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Normal Filter in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "b4f0308bcf728b794f88545a258d76be72b10db5a74be5020cefdda45808c770",
+    "state": "T13"
+  },
+  {
+    "file": "t14-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Advanced Filter in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "67e8414495eebd3896ff3f3e025396e57194163ba1c5b4cd45baa8729ee81925",
+    "state": "T14"
+  },
+  {
+    "file": "t15-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Add Tag in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "33ff33bea51031f7be8627ccf58d79449a69a1a81d1d0ca782a29d6188bf1fd9",
+    "state": "T15"
+  },
+  {
+    "file": "t16-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Parent Tag in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "3ad6599e9b7913a171eb9d212afce94bef87df9db657ce13ecb1d43c77370141",
+    "state": "T16"
+  },
+  {
+    "file": "t17-ticktick.png",
+    "historical": false,
+    "kind": "Unmodified macOS window capture",
+    "pixels": [
+      314,
+      691
+    ],
+    "provenance": "Actual TickTick Blank Quick Add in iPhone Mirroring, captured 2026-11-17 in the light appearance using macOS screencapture scoped to the Mirroring window. Device model and scale unverified.",
+    "receipt": "../../../../ticktick-spec/mobile-live-audit-2026-11-16.md",
+    "review": "Actual saved pixels inspected. No personal account information or personal task content visible. The view documents the reference, with unmatched Taskovsky fixture and viewport.",
+    "sha256": "94d2e52148817f33e0e06b3b814668bc6ac67bab8be794eaab0d56b955792d5d",
+    "state": "T17"
+  }
+]

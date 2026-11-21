@@ -48,15 +48,26 @@ enum PhoneStyle {
 struct MobileRootView: View {
     @StateObject private var model = PhoneWorkspaceModel()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var initialized = false
     @State private var section: PhoneSection = .tasks
     @State private var destination: TaskDestination = .today
+    @State private var detailDestinations: Set<TaskDestination> = []
+    @State private var hiddenCompletedDestinations: Set<TaskDestination> = []
+    @State private var collapsedCompletedDestinations: Set<TaskDestination> = []
     @State private var collapsedSubtasks: Set<UUID> = []
     @State private var alternateModes: [TaskDestination: TaskListViewMode] = [:]
+    @State private var boardGroupings: [TaskDestination: PhoneScopedBoardGrouping] = [:]
+    @State private var boardSorts: [TaskDestination: TaskBoardSortKind] = [:]
+    @State private var boardSortAscending: [TaskDestination: Bool] = [:]
+    @State private var boardSortRequest: PhoneBoardSortRequest?
+    @State private var pendingBoardSortRequest: PhoneBoardSortRequest?
     @State private var capturePresented = false
     @State private var drawer = false
     @State private var manageLists = false
     @State private var smartListRequest: PhoneSmartListRequest?
+    @State private var managementRequest: PhoneManagementRequest?
     @State private var manageFilters = false
     @State private var manageTags = false
     @State private var manageTemplates = false
@@ -76,11 +87,14 @@ struct MobileRootView: View {
     @State private var viewPicker = false
     @State private var jumpDatePresented = false
     @State private var showTaskSort = false
+    @State private var openSortAfterActions = false
     @State private var showTaskActions = false
     @State private var showTextBatch = false
     @State private var batchRequest: PhoneBatchRequest?
     @State private var showArrange = false
     @State private var showCalendarActions = false
+    @State private var showWeekOverview = false
+    @State private var overviewReturnDate: Date?
     @State private var calendarEdit: PhoneCalendarEditRequest?
     @State private var occurrenceChange: PhoneOccurrenceChange?
     @State private var calendarDragSession = UUID()
@@ -88,6 +102,7 @@ struct MobileRootView: View {
     private var options: TaskCalendarOptions {
         var displayed = model.document?.snapshot.settings.calendarOptions ?? TaskCalendarOptions()
         if let sessionCalendarMode { displayed.mode = sessionCalendarMode }
+        if overviewReturnDate != nil { displayed.mode = .day }
         return displayed
     }
     var body: some View {
@@ -161,7 +176,14 @@ struct MobileRootView: View {
             PhoneStyle.page.ignoresSafeArea()
             VStack(spacing: 12) {
                 HStack {
-                    circle("Open navigation", symbol: "line.3.horizontal") { drawer = true }
+                    if section == .calendar {
+                        if let returnDate = overviewReturnDate {
+                            circle("Back to Week overview", symbol: "chevron.left") {
+                                focus = returnDate; overviewReturnDate = nil
+                            }.accessibilityIdentifier("calendarWeekOverviewBack")
+                        } else { calendarModeChooser }
+                    }
+                    else { circle("Open navigation", symbol: "line.3.horizontal") { drawer = true } }
                     Spacer()
                     if section == .calendar {
                         Button {
@@ -179,23 +201,17 @@ struct MobileRootView: View {
                                                                             calendar: calendar, timeZone: calendar.timeZone)))
                         .accessibilityIdentifier("calendarJumpToDate")
                         Spacer()
-                        Button { viewPicker = true } label: {
-                            Image(systemName: "calendar").frame(width: 44, height: 44)
-                        }.accessibilityLabel("Calendar view")
-                            .popover(isPresented: $viewPicker, arrowEdge: .top) {
-                                VStack(spacing: 0) {
-                                    ForEach(TaskCalendarMode.allCases, id: \.self) { mode in
-                                        Button { viewPicker = false; selectCalendarMode(mode, at: focus) } label: {
-                                            HStack { Text(mode.title); Spacer(); if options.mode == mode { Image(systemName: "checkmark") } }
-                                                .frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-                                        }.buttonStyle(.plain)
-                                    }
-                                }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
-                            }
-                        circle("Calendar filters", symbol: "line.3.horizontal.decrease") { openCalendarPreferences(.filters) }
+                        if options.mode == .week {
+                            circle(showWeekOverview ? "Show hourly Week" : "Show Week overview", symbol: showWeekOverview ? "calendar" : "rectangle.grid.2x2") {
+                                showWeekOverview.toggle()
+                            }.accessibilityIdentifier("calendarWeekOverviewToggle")
+                        }
                         circle("Calendar actions", symbol: "ellipsis") { showCalendarActions = true }
                             .popover(isPresented: $showCalendarActions, arrowEdge: .top) {
                                 VStack(spacing: 0) {
+                                    calendarAction("Filter View Range", symbol: "line.3.horizontal.decrease") {
+                                        openCalendarPreferences(.filters)
+                                    }
                                     calendarAction("View Options", symbol: "slider.horizontal.3") {
                                         openCalendarPreferences(.display)
                                     }
@@ -215,14 +231,13 @@ struct MobileRootView: View {
                         Text("Taskovsky").font(.subheadline).foregroundStyle(.secondary)
                         if section == .tasks {
                             let showsSort = showsTaskSort(in: snapshot.workspace)
-                            if showsSort { taskSortMenu }
-                            if destination != .trash && (showsSort || TaskTextBatch.isAvailable(in: destination, workspace: snapshot.workspace)) {
+                            if showsSort && !supportsScopedViewMenu(snapshot.workspace) { taskSortMenu }
+                            if destination != .trash && (showsSort || supportsScopedViewMenu(snapshot.workspace) || TaskTextBatch.isAvailable(in: destination, workspace: snapshot.workspace)) {
                                 taskActions(snapshot.workspace, showsSelection: showsSort)
                             }
                         }
                     }
                 }.padding(.horizontal, 16)
-                Text(model.isQA ? "Sample workspace · Local editing" : "Local workspace · Early development").font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("previewNotice")
                 if model.recoveredDraft != nil || model.activeDraft != nil {
                     Button(model.activeDraft != nil ? "Continue your edit" : "Resume saved edit", action: resumeEdit).frame(minHeight: 44)
                 }
@@ -249,6 +264,7 @@ struct MobileRootView: View {
                             .accessibilityIdentifier("taskOrderNotice")
                     }
                     taskDestination(snapshot.workspace)
+                        .environment(\.phoneTaskDetails, detailDestinations.contains(destination) && supportsTaskDisplay(snapshot.workspace) ? PhoneTaskDetailsContext(data: snapshot.workspace, calendar: calendar) : nil)
                 case .calendar:
                     if let batchNotice = model.batchNotice {
                         Text(batchNotice).font(.footnote).foregroundStyle(.secondary)
@@ -293,11 +309,35 @@ struct MobileRootView: View {
                 }
             }.buttonStyle(.plain).padding(5).background(.regularMaterial, in: Capsule())
                 .overlay(Capsule().stroke(.primary.opacity(0.10), lineWidth: 0.5))
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("mobileRootReady")
+                .accessibilityValue(model.timePrecisionEvidence)
                 .padding(.horizontal, 20).padding(.bottom, 8)
         }.tint(PhoneStyle.accent)
-        .sheet(isPresented: $drawer) {
-            navigation(model.document?.snapshot ?? snapshot).presentationDetents([.large])
+        .disabled(drawer)
+        .overlay {
+            if drawer {
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Button { drawer = false } label: {
+                            Color.black.opacity(0.28).ignoresSafeArea()
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Close navigation")
+                        .accessibilityIdentifier("drawerBackdrop")
+                        navigation(model.document?.snapshot ?? snapshot)
+                            // R08 calibration is approximate, not a measured live-device threshold.
+                            .frame(width: min(geometry.size.width * 0.873, 440))
+                            .background(PhoneStyle.indigo.ignoresSafeArea())
+                            .accessibilityIdentifier("tasksDrawer")
+                            .accessibilityAddTraits(.isModal)
+                            .accessibilityAction(.escape) { drawer = false }
+                            .transition(.move(edge: .leading))
+                    }
+                }
+            }
         }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: drawer)
         .onChange(of: visibility, initial: true) { prior, current in
             if !current.shows(destination), prior.shows(destination) || destination.smartKey != nil {
                 destination = current.fallback
@@ -323,6 +363,34 @@ struct MobileRootView: View {
             case .move(let request): PhoneTaskMoveSheet(model: model, request: request)
             }
         }
+        .overlay {
+            if let request = boardSortRequest {
+                GeometryReader { geometry in
+                    ZStack(alignment: .bottom) {
+                        Color.black.opacity(0.25).contentShape(Rectangle())
+                            .onTapGesture { boardSortRequest = nil }
+                            .accessibilityLabel("Dismiss Group and Sort")
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityIdentifier("boardSortBackdrop")
+                        PhoneBoardSortSheet(
+                            grouping: Binding(get: { boardGroupings[request.destination] ?? PhoneScopedBoardGrouping.defaultGrouping(for: request.destination) },
+                                              set: { boardGroupings[request.destination] = $0 }),
+                            sort: Binding(get: { boardSorts[request.destination] }, set: { boardSorts[request.destination] = $0 }),
+                            ascending: Binding(get: { boardSortAscending[request.destination] ?? true }, set: { boardSortAscending[request.destination] = $0 }))
+                            .accessibilityAction(.escape) { boardSortRequest = nil }
+                            .frame(height: max(330, geometry.size.height * 0.41))
+                            .background(Color(uiColor: .systemBackground), in: UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24))
+                    }
+                }.ignoresSafeArea()
+            }
+        }
+        .sheet(isPresented: $showTaskSort) {
+            PhoneSortGroupSheet(sort: model.taskSort, grouping: model.taskGrouping,
+                                allowsGrouping: destination.supportsTaskDateGrouping,
+                                selectSort: applyTaskSort, selectGroup: applyTaskGrouping)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.hidden)
+        }
         .sheet(isPresented: $showTextBatch) { textBatchSheet.presentationDetents([.large]) }
         .sheet(item: $batchRequest) { request in taskBatchSheet(request).presentationDetents([.large]) }
         .onChange(of: destination) { _, _ in
@@ -338,18 +406,31 @@ struct MobileRootView: View {
         .sheet(isPresented: $jumpDatePresented) {
             PhoneCalendarDateJump(date: focus, calendar: calendar) { date in focus = date }
         }
-        .sheet(isPresented: $showArrange) {
-            let allowsDrag = options.mode.isHourly || options.mode == .month || options.mode == .multiWeek
-            PhoneCalendarArrangeSheet(model: model, focus: focus, options: options,
-                                      drag: allowsDrag ? calendarDrag : nil)
-                .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, save: saveCalendarGesture))
+        .overlay(alignment: .trailing) {
+            if showArrange {
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        Spacer(minLength: 0)
+                        let allowsDrag = options.mode.isHourly || options.mode == .month || options.mode == .multiWeek
+                        PhoneCalendarArrangeSheet(close: { if !model.isBusy { showArrange = false } },
+                                                  model: model, focus: focus, options: options,
+                                                  drag: allowsDrag ? calendarDrag : nil)
+                            // Approximate observed viewport fraction; not calibrated reference geometry.
+                            .frame(width: min(geometry.size.width * 0.72, 420))
+                            .background(PhoneStyle.page)
+                            .shadow(color: .black.opacity(0.16), radius: 8, x: -3)
+                            .accessibilityIdentifier("calendarArrangePanel")
+                    }
+                }
+            }
         }
-        .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, enabled: !showArrange, save: saveCalendarGesture))
+        .onChange(of: section) { _, _ in showArrange = false }
+        .modifier(PhoneOccurrenceScopeDialog(change: $occurrenceChange, save: saveCalendarGesture))
         .sheet(item: $calendarEdit) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(isPresented: $capturePresented, onDismiss: {
             if model.captureDraft != nil { model.requestCloseCapture() }
             else if let id = model.createdTaskID { selectedTask = PhoneTaskRoute(id: id) }
-        }) { PhoneCaptureSheet(model: model).presentationDetents([.large]).presentationDragIndicator(.visible) }
+        }) { PhoneCaptureSheet(model: model).presentationDragIndicator(.visible) }
     }
     private func circle(_ name: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { Image(systemName: symbol).font(.system(size: 20)).frame(width: 44, height: 44).background(.regularMaterial, in: Circle()) }
@@ -381,47 +462,128 @@ struct MobileRootView: View {
         }.accessibilityLabel("Sort tasks")
             .accessibilityValue(model.taskSort?.title ?? "Default Order")
             .accessibilityIdentifier("taskSortMenu")
-            .popover(isPresented: $showTaskSort, arrowEdge: .top) {
-                VStack(spacing: 0) {
-                    taskSortChoice(nil)
-                    ForEach(PhoneTaskSort.choices, id: \.self) { taskSortChoice($0) }
-                    if destination.supportsTaskDateGrouping {
-                        Divider()
-                        groupingChoice(.creationDate)
-                        groupingChoice(.dueDate)
-                    }
-                }.padding(8).frame(width: 245).presentationCompactAdaptation(.popover)
+
+    }
+
+    private func applyTaskSort(_ choice: PhoneTaskSort?) {
+        showTaskSort = false
+        taskOrderNotice = nil
+        taskListDragSession = UUID()
+        model.setTaskSort(choice)
+    }
+
+    private func applyTaskGrouping(_ choice: PhoneTaskGrouping) {
+        showTaskSort = false
+        taskOrderNotice = nil
+        taskListDragSession = UUID()
+        model.setTaskGrouping(choice)
+    }
+
+    private func supportsScopedViewMenu(_ data: WorkspaceData) -> Bool {
+        if case .list = destination { return false }
+        return TaskTimelineScope(destination: destination, data: data) != nil || ScopedBoardProjection.supports(destination, in: data)
+    }
+
+    private var scopedBoardGrouping: Binding<PhoneScopedBoardGrouping> {
+        Binding(get: { boardGroupings[destination] ?? PhoneScopedBoardGrouping.defaultGrouping(for: destination) },
+                set: { boardGroupings[destination] = $0; showTaskActions = false })
+    }
+
+    private func scopedViewMenu(_ data: WorkspaceData) -> some View {
+        Menu {
+            Picker("Tasks view", selection: Binding(get: { alternateModes[destination] ?? .list }, set: { mode in
+                alternateModes[destination] = mode == .list ? nil : mode
+                showTaskActions = false
+            })) {
+                Text("List View").tag(TaskListViewMode.list)
+                if ScopedBoardProjection.supports(destination, in: data) { Text("Kanban View").tag(TaskListViewMode.board) }
+                if TaskTimelineScope(destination: destination, data: data) != nil { Text("Timeline View").tag(TaskListViewMode.timeline) }
             }
-    }
-
-    private func taskSortChoice(_ choice: PhoneTaskSort?) -> some View {
-        let selected = model.taskSort == choice
-        return Button {
-            showTaskSort = false
-            taskOrderNotice = nil
-            taskListDragSession = UUID()
-            model.setTaskSort(choice)
         } label: {
-            HStack {
-                Text(choice?.title ?? "Default Order")
-                Spacer()
-                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
-            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+            Label("View", systemImage: "rectangle.split.3x1").frame(minHeight: 44)
+        }.accessibilityIdentifier("taskDestinationViewMode")
     }
 
+    private func supportsTaskDisplay(_ data: WorkspaceData) -> Bool {
+        switch destination {
+        case .all, .today, .tomorrow, .week, .inbox, .notes, .list, .folder, .tag: break
+        default: return false
+        }
+        if case .list(let id) = destination, let list = data.lists.first(where: { $0.id == id }) {
+            return !list.isArchived && list.viewMode != .timeline
+        }
+        return alternateModes[destination] != .timeline
+    }
+    private func supportsCompletedDisplay(_ data: WorkspaceData) -> Bool {
+        guard supportsTaskDisplay(data) else { return false }
+        if case .list(let id) = destination { return data.lists.first(where: { $0.id == id })?.viewMode == .list }
+        return alternateModes[destination] != .board
+    }
+    private func displayProjection(_ tasks: [TaskItem]) -> TaskDisplayProjection {
+        TaskDisplayProjection(tasks, showCompleted: !hiddenCompletedDestinations.contains(destination))
+    }
+    private func toggleDestination(_ set: inout Set<TaskDestination>) {
+        if set.contains(destination) { set.remove(destination) } else { set.insert(destination) }
+    }
+    @ViewBuilder private func completedRows(_ tasks: [TaskItem], lists: [TaskList]) -> some View {
+        if !tasks.isEmpty {
+            Button { toggleDestination(&collapsedCompletedDestinations) } label: {
+                HStack {
+                    Image(systemName: collapsedCompletedDestinations.contains(destination) ? "chevron.right" : "chevron.down")
+                    Text("Completed").font(.headline)
+                    Text("\(tasks.count)").foregroundStyle(.secondary)
+                    Spacer()
+                }.frame(minHeight: 44).padding(.horizontal, 16)
+            }.buttonStyle(.plain).accessibilityIdentifier("taskCompletedDisclosure")
+                .accessibilityValue(collapsedCompletedDestinations.contains(destination) ? "Collapsed" : "Expanded")
+            if !collapsedCompletedDestinations.contains(destination) {
+                taskRows(tasks, lists: lists, searchQuery: nil)
+            }
+        }
+    }
     private func taskActions(_ data: WorkspaceData, showsSelection: Bool) -> some View {
-        let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        let matched = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
+        let tasks = supportsCompletedDisplay(data) ? displayProjection(matched).visible(completedExpanded: !collapsedCompletedDestinations.contains(destination)) : matched
         return circle("Tasks actions", symbol: "ellipsis") { showTaskActions = true }
             .accessibilityIdentifier("taskListActions")
+            .accessibilityValue(supportsScopedViewMenu(data) ? (alternateModes[destination] == .board ? "Kanban View" : alternateModes[destination] == .timeline ? "Timeline View" : "List View") : "")
             .popover(isPresented: $showTaskActions, arrowEdge: .top) {
                 VStack(alignment: .leading, spacing: 0) {
+                    if supportsTaskDisplay(data) {
+                        Button { toggleDestination(&detailDestinations); showTaskActions = false } label: {
+                            Label(detailDestinations.contains(destination) ? "Hide Details" : "Show Details", systemImage: "text.alignleft").frame(minHeight: 44)
+                        }.accessibilityIdentifier("taskDisplayDetails")
+                    }
+                    if supportsCompletedDisplay(data) {
+                        Button { toggleDestination(&hiddenCompletedDestinations); showTaskActions = false } label: {
+                            Label(hiddenCompletedDestinations.contains(destination) ? "Show Completed" : "Hide Completed", systemImage: "checkmark.circle").frame(minHeight: 44)
+                        }.accessibilityIdentifier("taskDisplayCompleted")
+                    }
+                    if supportsScopedViewMenu(data) {
+                        scopedViewMenu(data)
+                        if alternateModes[destination] == .board {
+                            Button {
+                                pendingBoardSortRequest = PhoneBoardSortRequest(destination: destination)
+                                showTaskActions = false
+                            } label: {
+                                Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
+                            }.accessibilityIdentifier("scopedBoardGrouping")
+                        } else if showsSelection {
+                            Button {
+                                openSortAfterActions = true
+                                showTaskActions = false
+                            } label: {
+                                Label("Group & Sort", systemImage: "arrow.up.arrow.down").frame(minHeight: 44)
+                            }.accessibilityIdentifier("taskGroupAndSort")
+                        }
+                        Divider()
+                    }
                     if showsSelection {
                         Button {
                             guard let document = model.document else { return }
                             showTaskActions = false
                             model.clearBatchNotice()
-                            let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+                            let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
                             batchRequest = PhoneBatchRequest(scope: title(destination, in: data), tasks: ordered, document: document)
                         } label: {
                             Label("Select Tasks", systemImage: "checklist")
@@ -441,6 +603,16 @@ struct MobileRootView: View {
                     }
                 }.buttonStyle(.plain).padding(.horizontal, 16).padding(.vertical, 6)
                     .presentationCompactAdaptation(.popover)
+                    .onDisappear {
+                        if let pending = pendingBoardSortRequest {
+                            pendingBoardSortRequest = nil
+                            boardSortRequest = pending
+                        }
+                        if openSortAfterActions {
+                            openSortAfterActions = false
+                            showTaskSort = true
+                        }
+                    }
             }
     }
 
@@ -467,25 +639,9 @@ struct MobileRootView: View {
         }
     }
 
-    private func groupingChoice(_ grouping: TaskListGrouping) -> some View {
-        let selected = model.taskGrouping == grouping
-        return Button {
-            showTaskSort = false
-            taskOrderNotice = nil
-            taskListDragSession = UUID()
-            model.setTaskGrouping(selected ? .standard : grouping)
-        } label: {
-            HStack {
-                Text(grouping.title)
-                Spacer()
-                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
-            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
-    }
-
     private func taskDestinationRows(_ data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
-        let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
+        let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
         return taskList(ordered, data: data)
     }
 
@@ -511,20 +667,11 @@ struct MobileRootView: View {
                 taskDestinationRows(data)
             }
         } else if scope != nil || ScopedBoardProjection.supports(destination, in: data) {
-            let supportsBoard = ScopedBoardProjection.supports(destination, in: data)
-            Picker("Tasks view", selection: Binding(get: { alternateModes[destination] ?? .list }, set: { mode in
-                alternateModes[destination] = mode == .list ? nil : mode
-            })) {
-                Text("List").tag(TaskListViewMode.list)
-                if supportsBoard { Text("Board").tag(TaskListViewMode.board) }
-                if scope != nil { Text("Timeline").tag(TaskListViewMode.timeline) }
-            }.pickerStyle(.segmented).padding(.horizontal, 16)
-                .accessibilityIdentifier("taskDestinationViewMode")
             switch alternateModes[destination] {
             case .timeline:
                 if let scope { taskTimeline(scope, data: data) }
             case .board:
-                PhoneScopedTaskBoard(model: model, destination: destination, data: data,
+                PhoneScopedTaskBoard(model: model, destination: destination, data: data, grouping: scopedBoardGrouping, sort: boardSorts[destination], ascending: boardSortAscending[destination] ?? true,
                                      open: { selectedTask = PhoneTaskRoute(id: $0) },
                                      schedule: scheduleFromScopedBoard).id(destination)
             default:
@@ -589,8 +736,9 @@ struct MobileRootView: View {
 
     private func sectionedPhoneRows(_ list: TaskList, data: WorkspaceData) -> some View {
         let tasks = destination.matchingTasks(in: data, now: model.now, calendar: calendar)
-        let ordered = model.taskSort.map { tasks.sorted(by: $0.precedes) } ?? tasks
-        let rows = PinnedGrouping.partition(ordered)
+        let ordered = model.taskSort.map { sort in tasks.sorted { sort.precedes($0, $1, in: data, calendar: calendar) } } ?? tasks
+        let projection = displayProjection(ordered)
+        let rows = PinnedGrouping.partition(supportsCompletedDisplay(data) ? projection.ordinary : ordered)
         let editable = !list.isArchived && model.canBeginEditing
         return ScrollView {
             if let sectionMoveNotice {
@@ -621,6 +769,7 @@ struct MobileRootView: View {
                     }
                 taskRows(group.tasks, lists: data.lists, searchQuery: nil, sectionList: list)
             }
+            if supportsCompletedDisplay(data) { completedRows(projection.completed, lists: data.lists) }
             Color.clear.frame(height: 90)
         }
     }
@@ -632,7 +781,9 @@ struct MobileRootView: View {
     }
 
     private func taskList(_ tasks: [TaskItem], data: WorkspaceData, searchQuery: String? = nil) -> some View {
-        let groups = PinnedGrouping.partition(tasks)
+        let usesDisplay = searchQuery == nil && supportsCompletedDisplay(data)
+        let projection = displayProjection(tasks)
+        let groups = PinnedGrouping.partition(usesDisplay ? projection.ordinary : tasks)
         let separateHistory = searchQuery != nil || ![.completed, .wontDo, .trash].contains(destination)
         let completed = separateHistory ? groups.rest.filter { $0.deletedAt == nil && $0.completedAt != nil } : []
         let abandoned = separateHistory ? groups.rest.filter { $0.deletedAt == nil && $0.completedAt == nil && $0.wontDoAt != nil } : []
@@ -640,9 +791,21 @@ struct MobileRootView: View {
             ? groups.rest.filter { $0.deletedAt != nil || ($0.completedAt == nil && $0.wontDoAt == nil) }
             : groups.rest
         return ScrollView {
-            if tasks.isEmpty { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
+            if (usesDisplay ? projection.ordinary.isEmpty && projection.completed.isEmpty : tasks.isEmpty) { ContentUnavailableView("No matching tasks", systemImage: "checkmark.square", description: Text(searchQuery == nil ? "Add a task or choose another view." : "Change the search or its filters.")) }
             taskGroup(PinnedGrouping.pinnedGroupTitle, tasks: groups.pinned, lists: data.lists, searchQuery: searchQuery)
-            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .creationDate {
+            if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .list {
+                ForEach(TaskOrganizationGroup.byList(ordinary, in: data)) { group in
+                    taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .tag {
+                ForEach(TaskOrganizationGroup.byTag(ordinary, in: data)) { group in
+                    taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .priority {
+                ForEach(TaskPriorityListGroup.group(ordinary)) { group in
+                    taskGroup(group.title, tasks: group.tasks, lists: data.lists, searchQuery: nil)
+                }
+            } else if searchQuery == nil && destination.supportsTaskDateGrouping && model.taskGrouping == .creationDate {
                 ForEach(TaskCreationDayGroup.group(ordinary, calendar: calendar, sort: model.taskSort?.timestamp)) { group in
                     taskGroup(group.title(calendar: calendar), tasks: group.tasks, lists: data.lists, searchQuery: nil)
                 }
@@ -655,7 +818,8 @@ struct MobileRootView: View {
             } else {
                 taskRows(ordinary, lists: data.lists, searchQuery: searchQuery)
             }
-            taskGroup("Completed", tasks: completed, lists: data.lists, searchQuery: searchQuery)
+            if usesDisplay { completedRows(projection.completed, lists: data.lists) }
+            else { taskGroup("Completed", tasks: completed, lists: data.lists, searchQuery: searchQuery) }
             taskGroup("Won't Do", tasks: abandoned, lists: data.lists, searchQuery: searchQuery)
             Color.clear.frame(height: 90)
         }
@@ -663,6 +827,7 @@ struct MobileRootView: View {
     @ViewBuilder private func taskGroup(_ title: String, tasks: [TaskItem], lists: [TaskList], searchQuery: String?) -> some View {
         if !tasks.isEmpty {
             Text(title).font(.headline).accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("taskGroupHeader-" + title)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 16)
             taskRows(tasks, lists: lists, searchQuery: searchQuery)
         }
@@ -694,6 +859,7 @@ struct MobileRootView: View {
                         PhoneCompletionButton(model: model, task: task, lists: lists)
                         let switchesDate = searchQuery == nil && model.taskCountdownEnabled &&
                             TaskDueCountdown.label(for: task, now: model.now, calendar: calendar) != nil
+                        let compactDate = !dynamicTypeSize.isAccessibilitySize && searchQuery == nil && row.depth == 0
                         let titleButton = Button {
                             if let searchQuery { model.rememberSearch(searchQuery) }
                             revealedTaskSwipe = nil
@@ -706,19 +872,26 @@ struct MobileRootView: View {
                                     if let searchQuery {
                                         PhoneSearchResultContext(task: task, lists: lists, query: searchQuery)
                                     }
-                                    if !switchesDate, let due {
+                                    if searchQuery == nil, detailDestinations.contains(destination), let data = model.document?.snapshot.workspace, supportsTaskDisplay(data) {
+                                        PhoneTaskDetails(task: task, context: PhoneTaskDetailsContext(data: data, calendar: calendar))
+                                    }
+                                    if !switchesDate, let due, !compactDate {
                                         taskDateText(due, displayCalendar: displayCalendar)
                                     }
                                 }
                                 Spacer(minLength: 0)
+                                if !switchesDate, let due, compactDate {
+                                    taskDateText(due, displayCalendar: displayCalendar)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                }
                                 if task.richBody != nil {
                                     Image(systemName: "textformat").font(.caption).foregroundStyle(.secondary)
                                 }
                             }
-                            .frame(minHeight: switchesDate ? 24 : 48).padding(.trailing, 18).padding(.vertical, 3)
+                            .frame(minHeight: switchesDate ? 24 : compactDate ? 44 : 48).padding(.trailing, 18).padding(.vertical, 3)
                             .contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityLabel(task.title)
-                            .accessibilityValue(displayCalendar.flatMap { display in due.map { taskDateCaption($0, displayCalendar: display) } } ?? "")
+                            .accessibilityValue(searchQuery == nil && detailDestinations.contains(destination) && model.document.map { supportsTaskDisplay($0.snapshot.workspace) } == true ? model.document.map { PhoneTaskDetails.summary(task, context: PhoneTaskDetailsContext(data: $0.snapshot.workspace, calendar: calendar)) } ?? "" : due.map { taskDateCaption($0, displayCalendar: displayCalendar) } ?? "")
                             .background {
                                 if !actions.0.isEmpty || !actions.1.isEmpty { gesture }
                             }
@@ -862,8 +1035,8 @@ struct MobileRootView: View {
         return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Taskovsky").font(.largeTitle.bold()).padding(.vertical, 20)
-                    Text("Local preview").font(.caption).opacity(0.7)
+                    Text("Taskovsky").font(.title3.bold()).padding(.vertical, 12)
+                        .accessibilityAddTraits(.isHeader)
                     ForEach(visibility.top, id: \.self) { item in navRow(item, data: data) }
                     organizationNavigation(data: data)
                     if visibility.filters {
@@ -881,36 +1054,30 @@ struct MobileRootView: View {
                         Divider().overlay(.white.opacity(0.16)).padding(.top, 12)
                         ForEach(visibility.bottom, id: \.self) { item in navRow(item, data: data) }
                     }
+                    Button {
+                        guard let document = model.document else { return }
+                        managementRequest = PhoneManagementRequest(settings: document.snapshot.settings, revision: document.revision, initialTab: .smartLists)
+                    } label: {
+                        Label("Manage Smart Lists & Tags", systemImage: "rectangle.stack")
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("openManagement")
                     Button { manageTemplates = true } label: {
                         Label("Manage Templates", systemImage: "doc.on.doc")
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-                    }.buttonStyle(.plain).padding(.top, 16).accessibilityIdentifier("manageTemplates")
-                    Text("Create tasks or notes locally. Styled descriptions are protected. Further settings are still in development.")
-                        .font(.footnote).opacity(0.8).padding(.top, 24)
+                    }.buttonStyle(.plain).padding(.top, 8).accessibilityIdentifier("manageTemplates")
                 }.padding(20)
             }.background(PhoneStyle.indigo).foregroundStyle(.white)
+                .toolbarBackground(PhoneStyle.indigo, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .toolbar {
                     ToolbarItemGroup(placement: .topBarLeading) {
-                        Button {
-                            guard let document = model.document else { return }
-                            localSettingsRequest = PhoneLocalSettingsRequest(settings: document.snapshot.settings,
-                                                                             revision: document.revision,
-                                                                             taskCountdownEnabled: model.taskCountdownEnabled)
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }.tint(.white).accessibilityLabel("Settings").accessibilityIdentifier("openLocalSettings")
-                        Button {
-                            guard let document = model.document else { return }
-                            smartListRequest = PhoneSmartListRequest(settings: document.snapshot.settings, revision: document.revision)
-                        } label: {
-                            Image(systemName: "slider.horizontal.3")
-                        }.tint(.white).accessibilityLabel("Smart Lists").accessibilityIdentifier("openSmartLists")
-                        Button { manageFilters = true } label: {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                        }.tint(.white).accessibilityLabel("Manage Filters").accessibilityIdentifier("manageFilters")
-                        Button { manageTags = true } label: {
-                            Image(systemName: "tag")
-                        }.tint(.white).accessibilityLabel("Manage Tags").accessibilityIdentifier("manageTags")
+                        if dynamicTypeSize.isAccessibilitySize {
+                            Menu { drawerUtilityButtons } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }.tint(.white).accessibilityLabel("Navigation utilities")
+                        } else {
+                            drawerUtilityButtons.labelStyle(.iconOnly)
+                        }
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Done") { drawer = false }.tint(.white).accessibilityIdentifier("drawerDone")
@@ -919,10 +1086,34 @@ struct MobileRootView: View {
         }
         .sheet(isPresented: $manageLists) { PhoneListOrganization(model: model) }
         .sheet(item: $smartListRequest) { request in PhoneSmartListSettings(model: model, request: request) }
+        .sheet(item: $managementRequest) { request in PhoneUnifiedManagement(model: model, request: request) }
         .sheet(isPresented: $manageFilters) { PhoneSavedFilters(model: model) }
         .sheet(isPresented: $manageTags) { PhoneTagManagement(model: model) }
         .sheet(isPresented: $manageTemplates) { PhoneTemplateManager(model: model) }
         .sheet(item: $localSettingsRequest) { request in PhoneLocalSettings(model: model, request: request) }
+    }
+
+    @ViewBuilder private var drawerUtilityButtons: some View {
+        Button {
+            guard let document = model.document else { return }
+            localSettingsRequest = PhoneLocalSettingsRequest(settings: document.snapshot.settings,
+                                                             revision: document.revision,
+                                                             taskCountdownEnabled: model.taskCountdownEnabled)
+        } label: {
+            Label("Settings", systemImage: "gearshape")
+        }.tint(.white).accessibilityLabel("Settings").accessibilityIdentifier("openLocalSettings")
+        Button {
+            guard let document = model.document else { return }
+            smartListRequest = PhoneSmartListRequest(settings: document.snapshot.settings, revision: document.revision)
+        } label: {
+            Label("Smart Lists", systemImage: "slider.horizontal.3")
+        }.tint(.white).accessibilityLabel("Smart Lists").accessibilityIdentifier("openSmartLists")
+        Button { manageFilters = true } label: {
+            Label("Manage Filters", systemImage: "line.3.horizontal.decrease.circle")
+        }.tint(.white).accessibilityLabel("Manage Filters").accessibilityIdentifier("manageFilters")
+        Button { manageTags = true } label: {
+            Label("Manage Tags", systemImage: "tag")
+        }.tint(.white).accessibilityLabel("Manage Tags").accessibilityIdentifier("manageTags")
     }
 
     @ViewBuilder private func organizationNavigation(data: WorkspaceData) -> some View {
@@ -1012,26 +1203,34 @@ struct MobileRootView: View {
         let identifier: String
         if case .tag(let id) = item { identifier = (shortcut ? "pinnedTag-" : "drawerTag-") + id.uuidString }
         else { identifier = item.smartKey.map { "smartDrawer-" + $0.rawValue } ?? "" }
+        let rowLayout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout())
         return Button { destination = item; section = .tasks; drawer = false } label: {
-            HStack {
-                if case .list(let id) = item, let list = data.lists.first(where: { $0.id == id }) {
-                    PhoneListIcon(symbol: list.symbol, fallback: list.kind == .note ? "doc.text" : "list.bullet")
-                        .foregroundStyle(list.phoneListColor).accessibilityHidden(true)
+            rowLayout {
+                HStack {
+                    if case .list(let id) = item, let list = data.lists.first(where: { $0.id == id }) {
+                        PhoneListIcon(symbol: list.symbol, fallback: list.kind == .note ? "doc.text" : "list.bullet")
+                            .foregroundStyle(list.phoneListColor).accessibilityHidden(true)
+                    }
+                    if case .tag(let id) = item, let tag = data.tags.first(where: { $0.id == id }) {
+                        Image(systemName: "tag").foregroundStyle(PhoneEntityColor.read(tag.color)).accessibilityHidden(true)
+                    }
+                    Text(label)
                 }
-                if case .tag(let id) = item, let tag = data.tags.first(where: { $0.id == id }) {
-                    Image(systemName: "tag").foregroundStyle(PhoneEntityColor.read(tag.color)).accessibilityHidden(true)
-                }
-                Text(label)
-                Spacer()
+                if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                 Text("\(count)").opacity(0.65)
             }
-                .padding(.horizontal, 12).frame(minHeight: 44).background(destination == item ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
-                .contentShape(Rectangle())
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12).frame(minHeight: 44)
+            .background(destination == item ? Color.white.opacity(0.12) : .clear, in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel(shortcut ? "Pinned " + label : label)
             .accessibilityValue(String(count))
             .accessibilityIdentifier(identifier)
     }
     private func calendarBody(data: WorkspaceData) -> some View {
+        let arranging = showArrange
         let revision = model.document?.revision
         let controls = PhoneCalendarControls(
             drag: { entry in
@@ -1039,12 +1238,14 @@ struct MobileRootView: View {
                 return calendarDrag(for: entry.taskID, revision: revision)
             },
             edit: { entry, mode in
+                guard !arranging else { showArrange = false; return }
                 guard entry.canSchedule, model.canBeginEditing, let document = model.document,
                       let task = document.snapshot.workspace.tasks.first(where: { $0.id == entry.taskID }) else { return }
                 calendarEdit = PhoneCalendarEditRequest(task: task, expected: document.revision, focus: focus,
                                                         hourly: options.mode.isHourly, calendar: calendar, mode: mode)
             },
             complete: model.canBeginEditing ? { entry in
+                guard !arranging else { showArrange = false; return }
                 changeCalendarCompletion(entry, expected: revision)
             } : nil,
             drop: acceptCalendarDrop,
@@ -1053,6 +1254,7 @@ struct MobileRootView: View {
             },
             saveFoldedHours: { cutoffs in saveCalendarFoldedHours(cutoffs, expected: revision) },
             createRange: model.canBeginCapture ? { dates in
+                guard !arranging else { showArrange = false; return }
                 Task {
                     await model.beginCapture(destination: .all, calendarDate: dates.upperBound, calendarRange: dates)
                     capturePresented = model.captureDraft != nil
@@ -1063,7 +1265,21 @@ struct MobileRootView: View {
             || capturePresented || model.captureDraft != nil || selectedTask != nil || batchRequest != nil
         return MobileCalendarPreview(data: data, calendar: calendar, today: model.now, focus: $focus,
                                      options: options, monthInteractionActive: holdsMonthPosition, controls: controls,
-                                     select: selectCalendarMode) { id in selectedTask = PhoneTaskRoute(id: id) }
+                                     weekOverview: showWeekOverview && options.mode == .week,
+                                     select: { mode, date in
+                                         if arranging { showArrange = false }
+                                         else if overviewReturnDate != nil && mode == .day {
+                                             focus = date
+                                         } else if showWeekOverview && options.mode == .week && mode == .day {
+                                             overviewReturnDate = focus; focus = date
+                                         } else { selectCalendarMode(mode, at: date) }
+                                     }) { id in
+            if arranging { showArrange = false }
+            else { selectedTask = PhoneTaskRoute(id: id) }
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            if arranging && !model.isBusy { showArrange = false }
+        })
 
     }
 
@@ -1125,20 +1341,28 @@ struct MobileRootView: View {
         Task { preferenceNotice = await model.saveCalendarOptions(draft, expected: expected) }
     }
 
-    private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date) {
+    private func selectCalendarMode(_ mode: TaskCalendarMode, at date: Date, multiDayCount: Int? = nil) {
         guard !model.isBusy, let document = model.document else { return }
+        overviewReturnDate = nil
+        showWeekOverview = false
         var draft = document.snapshot.settings.calendarOptions
-        if mode == draft.mode {
+        if mode == draft.mode && (multiDayCount == nil || multiDayCount == draft.multiDayCount) {
             sessionCalendarMode = nil
             preferenceNotice = nil
             focus = date
             return
         }
         draft.mode = mode
+        if let multiDayCount { draft.multiDayCount = multiDayCount }
         Task {
             if let error = await model.saveCalendarOptions(draft, expected: document.revision) {
-                sessionCalendarMode = mode
-                preferenceNotice = "View changed for this session. " + error
+                if multiDayCount != nil {
+                    // A count-changing shortcut must not mask later persisted View Options.
+                    preferenceNotice = "Could not switch to 3 Day. " + error
+                } else {
+                    sessionCalendarMode = mode
+                    preferenceNotice = "View changed for this session. " + error
+                }
             } else {
                 sessionCalendarMode = nil
                 preferenceNotice = nil
@@ -1153,6 +1377,56 @@ struct MobileRootView: View {
                                                                expected: document.revision)
     }
 
+    private var calendarModeChooser: some View {
+                        Button { if showArrange { showArrange = false } else { viewPicker = true } } label: {
+                            Image(systemName: "calendar").frame(width: 44, height: 44)
+                        }.accessibilityLabel("Calendar view")
+                            .popover(isPresented: $viewPicker, arrowEdge: .top) {
+                                VStack(spacing: 0) {
+                                    calendarModeRow("List", selected: options.mode == .agenda) {
+                                        selectCalendarMode(.agenda, at: focus)
+                                    }.accessibilityIdentifier("Agenda")
+                                    calendarModeRow("Year", selected: options.mode == .year) {
+                                        selectCalendarMode(.year, at: focus)
+                                    }
+                                    calendarModeRow("Month", selected: options.mode == .month) {
+                                        selectCalendarMode(.month, at: focus)
+                                    }
+                                    calendarModeRow("Week", selected: options.mode == .week) {
+                                        selectCalendarMode(.week, at: focus)
+                                    }
+                                    calendarModeRow("3 Day", selected: options.mode == .multiDay && options.multiDayCount == 3) {
+                                        selectCalendarMode(.multiDay, at: focus, multiDayCount: 3)
+                                    }.accessibilityIdentifier("calendarThreeDay")
+                                    calendarModeRow("Day", selected: options.mode == .day) {
+                                        selectCalendarMode(.day, at: focus)
+                                    }
+                                    Divider().padding(.vertical, 4)
+                                    Text("More views").font(.caption).foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 12)
+                                        .accessibilityIdentifier("calendarModeExtrasHeader")
+                                    calendarModeRow("Multi-Day", selected: options.mode == .multiDay && options.multiDayCount != 3) {
+                                        selectCalendarMode(.multiDay, at: focus)
+                                    }.accessibilityIdentifier("calendarModeMultiDay")
+                                    calendarModeRow("Multi-Week", selected: options.mode == .multiWeek) {
+                                        selectCalendarMode(.multiWeek, at: focus)
+                                    }.accessibilityIdentifier("calendarModeMultiWeek")
+                                }.padding(8).frame(width: 220).presentationCompactAdaptation(.popover)
+                            }
+    }
+
+    private func calendarModeRow(_ label: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            viewPicker = false
+            action()
+        } label: {
+            HStack {
+                Text(label); Spacer(); if selected { Image(systemName: "checkmark") }
+            }.frame(minHeight: 44).padding(.horizontal, 12).contentShape(Rectangle())
+        }.buttonStyle(.plain)
+            .accessibilityValue(selected ? "Selected" : "")
+    }
+
     private func calendarAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
         Button {
             showCalendarActions = false
@@ -1162,5 +1436,108 @@ struct MobileRootView: View {
                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                 .padding(.horizontal, 12).contentShape(Rectangle())
         }.buttonStyle(.plain)
+    }
+}
+
+/// Supported List controls only. Additional reference criteria await their own contracts.
+private struct PhoneSortGroupSheet: View {
+    @Environment(\.dynamicTypeSize) private var textSize
+    let sort: PhoneTaskSort?
+    let grouping: PhoneTaskGrouping
+    let allowsGrouping: Bool
+    let selectSort: (PhoneTaskSort?) -> Void
+    let selectGroup: (PhoneTaskGrouping) -> Void
+
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 8), count: textSize.isAccessibilitySize ? 1 : 3)
+    }
+    private var ascending: Bool {
+        sort == .metadata(.dateAscending) || sort == .metadata(.tagAscending) || sort == .title(.ascending) || sort?.timestamp == .createdOldest || sort?.timestamp == .modifiedOldest
+    }
+    private var created: Bool { sort?.timestamp == .createdNewest || sort?.timestamp == .createdOldest }
+    private var modified: Bool { sort?.timestamp == .modifiedNewest || sort?.timestamp == .modifiedOldest }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                if allowsGrouping {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Group by").foregroundStyle(.secondary)
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            pill("List", selected: grouping == .list, id: "groupList") { selectGroup(.list) }
+                            pill("Date", selected: grouping == .dueDate, id: "groupDate") { selectGroup(.dueDate) }
+                            pill("Created Time", selected: grouping == .creationDate, id: "groupCreated") { selectGroup(.creationDate) }
+                            pill("Tag", selected: grouping == .tag, id: "groupTag") { selectGroup(.tag) }
+                            pill("Priority", selected: grouping == .priority, id: "groupPriority") { selectGroup(.priority) }
+                            pill("None", selected: grouping == .ungrouped, id: "groupNone") { selectGroup(.ungrouped) }
+                        }
+                        Button("Restore default grouping") { selectGroup(.standard) }
+                            .accessibilityIdentifier("groupDefault")
+                            .accessibilityAddTraits(grouping == .standard ? .isSelected : [])
+                    }
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("Sort by").foregroundStyle(.secondary)
+                        Spacer()
+                        if sort != nil && sort != .priority {
+                            Button {
+                                if case .metadata(let value) = sort {
+                                    switch value {
+                                    case .dateAscending: selectSort(.metadata(.dateDescending))
+                                    case .dateDescending: selectSort(.metadata(.dateAscending))
+                                    case .tagAscending: selectSort(.metadata(.tagDescending))
+                                    case .tagDescending: selectSort(.metadata(.tagAscending))
+                                    }
+                                } else if sort == .title(.ascending) || sort == .title(.descending) {
+                                    selectSort(.title(ascending ? .descending : .ascending))
+                                } else {
+                                selectSort(.timestamp(created ? (ascending ? .createdNewest : .createdOldest)
+                                                            : (ascending ? .modifiedNewest : .modifiedOldest)))
+                                }
+                            } label: {
+                                Label(ascending ? "Ascending" : "Descending", systemImage: ascending ? "arrow.up" : "arrow.down")
+                                    .font(.subheadline).frame(minHeight: 44)
+                            }.accessibilityIdentifier("sortDirection")
+                        } else {
+                            Text(sort == .priority ? "High to low" : "Default Order").font(.subheadline).foregroundStyle(.secondary)
+                        }
+                    }
+                    LazyVGrid(columns: columns, spacing: 8) {
+                        pill("Date", selected: sort == .metadata(.dateAscending) || sort == .metadata(.dateDescending), id: "sortDate") { selectSort(.metadata(.dateAscending)) }
+                        pill("Created Time", selected: created, id: "sortCreated") {
+                            selectSort(.timestamp(ascending ? .createdOldest : .createdNewest))
+                        }
+                        pill("Modified Time", selected: modified, id: "sortModified") {
+                            selectSort(.timestamp(ascending ? .modifiedOldest : .modifiedNewest))
+                        }
+                        pill("Title", selected: sort == .title(.ascending) || sort == .title(.descending), id: "sortTitle") {
+                            selectSort(.title(.ascending))
+                        }
+                        pill("Tag", selected: sort == .metadata(.tagAscending) || sort == .metadata(.tagDescending), id: "sortTag") { selectSort(.metadata(.tagAscending)) }
+                        pill("Priority", selected: sort == .priority, id: "sortPriority") { selectSort(.priority) }
+                    }
+                }
+                Button { selectSort(nil) } label: {
+                    Label("Restore default sorting", systemImage: "arrow.uturn.backward")
+                        .font(.subheadline).frame(maxWidth: .infinity, minHeight: 44)
+                }.disabled(sort == nil).accessibilityIdentifier("restoreDefaultTaskSort")
+            }.padding(20)
+        }
+        .background(Color(uiColor: .systemBackground))
+        .accessibilityIdentifier("taskSortGroupSheet")
+    }
+
+    private func pill(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.subheadline).multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, minHeight: 44).padding(.horizontal, 6)
+                .foregroundStyle(selected ? Color.white : Color.secondary)
+                .background(selected ? Color.accentColor : Color(uiColor: .secondarySystemBackground),
+                            in: Capsule())
+                .contentShape(Capsule())
+        }.buttonStyle(.plain)
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            .accessibilityIdentifier(id)
     }
 }

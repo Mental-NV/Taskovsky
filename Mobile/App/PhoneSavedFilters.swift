@@ -88,6 +88,16 @@ struct PhoneFilterEditor: View {
         (try? SavedFilterChange.sameDefinition(draft, request.filter)) != true
     }
     private var data: WorkspaceData { model.document?.snapshot.workspace ?? WorkspaceData() }
+    private var previewTasks: [TaskItem] {
+        data.tasks.filter { draft.matches($0, lists: data.lists, now: model.now, calendar: model.calendar) }
+    }
+    // Authoring affordance only: empty-group evaluation and save semantics stay unchanged.
+    private var previewAvailable: Bool {
+        switch draft.ruleRoot {
+        case .and(let children)?, .or(let children)?: !children.isEmpty
+        default: true
+        }
+    }
     private var requiresBounds: Bool { draft.ruleRoot == nil && draft.dateRules.contains(.custom) }
     private var canSave: Bool {
         !draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
@@ -116,12 +126,12 @@ struct PhoneFilterEditor: View {
                         Text("Advanced").tag(true)
                     }.pickerStyle(.segmented).accessibilityIdentifier("savedFilterMode")
                     Toggle("Pin filter", isOn: $draft.isPinned).accessibilityIdentifier("savedFilterPin")
-                    let count = data.tasks.filter { draft.matches($0, lists: data.lists, now: model.now, calendar: model.calendar) }.count
+                    let count = previewTasks.count
                     Text("\(count) matching").font(.footnote).foregroundStyle(.secondary)
                         .accessibilityIdentifier("savedFilterMatchCount")
                 }
                 if let rule = Binding($draft.ruleRoot) {
-                    Section("Advanced Rules") {
+                    Section("Filter Conditions") {
                         PhoneFilterRuleNode(rule: rule, data: data, depth: 0, path: "root")
                             .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                             .listRowBackground(Color.clear)
@@ -131,6 +141,28 @@ struct PhoneFilterEditor: View {
                 }
                 if draft.ruleRoot != nil || draft.dateRules.contains(.custom) {
                     PhoneFilterDateBounds(from: $draft.customDateFrom, to: $draft.customDateTo, now: model.now)
+                }
+                Group {
+                    Section {
+                        NavigationLink {
+                            List {
+                                if previewTasks.isEmpty { Text("No matching tasks") }
+                                ForEach(previewTasks) { task in
+                                    Text(task.title).accessibilityIdentifier("savedFilterPreviewTask-" + task.id.uuidString)
+                                }
+                            }.navigationTitle("Preview")
+                        } label: {
+                            LabeledContent("Preview", value: "\(previewTasks.count) matching")
+                        }.accessibilityIdentifier("savedFilterPreview")
+                            .disabled(!previewAvailable)
+                        if !previewAvailable {
+                            Text("Add a filter condition to preview.").font(.footnote).foregroundStyle(.secondary)
+                        }
+                        if draft.ruleRoot != nil {
+                            NavigationLink("Examples") { PhoneAdvancedFilterExamples() }
+                                .accessibilityIdentifier("savedFilterExamples")
+                        }
+                    }
                 }
                 if !request.creating {
                     Button("Delete Filter", role: .destructive) { confirmation = .delete }
@@ -192,6 +224,32 @@ struct PhoneFilterEditor: View {
     }
 }
 
+private struct PhoneAdvancedFilterExamples: View {
+    var body: some View {
+        List {
+            Section {
+                Text("Taskovsky examples").font(.headline)
+                Text("These examples explain supported rules. Reading them does not change your filter.")
+            }
+            Section("AND · All conditions") {
+                Text("Status is Active AND Priority is High")
+                Text("Matches only active high-priority tasks.").foregroundStyle(.secondary)
+            }
+            Section("OR · Any condition") {
+                Text("Keyword is weekly OR Keyword is meeting")
+                Text("Matches tasks whose searchable content contains either keyword.").foregroundStyle(.secondary)
+            }
+            Section("NOT · Invert condition") {
+                Text("NOT (Priority is High)")
+                Text("Matches eligible tasks that do not have High priority. Other eligibility rules still apply.").foregroundStyle(.secondary)
+            }
+            Section {
+                Text("An empty group keeps Taskovsky’s existing match-all behavior. Add a condition to preview it in the editor.")
+            }
+        }.navigationTitle("Examples").navigationBarTitleDisplayMode(.inline)
+    }
+}
+
 struct PhoneNormalFilterFields: View {
     enum Context { case search, savedFilter }
 
@@ -199,25 +257,51 @@ struct PhoneNormalFilterFields: View {
     let data: WorkspaceData
     let context: Context
 
-    var body: some View {
-        Section(context == .search ? "Search Criteria" : "Normal Criteria") {
-            if context == .savedFilter {
-                TextField("Keyword", text: $draft.keyword).accessibilityIdentifier("savedFilterKeyword")
-            }
-            Picker("Status", selection: $draft.status) {
-                ForEach(FilterStatus.allCases, id: \.self) { status in Text(status.phoneLabel).tag(status) }
-            }.pickerStyle(.navigationLink)
-            choices("Lists", values: $draft.listIDs, options: listOptions)
-            choices("Tags", values: $draft.tagIDs, options: tagOptions)
-            Picker("Tag matching", selection: $draft.tagMode) {
-                ForEach(FilterTagMode.allCases, id: \.self) { mode in Text(mode.label).tag(mode) }
-            }.pickerStyle(.navigationLink)
-            if context == .savedFilter {
+    @ViewBuilder var body: some View {
+        if context == .savedFilter {
+            Section("Filter Conditions") {
+                choices("List", values: $draft.listIDs, options: listOptions)
+                choices("Tag", values: $draft.tagIDs, options: tagOptions, allSelected: draft.hasUnrestrictedTagCriteria, summary: tagSummary, reset: { draft.clearTagCriteria() })
+                dateChoices
                 choices("Priority", values: $draft.priorities, options: TaskPriority.allCases.map { ($0, $0.phoneLabel) })
             }
-            choices("Type", values: $draft.kinds, options: [(.task, "Tasks"), (.note, "Notes")])
-            dateChoices
+            Section {
+                LabeledContent("Include keyword") {
+                    TextField("Keyword", text: $draft.keyword).accessibilityIdentifier("savedFilterKeyword")
+                }
+                choices("Type", values: $draft.kinds, options: [(.task, "Tasks"), (.note, "Notes")])
+            }
+            Section {
+                DisclosureGroup("More") { statusPicker; tagMatchingPicker }
+                    .accessibilityIdentifier("savedFilterMore")
+            }
+        } else {
+            Section("Search Criteria") {
+                statusPicker
+                choices("Lists", values: $draft.listIDs, options: listOptions)
+                choices("Tags", values: $draft.tagIDs, options: tagOptions)
+                tagMatchingPicker
+                choices("Type", values: $draft.kinds, options: [(.task, "Tasks"), (.note, "Notes")])
+                dateChoices
+            }
         }
+    }
+
+    private var tagSummary: String {
+        if draft.tagMode == .none || draft.tagMode == .anyTagged { return draft.tagMode.label }
+        return draft.tagIDs.isEmpty ? "All" : "\(draft.tagIDs.count) selected"
+    }
+
+    private var statusPicker: some View {
+        Picker("Status", selection: $draft.status) {
+            ForEach(FilterStatus.allCases, id: \.self) { status in Text(status.phoneLabel).tag(status) }
+        }.pickerStyle(.navigationLink)
+    }
+
+    private var tagMatchingPicker: some View {
+        Picker("Tag matching", selection: $draft.tagMode) {
+            ForEach(FilterTagMode.allCases, id: \.self) { mode in Text(mode.label).tag(mode) }
+        }.pickerStyle(.navigationLink)
     }
 
     private var dateChoices: some View {
@@ -234,10 +318,10 @@ struct PhoneNormalFilterFields: View {
                     }.frame(minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
                     .accessibilityIdentifier("dateRule-" + rule.rawValue)
-            }.navigationTitle("Dates")
+            }.navigationTitle(context == .savedFilter ? "Date" : "Dates")
         } label: {
-            LabeledContent("Dates", value: draft.dateRules.isEmpty || draft.dateRules.contains(.all) ? "Any" : "\(draft.dateRules.count) selected")
-        }
+            LabeledContent(context == .savedFilter ? "Date" : "Dates", value: draft.dateRules.isEmpty || draft.dateRules.contains(.all) ? (context == .savedFilter ? "All" : "Any") : "\(draft.dateRules.count) selected")
+        }.accessibilityIdentifier("normalFilterCriterion-Date")
     }
 
     private var listOptions: [(UUID, String)] {
@@ -256,9 +340,17 @@ struct PhoneNormalFilterFields: View {
         return selected.filter { seen.insert($0).inserted }.map { ($0, label + " · " + $0.uuidString.prefix(8)) }
     }
 
-    private func choices<Value: Hashable>(_ name: String, values: Binding<[Value]>, options: [(Value, String)]) -> some View {
+    private func choices<Value: Hashable>(_ name: String, values: Binding<[Value]>, options: [(Value, String)], allSelected: Bool? = nil, summary: String? = nil, reset: (() -> Void)? = nil) -> some View {
         NavigationLink {
-            List(options, id: \.0) { value, label in
+            List {
+                if context == .savedFilter {
+                    Button { if let reset { reset() } else { values.wrappedValue = [] } } label: {
+                        HStack { Text("All"); Spacer(); if allSelected ?? values.wrappedValue.isEmpty { Image(systemName: "checkmark") } }
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityAddTraits((allSelected ?? values.wrappedValue.isEmpty) ? .isSelected : [])
+                        .accessibilityIdentifier("savedFilterAll-" + name)
+                }
+                ForEach(options, id: \.0) { value, label in
                 let selected = values.wrappedValue.contains(value)
                 Button {
                     if selected { values.wrappedValue.removeAll { $0 == value } }
@@ -270,10 +362,12 @@ struct PhoneNormalFilterFields: View {
                         if selected { Image(systemName: "checkmark") }
                     }.frame(minHeight: 44).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("normalFilterOption-" + name + "-" + String(describing: value))
+                }
             }.navigationTitle(name)
         } label: {
-            LabeledContent(name, value: values.wrappedValue.isEmpty ? "Any" : "\(values.wrappedValue.count) selected")
-        }
+            LabeledContent(name, value: summary ?? (values.wrappedValue.isEmpty ? (context == .savedFilter ? "All" : "Any") : "\(values.wrappedValue.count) selected"))
+        }.accessibilityIdentifier("normalFilterCriterion-" + name)
     }
 }
 
@@ -325,7 +419,10 @@ private struct PhoneFilterRuleNode: View {
             HStack(spacing: 4) {
                 let layout = textSize.isAccessibilitySize ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0)) :
                     AnyLayout(HStackLayout(spacing: 8))
-                layout { conditionFields(condition) }
+                layout {
+                    Text("Filter").font(.subheadline).foregroundStyle(.secondary)
+                    conditionFields(condition)
+                }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 actions
             }
@@ -336,6 +433,7 @@ private struct PhoneFilterRuleNode: View {
 
     private func operatorHeader(_ title: String, detail: String) -> some View {
         HStack(spacing: 8) {
+            Text("Logic").font(.subheadline).foregroundStyle(.secondary)
             Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(Color.accentColor)
                 .padding(.horizontal, 8).padding(.vertical, 4)
                 .background(Color.accentColor.opacity(0.12), in: Capsule())
@@ -453,7 +551,7 @@ private struct PhoneFilterRuleNode: View {
         Picker("Condition", selection: Binding(get: { condition.wrappedValue.kind },
                                                 set: { condition.wrappedValue = FilterCondition(kind: $0) })) {
             ForEach(FilterConditionKind.allCases, id: \.self) { kind in Text(kind.label).tag(kind) }
-        }.pickerStyle(.menu).labelsHidden().accessibilityLabel("Condition kind")
+        }.pickerStyle(.menu).labelsHidden().fixedSize(horizontal: true, vertical: false).accessibilityLabel("Condition kind")
             .accessibilityIdentifier("filterConditionKind-" + path)
         switch current.kind {
         case .list:

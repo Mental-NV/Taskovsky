@@ -1,0 +1,515 @@
+[
+  {
+    "state": "C03",
+    "file": "c03-week-overview.png",
+    "sha256": "b0e5287489baa6a02b3c1ae27f5b12d13bae8380a1a7bc696a905616c52aa630",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 112,
+    "receipt": "../../../changes/mobile-week-overview-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C04",
+    "file": "c04-calendar-overflow.png",
+    "sha256": "9ba6f21fe2820e36f385daa74893f9631849ae9fab1262d028104760e4af9025",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 103,
+    "receipt": "../../../changes/mobile-calendar-header-2026-11-14.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C10",
+    "file": "c10-calendar-style.png",
+    "sha256": "e06a7040b206ce7689091a117dec7dd1ca62b9bd5cc09ba022eba26b6ee02b15",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 115,
+    "receipt": "../../../changes/mobile-calendar-options-navigation-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C11",
+    "file": "c11-calendar-icons.png",
+    "sha256": "f9b1d56d92c7181857ba342af9c62171876f760e9ce558540845c3e16f27c32a",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 115,
+    "receipt": "../../../changes/mobile-calendar-options-navigation-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "C15",
+    "file": "c15-arrange-filter.png",
+    "sha256": "6bcb4652577035fb2cc1909e2017721b3b0831ba09fff7b6b3c4ba3bf0a5d4cd",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 113,
+    "receipt": "../../../changes/mobile-arrange-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "D07",
+    "file": "d07-schedule-date.png",
+    "sha256": "57bda70c13f2dc0270ee6eed7aa3461e896fe9ec7693db62c874400e6dc2f437",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 114,
+    "receipt": "../../../changes/mobile-schedule-tabs-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "D08",
+    "file": "d08-schedule-duration.png",
+    "sha256": "633e427689d4e2dd00125c383b56f1fe0ad65ce47538f251f200e32ab0fd092d",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 114,
+    "receipt": "../../../changes/mobile-schedule-tabs-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "T01",
+    "file": "t01-today-list.png",
+    "sha256": "7b1d283fcf54de5ae4e831fe9a1d5d4c4112ad2750d6645a20619fe8369e04bd",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 102,
+    "receipt": "../../../changes/mobile-list-row-density-2026-11-14.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture or settings only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "D01",
+    "file": "d01-empty-description.png",
+    "sha256": "d1a8c5ad6d640037b927ee4b6094dad2b8c04f847374c7f885f35a7f1af0e986",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 116,
+    "receipt": "../../../changes/mobile-empty-description-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "T17",
+    "file": "t17-compact-capture.png",
+    "sha256": "8b441fcd14562f7cb7f77d851bdee19d69cf4bf93130be524fd5721cf30bbec5",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "pull_request": 120,
+    "receipt": "../../../changes/mobile-compact-capture-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal account/task data observed",
+    "historical": true
+  },
+  {
+    "state": "T17",
+    "file": "t17-composer-without-recovery-notice.png",
+    "sha256": "8805c943a6ee6f115287227a014f6fef01966f84d1acf1f9de0bd7f82d0425aa",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-capture-notice-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: empty neutral fixture composer, no personal account/task data",
+    "historical": true
+  },
+  {
+    "state": "D10",
+    "file": "d10-reminder-options.png",
+    "sha256": "a575c24e568c251e0c25f255a775a1e857dcc7977f48c74aedd720dee8590965",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-schedule-options-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture schedule controls only, no personal profile/task data",
+    "historical": true
+  },
+  {
+    "state": "D12",
+    "file": "d12-repeat-options.png",
+    "sha256": "b3d5768f7373d2d7c202c4503151c9049bcd01cfda568d64e5c9419aadc8dfc0",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-schedule-options-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture schedule controls only, no personal profile/task data",
+    "historical": true
+  },
+  {
+    "state": "T04",
+    "file": "t04-title-sort.png",
+    "sha256": "c1bfacc58ba6f77146b384859d45b425781dc2739dca9dd7d4ed4e2f6d16e6b1",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-title-sort-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral sample workspace tasks only, no real profile information",
+    "historical": true
+  },
+  {
+    "state": "T04",
+    "file": "t04-complete-choices.png",
+    "sha256": "67d6dd7eb1fcc2424c29124c6c7ff7136716262c0b6778e4b08c39dbdf9368e8",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-group-sort-complete-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral sample workspace only, no personal profile information",
+    "historical": true
+  },
+  {
+    "state": "D06",
+    "file": "d06-move-hierarchy.png",
+    "sha256": "4f5639e39d9ba75db94a1f9cf923b4e8aa82e82069f3ef9a0eb30c9a3e6158a8",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "source_commit": "8b6da8b",
+    "receipt": "../../../changes/mobile-move-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral move-hierarchy fixture after test list creation; no personal task/account/profile information",
+    "historical": true
+  },
+  {
+    "state": "D04",
+    "file": "d04-assigned-tags.png",
+    "sha256": "1e40871b196a8ccd286542ca352fb950b006a5b8781505fb7292509eebfb24ab",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "source_commit": "9459da6",
+    "receipt": "../../../changes/mobile-assigned-tags-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral Planning/Studio fixture and unavailable reference notice only; no personal profile information",
+    "historical": true
+  },
+  {
+    "state": "T12",
+    "file": "t12-list-creation.png",
+    "sha256": "1093ce6c693b70b7092bc382545dba6427bf3c2945cab45a6cda4e74dfa6aae7",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "capture_checkpoint": "9b8896b",
+    "receipt": "../../../changes/mobile-list-creation-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral project name, creation controls and no personal information",
+    "historical": true
+  },
+  {
+    "state": "C05",
+    "file": "c05-source-hierarchy.png",
+    "sha256": "58c9e1053b6a5f1833061fb1a95b26d810f483377ebda967a22937befc854cc7",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "source_commit": "77d6801",
+    "receipt": "../../../changes/mobile-calendar-filter-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral calendar-filter-hierarchy sample lists/tags only; no personal profile content",
+    "historical": true
+  },
+  {
+    "state": "C12",
+    "file": "c12-time-zone-settings.png",
+    "sha256": "d45ab8788a699133be32a154003f3d9656771b85ee6c9de837b3d4876abc7fd7",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-zone-settings-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Inspected neutral fixture; Moscow is hard-coded QA primary zone, not personal settings",
+    "historical": true
+  },
+  {
+    "state": "T16",
+    "file": "t16-parent-tag.png",
+    "sha256": "6e79fe2f473e316182ae75f5cc3398e23bd1ff0681aa6c4e6c6a21a8735fdcd5",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-parent-tag-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: None-only cycle-exclusion case, no personal content",
+    "historical": true
+  },
+  {
+    "state": "C14",
+    "file": "c14-arrange-options.png",
+    "sha256": "01d137b4c5f99de0cacd9cb6d56f61a6e31b81e9b785ef0695bf85d239209590",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-arrange-options-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral seeded fixture only; no personal account/task data. Three choices and checks visible; existing help truncates.",
+    "source_commit": "cec8cf1",
+    "historical": true
+  },
+  {
+    "state": "C14",
+    "file": "c14-arrange-hierarchy-expanded.png",
+    "sha256": "eb6a10f16e94a8cb6838222b04322d516eab2de325206ad445a0c499d2ac5c8c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-arrange-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral arrange-hierarchy fixture only (Neutral arrange parent/children/orphan, Read a chapter); no personal account/task data. Parent trailing disclosure, indented children, Work count 4.",
+    "source_commit": "3cc4027"
+  },
+  {
+    "state": "C14",
+    "file": "c14-arrange-hierarchy-collapsed.png",
+    "sha256": "04fe8768bc08000a977eaf230e69bc8761f893f73c303e56633cf3fea95882b3",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-arrange-hierarchy-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral arrange-hierarchy fixture only; no personal account/task data. Collapsed parent with trailing chevron, children hidden, Work count unchanged at 4.",
+    "source_commit": "3cc4027"
+  },
+  {
+    "state": "D11",
+    "file": "d11-custom-reminder.png",
+    "sha256": "caf375650a76a7bc897577f426ae6fc6b8c91bd824617943abb770360f4cbf8e",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-custom-reminder-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral fixture: Day/1/10:35, schedule-zone preview, Cancel/Add. No personal information.",
+    "source_commit": "4f43014",
+    "historical": true
+  },
+  {
+    "state": "D13",
+    "file": "d13-repeat-frequency.png",
+    "sha256": "173baf51359a415b2c1d7dd9f2cd004a3d2ae95271eda6cb7931f64daa501db2",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-repeat-frequency-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral3 Weeks/Mon/Wed recurrence settings, no personal data.",
+    "historical": true
+  },
+  {
+    "state": "D14",
+    "file": "d14-repeat-type.png",
+    "sha256": "733276cc0729c735a2be38d66a679391858c128ecaa338a13cb2c7009d7ac79d",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-repeat-type-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral menu with exact labels/current check; no personal task/account data.",
+    "source_commit": "5d5af24",
+    "historical": true
+  },
+  {
+    "state": "T13",
+    "file": "t13-normal-filter.png",
+    "sha256": "1cf1a5fa15622189efb4adf4b73088d46b94a9712d83ec63f485bb7b69f89e4c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-normal-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral filter draft. Primary criteria and keyword/type visible; More/Preview below viewport. No personal information."
+  },
+  {
+    "state": "D02",
+    "file": "d02-task-actions.png",
+    "sha256": "aebf208ccad354206dec9fa19e0248d9c0973765f86781c9f1d5e2c1deb5b9be",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-detail-actions-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral fixture task only (Review the project outline); custom Task Actions rows, no strip, no Share placeholder; no personal information.",
+    "source_commit": "fd962df",
+    "historical": true
+  },
+  {
+    "state": "T14",
+    "file": "t14-advanced-filter.png",
+    "sha256": "a5511cad7a3fb65195c09bea18dc5879c6293bb77cb655fe3fbf299032b6fb9b",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-advanced-filter-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected: neutral nested AND/OR with readable Keyword menus, Preview and Examples. No personal information."
+  },
+  {
+    "state": "T15",
+    "file": "t15-add-tag.png",
+    "sha256": "c9f2e9acc23cdf8efc7844fc472520ec8b276c53791ee0ebfa38aae1f4ecf255",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-add-tag-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixel inspected neutral Add Tag: current pink swatch check, retained Custom Color, Parent Tag and confirmation. No personal information."
+  },
+  {
+    "state": "C07",
+    "file": "c07-calendar-color.png",
+    "sha256": "f40e67116659a1cfde9d231dd34d33ff7ccd4e477aadc677a908481886b6cb9a",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-page-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral Inbox/Personal/Projects/Work fixture only; no personal account/task data",
+    "capture_source": "d25580b with screenshot-only native attachment addition committed as 8b0e625",
+    "historical": false
+  },
+  {
+    "state": "C08",
+    "file": "c08-color-by.png",
+    "sha256": "ab240271ccb5089b9fbf94eda9f92e7caa99705f2bfa56889444bc07abc9cb70",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-calendar-color-page-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral Inbox/Personal/Projects/Work fixture only; no personal account/task data",
+    "capture_source": "d25580b with screenshot-only native attachment addition committed as 8b0e625",
+    "historical": false
+  },
+  {
+    "state": "T02",
+    "file": "t02-list-details.png",
+    "sha256": "b0a624ff1492a0cc5972b8886b82fd97f53a4454430f79c0c95dec1781bf2e6c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-task-display-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
+    "historical": false
+  },
+  {
+    "state": "T02",
+    "file": "t02-kanban-details.png",
+    "sha256": "8640abade57e83681ca26a7145acd28f6d38ec3cf8e756003e310aab38c3f6da",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-task-display-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
+    "historical": false
+  },
+  {
+    "state": "T02",
+    "file": "t02-completed-section.png",
+    "sha256": "041cc3835312f2901f09a50e5933437bcc8885d86ad9276011c59151c5bc196c",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "receipt": "../../../changes/mobile-task-display-2026-11-15.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Pixels inspected: neutral fixture only; no personal TickTick account/task data",
+    "historical": false
+  },
+  {
+    "state": "T09",
+    "file": "t09-unified-smartlists.png",
+    "sha256": "11165c24c2ab2a50cb975282439063381f8e1a47a221b83349c69ab968c2e50b",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "capture_source": "ed2113e",
+    "receipt": "../../../changes/mobile-unified-management-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Independently inspected neutral fixture; no personal task/account data",
+    "historical": false
+  },
+  {
+    "state": "T11",
+    "file": "t11-unified-tags.png",
+    "sha256": "f1059b261cfd710ccb7d4a7682a16406fa500a54d536d5f4b256f0e48755246e",
+    "pixels": [
+      1170,
+      2532
+    ],
+    "capture_source": "ed2113e",
+    "receipt": "../../../changes/mobile-unified-management-2026-11-16.md",
+    "kind": "Unmodified owned Simulator QA screenshot",
+    "review": "Independently inspected neutral fixture; no personal task/account data",
+    "historical": false
+  }
+]

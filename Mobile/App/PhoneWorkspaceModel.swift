@@ -4,15 +4,35 @@ import TaskovskyDomain
 import TaskovskyWorkspace
 import UniformTypeIdentifiers
 
-private enum PhoneQACase: String { case known, batchPostpone = "batch-postpone", taskSort = "task-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+private enum PhoneQACase: String { case known, kanbanSort = "kanban-sort", durationPrecision = "duration-precision", taskDisplay = "task-display", timePrecision = "time-precision", calendarFilterHierarchy = "calendar-filter-hierarchy", assignedTags = "assigned-tags", moveHierarchy = "move-hierarchy", batchPostpone = "batch-postpone", taskSort = "task-sort", priorityList = "priority-list", organizationSort = "organization-sort", createdGrouping = "created-grouping", dueDateGrouping = "due-date-grouping", subtaskDisclosure = "subtask-disclosure", lifecycle, arrange, arrangeOptions = "arrange-options", arrangeHierarchy = "arrange-hierarchy", shortCalendarMove = "short-calendar-move", occurrence, skipOccurrence = "skip-occurrence", skipOccurrenceSaveFailure = "skip-occurrence-save-failure", agenda, foldedHours = "folded-hours", allDaySpans = "all-day-spans", monthSpans = "month-spans", monthBrowse = "month-browse", organization, savedFilter = "saved-filter", tagOrganization = "tag-organization", board, timeline, timelineArrange = "timeline-arrange", summary, summaryFields = "summary-fields", summarySaveFailure = "summary-save-failure", calendarOptions = "calendar-options", calendarCompletion = "calendar-completion", richPreview = "rich-preview", richPlainPaste = "rich-plain-paste", richMarkdownPaste = "rich-markdown-paste", richForeignPaste = "rich-foreign-paste", richForeignHTMLBlocks = "rich-foreign-html-blocks", richForeignRTFPaste = "rich-foreign-rtf-paste", richCodePaste = "rich-code-paste", richHighlightColors = "rich-highlight-colors", richChecklistToggle = "rich-checklist-toggle", taskMetadata = "task-metadata", legacyActions = "legacy-actions", malformedRich = "malformed-rich", captureEmpty = "capture-empty", captureTemplate = "capture-template", templateOrder = "template-order", afterWrite = "capture-after-write", saveFailure = "save-failure", staleSave = "stale-save", unknownWorkspace = "unknown-workspace", unknownDraft = "unknown-draft" }
+
+enum PhoneTaskGrouping: String {
+    case standard, creationDate, dueDate, priority, list, tag, ungrouped
+    init(stored: String?, legacyCreated: Bool) {
+        self = stored.flatMap(Self.init(rawValue:)) ?? (legacyCreated ? .creationDate : .standard)
+    }
+    var title: String {
+        switch self {
+        case .list: "Group by List"
+        case .tag: "Group by Tag"
+        case .ungrouped: "No Groups"
+        case .standard: "Default Groups"
+        case .creationDate: "Group by Created Date"
+        case .dueDate: "Group by Due Date"
+        case .priority: "Group by Priority"
+        }
+    }
+}
 
 enum PhoneTaskSort: Hashable {
-    case priority, timestamp(TaskTimestampSort)
+    case priority, timestamp(TaskTimestampSort), title(TaskTitleSort), metadata(TaskMetadataSort)
 
-    static let choices = [Self.priority] + TaskTimestampSort.allCases.map(Self.timestamp)
+    static let choices = [Self.priority] + TaskTimestampSort.allCases.map(Self.timestamp) + TaskTitleSort.allCases.map(Self.title) + TaskMetadataSort.allCases.map(Self.metadata)
 
     init?(stored: String) {
         if stored == "Priority" { self = .priority }
+        else if let metadata = TaskMetadataSort(rawValue: stored) { self = .metadata(metadata) }
+        else if let title = TaskTitleSort(rawValue: stored) { self = .title(title) }
         else if let timestamp = TaskTimestampSort(rawValue: stored) { self = .timestamp(timestamp) }
         else { return nil }
     }
@@ -20,6 +40,8 @@ enum PhoneTaskSort: Hashable {
     var stored: String {
         switch self {
         case .priority: "Priority"
+        case .metadata(let sort): sort.rawValue
+        case .title(let sort): sort.rawValue
         case .timestamp(let sort): sort.rawValue
         }
     }
@@ -27,6 +49,8 @@ enum PhoneTaskSort: Hashable {
     var title: String {
         switch self {
         case .priority: "Priority"
+        case .metadata(let sort): sort.title
+        case .title(let sort): sort == .ascending ? "Title · Ascending" : "Title · Descending"
         case .timestamp(let sort): sort.title
         }
     }
@@ -36,9 +60,11 @@ enum PhoneTaskSort: Hashable {
         return nil
     }
 
-    func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
+    func precedes(_ lhs: TaskItem, _ rhs: TaskItem, in data: WorkspaceData, calendar: Calendar) -> Bool {
         switch self {
         case .priority: lhs.priority.rank < rhs.priority.rank
+        case .metadata(let sort): sort.precedes(lhs, rhs, in: data, calendar: calendar)
+        case .title(let sort): sort.precedes(lhs, rhs)
         case .timestamp(let sort): sort.precedes(lhs, rhs)
         }
     }
@@ -87,7 +113,7 @@ final class PhoneWorkspaceModel: ObservableObject {
     @Published private(set) var recentSearches: [String] = []
     @Published private(set) var taskSort: PhoneTaskSort?
     @Published private(set) var taskCountdownEnabled = false
-    @Published private(set) var taskGrouping = TaskListGrouping.standard
+    @Published private(set) var taskGrouping = PhoneTaskGrouping.standard
     @Published private(set) var activeDraft: TaskFieldDraft?
     @Published private(set) var recoveredDraft: TaskFieldDraft?
     @Published private(set) var protectedDraft = false
@@ -107,6 +133,16 @@ final class PhoneWorkspaceModel: ObservableObject {
     private struct ScheduleFeedback {
         let message: String
         let undo: WorkspaceCalendarUndo?
+    }
+
+    var timePrecisionEvidence: String {
+        guard isQA, (qaCase == .timePrecision || qaCase == .durationPrecision), let task = document?.snapshot.workspace.tasks.first,
+              let due = task.dueDate else { return "" }
+        let base = "\(due.timeIntervalSince1970)|\(task.hasDueTime)|\(task.timeZoneID ?? "device")"
+        if qaCase == .durationPrecision {
+            return base + "|\(task.scheduledDuration?.start.timeIntervalSince1970 ?? 0)|\(task.reminderDates)|\(task.endReminderEnabled)"
+        }
+        return base
     }
 
     @Published private var scheduleFeedback: [PhoneScheduleSurface: ScheduleFeedback] = [:]
@@ -208,7 +244,7 @@ final class PhoneWorkspaceModel: ObservableObject {
         return isQA ? "TaskovskyMobile.qaTaskGrouping." + directory.lastPathComponent : "TaskovskyMobile.taskGrouping"
     }
 
-    func setTaskGrouping(_ value: TaskListGrouping) {
+    func setTaskGrouping(_ value: PhoneTaskGrouping) {
         guard let key = taskGroupingKey, value != taskGrouping else { return }
         taskGrouping = value
         UserDefaults.standard.set(value.rawValue, forKey: key)
@@ -238,12 +274,23 @@ final class PhoneWorkspaceModel: ObservableObject {
         if let key = taskCountdownKey { taskCountdownEnabled = UserDefaults.standard.bool(forKey: key) }
         if let key = taskGroupingKey, let legacyKey = taskCreatedGroupingKey {
             let defaults = UserDefaults.standard
-            taskGrouping = TaskListGrouping(stored: defaults.string(forKey: key), legacyCreated: defaults.bool(forKey: legacyKey))
+            taskGrouping = PhoneTaskGrouping(stored: defaults.string(forKey: key), legacyCreated: defaults.bool(forKey: legacyKey))
         }
         readTicket = UUID(); isBusy = true
         do {
             var initial = try MobilePreviewFixture.session(samples: isQA && qaCase != .captureEmpty, unknownData: qaCase == .unknownWorkspace)
-            if isQA && (qaCase == .taskSort || qaCase == .createdGrouping || qaCase == .dueDateGrouping) {
+            if isQA && qaCase == .kanbanSort {
+                var data = initial.workspace
+                guard data.tasks.count >= 3, let tag = data.tags.first else { throw CocoaError(.fileReadCorruptFile) }
+                let now = MobilePreviewFixture.now
+                data.tasks = [
+                    TaskItem(id: data.tasks[0].id, title: "Beta", tagIDs: [tag.id], dueDate: now, hasDueTime: true, priority: .medium, createdAt: now - 100, updatedAt: now + 100),
+                    TaskItem(id: data.tasks[1].id, title: "Alpha", dueDate: now + 600, hasDueTime: true, priority: .low, createdAt: now, updatedAt: now - 100),
+                    TaskItem(id: data.tasks[2].id, title: "Gamma", dueDate: now + 1200, hasDueTime: true, priority: .high, createdAt: now - 200, updatedAt: now)
+                ]
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && (qaCase == .taskSort || qaCase == .organizationSort || qaCase == .priorityList || qaCase == .createdGrouping || qaCase == .dueDateGrouping) {
                 var data = initial.workspace
                 guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
                 let stamp = MobilePreviewFixture.now.addingTimeInterval(-86_400)
@@ -255,7 +302,16 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[7].createdAt = stamp.addingTimeInterval(-3600)
                 data.tasks[7].updatedAt = stamp.addingTimeInterval(3600)
                 data.tasks[5].isPinned = true
-                if qaCase != .taskSort {
+                if qaCase == .organizationSort {
+                    data.tasks[0].dueDate = stamp
+                    data.tasks[7].dueDate = stamp.addingTimeInterval(172_800)
+                }
+                if qaCase == .priorityList {
+                    data.tasks[0].priority = .high
+                    data.tasks[1].priority = .low
+                    data.tasks[7].priority = .high
+                }
+                if qaCase != .taskSort && qaCase != .priorityList && qaCase != .organizationSort {
                     data.tasks[0].createdAt = stamp.addingTimeInterval(-86_400)
                     let section = TaskSection(name: "Review section")
                     let create = TaskSectionChange(listID: work.id, operation: .create(section))
@@ -309,6 +365,21 @@ final class PhoneWorkspaceModel: ObservableObject {
                 }
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
+            if isQA && qaCase == .taskDisplay {
+                var data = initial.workspace
+                guard data.tasks.count == 8, data.lists.count == 2 else { throw CocoaError(.fileReadCorruptFile) }
+                let section = TaskSection(name: "Focus")
+                _ = TaskSectionChange(listID: data.lists[0].id, operation: .create(section)).apply(to: &data, now: MobilePreviewFixture.now)
+                _ = TaskSectionChange(listID: data.lists[0].id, operation: .assign(taskID: data.tasks[1].id, sectionID: section.id)).apply(to: &data, now: MobilePreviewFixture.now)
+                data.tasks[3].listID = data.lists[0].id
+                data.tasks[3].completedAt = MobilePreviewFixture.now
+                data.tasks[3].isPinned = true
+                data.tasks[5].wontDoAt = MobilePreviewFixture.now
+                data.tasks[6].listID = nil
+                data.tasks[6].completedAt = MobilePreviewFixture.now
+                data.tasks[6].isPinned = true
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .lifecycle {
                 var data = initial.workspace
                 guard data.tasks.count == 8, data.lists.count == 2 else { throw CocoaError(.fileReadCorruptFile) }
@@ -325,12 +396,62 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.lists[1].isArchived = true
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
+            if isQA && qaCase == .arrangeOptions {
+                var data = initial.workspace
+                guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
+                data.tasks[2].title = "Neutral undated task"
+                data.tasks[2].dueDate = nil
+                data.tasks[3].title = "Neutral overdue task"
+                data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
+                var note = data.tasks[2]
+                note.id = UUID(); note.title = "Neutral undated note"; note.kind = .note
+                data.tasks.append(note)
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .arrange {
                 var data = initial.workspace
                 guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
                 data.tasks[2].priority = .high
                 data.tasks[3].dueDate = MobilePreviewFixture.now.addingTimeInterval(-86_400)
                 data.tasks[3].recurrence = .weekly
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .arrangeHierarchy {
+                // Neutral hierarchy content: a same-list parent with two
+                // children, plus a child whose parent is scheduled (and so
+                // not an eligible candidate) to prove orphans stay visible.
+                var data = initial.workspace
+                guard data.tasks.count == 8, let work = data.lists.first else { throw CocoaError(.fileReadCorruptFile) }
+                let now = MobilePreviewFixture.now
+                let areaTag = data.tags.first
+                data.tasks[0].dueDate = now.addingTimeInterval(60 * 86_400)
+                data.tasks[1].title = "Neutral arrange parent"
+                data.tasks[1].dueDate = nil
+                data.tasks[1].scheduledDuration = nil
+                data.tasks[1].hasDueTime = false
+                data.tasks[1].tagIDs = []
+                data.tasks[1].listID = work.id
+                data.tasks[1].parentID = nil
+                data.tasks[1].priority = .none
+                data.tasks[5].title = "Neutral arrange child one"
+                data.tasks[5].dueDate = nil
+                data.tasks[5].listID = work.id
+                data.tasks[5].parentID = data.tasks[1].id
+                data.tasks[5].priority = .none
+                data.tasks[5].tagIDs = []
+                data.tasks[7].title = "Neutral arrange child two"
+                data.tasks[7].dueDate = nil
+                data.tasks[7].listID = work.id
+                data.tasks[7].parentID = data.tasks[1].id
+                data.tasks[7].priority = .high
+                data.tasks[7].tagIDs = areaTag.map { [$0.id] } ?? []
+                data.tasks[3].title = "Neutral excluded parent"
+                data.tasks[3].dueDate = now.addingTimeInterval(7 * 86_400)
+                data.tasks[3].listID = work.id
+                data.tasks[4].title = "Neutral orphan child"
+                data.tasks[4].dueDate = nil
+                data.tasks[4].listID = work.id
+                data.tasks[4].parentID = data.tasks[3].id
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
             if isQA && (qaCase == .occurrence || qaCase == .skipOccurrence || qaCase == .skipOccurrenceSaveFailure) {
@@ -514,6 +635,23 @@ final class PhoneWorkspaceModel: ObservableObject {
                                                  .not(.condition(.init(kind: .tag, tagID: missingTag)))])
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
+            if isQA && qaCase == .calendarFilterHierarchy {
+                var data = initial.workspace
+                guard !data.lists.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                let folder = ListFolder(id: UUID(uuidString: "00000000-0000-0000-0000-000000000700")!, name: "Projects")
+                data.folders = [folder]
+                data.lists[0].folderID = folder.id
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .moveHierarchy {
+                var data = initial.workspace
+                guard data.lists.count >= 2, !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                let folder = ListFolder(id: UUID(uuidString: "00000000-0000-0000-0000-000000000700")!, name: "Projects")
+                data.folders = [folder]
+                data.lists[0].folderID = folder.id
+                data.tasks[0].listID = data.lists[0].id
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .organization {
                 var data = initial.workspace
                 guard data.tasks.count == 8, let work = data.lists.first?.id, !data.filters.isEmpty else {
@@ -569,6 +707,14 @@ final class PhoneWorkspaceModel: ObservableObject {
                 encoder.outputFormatting = [.sortedKeys]
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: encoder.encode(data), settingsBytes: encoder.encode(settings))
             }
+            if isQA && qaCase == .assignedTags {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty, let first = data.tags.first else { throw CocoaError(.fileReadCorruptFile) }
+                let second = TaskTag(id: UUID(uuidString: "00000000-0000-0000-0000-000000000201")!, name: "Studio", color: "#56789A")
+                data.tags = [first, second]
+                data.tasks[0].tagIDs = [second.id, UUID(uuidString: "00000000-0000-0000-0000-000000000599")!]
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .taskMetadata {
                 var data = initial.workspace
                 guard data.tasks.count == 8 else { throw CocoaError(.fileReadCorruptFile) }
@@ -580,7 +726,44 @@ final class PhoneWorkspaceModel: ObservableObject {
                 data.tasks[3].parentID = data.tasks[0].id
                 initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
             }
+            if isQA && qaCase == .legacyActions {
+                // Pre-D02 persisted layout: the ten original actions pinned,
+                // nothing in More. Raw values are literal so the fixture keeps
+                // matching the old schema even as the supported set grows.
+                // Stored bytes stay exactly this until an explicit edit.
+                let legacy = """
+                {"pinned":["complete","reopen","wontDo","pin","move","duplicate","convert","trash","saveTemplate","applyTemplate"],"more":[]}
+                """
+                guard let bytes = legacy.data(using: .utf8) else { throw CocoaError(.fileReadCorruptFile) }
+                UserDefaults.standard.set(bytes, forKey: "TaskovskyMobile.qaTaskActionLayout.v1." + directory.lastPathComponent)
+            }
             #if DEBUG
+            if isQA && qaCase == .timePrecision {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                var zone = Calendar(identifier: .gregorian)
+                zone.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+                let precise = zone.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 0, minute: 15, second: 37))!
+                data.tasks[0].dueDate = precise
+                data.tasks[0].hasDueTime = true
+                data.tasks[0].timeZoneID = "Pacific/Kiritimati"
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
+            if isQA && qaCase == .durationPrecision {
+                var data = initial.workspace
+                guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }
+                var zone = Calendar(identifier: .gregorian)
+                zone.timeZone = TimeZone(identifier: "Pacific/Kiritimati")!
+                let end = zone.date(from: DateComponents(year: 2026, month: 11, day: 9, hour: 0, minute: 15, second: 37))!
+                data.tasks[0].dueDate = end
+                data.tasks[0].scheduledDuration = TaskDurationRange(start: end.addingTimeInterval(-1891), end: end)
+                data.tasks[0].reminderDates = [end.addingTimeInterval(-900)]
+                data.tasks[0].reminderFollowsSchedule = false
+                data.tasks[0].endReminderEnabled = true
+                data.tasks[0].hasDueTime = true
+                data.tasks[0].timeZoneID = "Pacific/Kiritimati"
+                initial = try ReadOnlyWorkspaceSnapshot(workspaceBytes: JSONEncoder().encode(data), settingsBytes: initial.settingsBytes)
+            }
             if isQA && qaCase == .shortCalendarMove {
                 var data = initial.workspace
                 guard !data.tasks.isEmpty else { throw CocoaError(.fileReadCorruptFile) }

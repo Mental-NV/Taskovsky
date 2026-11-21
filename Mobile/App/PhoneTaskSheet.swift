@@ -14,7 +14,9 @@ struct PhoneTaskSheet: View {
     let close: () -> Void
     @State private var showActions = false
     @State private var scheduleRequest: PhoneScheduleRequest?
+    @State private var moveRequest: PhoneTaskMoveRequest?
     @State private var metadataRequest: PhoneTaskMetadataRequest?
+    @State private var priorityRequest: PhoneTaskMetadataRequest?
     @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
     @State private var relatedTasks: [UUID] = []
     @State private var checklistError: String?
@@ -65,8 +67,15 @@ struct PhoneTaskSheet: View {
                     VStack(alignment: .leading, spacing: 18) {
                         HStack {
                             PhoneCompletionButton(model: model, task: task, lists: data.lists)
-                            Text(task.listID.flatMap { id in data.lists.first { $0.id == id }?.name } ?? "Inbox")
-                                .font(.subheadline).foregroundStyle(.secondary)
+                            Button {
+                                guard let document = model.document else { return }
+                                moveRequest = PhoneTaskMoveRequest(task: task, revision: document.revision)
+                            } label: {
+                                Label(task.listID.flatMap { id in data.lists.first { $0.id == id }?.name } ?? "Inbox", systemImage: "chevron.down")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }.buttonStyle(.plain).accessibilityIdentifier("taskMoveList")
+                                .accessibilityHint("Move to another list")
+                                .disabled(!model.canBeginEditing || TaskLifecycle.refusal(for: .move(nil), task: task, lists: data.lists) != nil)
                             if task.deletedAt != nil { Text("In Trash").font(.caption).foregroundStyle(.secondary) }
                             else if SmartListEligibility.isArchived(task, lists: data.lists) {
                                 Text("Archived").font(.caption).foregroundStyle(.secondary)
@@ -95,14 +104,24 @@ struct PhoneTaskSheet: View {
                             .disabled(!writable)
                             .accessibilityIdentifier("editSchedule")
                             .accessibilityHint("Edit task schedule")
-                            progressRow(task)
+                            // Keep ordinary zero-progress details quiet; checklist and nonzero progress remain visible.
+                            if !task.checklist.isEmpty || task.progressPercent > 0 {
+                                progressRow(task)
+                            }
                         }
-                        description(task)
-                        Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
-                            .disabled(!writable || task.richBody != nil).frame(minHeight: 44)
-                        if (try? RichBodyEdit.applying([], to: task.body, rich: task.richBody)) != nil {
-                            Button("Format description") { Task { await model.begin(taskID: task.id, field: .richBody) } }
-                                .disabled(!writable).frame(minHeight: 44).accessibilityIdentifier("editRichDescription")
+                        if task.body.isEmpty && task.richBody == nil {
+                            Menu {
+                                descriptionActions(task)
+                            } label: {
+                                Label("Add description", systemImage: "text.alignleft")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                                    .frame(minHeight: 44)
+                            }
+                            .disabled(!writable)
+                            .accessibilityIdentifier("emptyDescriptionActions")
+                        } else {
+                            description(task)
+                            descriptionActions(task)
                         }
                         metadata(task, data: data)
                         if task.kind == .task || task.parentID != nil {
@@ -133,6 +152,9 @@ struct PhoneTaskSheet: View {
                     Button("Done", action: close).disabled(model.isBusy).accessibilityIdentifier("taskDetailDone")
                 }
             }
+            .sheet(item: $moveRequest) { request in
+                PhoneTaskMoveSheet(model: model, request: request)
+            }
             .sheet(item: $metadataRequest) { request in
                 PhoneTaskMetadataSheet(model: model, request: request)
             }
@@ -152,6 +174,15 @@ struct PhoneTaskSheet: View {
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
+        }
+    }
+
+    @ViewBuilder private func descriptionActions(_ task: TaskItem) -> some View {
+        Button("Edit description") { Task { await model.begin(taskID: task.id, field: .plainBody) } }
+            .disabled(!writable || task.richBody != nil).frame(minHeight: 44)
+        if (try? RichBodyEdit.applying([], to: task.body, rich: task.richBody)) != nil {
+            Button("Format description") { Task { await model.begin(taskID: task.id, field: .richBody) } }
+                .disabled(!writable).frame(minHeight: 44).accessibilityIdentifier("editRichDescription")
         }
     }
 
@@ -195,7 +226,14 @@ struct PhoneTaskSheet: View {
     private func metadata(_ task: TaskItem, data: WorkspaceData) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             metadataButton("Priority", detail: task.priority.phoneLabel, symbol: task.priority == .none ? "flag" : "flag.fill",
-                           identifier: "editTaskPriority") { openMetadata(.priority, task: task) }
+                           identifier: "editTaskPriority") {
+                guard writable, let revision = model.document?.revision else { return }
+                priorityRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .priority)
+            }
+            .popover(item: $priorityRequest) { request in
+                PhoneDetailPriorityPopover(model: model, request: request)
+                    .presentationCompactAdaptation(.popover)
+            }
             let names = task.tagIDs.compactMap { id in data.tags.first { $0.id == id }?.name }
             let extra = task.tagIDs.count - names.count
             let labels = names + (extra > 0 ? ["\(extra) unavailable"] : [])
@@ -286,6 +324,14 @@ struct PhoneCompletionButton: View {
                 .disabled(!model.canBeginEditing)
                 .accessibilityLabel((isHistory ? "Reopen " : "Complete ") + task.title)
                 .accessibilityIdentifier((isSubtaskRow ? "subtaskToggle-" : "lifecycleToggle-") + task.id.uuidString)
+                .accessibilityHint(task.canEditManualProgress ? "Touch and hold to set progress" : "")
+                .accessibilityActions {
+                    if task.canEditManualProgress, let revision {
+                        Button("Set Progress") {
+                            progressRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .progress)
+                        }
+                    }
+                }
                 .contextMenu {
                     if task.canEditManualProgress, let revision {
                         Button("Set Progress", systemImage: "chart.bar") {
@@ -558,7 +604,8 @@ struct PhoneTaskMoveSheet: View {
             PhoneTaskMoveChoices(model: model, request: request) { dismiss() }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { dismiss() }.disabled(model.isBusy)
+                        Button { dismiss() } label: { Image(systemName: "xmark") }
+                            .accessibilityLabel("Close").accessibilityIdentifier("taskMoveClose").disabled(model.isBusy)
                     }
                 }
         }.interactiveDismissDisabled(model.isBusy)
@@ -569,30 +616,104 @@ private struct PhoneTaskMoveChoices: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let request: PhoneTaskMoveRequest
     let moved: () -> Void
+    @State private var search = ""
+    @State private var expanded = Set<UUID>()
+    @State private var addList: ListEditorRequest?
+    @State private var createdList = false
+
+    private func matches(_ value: String) -> Bool {
+        search.isEmpty || value.localizedStandardContains(search)
+    }
 
     var body: some View {
         List {
-            moveTarget("Inbox", id: nil)
-            ForEach((model.document?.snapshot.workspace.lists ?? []).filter { !$0.isArchived }) { list in
-                moveTarget(list.name, id: list.id)
+            Section {
+                HStack {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                    TextField("Search", text: $search)
+                        .autocorrectionDisabled()
+                        .accessibilityIdentifier("taskMoveSearch")
+                    if !search.isEmpty {
+                        Button { search = "" } label: { Image(systemName: "xmark.circle.fill") }
+                            .buttonStyle(.plain).foregroundStyle(.secondary)
+                            .accessibilityLabel("Clear search")
+                            .accessibilityIdentifier("taskMoveClearSearch")
+                    }
+                }
+            }
+            if let data = model.document?.snapshot.workspace {
+                let active = data.lists.filter { !$0.isArchived }
+                let folderIDs = Set(data.folders.map(\.id))
+                if matches("Inbox") { moveTarget("Inbox", id: nil, symbol: "tray") }
+                ForEach(active.filter { $0.folderID == nil && !$0.belowFolders && matches($0.name) }) { list in listRow(list) }
+                ForEach(data.folders) { folder in
+                    let children = active.filter { $0.folderID == folder.id && (matches($0.name) || matches(folder.name)) }
+                    if !children.isEmpty {
+                        DisclosureGroup(isExpanded: Binding(get: { !search.isEmpty || expanded.contains(folder.id) }, set: { value in
+                            if value { expanded.insert(folder.id) } else { expanded.remove(folder.id) }
+                        })) {
+                            ForEach(children) { list in listRow(list) }
+                        } label: {
+                            Label(folder.name, systemImage: "folder")
+                                .accessibilityIdentifier("taskMoveFolder-" + folder.id.uuidString)
+                        }
+                    }
+                }
+                // Retain orphan-folder lists rather than silently hiding valid destinations.
+                ForEach(active.filter { list in
+                    (list.folderID == nil ? list.belowFolders : !folderIDs.contains(list.folderID!)) && matches(list.name)
+                }) { list in listRow(list) }
+                Section {
+                    Button("Add List", systemImage: "plus") {
+                        guard let document = model.document, document.revision == request.revision else { return }
+                        addList = ListEditorRequest(revision: request.revision, list: TaskList(name: "", color: "#4E64D8"), folder: nil, creating: true)
+                    }.disabled(!model.canBeginEditing || model.document?.revision != request.revision)
+                        .accessibilityIdentifier("taskMoveAddList")
+                } footer: {
+                    Text("Creating a list closes this chooser without moving the task. Reopen Move to to choose the new list.")
+                }
             }
             PhoneLifecycleFeedback(model: model)
-        }.navigationTitle("Move to List")
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .navigationTitle("Move to")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $addList, onDismiss: {
+            if createdList { moved() }
+        }) { editor in
+            PhoneListEditor(model: model, request: editor) { createdList = true }
+        }
     }
 
-    private func moveTarget(_ title: String, id: UUID?) -> some View {
-        Button(title) {
+    private func listRow(_ list: TaskList) -> some View {
+        moveTarget(list.name, id: list.id, symbol: list.symbol ?? (list.kind == .note ? "doc.text" : "list.bullet"))
+    }
+
+    private func moveTarget(_ title: String, id: UUID?, symbol: String) -> some View {
+        let selected = request.task.listID == id
+        return Button {
             Task {
                 if await model.performLifecycle(.move(id), taskID: request.task.id, expected: request.revision) { moved() }
             }
-        }.disabled(!model.canBeginEditing || request.task.listID == id)
+        } label: {
+            HStack {
+                Label { Text(title) } icon: { PhoneListIcon(symbol: symbol) }
+                Spacer()
+                if selected { Image(systemName: "checkmark").accessibilityHidden(true) }
+            }
+        }.disabled(!model.canBeginEditing || selected)
+            .accessibilityValue(selected ? "Current list" : "")
+            .accessibilityIdentifier("taskMoveTarget-" + (id?.uuidString ?? "inbox"))
     }
 }
 
-private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
-    case complete, reopen, wontDo, pin, move, duplicate, convert, trash, saveTemplate, applyTemplate
+/// D02 actions use the shared layout policy so tests exercise the production
+/// strip/rows/customization rules. Raw values and the stored encoding live in
+/// the shared type; only presentation titles stay here.
+private typealias PhoneTaskAction = DetailAction
+private typealias PhoneTaskActionLayout = DetailActionLayout
 
-    var id: Self { self }
+extension DetailAction {
     var title: String {
         switch self {
         case .complete: "Complete"
@@ -605,21 +726,10 @@ private enum PhoneTaskAction: String, Codable, CaseIterable, Identifiable {
         case .trash: "Move to Trash"
         case .saveTemplate: "Save as Template"
         case .applyTemplate: "Apply Template"
+        case .addSubtask: "Add Subtask"
+        case .linkParent: "Link Parent Task"
+        case .tags: "Tags"
         }
-    }
-}
-
-private struct PhoneTaskActionLayout: Codable, Equatable {
-    var pinned = PhoneTaskAction.allCases
-    var more: [PhoneTaskAction] = []
-
-    static func decode(_ data: Data) -> Self? {
-        if data.isEmpty { return Self() }
-        guard var layout = try? JSONDecoder().decode(Self.self, from: data) else { return nil }
-        var seen = Set<PhoneTaskAction>()
-        layout.pinned = layout.pinned.filter { seen.insert($0).inserted }
-        layout.more = (layout.more + PhoneTaskAction.allCases).filter { seen.insert($0).inserted }
-        return layout
     }
 }
 
@@ -630,6 +740,9 @@ private struct PhoneTaskActions: View {
     @AppStorage private var layoutData: Data
     @Environment(\.dismiss) private var dismiss
     @State private var purge: PurgeRequest?
+    @State private var hierarchyRequest: PhoneTaskHierarchyRequest?
+    @State private var tagsRequest: PhoneTaskMetadataRequest?
+    @State private var submitting = false
 
     init(model: PhoneWorkspaceModel, taskID: UUID, openDuplicate: @escaping (UUID) -> Void) {
         self.model = model
@@ -653,15 +766,25 @@ private struct PhoneTaskActions: View {
                 if let document = model.document,
                    let task = document.snapshot.workspace.tasks.first(where: { $0.id == taskID }) {
                     let layout = PhoneTaskActionLayout.decode(layoutData) ?? .init()
+                    // The strip renders only for untouched or default layouts;
+                    // saved custom layouts keep their exact rows with no strip
+                    // and no forced migration, so a moved Pin/Won't Do/Delete
+                    // row never duplicates or disappears.
+                    let showingStrip = task.deletedAt == nil && PhoneTaskActionLayout.showsStrip(for: layoutData)
+                    if showingStrip {
+                        Section {
+                            actionTiles(task: task, document: document)
+                        }
+                    }
                     Section(task.title) {
-                        ForEach(layout.pinned) { row($0, task: task, document: document) }
+                        ForEach(layout.pinnedRows(showingStrip: showingStrip)) { row($0, task: task, document: document) }
                         action("Restore", .restore, task: task, document: document)
                         if TaskLifecycle.refusal(for: .purge, task: task, lists: document.snapshot.workspace.lists) == nil {
                             Button("Delete Forever", role: .destructive) {
                                 purge = PurgeRequest(id: task.id, title: task.title, revision: document.revision)
                             }
                         }
-                    }.disabled(!model.canBeginEditing)
+                    }.disabled(!model.canBeginEditing || submitting)
                     if task.deletedAt == nil {
                         Section {
                             NavigationLink("More") { moreActions(task: task, document: document) }
@@ -675,9 +798,15 @@ private struct PhoneTaskActions: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }.disabled(model.isBusy)
+                    Button("Done") { dismiss() }.disabled(model.isBusy || submitting)
                         .accessibilityIdentifier("taskActionsDone")
                 }
+            }
+            .sheet(item: $hierarchyRequest) { request in
+                PhoneTaskHierarchySheet(model: model, request: request)
+            }
+            .sheet(item: $tagsRequest) { request in
+                PhoneTaskMetadataSheet(model: model, request: request)
             }
             .alert(item: $purge) { request in
                 Alert(title: Text("Delete Forever?"),
@@ -688,6 +817,37 @@ private struct PhoneTaskActions: View {
             }
         }
         .interactiveDismissDisabled(model.isBusy)
+    }
+
+    /// D02 icon strip: supported lifecycle tiles only. Share and other external
+    /// routes are deferred and intentionally have no placeholder here.
+    private func actionTiles(task: TaskItem, document: WorkspaceDocument) -> some View {
+        HStack(spacing: 12) {
+            tile(task.isPinned ? "Unpin" : "Pin", systemImage: task.isPinned ? "pin.fill" : "pin",
+                 tint: .yellow, identifier: "taskActionTile-pin",
+                 command: .setPinned(!task.isPinned), task: task, document: document)
+            tile("Won't Do", systemImage: "moon", tint: .blue, identifier: "taskActionTile-wontDo",
+                 command: .wontDo, task: task, document: document)
+            tile("Move to Trash", systemImage: "trash", tint: .red, identifier: "taskActionTile-trash",
+                 role: .destructive, command: .trash, task: task, document: document)
+        }
+        .buttonStyle(.plain)
+        .disabled(!model.canBeginEditing || submitting || model.isBusy)
+    }
+
+    private func tile(_ title: String, systemImage: String, tint: Color, identifier: String,
+                      role: ButtonRole? = nil, command: TaskLifecycleCommand,
+                      task: TaskItem, document: WorkspaceDocument) -> some View {
+        Group {
+            if TaskLifecycle.refusal(for: command, task: task, lists: document.snapshot.workspace.lists) == nil {
+                Button(title, systemImage: systemImage, role: role) { run(command, revision: document.revision) }
+                    .accessibilityIdentifier(identifier)
+                    .font(.subheadline)
+                    .foregroundStyle(tint)
+                    .frame(maxWidth: .infinity, minHeight: 60)
+                    .contentShape(Rectangle())
+            }
+        }
     }
 
     private func moreActions(task: TaskItem, document: WorkspaceDocument) -> some View {
@@ -728,6 +888,22 @@ private struct PhoneTaskActions: View {
             let kind: TaskKind = task.kind == .task ? .note : .task
             action(kind == .note ? "Convert to Note" : "Convert to Task", .setKind(kind), task: task, document: document)
         case .trash: action(item.title, .trash, role: .destructive, task: task, document: document)
+        case .addSubtask:
+            if TaskLifecycle.refusal(for: .addSubtask(id: task.id, title: task.title),
+                                     task: task, lists: lists) == nil {
+                Button(item.title) { openHierarchy(.child, task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-addSubtask")
+            }
+        case .linkParent:
+            if TaskLifecycle.refusal(for: .setParent(nil), task: task, lists: lists) == nil {
+                Button(item.title) { openHierarchy(.parent, task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-linkParent")
+            }
+        case .tags:
+            if task.deletedAt == nil, !SmartListEligibility.isArchived(task, lists: lists) {
+                Button(item.title) { openTags(task: task, revision: document.revision) }
+                    .accessibilityIdentifier("taskActionRow-tags")
+            }
         case .saveTemplate:
             if task.deletedAt == nil {
                 NavigationLink(item.title) {
@@ -752,12 +928,29 @@ private struct PhoneTaskActions: View {
     }
 
     private func run(_ command: TaskLifecycleCommand, revision: WorkspaceRevision) {
+        // Guard against accidental duplicate writes from repeated taps: the
+        // repository CAS refuses a retried revision, but a second Duplicate
+        // tap would mint a fresh copy ID, so only one command may be in flight.
+        guard !submitting, !model.isBusy else { return }
+        submitting = true
         Task {
-            if await model.performLifecycle(command, taskID: taskID, expected: revision) {
+            let finished = await model.performLifecycle(command, taskID: taskID, expected: revision)
+            submitting = false
+            if finished {
                 if case .duplicate(let copyID) = command { openDuplicate(copyID) }
                 dismiss()
             }
         }
+    }
+
+    private func openHierarchy(_ kind: PhoneTaskHierarchyRequest.Kind, task: TaskItem, revision: WorkspaceRevision) {
+        guard !submitting, !model.isBusy else { return }
+        hierarchyRequest = PhoneTaskHierarchyRequest(task: task, revision: revision, kind: kind)
+    }
+
+    private func openTags(task: TaskItem, revision: WorkspaceRevision) {
+        guard !submitting, !model.isBusy else { return }
+        tagsRequest = PhoneTaskMetadataRequest(task: task, revision: revision, kind: .tags)
     }
 }
 
@@ -842,9 +1035,51 @@ private struct PhoneTaskActionLayoutEditor: View {
     private func save() {
         guard data == originalData else { showSaveError = true; return }
         if draft != PhoneTaskActionLayout.decode(originalData) {
-            guard let encoded = try? JSONEncoder().encode(draft) else { showSaveError = true; return }
-            data = draft == .init() ? Data() : encoded
+            data = draft.encoded()
         }
         dismiss()
+    }
+}
+
+
+/// Detail-only D05 presentation; other metadata routes keep their existing sheets.
+private struct PhoneDetailPriorityPopover: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var model: PhoneWorkspaceModel
+    let request: PhoneTaskMetadataRequest
+    @State private var error: String?
+    @State private var submitting = false
+    private let choices: [TaskPriority] = [.high, .medium, .low, .none]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(choices, id: \.self) { priority in
+                Button {
+                    guard !submitting, !model.isBusy else { return }
+                    submitting = true
+                    Task {
+                        error = await model.saveTaskMetadata(.priority(priority), taskID: request.task.id, expected: request.revision)
+                        submitting = false
+                        if error == nil { dismiss() }
+                    }
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: priority == .none ? "flag" : "flag.fill")
+                            .foregroundStyle(priority.phoneColor).frame(width: 20)
+                        Text(priority == .none ? "No Priority" : priority.phoneLabel + " Priority")
+                        Spacer(minLength: 12)
+                        if priority == request.task.priority { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }
+                    }.padding(.horizontal, 16).frame(minHeight: 48).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+                    .accessibilityIdentifier("taskPriority-" + priority.rawValue)
+                    .accessibilityAddTraits(priority == request.task.priority ? .isSelected : [])
+                    .disabled(submitting || model.isBusy)
+            }
+            if let error {
+                Text(error).font(.footnote).foregroundStyle(.red).padding()
+                    .accessibilityIdentifier("taskMetadataError")
+            }
+        }.frame(minWidth: 250)
+            .interactiveDismissDisabled(submitting || model.isBusy)
     }
 }

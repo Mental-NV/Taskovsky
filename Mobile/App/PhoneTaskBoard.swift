@@ -197,40 +197,91 @@ struct PhoneTaskBoard: View {
     }
 }
 
+// Mobile-only presentation choices; do not expand the shared Mac grouping menu.
+enum PhoneScopedBoardGrouping: String, CaseIterable {
+    case list, date, createdTime, tag, priority
+    var title: String { self == .createdTime ? "Created Time" : rawValue.capitalized }
+    var supportsMoves: Bool { self == .date || self == .list }
+    static func defaultGrouping(for destination: TaskDestination) -> Self {
+        ScopedBoardProjection.defaultGrouping(for: destination) == .date ? .date : .list
+    }
+}
+
+private struct PhoneScopedBoardProjection {
+    struct Column: Identifiable {
+        enum ID: Hashable { case existing(ScopedBoardColumn.ID), priority(TaskPriority), metadata(TaskMetadataBoardProjection.Column.ID) }
+        let id: ID
+        let title: String
+        let tasks: [TaskItem]
+    }
+    let columns: [Column]
+    private let existing: ScopedBoardProjection?
+
+    init(destination: TaskDestination, grouping: PhoneScopedBoardGrouping, in data: WorkspaceData,
+         now: Date, calendar: Calendar, sort: TaskBoardSortKind?, ascending: Bool) {
+        let unsorted: [Column]
+        if grouping == .priority {
+            existing = nil
+            unsorted = PriorityBoardProjection(destination: destination, in: data, now: now, calendar: calendar)
+                .columns.map { Column(id: .priority($0.id), title: $0.title, tasks: $0.tasks) }
+        } else if grouping == .tag || grouping == .createdTime {
+            existing = nil
+            unsorted = TaskMetadataBoardProjection(destination: destination,
+                grouping: grouping == .tag ? .tag : .createdTime, in: data, now: now, calendar: calendar)
+                .columns.map { Column(id: .metadata($0.id), title: $0.title, tasks: $0.tasks) }
+        } else {
+            let projection = ScopedBoardProjection(destination: destination, grouping: grouping == .date ? .date : .list,
+                                                    in: data, now: now, calendar: calendar)
+            existing = projection
+            unsorted = projection.columns.map { Column(id: .existing($0.id), title: $0.title, tasks: $0.tasks) }
+        }
+        columns = unsorted.map { Column(id: $0.id, title: $0.title,
+            tasks: TaskBoardOrdering.ordered($0.tasks, kind: sort, ascending: ascending, in: data, calendar: calendar)) }
+    }
+
+    func move(_ id: UUID, to target: Column.ID) -> ScopedBoardProjection.Move? {
+        guard case .existing(let column) = target else { return nil }
+        return existing?.move(id, to: column)
+    }
+}
+
 struct PhoneScopedTaskBoard: View {
     @ObservedObject var model: PhoneWorkspaceModel
     let destination: TaskDestination
     let data: WorkspaceData
     let open: (UUID) -> Void
     let schedule: (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool
-    @State private var grouping: ScopedBoardGrouping
-    @State private var selected: ScopedBoardColumn.ID?
-    @State private var targeted: ScopedBoardColumn.ID?
+    @Binding var grouping: PhoneScopedBoardGrouping
+    let sort: TaskBoardSortKind?
+    let ascending: Bool
+    private struct SectionKey: Hashable { let lane: PhoneScopedBoardProjection.Column.ID; let tag: TaskOrganizationGroup.ID }
+    @State private var collapsedTagSections: Set<SectionKey> = []
+    @State private var selected: PhoneScopedBoardProjection.Column.ID?
+    @State private var targeted: PhoneScopedBoardProjection.Column.ID?
     @State private var dragSession = UUID()
     @State private var choosingTask: (id: UUID, revision: WorkspaceRevision)?
 
-    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData,
+    init(model: PhoneWorkspaceModel, destination: TaskDestination, data: WorkspaceData, grouping: Binding<PhoneScopedBoardGrouping>, sort: TaskBoardSortKind?, ascending: Bool,
          open: @escaping (UUID) -> Void, schedule: @escaping (UUID, CalendarScheduleOperation, WorkspaceRevision) -> Bool) {
         self.model = model
         self.destination = destination
         self.data = data
         self.open = open
         self.schedule = schedule
-        _grouping = State(initialValue: ScopedBoardProjection.defaultGrouping(for: destination))
+        _grouping = grouping
+        self.sort = sort
+        self.ascending = ascending
     }
 
-    private func projection(in workspace: WorkspaceData) -> ScopedBoardProjection {
-        ScopedBoardProjection(destination: destination, grouping: grouping, in: workspace,
-                              now: model.now, calendar: model.calendar)
+    private func projection(in workspace: WorkspaceData) -> PhoneScopedBoardProjection {
+        PhoneScopedBoardProjection(destination: destination, grouping: grouping, in: workspace,
+                              now: model.now, calendar: model.calendar, sort: sort, ascending: ascending)
     }
 
     var body: some View {
         let board = projection(in: data)
         let visible = board.columns.contains(where: { $0.id == selected }) ? selected : board.columns.first?.id
         VStack(spacing: 8) {
-            Picker("Group board by", selection: $grouping) {
-                ForEach(ScopedBoardGrouping.allCases, id: \.self) { Text($0.title).tag($0) }
-            }.pickerStyle(.segmented).accessibilityIdentifier("scopedBoardGrouping").padding(.horizontal, 16)
             PhoneScheduleFeedback(model: model, surface: .calendar).padding(.horizontal, 16)
             ScrollViewReader { reader in
                 ScrollView(.horizontal) {
@@ -245,6 +296,10 @@ struct PhoneScopedTaskBoard: View {
                         if let column { reader.scrollTo(column, anchor: .center) }
                     }
             }
+            if board.columns.isEmpty {
+                ContentUnavailableView("No tasks", systemImage: "rectangle.stack")
+                    .accessibilityIdentifier("priorityBoardEmpty")
+            } else {
             TabView(selection: Binding(get: { visible }, set: { selected = $0 })) {
                 ForEach(board.columns) { column in
                     ScrollView {
@@ -252,14 +307,43 @@ struct PhoneScopedTaskBoard: View {
                             if column.tasks.isEmpty {
                                 ContentUnavailableView("No items in " + column.title, systemImage: "rectangle.stack")
                             }
-                            ForEach(column.tasks) { card($0, board: board) }
+                            if sort == .tag {
+                                ForEach(TaskBoardOrdering.tagSections(column.tasks, in: data, ascending: ascending)) { section in
+                                    let key = SectionKey(lane: column.id, tag: section.id)
+                                    Button {
+                                        if collapsedTagSections.contains(key) { collapsedTagSections.remove(key) }
+                                        else { collapsedTagSections.insert(key) }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: collapsedTagSections.contains(key) ? "chevron.right" : "chevron.down")
+                                            Text(section.title)
+                                            Text(section.tasks.count.formatted()).foregroundStyle(.secondary)
+                                            Spacer()
+                                        }.font(.subheadline).frame(minHeight: 44).contentShape(Rectangle())
+                                    }.buttonStyle(.plain)
+                                        .accessibilityLabel(section.title)
+                                        .accessibilityValue("\(section.tasks.count), " + (collapsedTagSections.contains(key) ? "Collapsed" : "Expanded"))
+                                        .accessibilityIdentifier(tagSectionIdentifier(section.id, lane: column.id))
+                                    if !collapsedTagSections.contains(key) {
+                                        ForEach(section.tasks) { card($0, board: board) }
+                                    }
+                                }
+                            } else {
+                                ForEach(column.tasks) { card($0, board: board) }
+                            }
                             Color.clear.frame(height: 90).accessibilityHidden(true)
                         }.padding(.horizontal, 16)
                     }.tag(Optional(column.id))
                 }
             }.tabViewStyle(.page(indexDisplayMode: .never))
+            }
         }
+        .onChange(of: board.columns.flatMap { column in
+            TaskBoardOrdering.tagSections(column.tasks, in: data, ascending: ascending).map { SectionKey(lane: column.id, tag: $0.id) }
+        }) { _, valid in collapsedTagSections.formIntersection(Set(valid)) }
         .onChange(of: grouping) { _, _ in
+            collapsedTagSections.removeAll()
+            choosingTask = nil
             selected = nil
             targeted = nil
             dragSession = UUID()
@@ -278,8 +362,14 @@ struct PhoneScopedTaskBoard: View {
         }
     }
 
-    private func columnTab(_ column: ScopedBoardColumn, index: Int, selected isSelected: Bool) -> some View {
-        Button { selected = column.id } label: {
+    private func tagSectionIdentifier(_ id: TaskOrganizationGroup.ID, lane: PhoneScopedBoardProjection.Column.ID) -> String {
+        let prefix = "boardTagSection-" + String(reflecting: lane) + "-"
+        if case .tag(let tag) = id { return prefix + tag.uuidString }
+        return prefix + "untagged"
+    }
+
+    @ViewBuilder private func columnTab(_ column: PhoneScopedBoardProjection.Column, index: Int, selected isSelected: Bool) -> some View {
+        let tab = Button { selected = column.id } label: {
             VStack(spacing: 3) {
                 Text(column.title).font(.subheadline.weight(.semibold)).lineLimit(1)
                 Text(column.tasks.count.formatted()).font(.caption.monospacedDigit()).foregroundStyle(.secondary)
@@ -290,7 +380,10 @@ struct PhoneScopedTaskBoard: View {
         }.buttonStyle(.plain).accessibilityLabel(column.title).accessibilityValue(column.tasks.count.formatted())
             .accessibilityAddTraits(isSelected ? .isSelected : [])
             .accessibilityIdentifier("scopedBoardColumn-\(index)")
-            .dropDestination(for: PhoneBoardDrag.self) { payloads, _ in
+        if !grouping.supportsMoves {
+            tab
+        } else {
+            tab.dropDestination(for: PhoneBoardDrag.self) { payloads, _ in
                 guard payloads.count == 1, let drag = payloads.first, drag.session == dragSession,
                       let revision = drag.revision else { return false }
                 return move(drag.taskID, to: column.id, expected: revision)
@@ -298,9 +391,10 @@ struct PhoneScopedTaskBoard: View {
                 if hovering && model.canBeginEditing { targeted = column.id }
                 else if targeted == column.id { targeted = nil }
             }
+        }
     }
 
-    private func card(_ task: TaskItem, board: ScopedBoardProjection) -> some View {
+    private func card(_ task: TaskItem, board: PhoneScopedBoardProjection) -> some View {
         let canMove = model.canBeginEditing && board.columns.contains { board.move(task.id, to: $0.id) != nil }
         return HStack(spacing: 0) {
             PhoneCompletionButton(model: model, task: task, lists: data.lists)
@@ -318,7 +412,7 @@ struct PhoneScopedTaskBoard: View {
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
-    private func move(_ taskID: UUID, to target: ScopedBoardColumn.ID, expected: WorkspaceRevision) -> Bool {
+    private func move(_ taskID: UUID, to target: PhoneScopedBoardProjection.Column.ID, expected: WorkspaceRevision) -> Bool {
         guard model.canBeginEditing, let document = model.document, expected == document.revision,
               let operation = projection(in: document.snapshot.workspace).move(taskID, to: target) else { return false }
         switch operation {
@@ -479,16 +573,27 @@ struct PhoneTaskRowOrderDrop: ViewModifier {
 }
 
 private struct PhoneBoardTaskTitle: View {
+    @Environment(\.phoneTaskDetails) private var details
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let task: TaskItem
     let open: (UUID) -> Void
 
     var body: some View {
         Button { open(task.id) } label: {
             VStack(alignment: .leading, spacing: 4) {
-                Text(task.title).font(.body)
-                if let due = task.dueDate {
-                    Text(due.formatted(.dateTime.month(.abbreviated).day())).font(.caption).foregroundStyle(.secondary)
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(task.title).font(.body)
+                        dueCaption
+                    }
+                } else {
+                    HStack(spacing: 8) {
+                        Text(task.title).font(.body).lineLimit(1).truncationMode(.tail)
+                        Spacer(minLength: 0)
+                        dueCaption.fixedSize(horizontal: true, vertical: false)
+                    }
                 }
+                if let details { PhoneTaskDetails(task: task, context: details) }
             }
             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .padding(.trailing, 8).contentShape(Rectangle())
@@ -496,5 +601,125 @@ private struct PhoneBoardTaskTitle: View {
         .buttonStyle(.plain)
         .accessibilityLabel(task.title)
         .accessibilityIdentifier("boardCard-" + task.id.uuidString)
+        .accessibilityValue(details.map { PhoneTaskDetails.summary(task, context: $0) } ?? "")
+    }
+
+    @ViewBuilder private var dueCaption: some View {
+        if let due = task.dueDate {
+            Text(due.formatted(.dateTime.month(.abbreviated).day()))
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct PhoneTaskDetailsContext {
+    let data: WorkspaceData
+    let calendar: Calendar
+}
+private struct PhoneTaskDetailsKey: EnvironmentKey {
+    static let defaultValue: PhoneTaskDetailsContext? = nil
+}
+extension EnvironmentValues {
+    var phoneTaskDetails: PhoneTaskDetailsContext? {
+        get { self[PhoneTaskDetailsKey.self] }
+        set { self[PhoneTaskDetailsKey.self] = newValue }
+    }
+}
+/// Presentation only: stored descriptions and metadata, never changes task state.
+struct PhoneTaskDetails: View {
+    static func summary(_ task: TaskItem, context: PhoneTaskDetailsContext) -> String {
+        var parts = [task.body]
+        if task.dueDate != nil { parts.append(PhoneScheduleRequest.summary(for: task, calendar: context.calendar)) }
+        parts += context.data.tags.filter { task.tagIDs.contains($0.id) }.map { "#" + $0.name }
+        if !task.effectiveReminderDates.isEmpty { parts.append("Reminder") }
+        if task.isRepeating { parts.append(task.repeatLabel(calendar: context.calendar)) }
+        if !task.checklist.isEmpty { parts.append("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)") }
+        if let list = context.data.lists.first(where: { $0.id == task.listID }) { parts.append(list.name) }
+        return parts.filter { !$0.isEmpty }.joined(separator: ", ")
+    }
+    let task: TaskItem
+    let context: PhoneTaskDetailsContext
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !task.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(task.body).lineLimit(2)
+            }
+            if task.dueDate != nil { Text(PhoneScheduleRequest.summary(for: task, calendar: context.calendar)) }
+            let tags = context.data.tags.filter { task.tagIDs.contains($0.id) }
+            if !tags.isEmpty {
+                Text(tags.map { "#" + $0.name }.joined(separator: "  "))
+            }
+            HStack(spacing: 8) {
+                if !task.effectiveReminderDates.isEmpty { Image(systemName: "bell").accessibilityLabel("Reminder") }
+                if task.isRepeating { Label(task.repeatLabel(calendar: context.calendar), systemImage: "repeat") }
+                if !task.checklist.isEmpty {
+                    Label("\(task.checklist.filter(\.isCompleted).count)/\(task.checklist.count)", systemImage: "checklist")
+                }
+                if let list = context.data.lists.first(where: { $0.id == task.listID }) { Text(list.name) }
+            }
+        }.font(.caption).foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("taskDisplayDetails-" + task.id.uuidString)
+    }
+}
+
+
+struct PhoneBoardSortRequest: Identifiable {
+    let id = UUID()
+    let destination: TaskDestination
+}
+
+/// Immediate session choices. The host overlay handles backdrop dismissal; no
+/// invented Done, reset, title or footer. No selection is fabricated for nil.
+struct PhoneBoardSortSheet: View {
+    @Binding var grouping: PhoneScopedBoardGrouping
+    @Binding var sort: TaskBoardSortKind?
+    @Binding var ascending: Bool
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 10), count: 3)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Group by").font(.system(size: 14)).foregroundStyle(.secondary)
+                LazyVGrid(columns: columns, spacing: 0) {
+                    ForEach(PhoneScopedBoardGrouping.allCases, id: \.self) { choice in
+                        pill(choice.title, selected: grouping == choice, id: "boardGroup-" + choice.rawValue) { grouping = choice }
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("Sort by").font(.system(size: 14)).foregroundStyle(.secondary)
+                    Spacer()
+                    Button { ascending.toggle() } label: {
+                        HStack(spacing: 4) {
+                            Text(ascending ? "Ascending" : "Descending")
+                            Image(systemName: ascending ? "arrow.up" : "arrow.down")
+                        }.font(.system(size: 14)).frame(minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("boardSortDirection")
+                        .accessibilityValue(ascending ? "Ascending" : "Descending")
+                }.frame(height: 44)
+                LazyVGrid(columns: columns, spacing: 0) {
+                    ForEach(TaskBoardSortKind.allCases, id: \.self) { choice in
+                        pill(choice.title, selected: sort == choice, id: "boardSort-" + choice.rawValue) { sort = choice }
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+        }.padding(.horizontal, 24).padding(.top, 24)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
+            .accessibilityIdentifier("boardGroupSortSheet")
+    }
+
+    private func pill(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 14)).lineLimit(1).minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity).frame(height: 36)
+                .foregroundStyle(selected ? Color.white : Color.primary)
+                .background(selected ? Color.accentColor : Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 18))
+                .frame(height: 44).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier(id)
+            .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

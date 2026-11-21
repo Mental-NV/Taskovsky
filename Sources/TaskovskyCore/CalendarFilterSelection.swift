@@ -1,7 +1,7 @@
 import Foundation
 
 public enum CalendarFilterMark: Equatable, Sendable { case off, mixed, on }
-public enum CalendarArrangeSelection: Hashable, Sendable { case calendar, inbox, list(UUID) }
+public enum CalendarArrangeSelection: Hashable, Sendable { case calendar, inbox, list(UUID), sources(listIDs: Set<UUID>, inbox: Bool) }
 
 extension TaskCalendarOptions {
     public var isAllSources: Bool { listIDs == nil && includeInbox && tagIDs.isEmpty }

@@ -204,3 +204,115 @@ public struct ScopedBoardProjection: Sendable {
         return columns
     }
 }
+
+/// Read-only priority partition for a scoped board. It intentionally exposes no move operation.
+/// Uses existing Taskovsky priority rank, not an inferred reference-app ordering contract.
+public struct PriorityBoardProjection: Sendable {
+    public struct Column: Identifiable, Sendable {
+        public let id: TaskPriority
+        public let tasks: [TaskItem]
+        public var title: String { id == .none ? "No Priority" : id.rawValue.capitalized + " Priority" }
+    }
+    public let columns: [Column]
+
+    public init(destination: TaskDestination, in data: WorkspaceData, now: Date, calendar: Calendar) {
+        guard ScopedBoardProjection.supports(destination, in: data) else { columns = []; return }
+        let tasks = destination.matchingTasks(in: data, now: now, calendar: calendar)
+            .filter { !SmartListEligibility.isArchived($0, lists: data.lists) }
+        let groups = Dictionary(grouping: tasks, by: \.priority)
+        columns = TaskPriority.allCases.sorted { $0.rank < $1.rank }.compactMap { priority in
+            groups[priority].map { Column(id: priority, tasks: $0) }
+        }
+    }
+}
+
+
+/// Display-only mobile board lanes. These reuse Taskovsky's List grouping policies;
+/// multi-tag duplication and the reference app's creation buckets are not certified.
+public struct TaskMetadataBoardProjection: Sendable {
+    public enum Grouping: Sendable { case createdTime, tag }
+    public struct Column: Identifiable, Sendable {
+        public enum ID: Hashable, Sendable { case createdDay(Date), tag(TaskOrganizationGroup.ID) }
+        public let id: ID
+        public let title: String
+        public let tasks: [TaskItem]
+    }
+    public let columns: [Column]
+
+    public init(destination: TaskDestination, grouping: Grouping, in data: WorkspaceData,
+                now: Date, calendar: Calendar) {
+        guard ScopedBoardProjection.supports(destination, in: data) else { columns = []; return }
+        let tasks = destination.matchingTasks(in: data, now: now, calendar: calendar)
+            .filter { !SmartListEligibility.isArchived($0, lists: data.lists) }
+        switch grouping {
+        case .createdTime:
+            columns = TaskCreationDayGroup.group(tasks, calendar: calendar, sort: nil).map {
+                Column(id: .createdDay($0.day), title: $0.title(calendar: calendar), tasks: $0.tasks)
+            }
+        case .tag:
+            columns = TaskOrganizationGroup.byTag(tasks, in: data).map {
+                Column(id: .tag($0.id), title: $0.title, tasks: $0.tasks)
+            }
+        }
+    }
+
+    /// No pin repartition: retain the board's existing incoming order for equal keys.
+    public static func ordered(_ tasks: [TaskItem], title: TaskTitleSort?) -> [TaskItem] {
+        guard let title else { return tasks }
+        return tasks.enumerated().sorted { lhs, rhs in
+            if title.precedes(lhs.element, rhs.element) { return true }
+            if title.precedes(rhs.element, lhs.element) { return false }
+            return lhs.offset < rhs.offset
+        }.map(\.element)
+    }
+}
+
+
+/// Session presentation policies for mobile Kanban; no task mutation or schema.
+public enum TaskBoardSortKind: String, CaseIterable, Sendable {
+    case date, createdTime, modifiedTime, title, tag, priority
+    public var title: String {
+        switch self {
+        case .date: "Date"
+        case .createdTime: "Created Time"
+        case .modifiedTime: "Modified Time"
+        case .title: "Title"
+        case .tag: "Tag"
+        case .priority: "Priority"
+        }
+    }
+}
+
+public enum TaskBoardOrdering {
+    public static func ordered(_ tasks: [TaskItem], kind: TaskBoardSortKind?, ascending: Bool,
+                               in data: WorkspaceData, calendar: Calendar) -> [TaskItem] {
+        guard let kind, kind != .tag else { return tasks }
+        func precedes(_ a: TaskItem, _ b: TaskItem) -> Bool {
+            switch kind {
+            case .date: (ascending ? TaskMetadataSort.dateAscending : .dateDescending).precedes(a, b, in: data, calendar: calendar)
+            case .createdTime: (ascending ? TaskTimestampSort.createdOldest : .createdNewest).precedes(a, b)
+            case .modifiedTime: (ascending ? TaskTimestampSort.modifiedOldest : .modifiedNewest).precedes(a, b)
+            case .title: (ascending ? TaskTitleSort.ascending : .descending).precedes(a, b)
+            case .priority: ascending ? a.priority.rank < b.priority.rank : a.priority.rank > b.priority.rank
+            case .tag: false
+            }
+        }
+        return tasks.enumerated().sorted {
+            if precedes($0.element, $1.element) { return true }
+            if precedes($1.element, $0.element) { return false }
+            return $0.offset < $1.offset
+        }.map(\.element)
+    }
+
+    /// Real within-lane sections, not a flat tag comparator. Primary known tag
+    /// and unchanged secondary row order are qualified Taskovsky policies.
+    public static func tagSections(_ tasks: [TaskItem], in data: WorkspaceData, ascending: Bool) -> [TaskOrganizationGroup] {
+        TaskOrganizationGroup.byTag(tasks, in: data).enumerated().sorted { a, b in
+            if a.element.id == .untagged { return false }
+            if b.element.id == .untagged { return true }
+            let order = a.element.title.compare(b.element.title, options: [.caseInsensitive, .diacriticInsensitive, .numeric], locale: Locale(identifier: "en_US_POSIX"))
+            if order == .orderedSame { return a.offset < b.offset }
+            return ascending ? order == .orderedAscending : order == .orderedDescending
+        }.map(\.element)
+    }
+}

@@ -156,6 +156,26 @@ final class CalendarFilterSelectionTests: XCTestCase {
         XCTAssertEqual(TaskCalendarProjection.arrangementTasks(data: data, options: options, calendar: calendar, selection: .inbox).map(\.title), ["Inbox tagged"])
     }
 
+    func testArrangeMultipleSourcesUnionEmptyAndTagConstraints() {
+        let f = Fixture()
+        var archived = TaskList(name: "Archived", color: "#333333"); archived.isArchived = true
+        let data = WorkspaceData(tasks: [TaskItem(title: "A plain", listID: f.a.id),
+            TaskItem(title: "A tagged", listID: f.a.id, tagIDs: [f.tag.id]),
+            TaskItem(title: "B tagged", listID: f.b.id, tagIDs: [f.tag.id]),
+            TaskItem(title: "Inbox tagged", tagIDs: [f.tag.id]),
+            TaskItem(title: "Archived", listID: archived.id)], lists: f.data.lists + [archived], tags: f.data.tags)
+        var options = TaskCalendarOptions()
+        let calendar = Calendar(identifier: .gregorian)
+        func titles(_ selection: CalendarArrangeSelection) -> Set<String> {
+            Set(TaskCalendarProjection.arrangementTasks(data: data, options: options, calendar: calendar, selection: selection).map(\.title))
+        }
+        XCTAssertEqual(titles(.sources(listIDs: [f.a.id, archived.id], inbox: true)), ["A plain", "A tagged", "Inbox tagged"])
+        XCTAssertTrue(titles(.sources(listIDs: [], inbox: false)).isEmpty)
+        options.tagIDs = [f.tag.id]
+        XCTAssertEqual(titles(.sources(listIDs: [f.a.id], inbox: true)), ["A tagged", "Inbox tagged"])
+        XCTAssertEqual(titles(.sources(listIDs: [f.a.id, f.b.id], inbox: false)), ["A tagged", "B tagged"])
+    }
+
     @MainActor func testStoreReloadAndViewChangesKeepSelectionAndNeverWriteTaskFile() throws {
         let f = Fixture(), dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

@@ -56,7 +56,7 @@ The extraction must inspect implementations, not infer behavior from type names 
 - [`SearchPane` and `SearchDialog`](../../Sources/Taskovsky/SearchView.swift) compose search scope and criteria around [TaskFilter and TaskSearch](../../Sources/TaskovskyCore/Settings.swift). Highlighting and snippets are presentation; result eligibility should not be independently re-created on iPhone.
 - [`RichBodyController` and the representable coordinator](../../Sources/Taskovsky/RichBodyEditor.swift) own important selection, pending-style, Return, undo, and callback behavior. Core-only helper tests do not by themselves exercise this host wiring.
 
-These are extraction candidates, not a claim that every rule must become its own module. The [existing code review](../code-review-findings-2026-11-08.md) retains those original issues and their fixes, now in merged PR #2. Extraction must preserve the new recurrence, nested-draft, reminder-cloning and native text-policy regressions. This documentation PR does not alter those implementations.
+These are extraction candidates, not a claim that every rule must become its own module. The [existing code review](../archive/early-research/code-review-findings-2026-11-08.md) retains those original issues and their fixes, now in merged PR #2. Extraction must preserve the new recurrence, nested-draft, reminder-cloning and native text-policy regressions. This documentation PR does not alter those implementations.
 
 <a id="arch-002"></a>
 ## ARCH-002 Proposed target and dependency direction

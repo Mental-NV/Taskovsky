@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 import TaskovskyCore
 @testable import Taskovsky
 
@@ -7,7 +8,14 @@ import TaskovskyCore
         let feedback = DesktopNotice(duration: .milliseconds(20))
         feedback.show("Schedule updated")
         XCTAssertEqual(feedback.event?.message, "Schedule updated")
-        try await Task.sleep(for: .milliseconds(100))
+        // The expiry task must first be scheduled on MainActor. A fixed sleep
+        // races that startup under CI load; observe the actual expiry instead.
+        let expired = expectation(description: "Success notice expires automatically")
+        let observation = feedback.$event.dropFirst().filter { $0 == nil }.sink { _ in
+            expired.fulfill()
+        }
+        await fulfillment(of: [expired], timeout: 5)
+        withExtendedLifetime(observation) {}
         XCTAssertNil(feedback.event)
     }
 

@@ -36,7 +36,7 @@ enum PhoneEntityColor {
     }
 }
 
-private struct ListEditorRequest: Identifiable {
+struct ListEditorRequest: Identifiable {
     let id = UUID()
     let revision: WorkspaceRevision
     let list: TaskList?
@@ -157,7 +157,7 @@ struct PhoneListOrganization: View {
     }
 }
 
-private struct PhoneListEditor: View {
+struct PhoneListEditor: View {
     private enum IconChoice: Hashable { case defaultIcon, symbol(String), emoji }
 
     private enum Confirmation: String, Identifiable {
@@ -176,20 +176,23 @@ private struct PhoneListEditor: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var model: PhoneWorkspaceModel
     let request: ListEditorRequest
+    let didSave: () -> Void
     @State private var list: TaskList
     @State private var iconChoice: IconChoice
     @State private var emojiText: String
     @State private var folder: ListFolder
     @State private var placement: ListPlacement
+    @State private var showMore = false
     @State private var composing = false
     @State private var focusRequest: UUID?
     @State private var confirm: Confirmation?
     @State private var error: String?
     @State private var copyID = UUID()
 
-    init(model: PhoneWorkspaceModel, request: ListEditorRequest) {
+    init(model: PhoneWorkspaceModel, request: ListEditorRequest, didSave: @escaping () -> Void = {}) {
         self.model = model
         self.request = request
+        self.didSave = didSave
         let list = request.list ?? TaskList(name: "", color: "#4E64D8")
         let emoji = list.symbol.flatMap { ListIcon.emoji($0) == $0 ? $0 : nil }
         _list = State(initialValue: list)
@@ -253,7 +256,16 @@ private struct PhoneListEditor: View {
                         }
                     }
                 }
-                if isList { listFields }
+                if isList {
+                    if request.creating {
+                        creationFields
+                        Section {
+                            DisclosureGroup(isExpanded: $showMore) { advancedListFields } label: {
+                                Text("More").accessibilityIdentifier("organizationMore")
+                            }
+                        }
+                    } else { listFields }
+                }
                 else { Toggle("Pin folder", isOn: $folder.isPinned).accessibilityIdentifier("organizationPin") }
                 if !request.creating {
                     Section {
@@ -274,7 +286,7 @@ private struct PhoneListEditor: View {
                         .background(.regularMaterial).accessibilityIdentifier("organizationSaveError")
                 }
             }
-            .navigationTitle((request.creating ? "New " : "Edit ") + (isList ? "List" : "Folder"))
+            .navigationTitle(request.creating && isList ? "Add List" : (request.creating ? "New " : "Edit ") + (isList ? "List" : "Folder"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -293,13 +305,17 @@ private struct PhoneListEditor: View {
     }
 
     private var listFields: some View {
-        Section {
+        Section { advancedListFields }
+    }
+
+    @ViewBuilder private var advancedListFields: some View {
             Picker("Type", selection: $list.kind) {
                 Text("Tasks").tag(TaskKind.task)
                 Text("Notes").tag(TaskKind.note)
             }
-            ColorPicker("Color", selection: Binding(get: { list.phoneListColor }, set: { list.color = PhoneEntityColor.encode($0) ?? list.color }),
-                        supportsOpacity: false)
+            if !request.creating {
+                ColorPicker("Color", selection: Binding(get: { list.phoneListColor }, set: { list.color = PhoneEntityColor.encode($0) ?? list.color }), supportsOpacity: false)
+            }
             Picker(selection: $iconChoice) {
                 Text("Default").tag(IconChoice.defaultIcon)
                 ForEach(symbols, id: \.self) { name in
@@ -329,6 +345,61 @@ private struct PhoneListEditor: View {
             if !request.creating {
                 Toggle("Archived", isOn: $list.isArchived).accessibilityIdentifier("organizationArchive")
             }
+    }
+
+    private var creationFields: some View {
+        Group {
+            Section("List Color") {
+                ColorPicker("List Color", selection: Binding(get: { list.phoneListColor }, set: { list.color = PhoneEntityColor.encode($0) ?? list.color }), supportsOpacity: false)
+            }
+            Section("View Type") {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(TaskListViewMode.allCases, id: \.self) { mode in
+                        Button { list.viewMode = mode } label: {
+                            VStack(spacing: 8) {
+                                creationPreview(mode)
+                                    .frame(height: 64).padding(8)
+                                    .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+                                HStack(spacing: 4) {
+                                    Text(mode == .board ? "Kanban" : mode.label).font(.caption)
+                                    if list.viewMode == mode { Image(systemName: "checkmark").font(.caption) }
+                                }
+                            }.frame(maxWidth: .infinity)
+                                .contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                            .accessibilityLabel(mode == .board ? "Kanban" : mode.label)
+                            .accessibilityValue(list.viewMode == mode ? "Selected" : "Not selected")
+                            .accessibilityIdentifier("organizationView-" + mode.rawValue)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func creationPreview(_ mode: TaskListViewMode) -> some View {
+        switch mode {
+        case .list:
+            VStack(spacing: 6) {
+                ForEach(0..<3) { _ in HStack(spacing: 4) {
+                    Circle().stroke(Color.secondary, lineWidth: 1).frame(width: 7, height: 7)
+                    RoundedRectangle(cornerRadius: 2).fill(Color.secondary.opacity(0.35)).frame(height: 5)
+                } }
+            }.accessibilityHidden(true)
+        case .board:
+            HStack(alignment: .top, spacing: 4) {
+                ForEach(0..<3) { column in VStack(spacing: 4) {
+                    ForEach(0..<(column == 1 ? 3 : 2), id: \.self) { _ in
+                        RoundedRectangle(cornerRadius: 3).fill(Color.secondary.opacity(0.35)).frame(height: 16)
+                    }
+                } }
+            }.accessibilityHidden(true)
+        case .timeline:
+            VStack(alignment: .leading, spacing: 7) {
+                ForEach(0..<3) { row in
+                    RoundedRectangle(cornerRadius: 3).fill(Color.secondary.opacity(0.35))
+                        .frame(width: 35, height: 9).padding(.leading, CGFloat(row * 10))
+                }
+            }.frame(maxWidth: .infinity, alignment: .leading).accessibilityHidden(true)
         }
     }
 
@@ -363,7 +434,7 @@ private struct PhoneListEditor: View {
             edited.name = identity.name
             edited.symbol = identity.symbol
             if request.creating || placement != ListPlacement(list) { placement.apply(to: &edited) }
-            submit(.saveList(edited, creating: request.creating))
+            submit(.saveList(edited, creating: request.creating, initialViewMode: list.viewMode))
         } else {
             submit(.saveFolder(folder, creating: request.creating))
         }
@@ -372,7 +443,7 @@ private struct PhoneListEditor: View {
     private func submit(_ command: ListOrganizationCommand) {
         Task {
             error = await model.saveOrganization(command, expected: request.revision)
-            if error == nil { dismiss() }
+            if error == nil { didSave(); dismiss() }
         }
     }
 }

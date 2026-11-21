@@ -150,6 +150,19 @@ public enum TaskSortPolicy {
     public static func canReorder(_ raw: String) -> Bool { isManual(raw) }
 }
 
+/// iPhone title ordering is a Taskovsky contract, not a verified TickTick collation rule.
+/// Equal case/diacritic-insensitive keys retain the incoming stable order.
+public enum TaskTitleSort: String, CaseIterable, Sendable {
+    case ascending = "TitleAscending", descending = "TitleDescending"
+    public func precedes(_ lhs: TaskItem, _ rhs: TaskItem) -> Bool {
+        let locale = Locale(identifier: "en_US_POSIX")
+        let left = lhs.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+        let right = rhs.title.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+        let order = left.compare(right, options: [.numeric], locale: locale)
+        return self == .ascending ? order == .orderedAscending : order == .orderedDescending
+    }
+}
+
 public enum TaskTimestampSort: String, CaseIterable, Sendable {
     // The existing Mac Created preference sorts newest first.
     case createdNewest = "Created"
@@ -191,6 +204,19 @@ public struct TaskCreationDayGroup: Identifiable, Sendable {
         let groups = Dictionary(grouping: tasks) { calendar.startOfDay(for: $0.createdAt) }
         return groups.map { Self(day: $0.key, tasks: $0.value) }
             .sorted { sort == .createdOldest ? $0.day < $1.day : $0.day > $1.day }
+    }
+}
+
+/// Display-only priority buckets retain the incoming (possibly sorted) row order.
+public struct TaskPriorityListGroup: Identifiable, Sendable {
+    public let id: TaskPriority
+    public let tasks: [TaskItem]
+    public var title: String { id == .none ? "No Priority" : id.rawValue.capitalized + " Priority" }
+    public static func group(_ tasks: [TaskItem]) -> [Self] {
+        let grouped = Dictionary(grouping: tasks, by: \.priority)
+        return TaskPriority.allCases.sorted { $0.rank < $1.rank }.compactMap { priority in
+            grouped[priority].map { Self(id: priority, tasks: $0) }
+        }
     }
 }
 
@@ -256,6 +282,103 @@ public struct TaskDueDateGroup: Identifiable, Sendable {
         let order = overduePosition == .top ? [.overdue] + days + [.undated] : days + [.undated, .overdue]
         return order.compactMap { bucket in
             buckets[bucket].map { Self(id: bucket, tasks: $0) }
+        }
+    }
+}
+
+/// Organization grouping is display-only. The caller owns scope, lifecycle and
+/// pinned partitions. Every input row belongs to exactly one bucket.
+public struct TaskOrganizationGroup: Identifiable, Sendable {
+    public enum ID: Hashable, Sendable { case list(UUID), inbox, missingList(UUID), tag(UUID), untagged, ungrouped }
+    public let id: ID
+    public let title: String
+    public let tasks: [TaskItem]
+
+    public static func ungrouped(_ tasks: [TaskItem]) -> [Self] {
+        tasks.isEmpty ? [] : [Self(id: .ungrouped, title: "", tasks: tasks)]
+    }
+
+    public static func byList(_ tasks: [TaskItem], in workspace: WorkspaceData) -> [Self] {
+        var names: [UUID: String] = [:], ids: [UUID] = []
+        for list in workspace.lists where names[list.id] == nil { names[list.id] = list.name; ids.append(list.id) }
+        let buckets = Dictionary(grouping: tasks) { task -> ID in
+            guard let id = task.listID else { return .inbox }
+            return names[id] == nil ? .missingList(id) : .list(id)
+        }
+        let missing = Set(tasks.compactMap(\.listID)).filter { names[$0] == nil }.sorted { $0.uuidString < $1.uuidString }
+        let order: [ID] = [.inbox] + ids.map(ID.list) + missing.map(ID.missingList)
+        return order.compactMap { id in
+            guard let rows = buckets[id] else { return nil }
+            let title: String
+            switch id {
+            case .inbox: title = "Inbox"
+            case .list(let key): title = names[key] ?? "Unavailable List"
+            default: title = "Unavailable List"
+            }
+            return Self(id: id, title: title, tasks: rows)
+        }
+    }
+
+    /// Multi-tag rows use their first known tag in workspace order. Unknown tag
+    /// IDs remain on the task but do not create guessed names or duplicate rows.
+    public static func primaryTag(for task: TaskItem, in workspace: WorkspaceData) -> TaskTag? {
+        let ids = Set(task.tagIDs)
+        return workspace.tags.first { ids.contains($0.id) }
+    }
+
+    public static func byTag(_ tasks: [TaskItem], in workspace: WorkspaceData) -> [Self] {
+        let buckets = Dictionary(grouping: tasks) { task in
+            primaryTag(for: task, in: workspace).map { ID.tag($0.id) } ?? .untagged
+        }
+        var seen = Set<UUID>()
+        var result = workspace.tags.compactMap { tag -> Self? in
+            guard seen.insert(tag.id).inserted, let rows = buckets[.tag(tag.id)] else { return nil }
+            return Self(id: .tag(tag.id), title: tag.name, tasks: rows)
+        }
+        if let rows = buckets[.untagged] { result.append(Self(id: .untagged, title: "No Tags", tasks: rows)) }
+        return result
+    }
+}
+
+/// Explicit Taskovsky semantics; exact TickTick ordering has not been observed.
+/// Date uses the existing civil-day display projection. Missing keys stay last
+/// in either direction, and equal keys retain incoming stable order.
+public enum TaskMetadataSort: String, CaseIterable, Sendable {
+    case dateAscending = "DateAscending", dateDescending = "DateDescending"
+    case tagAscending = "TagAscending", tagDescending = "TagDescending"
+
+    public var title: String {
+        switch self {
+        case .dateAscending: "Date · Ascending"
+        case .dateDescending: "Date · Descending"
+        case .tagAscending: "Tag · Ascending"
+        case .tagDescending: "Tag · Descending"
+        }
+    }
+
+    public func precedes(_ lhs: TaskItem, _ rhs: TaskItem, in workspace: WorkspaceData, calendar: Calendar) -> Bool {
+        switch self {
+        case .dateAscending, .dateDescending:
+            let left = TaskDueDateGroup.displayDue(for: lhs, calendar: calendar)
+            let right = TaskDueDateGroup.displayDue(for: rhs, calendar: calendar)
+            switch (left, right) {
+            case (.some(let a), .some(let b)): return self == .dateAscending ? a < b : a > b
+            case (.some, .none): return true
+            default: return false
+            }
+        case .tagAscending, .tagDescending:
+            let left = TaskOrganizationGroup.primaryTag(for: lhs, in: workspace)
+            let right = TaskOrganizationGroup.primaryTag(for: rhs, in: workspace)
+            switch (left, right) {
+            case (.some(let a), .some(let b)):
+                let locale = Locale(identifier: "en_US_POSIX")
+                let aKey = a.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+                let bKey = b.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+                let result = aKey.compare(bKey, options: [.numeric], locale: locale)
+                return self == .tagAscending ? result == .orderedAscending : result == .orderedDescending
+            case (.some, .none): return true
+            default: return false
+            }
         }
     }
 }
@@ -398,6 +521,12 @@ public struct TaskFilter: Codable, Identifiable, Equatable, Sendable {
         self.customDateFrom = customDateFrom; self.customDateTo = customDateTo
         self.isPinned = isPinned; self.ruleRoot = ruleRoot
     }
+    /// Explicit Normal-filter Tag All action, not normalization on opening.
+    public mutating func clearTagCriteria() { tagIDs = []; tagMode = .any }
+    public var hasUnrestrictedTagCriteria: Bool {
+        tagIDs.isEmpty && (tagMode == .any || tagMode == .all)
+    }
+
     private enum CodingKeys: String, CodingKey { case id, name, listIDs, tagIDs, priority, priorities, dateRule, dateRules, status, keyword, kinds, tagMode, customDateFrom, customDateTo, isPinned, ruleRoot }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
