@@ -5,7 +5,7 @@
 - **Scope:** Mac Calendar task cards only. No iPhone or scheduling/data change.
 - **Starting point:** `ddef08a` (PR62); isolated clean worktree. Reconcile latest main before implementation.
 - **Authority:** The user's standing Tasks/Calendar UI parity request authorizes investigation and bounded improvements. It does not establish a particular TickTick hiding threshold.
-- **Related contract:** [UX-017](../spec/ui-ux.md#ux-017), [workflow](../spec/workflow.md), [reference audit](../calendar-visual-parity-audit-2026-11-08.md).
+- **Related contract:** [UX-017](../spec/ui-ux.md#ux-017), [workflow](../spec/workflow.md), [reference audit](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md).
 
 ## Problem and evidence
 
@@ -81,3 +81,7 @@ The broad current UI contract and parity tracker remain unchanged in this draft 
 ## November 13 integration checkpoint (supersedes current-gate wording above)
 
 Reconciled existing PR65 with main `b054f8c` in isolated checkout, source `45728f9`. Both adaptive available width and merged full-height/Outline rendering are retained; no resize/move geometry changed. Earlier cloud-only/pending records are historical. Current user direction defers Dark parity; light-theme acceptance only, preserving semantic colors. Broad documentation edits are now user-preapproved, so canonical scope is updated narrowly rather than replacing historical records. Independent source review found no actionable defect. Full Mac tests/release and renewed scoped AX native QA are running; actual focus/Option and visual acceptance remain open. The budget is still explicitly approximate, not an observed TickTick point cutoff. Do not merge until the bounded acceptance evidence is reviewed.
+
+## November 21 source refresh
+
+Integrated current main `522cff5` without rewriting the branch. The existing checkbox gate and main’s readability-dependent icon tint both remain in place. The fixed-inset tests above are distinct from actual schedulable timed cards: `min(18, width / 3)` leaves an outer threshold of 51pt compact / 52.5pt normal for the current approximation. The added boundary test exercises this width-dependent inset. These are Taskovsky policy values, not a TickTick measurement. The statistical or visual cutoff is not claimed verified; fresh exact-build and native checks remain separate.

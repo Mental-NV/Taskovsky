@@ -14,6 +14,24 @@ import Testing
         #expect(CalendarCardLayout.showsCompletionCheckbox(cardWidth: 52, trailingInset: 18, compact: true))
     }
 
+    @Test func timedCardBoundariesWithWidthDependentGrip() {
+        // CalendarTimedBlock uses min(18, width / 3) for schedulable entries.
+        // At these widths grip is still growing, unlike the fixed-inset tests.
+        for (compact, boundary) in [(true, 51.0), (false, 52.5)] {
+            let below = boundary - 0.125
+            let above = boundary + 0.125
+            #expect(!CalendarCardLayout.showsCompletionCheckbox(
+                cardWidth: below, trailingInset: min(18, below / 3), compact: compact
+            ))
+            #expect(CalendarCardLayout.showsCompletionCheckbox(
+                cardWidth: boundary, trailingInset: min(18, boundary / 3), compact: compact
+            ))
+            #expect(CalendarCardLayout.showsCompletionCheckbox(
+                cardWidth: above, trailingInset: min(18, above / 3), compact: compact
+            ))
+        }
+    }
+
     @Test func actualGripChangesAvailableSpace() {
         #expect(CalendarCardLayout.showsCompletionCheckbox(cardWidth: 37))
         #expect(!CalendarCardLayout.showsCompletionCheckbox(cardWidth: 37, trailingInset: 37.0 / 3))
