@@ -1421,106 +1421,45 @@ struct RichBodyReader: View {
 struct RichBodyToolbar: View {
     @ObservedObject var controller: RichBodyController
     var disabled: Bool
-    @State private var showLink = false
+    @State private var showWideLink = false
+    @State private var showCompactLink = false
+    @State private var showExpandedLink = false
+    @State private var showAllTools = false
 
     var body: some View {
-        // Horizontal scroll keeps every tool reachable in narrow panes
-        // (drawer, pop-up) instead of clipping trailing controls.
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 2) {
-                toolButton(symbol: "bold", label: "Bold (⌘B)", active: controller.active.bold) {
-                    controller.toggleTrait(.boldFontMask)
+        ViewThatFits(in: .horizontal) {
+            toolStrip(linkPresented: $showWideLink)
+                .fixedSize(horizontal: true, vertical: false)
+                .onDisappear { showWideLink = false }
+            HStack(spacing: 4) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    toolStrip(linkPresented: $showCompactLink).fixedSize(horizontal: true, vertical: false)
                 }
-            toolButton(symbol: "italic", label: "Italic (⌘I)", active: controller.active.italic) {
-                controller.toggleTrait(.italicFontMask)
-            }
-            toolButton(symbol: "underline", label: "Underline (⌘U)", active: controller.active.underline) {
-                controller.toggleUnderline()
-            }
-            toolButton(symbol: "strikethrough", label: "Strikethrough", active: controller.active.strikethrough) {
-                controller.toggleStrikethrough()
-            }
-            Divider().frame(height: 16)
-            Menu {
-                Button("None") { controller.setHeading(nil) }
-                ForEach(1...6, id: \.self) { level in Button("Heading \(level)") { controller.setHeading(level) } }
-            } label: {
-                Text(controller.active.heading.map { "H\($0)" } ?? "H")
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 26, height: 24)
-                    .background(controller.active.heading != nil ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
-                    .foregroundStyle(controller.active.heading != nil ? Color.accentColor : Color.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help("Heading")
-            .accessibilityLabel(controller.active.heading.map { "Heading \($0)" } ?? "Heading")
-            .disabled(disabled)
-            toolButton(symbol: "link", label: controller.active.link ?? "Add Link", active: controller.active.link != nil) {
-                controller.linkDraft = controller.active.link ?? ""
-                showLink = true
-            }
-            .popover(isPresented: $showLink, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Link").font(.headline)
-                    TextField("https://…", text: $controller.linkDraft)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 260)
-                    HStack {
-                        if controller.active.link != nil {
-                            Button("Remove") { controller.removeLink(); showLink = false }
-                        }
-                        Spacer()
-                        Button("Cancel") { showLink = false }.keyboardShortcut(.cancelAction)
-                        Button("Apply") { controller.applyLink(controller.linkDraft); showLink = false }
-                            .keyboardShortcut(.defaultAction)
-                            .disabled(controller.linkDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button { showAllTools.toggle() } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.system(size: 13))
+                        .frame(width: 26, height: 24)
+                }
+                .buttonStyle(.plain)
+                .help("Show all formatting tools")
+                .accessibilityLabel("Show all formatting tools")
+                .popover(isPresented: $showAllTools, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Text Formatting").font(.headline)
+                        HStack(spacing: 2) { leadingTools(linkPresented: $showExpandedLink) }
+                        HStack(spacing: 2) { trailingTools }
                     }
-                }.padding(14).frame(width: 300)
+                    .padding(12)
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+                .onChange(of: showAllTools) { _, isPresented in
+                    if !isPresented { showExpandedLink = false }
+                }
             }
-            toolButton(symbol: "highlighter", label: "Highlight", active: controller.active.highlight) {
-                controller.toggleHighlight()
-            }
-            highlightPalette
-            toolButton(symbol: "chevron.left.forwardslash.chevron.right", label: "Inline Code", active: controller.active.code) {
-                controller.toggleCode()
-            }
-            toolButton(symbol: "curlybraces", label: "Code Block", active: false) { controller.toggleCodeBlock() }
-            Divider().frame(height: 16)
-            toolButton(symbol: "text.quote", label: "Block Quote", active: controller.active.quote) {
-                controller.toggleQuote()
-            }
-            toolButton(symbol: "list.bullet", label: "Bulleted List", active: controller.active.bullet) {
-                controller.toggleList(.bullet)
-            }
-            toolButton(symbol: "list.number", label: "Numbered List", active: controller.active.numbered) {
-                controller.toggleList(.numbered)
-            }
-            Menu {
-                Button("Checklist") { controller.toggleList(.checklist) }
-                Divider()
-                Button("Mark Checked") { controller.setChecklist(true) }
-                Button("Mark Unchecked") { controller.setChecklist(false) }
-            } label: {
-                Image(systemName: "checklist")
-                    .font(.system(size: 13))
-                    .frame(width: 26, height: 24)
-                    .background(controller.active.checklist ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
-                    .foregroundStyle(controller.active.checklist ? Color.accentColor : Color.secondary)
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help(controller.active.checklist ? (controller.active.checklistChecked ? "Checklist (checked)" : "Checklist (unchecked)") : "Checklist")
-            .accessibilityLabel("Checklist")
-            .disabled(disabled)
-            toolButton(symbol: "eraser", label: "Clear Formatting", active: false) {
-                controller.clearFormatting()
-            }
-            toolButton(symbol: "minus", label: "Insert Horizontal Rule", active: false) {
-                controller.insertRule()
-            }
+            .onDisappear {
+                showCompactLink = false
+                showAllTools = false
+                showExpandedLink = false
             }
         }
         .buttonStyle(.plain)
@@ -1528,6 +1467,114 @@ struct RichBodyToolbar: View {
         .opacity(disabled ? 0.5 : 1)
         .padding(.vertical, 2)
         .accessibilityLabel("Text formatting")
+    }
+
+    private func toolStrip(linkPresented: Binding<Bool>) -> some View {
+        HStack(spacing: 2) {
+            leadingTools(linkPresented: linkPresented)
+            trailingTools
+        }
+    }
+
+    @ViewBuilder
+    private func leadingTools(linkPresented: Binding<Bool>) -> some View {
+        toolButton(symbol: "bold", label: "Bold (⌘B)", active: controller.active.bold) {
+            controller.toggleTrait(.boldFontMask)
+        }
+        toolButton(symbol: "italic", label: "Italic (⌘I)", active: controller.active.italic) {
+            controller.toggleTrait(.italicFontMask)
+        }
+        toolButton(symbol: "underline", label: "Underline (⌘U)", active: controller.active.underline) {
+            controller.toggleUnderline()
+        }
+        toolButton(symbol: "strikethrough", label: "Strikethrough", active: controller.active.strikethrough) {
+            controller.toggleStrikethrough()
+        }
+        Divider().frame(height: 16)
+        Menu {
+            Button("None") { controller.setHeading(nil) }
+            ForEach(1...6, id: \.self) { level in Button("Heading \(level)") { controller.setHeading(level) } }
+        } label: {
+            Text(controller.active.heading.map { "H\($0)" } ?? "H")
+                .font(.system(size: 12, weight: .semibold))
+                .frame(width: 26, height: 24)
+                .background(controller.active.heading != nil ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                .foregroundStyle(controller.active.heading != nil ? Color.accentColor : Color.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Heading")
+        .accessibilityLabel(controller.active.heading.map { "Heading \($0)" } ?? "Heading")
+        .disabled(disabled)
+        toolButton(symbol: "link", label: controller.active.link ?? "Add Link", active: controller.active.link != nil) {
+            controller.linkDraft = controller.active.link ?? ""
+            linkPresented.wrappedValue = true
+        }
+        .popover(isPresented: linkPresented, arrowEdge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Link").font(.headline)
+                TextField("https://…", text: $controller.linkDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 260)
+                HStack {
+                    if controller.active.link != nil {
+                        Button("Remove") { controller.removeLink(); linkPresented.wrappedValue = false }
+                    }
+                    Spacer()
+                    Button("Cancel") { linkPresented.wrappedValue = false }.keyboardShortcut(.cancelAction)
+                    Button("Apply") { controller.applyLink(controller.linkDraft); linkPresented.wrappedValue = false }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(controller.linkDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }.padding(14).frame(width: 300)
+        }
+        toolButton(symbol: "highlighter", label: "Highlight", active: controller.active.highlight) {
+            controller.toggleHighlight()
+        }
+        highlightPalette
+    }
+
+    @ViewBuilder
+    private var trailingTools: some View {
+        toolButton(symbol: "chevron.left.forwardslash.chevron.right", label: "Inline Code", active: controller.active.code) {
+            controller.toggleCode()
+        }
+        toolButton(symbol: "curlybraces", label: "Code Block", active: false) { controller.toggleCodeBlock() }
+        Divider().frame(height: 16)
+        toolButton(symbol: "text.quote", label: "Block Quote", active: controller.active.quote) {
+            controller.toggleQuote()
+        }
+        toolButton(symbol: "list.bullet", label: "Bulleted List", active: controller.active.bullet) {
+            controller.toggleList(.bullet)
+        }
+        toolButton(symbol: "list.number", label: "Numbered List", active: controller.active.numbered) {
+            controller.toggleList(.numbered)
+        }
+        Menu {
+            Button("Checklist") { controller.toggleList(.checklist) }
+            Divider()
+            Button("Mark Checked") { controller.setChecklist(true) }
+            Button("Mark Unchecked") { controller.setChecklist(false) }
+        } label: {
+            Image(systemName: "checklist")
+                .font(.system(size: 13))
+                .frame(width: 26, height: 24)
+                .background(controller.active.checklist ? Color.accentColor.opacity(0.16) : Color.clear, in: RoundedRectangle(cornerRadius: 5))
+                .foregroundStyle(controller.active.checklist ? Color.accentColor : Color.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(controller.active.checklist ? (controller.active.checklistChecked ? "Checklist (checked)" : "Checklist (unchecked)") : "Checklist")
+        .accessibilityLabel("Checklist")
+        .disabled(disabled)
+        toolButton(symbol: "eraser", label: "Clear Formatting", active: false) {
+            controller.clearFormatting()
+        }
+        toolButton(symbol: "minus", label: "Insert Horizontal Rule", active: false) {
+            controller.insertRule()
+        }
     }
 
     private func toolButton(symbol: String, label: String, active: Bool, action: @escaping () -> Void) -> some View {
