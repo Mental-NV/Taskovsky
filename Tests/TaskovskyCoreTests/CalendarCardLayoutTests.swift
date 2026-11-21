@@ -74,4 +74,39 @@ import Testing
             #expect(CalendarCardLayout.showsCompletionCheckbox(cardWidth: 240, trailingInset: 18, compact: compact))
         }
     }
+
+    @Test func startResizeGripClearsTheCheckboxAtNarrowAndWideWidths() {
+        let checkboxEnd = CalendarCardLayout.horizontalPadding / 2 + CalendarCardLayout.completionIconWidth
+        for cardWidth in [49.0, 51, 52.5, 55, 124] {
+            let moveWidth = min(18, cardWidth / 3)
+            let grip = CalendarCardLayout.startResizeGrip(
+                cardWidth: cardWidth, trailingInset: moveWidth, height: 9, protectsCompletion: true
+            )
+            #expect(grip.leading > checkboxEnd)
+            #expect(grip.leading + grip.width <= cardWidth - moveWidth)
+            #expect(grip.height == 9)
+        }
+    }
+
+    @Test func startResizeGripKeepsTheCenteredBaselineAndFitsVeryThinLanes() {
+        let wide = CalendarCardLayout.startResizeGrip(
+            cardWidth: 124, trailingInset: 18, height: 9, protectsCompletion: true
+        )
+        #expect(wide.leading == 42)
+        #expect(wide.width == 22)
+
+        let note = CalendarCardLayout.startResizeGrip(
+            cardWidth: 55, trailingInset: 18, height: 9, protectsCompletion: false
+        )
+        #expect(note.leading == 7.5)
+        #expect(note.width == 22)
+        #expect(note.height == 9)
+
+        let thin = CalendarCardLayout.startResizeGrip(
+            cardWidth: 18, trailingInset: 6, height: 7.5, protectsCompletion: true
+        )
+        #expect(thin.leading == 0)
+        #expect(thin.width == 12)
+        #expect(thin.height == 2)
+    }
 }

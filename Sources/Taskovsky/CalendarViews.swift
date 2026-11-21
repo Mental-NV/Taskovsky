@@ -570,9 +570,14 @@ private struct CalendarTimedBlock: View {
                         .padding(.trailing, gripWidth)
                 }
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .topLeading) {
                 if canResizeStart {
-                    startGrip(width: resizeWidth, height: resizeHeight).padding(.trailing, gripWidth)
+                    let grip = CalendarCardLayout.startResizeGrip(
+                        cardWidth: Double(width), trailingInset: Double(gripWidth), height: Double(resizeHeight),
+                        protectsCompletion: entry.canChangeCompletion
+                    )
+                    startGrip(width: CGFloat(grip.width), height: CGFloat(grip.height))
+                        .padding(.leading, CGFloat(grip.leading))
                 }
             }
             .overlay(alignment: .topTrailing) {

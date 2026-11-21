@@ -7,6 +7,22 @@ public enum CalendarCardLayout {
     public static let completionIconWidth: Double = 10
     public static let iconSpacing: Double = 5
 
+    public static func startResizeGrip(
+        cardWidth: Double, trailingInset: Double, height: Double, protectsCompletion: Bool
+    ) -> (leading: Double, width: Double, height: Double) {
+        let bodyWidth = cardWidth - trailingInset
+        let leadingInset = protectsCompletion ? horizontalPadding / 2 + completionIconWidth + 2 : 0
+        let widthBesideCheckbox = bodyWidth - leadingInset
+        // Very thin lanes cannot fit both targets side by side. In that case,
+        // keep the resize hit area at the painted top edge, above the icon center.
+        if widthBesideCheckbox < 8 {
+            let width = min(22, bodyWidth)
+            return ((bodyWidth - width) / 2, width, min(2, height))
+        }
+        let width = min(22, widthBesideCheckbox)
+        return (max(leadingInset, (bodyWidth - width) / 2), width, height)
+    }
+
     public static func showsCompletionCheckbox(
         cardWidth: Double?, trailingInset: Double = 0, compact: Bool = false,
         iconsEnabled: Bool = true, forceReveal: Bool = false
