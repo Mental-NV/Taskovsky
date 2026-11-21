@@ -1,6 +1,6 @@
 # CAL-VIS-001 — Calendar visual alignment
 
-Status: Implemented locally with bounded verification; uncommitted. The user's 8 November 2026 request to pursue a near-pixel-perfect Calendar match authorizes this bounded visual pass. No publication, merge or deployment is authorized. See the [comparison and remaining gaps](../calendar-visual-parity-audit-2026-11-08.md) and [final verification](../spec/verification.md#calendar-visual-follow-up); no pixel-perfect claim is made.
+Status: Implemented locally with bounded verification; uncommitted. The user's 8 November 2026 request to pursue a near-pixel-perfect Calendar match authorizes this bounded visual pass. No publication, merge or deployment is authorized. See the [comparison and remaining gaps](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md) and [final verification](../spec/verification.md#calendar-visual-follow-up); no pixel-perfect claim is made.
 
 Baseline: `f85e2f6a9c538f36829961961a0749197f29c4e2`. Contracts: BUS-027–030, UX-017 and the Calendar rows of the parity tracker. Preserve scheduling, reminder/recurrence semantics, staged editors, filters, previews and local-only integration exclusions.
 

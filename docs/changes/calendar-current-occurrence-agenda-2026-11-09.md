@@ -16,7 +16,7 @@ The [TickTick recurrence guide](https://help.ticktick.com/articles/7055782206349
 
 Agenda starts with 30 local days. **Show more** appends six local calendar months without shifting the start or changing sources. The footer shows the last visible day. The view accepts up to four extensions per starting window. Today, previous or next period, and leaving Agenda reset the extension. The horizon is view state and writes no task data or preference. An empty Agenda still exposes Show more.
 
-The [installed Mac audit](../calendar-visual-parity-audit-2026-11-08.md) observed a six-month extension. The starting horizon and cap are Taskovsky choices. [TickTick Agenda guide](https://help.ticktick.com/articles/7213444784319365120).
+The [installed Mac audit](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md) observed a six-month extension. The starting horizon and cap are Taskovsky choices. [TickTick Agenda guide](https://help.ticktick.com/articles/7213444784319365120).
 
 ## Mac Calendar mode shortcuts
 

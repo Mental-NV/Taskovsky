@@ -1,5 +1,7 @@
 # PR #2 Calendar review findings
 
+> Historical evidence. Status and results refer to this dated investigation, not the current branch. See the [active specifications](../../README.md).
+
 Review date: 2026-11-08  
 Pull request: [Mental-NV/Taskovsky #2](https://github.com/Mental-NV/Taskovsky/pull/2)  
 Reviewed head: [`79388c42d826859ebda643c6f2400c9fc672e060`](https://github.com/Mental-NV/Taskovsky/commit/79388c42d826859ebda643c6f2400c9fc672e060) (`codex/local-calendar`)  

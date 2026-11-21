@@ -1,5 +1,7 @@
 # Taskovsky code review findings
 
+> Historical evidence. Status and results refer to this dated investigation, not the current branch. See the [active specifications](../../README.md).
+
 Review date: 2026-11-08  
 Repository: [Mental-NV/Taskovsky](https://github.com/Mental-NV/Taskovsky)  
 Reviewed commit: [`18732856fb3b9d2d5b9ca55a621dabbea3aeb761`](https://github.com/Mental-NV/Taskovsky/commit/18732856fb3b9d2d5b9ca55a621dabbea3aeb761)  
@@ -143,8 +145,8 @@ All five findings were open at the time of the static review. Their fixes and va
 **Current status: all five findings addressed.** Final validation passes
 435 tests (401 XCTest + 34 Swift Testing), with no failures, errors, or
 warnings. The release build and local signature verification pass. Logs:
-[tests](../build/verification/swift-test.log),
-[release build](../build/verification/build-app.log). The fixes remain
+test log (`build/verification/swift-test.log`) and
+release build log (`build/verification/build-app.log`), both local and not tracked. The fixes remain
 uncommitted. Live checks and their limits are recorded at the end.
 
 The original static findings above retain their evidence and reproduction

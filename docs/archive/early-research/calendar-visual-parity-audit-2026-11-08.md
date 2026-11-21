@@ -1,6 +1,8 @@
 # Calendar visual comparison — 8 November 2026
 
-The approved [CAL-VIS-001](changes/calendar-visual-parity-2026-11-08.md) follow-up brings the local Calendar closer to TickTick. It does **not** establish pixel-perfect or complete functional parity. Changes are local and uncommitted on `codex/calendar-visual-parity`, based on merged PR #3 at `f85e2f6a9c538f36829961961a0749197f29c4e2`. No external integrations were added.
+> Historical evidence. Status and results refer to this dated investigation, not the current branch. See the [active specifications](../../README.md).
+
+The approved [CAL-VIS-001](../../changes/calendar-visual-parity-2026-11-08.md) follow-up brings the local Calendar closer to TickTick. It does **not** establish pixel-perfect or complete functional parity. Changes are local and uncommitted on `codex/calendar-visual-parity`, based on merged PR #3 at `f85e2f6a9c538f36829961961a0749197f29c4e2`. No external integrations were added.
 
 ## Method and evidence
 
@@ -49,7 +51,7 @@ Controlled native drops also succeeded: an Arrange item reached Monday November 
 - Bounded title/time lines, compact all-day cards, hover/focus creation controls and adjusted Month spacing.
 - Year layout based on viewport proportions, with six-week miniature months and scaled typography.
 
-Scheduling, recurrence, reminders, stored colors and the workspace schema retain their existing policies. See [UX-017](spec/ui-ux.md#ux-017) for source dimensions and [verification](spec/verification.md#calendar-visual-follow-up) for exact build identity/results.
+Scheduling, recurrence, reminders, stored colors and the workspace schema retain their existing policies. See [UX-017](../../spec/ui-ux.md#ux-017) for source dimensions and [verification](../../spec/verification.md#calendar-visual-follow-up) for exact build identity/results.
 
 ## Audit disposition and remaining gaps
 
@@ -65,7 +67,7 @@ Scheduling, recurrence, reminders, stored colors and the workspace schema retain
 | Multi-day bars, recurrence and checklists | Taskovsky still uses per-day fragments, with no all-day resize, series-exception editor or independent checklist scheduling. **Checklist completion UI: unverified in this visual pass.** Checked/unchecked and future-preview rows were rendered, but no checklist completion control was activated in either application. Historical checklist visibility/model results are not a live completion-interaction pass. Reference interaction semantics were not re-established through controlled mutations in this session. Existing core regressions passed; they are not gesture-parity proof. |
 | Time rulers / working hours | Three local Taskovsky rulers rendered at compact/full widths and survived reload. First-displayed-date DST conversion remains the known policy. Reference 07/21 ruler handles were visible, but their behavior and working/visible-hour preference semantics remain unknown. Static weekend controls do not establish runtime availability. |
 | Motion, keyboard, accessibility and themes | Escape dismissal and Calendar date/action controls were exercised; exhaustive keyboard/VoiceOver, focus reveal of hover controls, high contrast and reduced motion remain open. Sidebar frame capture began too late to measure easing/duration. A process-only dark override remained light, so its capture is named `final-release-reload-light-override-ineffective`; it is not dark-mode evidence. No system appearance/accessibility preference was changed. |
-| External modules/integrations | Deliberately excluded under the user's local-only scope; see the [explicit deferrals](parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026). No subscription/account placeholders added. |
+| External modules/integrations | Deliberately excluded under the user's local-only scope; see the [explicit deferrals](../../parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026). No subscription/account placeholders added. |
 
 ## REA and static-evidence limits
 

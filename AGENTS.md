@@ -1,12 +1,12 @@
 # Working on Taskovsky
 
-Read [docs/README.md](docs/README.md) first, then the relevant [business](docs/spec/business.md), [macOS UI](docs/spec/ui-ux.md), [architecture](docs/architecture/shared-engine.md), and [workflow](docs/spec/workflow.md) documents.
+Start at the [parity specs index](docs/README.md) and [workflow](docs/spec/workflow.md). Read the affected business and platform contracts, tracker row and reference evidence, not every historical receipt.
 
 ## Source and specification
 
 - Source code is the authority for the current baseline. Approved change specifications define future deltas. Record disagreements; do not claim a feature exists or a test passed solely because documentation says so.
 - TickTick research under `docs/ticktick-spec/` is reference evidence. Archived documents are historical. Neither authorizes new product scope.
-- Keep business rules separate from platform presentation. The existing core is not yet iOS portable. Follow the documented boundaries before sharing editor or UI code.
+- Keep business rules separate from platform presentation. Use the shared Domain/Workspace boundaries and keep macOS and iPhone presentation separate.
 - Do not silently erase unsupported rich text when introducing a limited editor. See [component contracts](docs/architecture/components.md).
 - Keep known review findings visible until a fix and its evidence are verified. Documentation cleanup must not close a bug or make accidental behavior normative.
 

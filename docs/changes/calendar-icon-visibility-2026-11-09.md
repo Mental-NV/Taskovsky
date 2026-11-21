@@ -4,4 +4,4 @@ Calendar View Options keeps Show Item Icons as the master switch. Show Task Icon
 
 A hidden icon leaves the title, schedule, date and card available. Mac task cards keep their Complete and Reopen context-menu commands while the checkbox is hidden. The phone keeps task detail and task-list actions. Saving a preference changes settings only, and cancelling the phone sheet discards its draft.
 
-The [installed Mac audit](../calendar-visual-parity-audit-2026-11-08.md) observed independent task and note icon controls. The [TickTick release notes](https://help.ticktick.com/articles/7082552170989486080) document the master switch. Taskovsky uses its own existing card symbols. [Verification](../spec/verification.md#calendar-icon-visibility).
+The [installed Mac audit](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md) observed independent task and note icon controls. The [TickTick release notes](https://help.ticktick.com/articles/7082552170989486080) document the master switch. Taskovsky uses its own existing card symbols. [Verification](../spec/verification.md#calendar-icon-visibility).
