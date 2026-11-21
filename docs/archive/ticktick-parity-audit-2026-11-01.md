@@ -73,8 +73,8 @@ Calendar tab, Eisenhower Matrix, Pomodoro, Habit Tracker, countdowns, accounts/s
 - [Search presentation and actions](../../Sources/Taskovsky/SearchView.swift)
 - [Settings layout and icon mappings](../../Sources/Taskovsky/SettingsView.swift)
 - [Task detail and scheduling](../../Sources/Taskovsky/TaskDetail.swift)
-- [Schedule model](../../Sources/TaskovskyCore/Models.swift)
-- [Defaults, filters and built-in templates](../../Sources/TaskovskyCore/Settings.swift)
+- [Schedule model](../../Sources/TaskovskyDomain/Models.swift)
+- [Defaults, filters and built-in templates](../../Sources/TaskovskyDomain/Settings.swift)
 - [Original completion sound generator](../../scripts/make-sound.py)
 
 **Follow-up inspection during implementation**

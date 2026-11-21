@@ -52,6 +52,16 @@ The [iPhone project layout change](../changes/iphone-project-layout.md) was test
 
 Local logs and Simulator result bundles are in `/private/tmp/TaskovskyLayoutEvidence-1121/iphone-mac` and `/private/tmp/TaskovskyLayoutEvidence-1121/iphone-ios`.
 
+## Shared domain source layout
+
+The [shared domain source layout change](../changes/domain-source-layout.md) was tested at `06d24405681f81baf2c189d64afb5458f8d216a5` on November 21, 2026, on the same Mac and iPhone Simulator described above. The subsequent rebase of this commit onto the first PR's verification record changed only this Markdown ledger.
+
+- **SwiftPM ownership matched.** `swift package describe --type json` reported the same sources and dependencies across all nine targets and the same product and platform metadata. The only target path change was `TaskovskyDomain`. All 36 moved Swift files matched their original bytes.
+- **Mac tests and packaging passed.** `swift test --disable-sandbox` passed 541 XCTest and 49 Swift Testing cases. `./scripts/build-app.sh` and strict signature verification passed.
+- **iPhone compile and Simulator tests passed.** The CI script built the app and both test bundles. The packaged fixtures matched the repository bytes. The same 210 contract and 3 native navigation tests passed with zero failures, skips, and runtime warnings. Other native UI tests and physical device runs were outside this check.
+
+Local logs and Simulator result bundles are in `/private/tmp/TaskovskyLayoutEvidence-1121/domain-mac` and `/private/tmp/TaskovskyLayoutEvidence-1121/domain-ios`.
+
 <a id="hosted-macos-ci"></a>
 ## Hosted macOS CI — November 8, 2026
 

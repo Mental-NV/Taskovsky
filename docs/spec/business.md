@@ -14,7 +14,7 @@ This document owns durable Taskovsky behavior and stable `BUS-###` IDs. Inspect 
 
 **Acceptance.** Open an isolated workspace, create and edit a task, then reopen the same workspace and inspect its stored content. This is a persistence scenario, not a sync scenario. Proposed iPhone capability differences must be evaluated against the future iPhone scope rather than recorded as current macOS defects.
 
-**Evidence.** [Package.swift](../../Package.swift); [WorkspaceData](../../Sources/TaskovskyCore/Models.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift).
+**Evidence.** [Package.swift](../../Package.swift); [WorkspaceData](../../Sources/TaskovskyDomain/Models.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift).
 
 <a id="bus-002"></a>
 
@@ -26,7 +26,7 @@ The UI presents notes without the task completion checkbox. List kind supplies a
 
 **Acceptance.** Check a stored quick step without completing its parent; open a linked child's own detail; check a styled paragraph through the body toolbar. Each operation changes its own representation only. Inspect a mixed task/note list without silently converting its records.
 
-**Evidence.** [Models](../../Sources/TaskovskyCore/Models.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [TaskRow](../../Sources/Taskovsky/TaskRow.swift); [EntryAndListTests](../../Tests/TaskovskyCoreTests/EntryAndListTests.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift).
+**Evidence.** [Models](../../Sources/TaskovskyDomain/Models.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [TaskRow](../../Sources/Taskovsky/TaskRow.swift); [EntryAndListTests](../../Tests/TaskovskyCoreTests/EntryAndListTests.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift).
 
 Task progress is an integer percentage. A checklist supplies the floor of the completed fraction as a percentage. A task without checklist items shows its saved manual percentage or 0. Manual progress edits apply only to active editable tasks. Progress does not complete a task or advance recurrence. A successor starts at 0 while the original keeps its recorded value. [Progress rules and storage](../changes/task-progress-2026-11-10.md).
 
@@ -38,7 +38,7 @@ Task progress is an integer percentage. A checklist supplies the floor of the co
 
 Date recognition is a limited English parser: today, tomorrow, day after tomorrow, next week, `in N days`, and weekday names, with supported times before/after the date phrase. A weekday matching today means the following week. `next week` means the next configured calendar-week boundary. Recognized dates can override the contextual date when requested by quick entry. Removal of recognized date text is optional. A rejected trailing clock remains literal: only the successfully recognized date phrase is highlighted/removable. Malformed numeric clock suffixes are not partly consumed; valid leading/trailing clock behavior is retained. Preceding clock matches cannot start inside digit/colon numeric components; malformed preceding clock text stays literal while an independent date may still be recognized. Ordinary punctuation adjacency remains supported. This is not a general clock grammar guarantee. [Preceding clock boundary](../changes/recognition-prefix-clock-boundary-2026-11-12.md). [Recognition correction](../changes/recognition-invalid-clock-text-2026-11-12.md). `#tag` and `#"multi word"` tokens reuse case-insensitive tag names or create a tag; removal from the title is optional. Ignoring a recognition suggestion leaves that entry's date text unparsed.
 
-**Phone follow-up.** [TaskCreation](../../Sources/TaskovskyCore/TaskCreation.swift) supplies both platforms' creation policies, including date parsing, list resolution, templates and reminder/duration defaults. The phone previews contextual/default list and date, accepts explicit Inbox, and only recognizes existing tag IDs. Ignoring a tag candidate keeps its token; no implicit tag creation on phone. Capture is staged with a stable ID and separate recovery until explicit Add. Its known-format repository writes exactly one task; a repeated ID returns the same durable outcome or a conflict, with no extra record. An explicit missing/archived target or a stale revision is refused. See [MOB-CAPTURE-001](../changes/mobile-capture-2026-11-09.md) and [exact verification](verification.md#mobile-local-capture).
+**Phone follow-up.** [TaskCreation](../../Sources/TaskovskyDomain/TaskCreation.swift) supplies both platforms' creation policies, including date parsing, list resolution, templates and reminder/duration defaults. The phone previews contextual/default list and date, accepts explicit Inbox, and only recognizes existing tag IDs. Ignoring a tag candidate keeps its token; no implicit tag creation on phone. Capture is staged with a stable ID and separate recovery until explicit Add. Its known-format repository writes exactly one task; a repeated ID returns the same durable outcome or a conflict, with no extra record. An explicit missing/archived target or a stale revision is refused. See [MOB-CAPTURE-001](../changes/mobile-capture-2026-11-09.md) and [exact verification](verification.md#mobile-local-capture).
 
 **Acceptance.** Create from Inbox with a default list configured and verify the explicit Inbox choice is retained. Try a recognized date, ignore it, and inspect the saved title/date. Create using a quoted tag name twice and verify one tag identity is reused. Test archived defaults and invalid time tokens separately.
 
@@ -72,7 +72,7 @@ Ordinary paste from HTML or RTF imports supported inline styles. Semantic HTML c
 
 **Corrections and limits.** Merged PR #2 fixes paragraph-selection spillover and the empty-document Quote toggle ([DEV-004/005](verification.md#known-deviations)); block expansion respects the exclusive UTF-16 selection end and a second empty-editor Quote toggle returns to plain typing state. [BlockRangeTests](../../Tests/TaskovskyCoreTests/BlockRangeTests.swift) and [QuoteToggleTests](../../Tests/TaskovskyCoreTests/QuoteToggleTests.swift) retain regressions; live Undo/Redo and selection checks remain limited. Attachments/images, tables, source-mode editing and arbitrary foreign rich-text fidelity remain outside this implementation. Return inside a saved list item continues the list, with a new checklist fragment unchecked. Return on a blank item exits the list. [List continuation](../changes/rich-list-continuation-2026-11-10.md). Large list numbers can exceed the fixed gutter. These limits are not a declaration that the entire rich editor is absent.
 
-**Evidence.** [RichText](../../Sources/TaskovskyCore/RichText.swift); [RichTextRender](../../Sources/TaskovskyCore/RichTextRender.swift); [RichBodyEditor](../../Sources/Taskovsky/RichBodyEditor.swift); [ListLayoutManager](../../Sources/TaskovskyCore/ListLayoutManager.swift); [RichRenderTests](../../Tests/TaskovskyCoreTests/RichRenderTests.swift); [RichTextPinTests](../../Tests/TaskovskyCoreTests/RichTextPinTests.swift); [BlockCoherenceTests](../../Tests/TaskovskyCoreTests/BlockCoherenceTests.swift); [ListContinuationTests](../../Tests/TaskovskyCoreTests/ListContinuationTests.swift); [PendingListArmTests](../../Tests/TaskovskyCoreTests/PendingListArmTests.swift).
+**Evidence.** [RichText](../../Sources/TaskovskyDomain/RichText.swift); [RichTextRender](../../Sources/TaskovskyCore/RichTextRender.swift); [RichBodyEditor](../../Sources/Taskovsky/RichBodyEditor.swift); [ListLayoutManager](../../Sources/TaskovskyCore/ListLayoutManager.swift); [RichRenderTests](../../Tests/TaskovskyCoreTests/RichRenderTests.swift); [RichTextPinTests](../../Tests/TaskovskyCoreTests/RichTextPinTests.swift); [BlockCoherenceTests](../../Tests/TaskovskyCoreTests/BlockCoherenceTests.swift); [ListContinuationTests](../../Tests/TaskovskyCoreTests/ListContinuationTests.swift); [PendingListArmTests](../../Tests/TaskovskyCoreTests/PendingListArmTests.swift).
 
 <a id="bus-006"></a>
 
@@ -90,7 +90,7 @@ List rows can [fold linked subtasks](../changes/task-subtree-disclosure-2026-11-
 
 **Acceptance.** Move a parent with a grandchild, then move only the child to a different list; verify list membership and parent links. Reject a cycle without saving it. Filter to a child alone and verify it remains visible. Reject one invalid ID mixed into an otherwise valid move.
 
-**Evidence.** [TaskStore parenting](../../Sources/TaskovskyCore/TaskStore.swift); [Shared list movement](../../Sources/TaskovskyCore/TaskLifecycle.swift); [TaskHierarchy](../../Sources/TaskovskyCore/Organization.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [ReorderTests](../../Tests/TaskovskyCoreTests/ReorderTests.swift).
+**Evidence.** [TaskStore parenting](../../Sources/TaskovskyCore/TaskStore.swift); [Shared list movement](../../Sources/TaskovskyDomain/TaskLifecycle.swift); [TaskHierarchy](../../Sources/TaskovskyDomain/Organization.swift); [TaskHierarchyTests](../../Tests/TaskovskyCoreTests/TaskHierarchyTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [ReorderTests](../../Tests/TaskovskyCoreTests/ReorderTests.swift).
 
 <a id="bus-007"></a>
 
@@ -102,7 +102,7 @@ The phone submits one revision-checked command from a row or detail. It offers c
 
 **Acceptance.** Complete a parent with one open, one completed and one Won't Do child, reload, then reopen it. Only the untouched cascaded child should reopen. Reopen one child before parent Undo and confirm the later parent action does not overwrite it. A child reopen does not itself consume the parent's ledger entry; the later parent action skips the changed stamp.
 
-**Evidence.** [Shared completion and reopening](../../Sources/TaskovskyCore/TaskLifecycle.swift); [DetailState](../../Sources/TaskovskyCore/DetailState.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [DetailStateTests](../../Tests/TaskovskyCoreTests/DetailStateTests.swift).
+**Evidence.** [Shared completion and reopening](../../Sources/TaskovskyDomain/TaskLifecycle.swift); [DetailState](../../Sources/TaskovskyCore/DetailState.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [DetailStateTests](../../Tests/TaskovskyCoreTests/DetailStateTests.swift).
 
 <a id="bus-008"></a>
 
@@ -118,7 +118,7 @@ Undo removes a spawned record only when it can prove that record is unchanged fr
 
 **Reminder preservation.** All-day descendant reminders shift by calendar days without midnight normalization, preserving wall-clock times and relative days in the task zone. [DEV-002](verification.md#known-deviations) is fixed in merged PR #2; [CloneReminderTests](../../Tests/TaskovskyCoreTests/CloneReminderTests.swift) cover multiple times, previous-day reminders, DST and reload.
 
-**Evidence.** [Shared successor and pristine snapshot rules](../../Sources/TaskovskyCore/TaskLifecycle.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
+**Evidence.** [Shared successor and pristine snapshot rules](../../Sources/TaskovskyDomain/TaskLifecycle.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
 
 <a id="bus-009"></a>
 
@@ -128,7 +128,7 @@ Undo removes a spawned record only when it can prove that record is unchanged fr
 
 **Acceptance.** Trash a parent whose child was already trashed, restore the parent after reload, and verify the independently trashed child stays in Trash. Cancel Delete Forever without changes. Exercise purge only in disposable test data and confirm survivors have no dangling parent. Verify toast Undo is consumed once.
 
-**Evidence.** [Shared Trash, restore and purge](../../Sources/TaskovskyCore/TaskLifecycle.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [App actions](../../Sources/Taskovsky/App.swift); [TrashTests](../../Tests/TaskovskyCoreTests/TrashTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
+**Evidence.** [Shared Trash, restore and purge](../../Sources/TaskovskyDomain/TaskLifecycle.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [App actions](../../Sources/Taskovsky/App.swift); [TrashTests](../../Tests/TaskovskyCoreTests/TrashTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift).
 
 <a id="bus-010"></a>
 
@@ -146,7 +146,7 @@ Mac Save as Template, Edit/New and Delete also stage their template-array change
 
 **Acceptance.** Duplicate a nested task and check no copied child points to an original ancestor inside the copied subtree. Instantiate a template after deleting one of its tags; the missing tag must not return. Apply a template to a task with children and verify those links remain. Reopen a previously pinned task and inspect its grouping.
 
-**Evidence.** [TaskStore duplicates/templates/pins](../../Sources/TaskovskyCore/TaskStore.swift); [TaskTemplate](../../Sources/TaskovskyCore/Settings.swift); [TaskDetail.applyTemplate](../../Sources/Taskovsky/TaskDetail.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [RichTextPinTests](../../Tests/TaskovskyCoreTests/RichTextPinTests.swift).
+**Evidence.** [TaskStore duplicates/templates/pins](../../Sources/TaskovskyCore/TaskStore.swift); [TaskTemplate](../../Sources/TaskovskyDomain/Settings.swift); [TaskDetail.applyTemplate](../../Sources/Taskovsky/TaskDetail.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [HierarchyLifecycleTests](../../Tests/TaskovskyCoreTests/HierarchyLifecycleTests.swift); [RichTextPinTests](../../Tests/TaskovskyCoreTests/RichTextPinTests.swift).
 
 ## Scheduling
 
@@ -160,7 +160,7 @@ An optional countdown label derives from the same deadline and current time for 
 
 **Acceptance.** Create/update using mismatched due/end values and verify the valid window wins. Move a timed interval across DST and compare elapsed seconds; move an all-day range and compare calendar-day span. Reject a reversed range without preserving a contradictory window. Verify an absolute template window supplies a due date when instantiated without an explicit one.
 
-**Evidence.** [TaskDurationRange](../../Sources/TaskovskyCore/CustomRecurrence.swift); [TaskStore.coherentSchedule](../../Sources/TaskovskyCore/TaskStore.swift); [DurationTests](../../Tests/TaskovskyCoreTests/DurationTests.swift); [TaskZoneDurationTests](../../Tests/TaskovskyCoreTests/TaskZoneDurationTests.swift).
+**Evidence.** [TaskDurationRange](../../Sources/TaskovskyDomain/CustomRecurrence.swift); [TaskStore.coherentSchedule](../../Sources/TaskovskyCore/TaskStore.swift); [DurationTests](../../Tests/TaskovskyCoreTests/DurationTests.swift); [TaskZoneDurationTests](../../Tests/TaskovskyCoreTests/TaskZoneDurationTests.swift).
 
 <a id="bus-012"></a>
 
@@ -174,7 +174,7 @@ An optional countdown label derives from the same deadline and current time for 
 
 **Nested transaction.** Custom opens a sheet-local recurrence draft. Cancel or dismissal leaves the outer none/simple/custom rule unchanged; Done applies a valid draft and Clear Rule explicitly removes the custom rule. Merged PR #2 fixes [DEV-001](verification.md#known-deviations); [RepeatDraftTests](../../Tests/TaskovskyCoreTests/RepeatDraftTests.swift) and the retained live report cover these distinct paths.
 
-**Evidence.** [ScheduleEditor](../../Sources/Taskovsky/ScheduleEditor.swift); [CustomRecurrenceEditor](../../Sources/Taskovsky/CustomRecurrenceEditor.swift); [ScheduleDraft](../../Sources/TaskovskyCore/ScheduleDraft.swift); [ScheduleDraftTests](../../Tests/TaskovskyCoreTests/ScheduleDraftTests.swift). Draft-unit tests alone do not verify the nested-sheet transaction.
+**Evidence.** [ScheduleEditor](../../Sources/Taskovsky/ScheduleEditor.swift); [CustomRecurrenceEditor](../../Sources/Taskovsky/CustomRecurrenceEditor.swift); [ScheduleDraft](../../Sources/TaskovskyDomain/ScheduleDraft.swift); [ScheduleDraftTests](../../Tests/TaskovskyCoreTests/ScheduleDraftTests.swift). Draft-unit tests alone do not verify the nested-sheet transaction.
 
 <a id="bus-013"></a>
 
@@ -190,7 +190,7 @@ Workday means Monday–Friday without a holiday calendar. Weekend skipping rolls
 
 Mac and iPhone Tasks can skip an eligible open occurrence through the same schedule transaction as Calendar. The saved series moves forward without creating a successor. Undo restores the captured schedule when the task still matches the guarded result. [Mac command](../changes/mac-task-skip-occurrence-2026-11-10.md) · [iPhone editor](../changes/mobile-task-schedule-skip-2026-11-10.md).
 
-**Evidence.** [CustomRecurrence](../../Sources/TaskovskyCore/CustomRecurrence.swift); [TaskStore.nextRecurrenceDate](../../Sources/TaskovskyCore/TaskStore.swift); [CustomRecurrenceTests](../../Tests/TaskovskyCoreTests/CustomRecurrenceTests.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift).
+**Evidence.** [CustomRecurrence](../../Sources/TaskovskyDomain/CustomRecurrence.swift); [TaskStore.nextRecurrenceDate](../../Sources/TaskovskyCore/TaskStore.swift); [CustomRecurrenceTests](../../Tests/TaskovskyCoreTests/CustomRecurrenceTests.swift); [RecurrenceIntegrationTests](../../Tests/TaskovskyCoreTests/RecurrenceIntegrationTests.swift).
 
 <a id="bus-014"></a>
 
@@ -206,7 +206,7 @@ Taskovsky stores these reminders and exposes in-app reminder information. There 
 
 **Calendar edits and cloning.** Calendar moves shift manual reminders with the due date and recalculate automatic reminders through the store. All-day descendant cloning now preserves wall-clock components ([DEV-002 resolution](verification.md#known-deviations)); this does not add OS notification delivery.
 
-**Evidence.** [Models.reminderDates](../../Sources/TaskovskyCore/Models.swift); [TaskStore reminder helpers](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [Organization](../../Sources/TaskovskyCore/Organization.swift); [ReminderTests](../../Tests/TaskovskyCoreTests/ReminderTests.swift); [TaskZoneDurationTests](../../Tests/TaskovskyCoreTests/TaskZoneDurationTests.swift).
+**Evidence.** [Models.reminderDates](../../Sources/TaskovskyDomain/Models.swift); [TaskStore reminder helpers](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail](../../Sources/Taskovsky/TaskDetail.swift); [Organization](../../Sources/TaskovskyDomain/Organization.swift); [ReminderTests](../../Tests/TaskovskyCoreTests/ReminderTests.swift); [TaskZoneDurationTests](../../Tests/TaskovskyCoreTests/TaskZoneDurationTests.swift).
 
 ## Organization and views
 
@@ -224,7 +224,7 @@ The phone manager uses staged list and folder edits. It shares deletion, duplica
 
 **Acceptance.** Create a list in a folder, rename it, move it to the root, then ungroup the folder and reload. Verify task IDs/content remain. Delete a list referenced by a filter and inspect both Inbox records and the unavailable filter selection.
 
-**Evidence.** [Models](../../Sources/TaskovskyCore/Models.swift); [TaskStore list/folder operations](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail entity editor](../../Sources/Taskovsky/TaskDetail.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
+**Evidence.** [Models](../../Sources/TaskovskyDomain/Models.swift); [TaskStore list/folder operations](../../Sources/TaskovskyCore/TaskStore.swift); [TaskDetail entity editor](../../Sources/Taskovsky/TaskDetail.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
 
 <a id="bus-016"></a>
 
@@ -236,7 +236,7 @@ Eligibility is **not universal**. In `Destination.includes`, All/Today/Tomorrow/
 
 **Acceptance.** Compare the same archived/excluded task across All, Completed, tag navigation, quick search and a filter explicitly naming its list. Verify no global “hidden everywhere” assumption. Move out of archive and edit; unarchive without losing stored schedule or organization.
 
-**Evidence.** [SmartListEligibility](../../Sources/TaskovskyCore/Organization.swift); [Destination.includes](../../Sources/Taskovsky/App.swift); [TaskFilter.matches](../../Sources/TaskovskyCore/Settings.swift); [SearchView](../../Sources/Taskovsky/SearchView.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterIntentTests](../../Tests/TaskovskyCoreTests/FilterIntentTests.swift).
+**Evidence.** [SmartListEligibility](../../Sources/TaskovskyDomain/Organization.swift); [Destination.includes](../../Sources/Taskovsky/App.swift); [TaskFilter.matches](../../Sources/TaskovskyDomain/Settings.swift); [SearchView](../../Sources/Taskovsky/SearchView.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterIntentTests](../../Tests/TaskovskyCoreTests/FilterIntentTests.swift).
 
 <a id="bus-017"></a>
 
@@ -250,7 +250,7 @@ Merge rewrites task/template/filter references, deduplicates IDs, follows the de
 
 The phone stages name, color, parent and pin edits. It saves sibling reorder and collapse directly. A merge or delete that changes the default tag journals the paired workspace and settings writes, and recovery stops if either file differs from both recorded revisions.
 
-**Evidence.** [Shared tag rules](../../Sources/TaskovskyCore/TagOrganization.swift); [TaskStore tag operations](../../Sources/TaskovskyCore/TaskStore.swift); [TagHierarchy](../../Sources/TaskovskyCore/Organization.swift); [iPhone verification](verification.md#mobile-tag-management); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
+**Evidence.** [Shared tag rules](../../Sources/TaskovskyDomain/TagOrganization.swift); [TaskStore tag operations](../../Sources/TaskovskyCore/TaskStore.swift); [TagHierarchy](../../Sources/TaskovskyDomain/Organization.swift); [iPhone verification](verification.md#mobile-tag-management); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
 
 <a id="bus-018"></a>
 
@@ -264,7 +264,7 @@ The phone uses the shared visibility and ordering rules for its drawer. It saves
 
 **Acceptance.** Give one task an overdue due date and inspect Today/Next 7 Days versus their saved-filter equivalents. Hide/show/reorder entries, reload and verify hidden slots and group boundaries remain meaningful.
 
-**Evidence.** [Destination](../../Sources/Taskovsky/App.swift); [AppSettings](../../Sources/TaskovskyCore/Settings.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift).
+**Evidence.** [Destination](../../Sources/Taskovsky/App.swift); [AppSettings](../../Sources/TaskovskyDomain/Settings.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift).
 
 <a id="bus-019"></a>
 
@@ -288,7 +288,7 @@ Mac Board widths and idle task input visibility are local presentation preferenc
 
 **Acceptance.** Use a list containing only completed tasks and verify the board still shows them. Complete/drop a recurring task and inspect the shared successor behavior. Switch another list's mode and confirm the first list's preference is unchanged. Attempt a note completion drop and inspect refusal.
 
-**Evidence.** [BoardProjection](../../Sources/TaskovskyCore/BoardProjection.swift); [App board](../../Sources/Taskovsky/App.swift); [BoardProjectionTests](../../Tests/TaskovskyCoreTests/BoardProjectionTests.swift); [BoardIsolationGateTests](../../Tests/TaskovskyCoreTests/BoardIsolationGateTests.swift).
+**Evidence.** [BoardProjection](../../Sources/TaskovskyDomain/BoardProjection.swift); [App board](../../Sources/Taskovsky/App.swift); [BoardProjectionTests](../../Tests/TaskovskyCoreTests/BoardProjectionTests.swift); [BoardIsolationGateTests](../../Tests/TaskovskyCoreTests/BoardIsolationGateTests.swift).
 
 ## Finding and reporting work
 
@@ -302,7 +302,7 @@ Dates include Today/Tomorrow, bounded Next 7, Overdue, No Date, this/next/last w
 
 **Acceptance.** Combine two priorities with two date choices and one list, check field OR/AND behavior, then save/reload. Check custom bounds on both endpoint days and across DST. Delete the selected list/tag and verify the filter does not expand to all items.
 
-**Evidence.** [TaskFilter](../../Sources/TaskovskyCore/Settings.swift); [FilterEditor](../../Sources/Taskovsky/FilterEditor.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
+**Evidence.** [TaskFilter](../../Sources/TaskovskyDomain/Settings.swift); [FilterEditor](../../Sources/Taskovsky/FilterEditor.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
 
 <a id="bus-022"></a>
 
@@ -316,7 +316,7 @@ The iPhone uses the shared filter predicate and a separate rule editor. It stage
 
 **Acceptance.** Save a rule with nested NOT, reload, and compare its meaning. Verify NOT(list A) does not reveal archived list A just because it was mentioned. Test empty groups intentionally. Try collapsing a multi-child group to a single condition and verify constraints are not silently discarded.
 
-**Evidence.** [FilterRule/TaskFilter.evaluate](../../Sources/TaskovskyCore/Settings.swift); [FilterRuleEdit](../../Sources/TaskovskyCore/FilterRuleEdit.swift); [FilterEditor](../../Sources/Taskovsky/FilterEditor.swift); [FilterIntentTests](../../Tests/TaskovskyCoreTests/FilterIntentTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
+**Evidence.** [FilterRule/TaskFilter.evaluate](../../Sources/TaskovskyDomain/Settings.swift); [FilterRuleEdit](../../Sources/TaskovskyDomain/FilterRuleEdit.swift); [FilterEditor](../../Sources/Taskovsky/FilterEditor.swift); [FilterIntentTests](../../Tests/TaskovskyCoreTests/FilterIntentTests.swift); [FilterHardeningTests](../../Tests/TaskovskyCoreTests/FilterHardeningTests.swift).
 
 <a id="bus-023"></a>
 
@@ -330,7 +330,7 @@ Full search retains its query/filter state while opening detail and combines tex
 
 **Acceptance.** Search a quick-step title and a body match; open a result without losing the full-search query. Compare an archived match in quick versus full search. Save a filtered query, reopen the filter, and verify criteria round-trip.
 
-**Evidence.** [TaskSearch](../../Sources/TaskovskyCore/Settings.swift); [SearchView](../../Sources/Taskovsky/SearchView.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift). Native keyboard/navigation paths are not established by matching-unit tests alone.
+**Evidence.** [TaskSearch](../../Sources/TaskovskyDomain/Settings.swift); [SearchView](../../Sources/Taskovsky/SearchView.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [OrgScopeTests](../../Tests/TaskovskyCoreTests/OrgScopeTests.swift). Native keyboard/navigation paths are not established by matching-unit tests alone.
 
 <a id="bus-024"></a>
 
@@ -344,7 +344,7 @@ Named Summary presets save the full report configuration as local device prefere
 
 **Acceptance.** Include a completed undated task by completion date, exclude a note, adjust fields and observe regeneration. Edit the report, save as a note and inspect the saved text and cleared defaults. Explicitly select an archived list and compare the result with All Lists.
 
-**Evidence.** [Shared Summary generator](../../Sources/TaskovskyCore/SummaryReport.swift), [Mac editor](../../Sources/Taskovsky/SummaryView.swift), [iPhone editor](../../Sources/TaskovskyMobile/PhoneSummaryView.swift) and [verification record](verification.md#mobile-summary).
+**Evidence.** [Shared Summary generator](../../Sources/TaskovskyDomain/SummaryReport.swift), [Mac editor](../../Sources/Taskovsky/SummaryView.swift), [iPhone editor](../../Sources/TaskovskyMobile/PhoneSummaryView.swift) and [verification record](verification.md#mobile-summary).
 
 ## Settings, persistence and evolution
 
@@ -358,7 +358,7 @@ The four Settings sections are Smart Lists, Date & Time, More and About. Configu
 
 **Acceptance.** Reload settings and workspace after valid edits. Corrupt an isolated workspace and verify normal save does not replace it; recover only after a backup exists. Repeat with malformed settings and confirm those original bytes remain. Launch with a bare/invalid `--workspace` and verify isolation uses temporary storage rather than the normal workspace.
 
-**Evidence.** [TaskStore storage](../../Sources/TaskovskyCore/TaskStore.swift); [AppMigration](../../Sources/TaskovskyCore/AppMigration.swift); [IsolatedLaunch](../../Sources/TaskovskyCore/IsolatedLaunch.swift); [Models decoding](../../Sources/TaskovskyCore/Models.swift); [SettingsView](../../Sources/Taskovsky/SettingsView.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [BoardIsolationGateTests](../../Tests/TaskovskyCoreTests/BoardIsolationGateTests.swift).
+**Evidence.** [TaskStore storage](../../Sources/TaskovskyCore/TaskStore.swift); [AppMigration](../../Sources/TaskovskyCore/AppMigration.swift); [IsolatedLaunch](../../Sources/TaskovskyCore/IsolatedLaunch.swift); [Models decoding](../../Sources/TaskovskyDomain/Models.swift); [SettingsView](../../Sources/Taskovsky/SettingsView.swift); [TaskStoreTests](../../Tests/TaskovskyCoreTests/TaskStoreTests.swift); [FoldersSmartOrderTests](../../Tests/TaskovskyCoreTests/FoldersSmartOrderTests.swift); [BoardIsolationGateTests](../../Tests/TaskovskyCoreTests/BoardIsolationGateTests.swift).
 
 <a id="bus-026"></a>
 
@@ -381,7 +381,7 @@ A Year day preview projects the selected civil day in the displayed Calendar zon
 
 **Acceptance.** Project an excluded-but-active list, archived list, parent tag with a tagged descendant, multi-day span and midnight-ending timed window. Compare Today in opposite-side time zones for all-day points and ranges. Check each visible range around leap days and configured week starts.
 
-**Evidence.** [TaskCalendar](../../Sources/TaskovskyCore/TaskCalendar.swift); [TaskCalendarProjection](../../Sources/TaskovskyCore/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
+**Evidence.** [TaskCalendar](../../Sources/TaskovskyDomain/TaskCalendar.swift); [TaskCalendarProjection](../../Sources/TaskovskyDomain/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
 
 Calendar List and Tag coloring can use a saved per-source override. Without one, a card follows its list or first existing assigned tag. Tag mode falls back to the Calendar list color when no assigned tag exists. Inbox has its own override and Priority uses fixed colors. Reset removes the override so the current workspace color applies again. Calendar-only preference edits preserve workspace records and schedules. On Mac, applying a named list color updates the shared list record. A saved Calendar override keeps precedence until the user saves **Use List Color**. [Source color contract](../changes/calendar-source-colors-2026-11-10.md) and [shared Mac list colors](../changes/mac-calendar-shared-list-color-2026-11-12.md).
 
@@ -396,7 +396,7 @@ Current Calendar checklist completion updates only the selected embedded item an
 
 **Acceptance.** Compare tomorrow's checklist preview with the actual generated successor; toggle completed visibility without hiding future unchecked items. Confirm projection leaves stored bytes unchanged. Check Tokyo/UTC and Auckland/Los Angeles yesterday/today/tomorrow classification and a bounded long-running series.
 
-**Evidence.** [TaskCalendarProjection](../../Sources/TaskovskyCore/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
+**Evidence.** [TaskCalendarProjection](../../Sources/TaskovskyDomain/TaskCalendarProjection.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift).
 
 <a id="bus-029"></a>
 ### BUS-029 — Atomic Calendar scheduling and guarded Undo
@@ -407,7 +407,7 @@ Schedule changes go through `scheduleOnCalendar`. In the Mac split workspace, dr
 
 **Acceptance.** Unchanged Save on reminded repeating points and 0/5/10-minute ranges must preserve the full schedule and file bytes. Move short and fractional windows, then reload and Undo in separate scenarios. Confirm an unrelated text edit survives Undo and a later schedule/status edit blocks it. Cancel a new task; explicitly convert a point to a range and undo it.
 
-**Evidence.** [CalendarScheduleDraft](../../Sources/TaskovskyCore/CalendarScheduleDraft.swift); [CalendarScheduling](../../Sources/TaskovskyCore/CalendarScheduling.swift); [TaskStore](../../Sources/TaskovskyCore/TaskStore.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift).
+**Evidence.** [CalendarScheduleDraft](../../Sources/TaskovskyDomain/CalendarScheduleDraft.swift); [CalendarScheduling](../../Sources/TaskovskyDomain/CalendarScheduling.swift); [TaskStore](../../Sources/TaskovskyCore/TaskStore.swift); [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift); [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift).
 
 <a id="bus-030"></a>
 ### BUS-030 — Local Calendar boundaries
@@ -426,7 +426,7 @@ On iPhone, Show Details adds time and source list to Agenda and Month. Clocks us
 
 **Acceptance.** Launch Calendar without account or permission prompts; verify records/options remain local. Do not interpret a stored reminder or additional ruler as network integration. Keep the deferred-integration table and the platform proposal explicit when requesting follow-up features.
 
-**Evidence.** [CalendarTimeZones](../../Sources/TaskovskyCore/CalendarTimeZones.swift); [TaskCalendarOptions](../../Sources/TaskovskyCore/TaskCalendar.swift); [CalendarTimeZoneSettings](../../Sources/Taskovsky/CalendarTimeZoneSettings.swift); [CalendarDisplayOptionsTests](../../Tests/TaskovskyCoreTests/CalendarDisplayOptionsTests.swift); [display verification](verification.md#calendar-display-follow-up); [Calendar evidence and limits](../ticktick-spec/calendar.md); [deferred integrations](../parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026); [iPhone proposal](iphone.md).
+**Evidence.** [CalendarTimeZones](../../Sources/TaskovskyDomain/CalendarTimeZones.swift); [TaskCalendarOptions](../../Sources/TaskovskyDomain/TaskCalendar.swift); [CalendarTimeZoneSettings](../../Sources/Taskovsky/CalendarTimeZoneSettings.swift); [CalendarDisplayOptionsTests](../../Tests/TaskovskyCoreTests/CalendarDisplayOptionsTests.swift); [display verification](verification.md#calendar-display-follow-up); [Calendar evidence and limits](../ticktick-spec/calendar.md); [deferred integrations](../parity-implementation-status.md#calendar-integrations-deliberately-deferred--8-november-2026); [iPhone proposal](iphone.md).
 
 
 

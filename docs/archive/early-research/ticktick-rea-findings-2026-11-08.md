@@ -80,11 +80,11 @@ Parent-tag navigation includes descendants, while filter tag selections match th
 
 | Feature | Code |
 | --- | --- |
-| Body model, attributed conversion, formatting commands | [RichText](../../../Sources/TaskovskyCore/RichText.swift), [RichTextRender](../../../Sources/TaskovskyCore/RichTextRender.swift), [native editor](../../../Sources/Taskovsky/RichBodyEditor.swift) |
+| Body model, attributed conversion, formatting commands | [RichText](../../../Sources/TaskovskyDomain/RichText.swift), [RichTextRender](../../../Sources/TaskovskyCore/RichTextRender.swift), [native editor](../../../Sources/Taskovsky/RichBodyEditor.swift) |
 | Visible list/quote markers and body sizing | [ListLayoutManager](../../../Sources/TaskovskyCore/ListLayoutManager.swift), [ListDecorations](../../../Sources/TaskovskyCore/ListDecorations.swift), [RichEditorSizing](../../../Sources/TaskovskyCore/RichEditorSizing.swift) |
-| Task/list/tag lifecycle and persistence | [TaskStore](../../../Sources/TaskovskyCore/TaskStore.swift), [models](../../../Sources/TaskovskyCore/Models.swift), [hierarchy/eligibility](../../../Sources/TaskovskyCore/Organization.swift) |
-| Filters, matching and rule conversion | [matching models](../../../Sources/TaskovskyCore/Settings.swift), [rule transforms](../../../Sources/TaskovskyCore/FilterRuleEdit.swift), [filter editor](../../../Sources/Taskovsky/FilterEditor.swift) |
-| Duration/custom repeat and board projection | [CustomRecurrence](../../../Sources/TaskovskyCore/CustomRecurrence.swift), [ScheduleDraft](../../../Sources/TaskovskyCore/ScheduleDraft.swift), [BoardProjection](../../../Sources/TaskovskyCore/BoardProjection.swift) |
+| Task/list/tag lifecycle and persistence | [TaskStore](../../../Sources/TaskovskyCore/TaskStore.swift), [models](../../../Sources/TaskovskyDomain/Models.swift), [hierarchy/eligibility](../../../Sources/TaskovskyDomain/Organization.swift) |
+| Filters, matching and rule conversion | [matching models](../../../Sources/TaskovskyDomain/Settings.swift), [rule transforms](../../../Sources/TaskovskyDomain/FilterRuleEdit.swift), [filter editor](../../../Sources/Taskovsky/FilterEditor.swift) |
+| Duration/custom repeat and board projection | [CustomRecurrence](../../../Sources/TaskovskyDomain/CustomRecurrence.swift), [ScheduleDraft](../../../Sources/TaskovskyDomain/ScheduleDraft.swift), [BoardProjection](../../../Sources/TaskovskyDomain/BoardProjection.swift) |
 
 ## Tool limitations
 
