@@ -89,3 +89,7 @@ Integrated current main `522cff5` without rewriting the branch. The existing che
 ## November 21 bounded native acceptance
 
 See the [native acceptance receipt](../verification/calendar-narrow-card-2026-11-12.md#bounded-taskovsky-native-acceptance--november-21-2026) for the verified `9830e104` Taskovsky interactions and exact source build results. Narrowing/widening, retained accessibility actions, the all-day note icon, actual move/end-resize and Undo passed in the owned Week fixture. Exact allocation, start resize, Option lifecycle and projected-repeat behavior were not established. The current TickTick observation did not yield a new point cutoff or validate exact parity. Keep this draft open; historical reference and native gate records remain intact.
+
+## November 21 pointer target follow-up
+
+A local follow-up separates the top start-resize target from the completion checkbox in narrow timed cards. The practical defect was a compact checkbox click opening Schedule, including on the checkbox revealed with Option. The [pointer verification receipt](../verification/calendar-narrow-card-2026-11-12.md#compact-checkbox-pointer-target--november-21-2026) records native completion, reopening, drag, Undo and Escape checks on the fixed product source. The width thresholds and TickTick reference limits remain as stated above.

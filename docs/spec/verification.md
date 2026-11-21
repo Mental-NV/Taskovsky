@@ -2309,3 +2309,7 @@ Still unverified: matched reference typography/geometry, dark appearance (deferr
 ## Phone Smart-list visibility popup (T10) — 2026-11-16
 
 [Receipt](../changes/mobile-visibility-popup-2026-11-16.md), source `5dff850`: independent review approved. Full934 XCTest+38 Swift Testing, signed release and iPhone compile passed. Owned Simulator native16/16 passed (14 unified management including5 new popup tests +2 adjacent), zero failures. Logs/xcresult retained in `/private/tmp/TaskovskyVisibilityPopupNative/`; final Today/Tags popup pixels independently inspected, neutral fixtures only; one1170×2532 T10 capture placed with verified hash. Tests cover order/check/backdrop, repeat/selected-row dismissal, staged Cancel/Done/relaunch, Tags/Filters, nested dirty guards and reorder. Large-text fit, VoiceOver traversal/focus/Escape and state changes while open remain unverified. Prior baseline failures remain open; no full-parity claim. Exact-head hosted CI pending. PR158 drawer work is separate and unmerged at this checkpoint.
+
+## Compact Calendar checkbox pointer target — November 21, 2026
+
+The local PR #65 follow-up at `f13f32d` passed 590 automated tests and signed release verification. Guarded native checks confirmed the formerly intercepted checkbox clicks, plus start/end resize, move and Undo in the same fixture. See the [native pointer verification](../verification/calendar-narrow-card-2026-11-12.md#compact-checkbox-pointer-target--november-21-2026) for the measured widths, product build and remaining scope.

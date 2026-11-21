@@ -219,7 +219,7 @@ Mac compiler correction pending. This is not a full Search or exact visual parit
 
 ### Timed Calendar adaptive completion candidate
 
-Existing PR65 is reconciled with current main; [CAL-MAC-NARROW-01](changes/calendar-narrow-card-affordance-2026-11-12.md) adds bounded width-sensitive completion-checkbox hiding while preserving merged fill/outline and gesture geometry. This remains a candidate pending renewed native/CI gates; exact reference cutoff and pixel parity unverified.
+PR #65 adds width-sensitive completion checkboxes on timed cards through [CAL-MAC-NARROW-01](changes/calendar-narrow-card-affordance-2026-11-12.md). The [local native follow-up](verification/calendar-narrow-card-2026-11-12.md#compact-checkbox-pointer-target--november-21-2026) verifies the compact checkbox pointer fix and adjacent resize target. Integration CI, the exact reference cutoff and pixel parity remain open.
 
 ### Full Search week captions
 
