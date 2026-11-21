@@ -1959,6 +1959,12 @@ See the [bounded correction](../changes/calendar-minimum-outline-2026-11-12.md) 
 
 Follow-up for `517816b`: release/signature passed. Native light AX-only sheet checks passed initial focus, mode-label changes, empty/named Return, Escape/Cancel, Save/reopen and sampled preview focus exclusion; tag data unchanged. QA bundle/fixture/preferences restored and Codex stopped. Exact visible dimensions, fallback/clipping and failed-save interaction remain unverified; capture was not retried. This is functional coverage, not screenshot-level parity.
 
+### Mac List editor preview completed native acceptance — November 21
+
+The [completed receipt](../changes/mac-list-editor-preview-2026-11-13.md#november-21-completed-native-acceptance--source-b13b874) records fresh normal and observed compact light-theme New/Edit checks for source `b13b874`, using a separately signed QA-only native guard with identical product UI source. Actual rendered preview/footer fit, long names, List/Board/Timeline transitions, name focus/Tab/Return, Escape/Cancel/reopen, Save/retention and failed-save draft preservation passed. Full AX trees exposed exactly one Timeline-unavailable summary; Tag remained single-column and task/tag values were preserved. Original QA bundle contents/modes and fixture permissions were restored. No capture export or publication occurred.
+
+The compact main-window capture was 754 × 741 pixels; native point scale and exact TickTick geometry were not established. Both panes remained visible, so the form-only fallback was not exercised. Dark, reduced-motion, window-close interruption and comprehensive VoiceOver checks remain outside this receipt. Existing source-head [CI run 44894071634](https://github.com/Mental-NV/Taskovsky/actions/runs/44894071634) passed Mac test/package/signature and iPhone compile stages; final documentation-head CI is separate. No new local production build/test run is claimed for this Markdown-only acceptance update.
+
 ### Mac temporary feedback lifetime — November 13
 
 [Change and audit](../changes/mac-feedback-lifetime-2026-11-13.md). Automated lifetime regression tests and full build results are recorded in the change receipt; native visual timing remains separate. iPhone feedback is a separate workstream. No OS notifications or permission changes involved.

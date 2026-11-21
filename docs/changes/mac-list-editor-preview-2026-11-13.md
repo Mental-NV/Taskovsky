@@ -1,6 +1,6 @@
 # LIST-VIS-001 — Mac List editor live preview
 
-Status: **Published as draft PR #73 after explicit user approval. Automated and bounded native AX checks passed; actual visual fit/fallback and failed-save interaction remain unverified.**
+Status: **Implemented in PR #73. Normal and observed compact light-theme native fit, keyboard, Save/Cancel and failed-save acceptance passed on November 21 using the QA-only guarded variant of source `b13b874`. Exact reference geometry and the form-only fallback remain unverified. The user explicitly authorized committing and merging after these checks; final-head CI is checked separately.**
 
 The user requested macro-area parity planning and implementation on November 13. This is the first P-ORG slice in [UI-MAP-001](ui-macro-parity-plan-2026-11-13.md), after finishing in-flight feedback fixes. The paragraphs below retain the original candidate history. Light theme is the active gate; historical Dark probe results are supplemental, not a requirement.
 
@@ -92,3 +92,39 @@ After explicit user approval, published [PR #73](https://github.com/Mental-NV/Ta
 Integrated current main `390fae67` into the draft without rewriting its history. A fresh TickTick Mac inspection of the normal Edit List dialog confirmed a left form and a large right preview. The view selector used three icon tiles, with blue outline/icon and pale blue fill for selected List and gray idle icons; the third mode was marked Premium. The List preview showed a white rounded panel with grouped checkbox rows and a detail area on a pale-green surround. Switching the existing list to Board was not permitted during inspection; no change was made and no Board or compact reference was verified. No exact geometry or color values were measured.
 
 The Taskovsky candidate keeps its existing selector, the non-interactive preview width and fallback, and all draft and save behavior. Its neutral List illustration now includes grouped sample rows and a detail area within a rounded panel on a subtle green surround. Board remains the existing illustrative local sample, not a newly verified TickTick match. Timeline remains selectable as a real view mode; the preview's visible note and single accessibility summary both state that its preview is unavailable. No premium controls, unrelated fields, or persistent behavior were added. The focused tests cover the single accessibility summary per mode and existing hosted geometry/Save invariants. Hosted sizing and label assertions do not replace native normal/compact layout, accessibility and save checks.
+
+
+## November 21 completed native acceptance — source `b13b874`
+
+This receipt supersedes the earlier blocked-launch and unverified native-fit statements for the cases below. It does not turn the historical attempts into passes or certify whole-dialog TickTick parity.
+
+### Build and isolation
+
+The production candidate is `b13b8743d36b491bb6f4e1b0c0d43d1a02d776a1`, based on main `390fae67`. The native session used the QA-only bundle `Taskovsky QA`, identifier `local.taskovsky.native-qa`, temporarily staged at `/private/tmp/TaskovskyNativeQA/Taskovsky QA.app`. It launched through LaunchServices with the exact workspace/settings pair in `/private/tmp/TaskovskyPR73NativeGuard.GhRuGxAg/fixture/`. Only synthetic fixture data was read or changed.
+
+The QA source copy was compared with `b13b874`: every tracked source and package file matched except `App.swift`; `TaskovskyApp` and all following UI code in that file also matched exactly. The QA-only differences are the native guarded entry, a dedicated preferences suite and a canonical-path check. The initial restricted launch reported `kLSNoExecutableErr`; approved desktop launch access resolved that layer. Foundation then normalized the approved `/private/tmp` paths to `/tmp`, causing the exact-path guard to refuse valid input. The QA-only guard now compares POSIX `realpath`, retaining exact arguments/order, owned private regular files and single-link checks. Missing and mismatched arguments both exited 64. The guard fix and temporary build are not production changes in this PR.
+
+QA environment: macOS 27.0.1 (`26A434`), ARM64, Xcode 27.0 (`27A266a`), Swift 6.4. Release rebuild and strict ad hoc signature verification passed. Native UI was inspected in the light appearance through supported Computer Use, including actual rendered captures and separate AX observations. No images were exported or published. Locale, text size, reduced-motion state and the native point-to-capture scale were not independently recorded. This is a guarded QA build of the candidate UI, not the exact production executable.
+
+### Passed cases and limits
+
+| Case | Observed result |
+| --- | --- |
+| Normal and compact New/Edit List | The form and preview pane were visible together, with the footer inside the sheet. Long preview names used two lines then an ellipsis; the name field retained its full value. No control overlap or footer clipping was observed. |
+| Compact viewport | A settled main-window JPEG capture measured 754 × 741 capture pixels. These are not asserted native points. Native shortcut attempts reported user-changed-app freshness messages before the narrower window was observed; the resize cause is not attributed. Both panes still fit; the form-only fallback was not reached. |
+| List / Board / Timeline | Each selection updated the draft and rendered preview without dismissing New or Edit. List showed grouped neutral rows and a detail area; Board showed its three status columns; Timeline visibly explained that its preview is unavailable. |
+| Accessibility | The full AX tree contained exactly one `Timeline preview is not available.` summary in normal and compact New/Edit, including the compact failed-save state. This is sampled AX coverage, not a live VoiceOver usability pass. |
+| Focus and keyboard | Name was focused on opening. Tab moved to Custom emoji without visiting illustrative rows. Return in the name field created the neutral named list. |
+| Escape / Cancel / reopen | Escape discarded a New draft, reopening blank with List selected. Edit Cancel discarded the changed name and Timeline selection; reopening showed the saved name and List selection. |
+| Save and retention | Save retained the edited long name and Board mode on reopening. Normal-width saved values also survived quitting/relaunching; compact saved values were confirmed in the persisted fixture after quitting. |
+| Failed Create / Edit | Temporarily removed write access only from the owned fixture directory, restoring its original mode immediately after each attempt. Error text, name, selected mode and preview remained visible; footer controls stayed visible. Failed attempts left workspace bytes unchanged. Restored-write Create succeeded; Escape discarded a failed Edit draft; workspace Retry cleared the recovered error. The taller failed Edit state also fit at the observed compact width. |
+| Tag and existing data | The normal and compact Tag form stayed single-column with no List preview and was cancelled without editing. Existing task/tag values remained unchanged after accounting for source-defined serialization defaults and UUID capitalization emitted by workspace Retry. |
+| Restoration | Each QA instance quit. The original stable-path directory was restored with identical file contents and modes; the repaired candidate returned unchanged to staging with a valid strict signature. Fixture directory permissions were restored. Only disposable QA list changes remained in the fixture. |
+
+Private local receipts remain under `/private/tmp/TaskovskyPR73NativeGuard.GhRuGxAg/`: `recovery-b802c03c846e4e57be9de187c2db85f7.json`, `compact-save-retry-57dd7700197f454dbb8cf005ece1538a.json` and `compact-native-a50fe47b86ed482f881101f25b7aa4b6.json`. These local files are supplemental provenance, not repository-hosted screenshots. The repaired QA executable SHA-256 is `fb45e8324894c6a92140ef9005954462e3f3693ea0d1c5c853ac4d19d8195429`.
+
+### Automation and integration boundary
+
+Existing exact-source CI at `b13b874`, [run 44894071634](https://github.com/Mental-NV/Taskovsky/actions/runs/44894071634), passed Mac tests, release packaging/signature and iPhone simulator compilation. The local production-source test/build results recorded in the PR predate this documentation-only acceptance commit; they are not represented as newly rerun here. The final documentation head receives its own applicable CI check before merge.
+
+Exact TickTick geometry, calibrated colors, the form-only fallback, Dark acceptance, reduced-motion behavior, window-close interruption and comprehensive VoiceOver traversal are not certified by this session. No iPhone UI, external integration or unrelated recovery behavior was added. The user requested commit and merge after the completed acceptance checks.
