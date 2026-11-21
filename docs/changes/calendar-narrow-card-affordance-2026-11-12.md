@@ -85,3 +85,7 @@ Reconciled existing PR65 with main `b054f8c` in isolated checkout, source `45728
 ## November 21 source refresh
 
 Integrated current main `522cff5` without rewriting the branch. The existing checkbox gate and main’s readability-dependent icon tint both remain in place. The fixed-inset tests above are distinct from actual schedulable timed cards: `min(18, width / 3)` leaves an outer threshold of 51pt compact / 52.5pt normal for the current approximation. The added boundary test exercises this width-dependent inset. These are Taskovsky policy values, not a TickTick measurement. The statistical or visual cutoff is not claimed verified; fresh exact-build and native checks remain separate.
+
+## November 21 bounded native acceptance
+
+See the [native acceptance receipt](../verification/calendar-narrow-card-2026-11-12.md#bounded-taskovsky-native-acceptance--november-21-2026) for the verified `9830e104` Taskovsky interactions and exact source build results. Narrowing/widening, retained accessibility actions, the all-day note icon, actual move/end-resize and Undo passed in the owned Week fixture. Exact allocation, start resize, Option lifecycle and projected-repeat behavior were not established. The current TickTick observation did not yield a new point cutoff or validate exact parity. Keep this draft open; historical reference and native gate records remain intact.
