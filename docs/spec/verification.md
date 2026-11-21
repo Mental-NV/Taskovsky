@@ -52,6 +52,10 @@ The [iPhone project layout change](../changes/iphone-project-layout.md) was test
 
 Local logs and Simulator result bundles are in `/private/tmp/TaskovskyLayoutEvidence-1121/iphone-mac` and `/private/tmp/TaskovskyLayoutEvidence-1121/iphone-ios`.
 
+## Shared domain source layout
+
+The [shared domain source layout change](../changes/domain-source-layout.md) replaces explicit SwiftPM file lists with standard module directories. Execution evidence is pending.
+
 <a id="hosted-macos-ci"></a>
 ## Hosted macOS CI — November 8, 2026
 

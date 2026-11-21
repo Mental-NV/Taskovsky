@@ -110,7 +110,7 @@ Sidebar/manual drawer transitions use cubic timing `(0.4, 0, 0.2, 1)`, 0.22 seco
 
 ## UX-004 — Rail, navigation, and sidebar organization
 
-Sources: [App.swift](../../Sources/Taskovsky/App.swift), [WorkspaceSymbols.swift](../../Sources/Taskovsky/WorkspaceSymbols.swift), [Settings.swift](../../Sources/TaskovskyCore/Settings.swift).
+Sources: [App.swift](../../Sources/Taskovsky/App.swift), [WorkspaceSymbols.swift](../../Sources/Taskovsky/WorkspaceSymbols.swift), [Settings.swift](../../Sources/TaskovskyDomain/Settings.swift).
 
 The rail contains **Tasks**, **Calendar**, **Search**, and a bottom **Settings** control, not all reference-product modules. Its vertical stack spacing is 26 with top 12 and bottom 18 spacer elements. Each rail button occupies 38 × 38. Active Tasks is a 20 × 20 accent tile, radius 4.5, white bold 14-point `checkmark`. Search uses a 22-point `magnifyingglass`, 34 × 34 background/radius 8, accent fill at 0.12 when active. Settings is `gearshape` 22 with padding 8. Tasks routes to Today and closes the drawer; Search opens quick search.
 
@@ -212,7 +212,7 @@ Tasks → More → Add Multiple Tasks opens a multiline text sheet. Review shows
 
 ## UX-007 — Drag feedback and board mode
 
-Sources: [DragReorder.swift](../../Sources/Taskovsky/DragReorder.swift), [DragPayloads.swift](../../Sources/TaskovskyCore/DragPayloads.swift), [App.swift](../../Sources/Taskovsky/App.swift), [BoardProjection.swift](../../Sources/TaskovskyCore/BoardProjection.swift).
+Sources: [DragReorder.swift](../../Sources/Taskovsky/DragReorder.swift), [DragPayloads.swift](../../Sources/TaskovskyCore/DragPayloads.swift), [App.swift](../../Sources/Taskovsky/App.swift), [BoardProjection.swift](../../Sources/TaskovskyDomain/BoardProjection.swift).
 
 Task row drag starts only from the reserved grip, not the whole title/row. Six 3-point dots form two columns and three rows with three-point spacing in a 14 × 20 frame; opacity reveals them on whole-row hover or selection. The drag preview uses 13-point single-line title, optional count 11 semibold in an accent capsule, padding 10 horizontal/6 vertical, radius 8, black 0.2 shadow/radius 8/y 2, max width 260. The task insertion line is accent/2 high/radius 1, horizontal inset 10, overlaid at a row half's edge without layout changes.
 
@@ -300,7 +300,7 @@ The editor owns document-scoped undo. Switching task IDs, even with identical te
 
 The task Schedule popover’s Reminder row offers At the end for a valid timed duration. Its staged count includes the end instant once. Save applies the preference, and Escape or Cancel leaves the task unchanged. The task row badge, detail, and Reminders destination use the effective reminder time. [Duration end reminder](../changes/task-duration-end-reminders-2026-11-10.md).
 
-Sources: [ScheduleEditor.swift](../../Sources/Taskovsky/ScheduleEditor.swift), [CalendarGrid.swift](../../Sources/Taskovsky/CalendarGrid.swift), [CustomRecurrenceEditor.swift](../../Sources/Taskovsky/CustomRecurrenceEditor.swift), [ScheduleDraft.swift](../../Sources/TaskovskyCore/ScheduleDraft.swift).
+Sources: [ScheduleEditor.swift](../../Sources/Taskovsky/ScheduleEditor.swift), [CalendarGrid.swift](../../Sources/Taskovsky/CalendarGrid.swift), [CustomRecurrenceEditor.swift](../../Sources/Taskovsky/CustomRecurrenceEditor.swift), [ScheduleDraft.swift](../../Sources/TaskovskyDomain/ScheduleDraft.swift).
 
 Schedule popover: width 300, padding 14, VStack spacing 8, native text background. Top shortcut icons evenly share width and height 30: `sun.max` Today, `sun.horizon` Tomorrow, `calendar.badge.clock` Next week, `moon.stars` This evening, `calendar.badge.minus` No date. Next week chooses the next configured week boundary, not simply seven elapsed days; This evening chooses 18:00. No date stages removal; Clear commits removal and dismisses immediately.
 
@@ -469,7 +469,7 @@ No general loading spinner or network-error screen is established for these loca
 <a id="ux-017"></a>
 ## UX-017 — Local Calendar workspace
 
-Sources: [TaskCalendarWorkspace](../../Sources/Taskovsky/TaskCalendarWorkspace.swift), [CalendarViews](../../Sources/Taskovsky/CalendarViews.swift), [CalendarPanels](../../Sources/Taskovsky/CalendarPanels.swift), [TaskCalendar](../../Sources/TaskovskyCore/TaskCalendar.swift). Business rules are BUS-027–030. The task pane geometry in UX-003 does not describe this separate center workspace.
+Sources: [TaskCalendarWorkspace](../../Sources/Taskovsky/TaskCalendarWorkspace.swift), [CalendarViews](../../Sources/Taskovsky/CalendarViews.swift), [CalendarPanels](../../Sources/Taskovsky/CalendarPanels.swift), [TaskCalendar](../../Sources/TaskovskyDomain/TaskCalendar.swift). Business rules are BUS-027–030. The task pane geometry in UX-003 does not describe this separate center workspace.
 
 | Surface | Current layout and interaction |
 | --- | --- |
