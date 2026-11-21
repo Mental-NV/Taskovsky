@@ -2334,3 +2334,8 @@ Still unverified: matched reference typography/geometry, dark appearance (deferr
 ## Compact Calendar checkbox pointer target — November 21, 2026
 
 The local PR #65 follow-up at `f13f32d` passed 590 automated tests and signed release verification. Guarded native checks confirmed the formerly intercepted checkbox clicks, plus start/end resize, move and Undo in the same fixture. See the [native pointer verification](../verification/calendar-narrow-card-2026-11-12.md#compact-checkbox-pointer-target--november-21-2026) for the measured widths, product build and remaining scope.
+
+
+## Mac full Search query heading — November 21, 2026
+
+[SEARCH-HEADER-001](../changes/mac-search-query-heading-2026-11-21.md) records the native reference, reviewed source change and acceptance checklist. Source review is not native acceptance or a matched geometry comparison.

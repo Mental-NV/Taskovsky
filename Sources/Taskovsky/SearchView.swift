@@ -127,10 +127,27 @@ struct SearchPane: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Button(action: onClose) { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close Search").help("Close Search")
-                if editing { TextField("Search", text: $query, onCommit: { editing = false }).textFieldStyle(.roundedBorder).frame(maxWidth: 350) }
-                else { Text("Search \(query)").font(.system(size: 20, weight: .bold)).lineLimit(1); Button { editing = true } label: { Image(systemName: "pencil").foregroundStyle(.secondary) }.buttonStyle(.plain).help("Edit search") }
-                Spacer()
-                Button("Save as Filter") { saveFilter = true }.disabled(trimmed.isEmpty)
+                if editing {
+                    TextField("Search", text: $query, onCommit: { editing = false })
+                        .textFieldStyle(.roundedBorder)
+                        .frame(maxWidth: 350)
+                } else {
+                    searchHeading
+                        .font(.system(size: 20, weight: .bold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .accessibilityAddTraits(.isHeader)
+                    Button { editing = true } label: {
+                        Image(systemName: "pencil").foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Edit search")
+                    .help("Edit search")
+                }
+                Spacer(minLength: 0)
+                Button("Save as Filter") { saveFilter = true }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .disabled(trimmed.isEmpty)
             }.padding(.bottom, 20)
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 18) {
@@ -167,6 +184,12 @@ struct SearchPane: View {
                     initialCustomTo: dateRules.contains(.custom) && hasCustomTo ? customTo : nil)
             }
     }
+    private var searchHeading: Text {
+        guard !query.isEmpty else { return Text("Search") }
+        let coloredQuery = Text(verbatim: query).foregroundColor(accent)
+        return Text("Search \(coloredQuery)")
+    }
+
     private var dateMenu: some View {
         Menu {
             ForEach(FilterDateRule.allCases, id: \.self) { rule in
