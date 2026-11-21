@@ -100,6 +100,6 @@ For near-pixel-perfect parity, capture matching fixtures at the same viewport an
 
 ## Implementation handoff and coverage discipline
 
-Prioritize the [plan](../changes/mobile-live-parity-plan-2026-11-14.md): Tasks drawer/shell first (T07–T11), then list density/detail, Calendar header and Arrange (C01–C15), and schedule presentation (D07–D14). Keep each feature PR bounded with independent review, exact-head CI, isolated native interaction tests and matched light-theme screenshots. Do not implement unsupported menu entries as decorative controls. Use the open branches above as evidence requests, not a claim the inventory is complete. Additional inspections should append receipt/state coverage rather than silently changing observed labels.
+This is a historical observation inventory, not an implementation queue. Use the [current workflow](../spec/workflow.md#scope-and-delivery) and [visual tracker](../mobile-visual-parity.md) for handoff. Use open branches above as evidence requests, not a claim the inventory is complete.
 
 Docs validation: Markdown/source-link checks and independent review; no runtime tests implied. Workflow filters unchanged. Original worktrees and app fixtures preserved.

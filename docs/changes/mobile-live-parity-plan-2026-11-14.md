@@ -1,5 +1,7 @@
 # Mobile Tasks and Calendar: live parity plan
 
+**Historical plan.** This records the November 14–15 observations and original breadth-first queue. The [current workflow](../spec/workflow.md#scope-and-delivery) supersedes its sequence and estimates; use the [current tracker](../mobile-visual-parity.md) for evidence and status.
+
 ## Current delivery priority: core features first
 
 User direction (November 15, 2026): **Background chooser and Share / Print are explicitly deferred until core Tasks and Calendar features are finished.** Keep these surfaces in the later-work backlog, not the active core-parity implementation queue or core completion gate. This is a deferral, not a claim that they are implemented or verified, and it does not authorize new external integrations. Revisit both after core feature completion.

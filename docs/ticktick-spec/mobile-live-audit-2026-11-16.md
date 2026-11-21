@@ -2,7 +2,7 @@
 
 Observed live on the connected iPhone in light appearance on **local 2026-11-17** (**UTC 2026-11-16**; the filename uses the UTC date). Method: live iPhone Mirroring inspection through Computer Use against the 46-state checklist in the [mobile visual parity tracker](../mobile-visual-parity.md). Viewed all 46 tracked states (15 Calendar, 14 detail/scheduling, 17 Tasks). Verified some draft cancellation paths and returned to Today. Add List More was visible but its expansion remained unverified.
 
-The original live run recorded observations for 46 states and saved zero screenshot files. The November 17 follow-up added the owner’s Today image and 33 fresh, pixel-inspected iPhone Mirroring window captures. The tracker now has 34 portable TickTick references. It retains the historical Taskovsky captures and their original verification limits. [Mobile visual parity tracker](../mobile-visual-parity.md) · [Reference manifest](../assets/mobile-parity/2026-11-17/reference/manifest.json)
+The original live run recorded observations for 46 states and saved zero screenshot files. The November 17 follow-up added the owner’s Today image and 33 fresh, pixel-inspected iPhone Mirroring window captures. That first batch brought the tracker to 34 portable TickTick references. Later captures brought it to 46, including nine documented redacted derivatives. The privacy column below applies to the original live frames, not to those later derivatives. It retains the historical Taskovsky captures and their original verification limits. [Mobile visual parity tracker](../mobile-visual-parity.md) · [Reference manifest](../assets/mobile-parity/2026-11-17/reference/manifest.json)
 
 ## Evidence limits
 

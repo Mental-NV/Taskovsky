@@ -2,11 +2,7 @@
 
 ## Authority and scope
 
-This document was initially reconciled against source baseline `cfdec454acff91285ac00beaa20c0cf0f0961ee1` (main), reviewed on 2026-11-08, and has since been updated incrementally. See the [current integration baseline](../current-baseline.md) for the merged platform targets and recent checkpoints; the dated follow-up notes below describe their original verification scope. Executable source takes precedence over old reports and source comments. These are current-behavior requirements, not a claim of complete TickTick equivalence or a promise that every path is correct.
-
-Each stable `BUS-###` identifier names one behavior area. Acceptance cases below are review scenarios, not blanket pass claims. The follow-up CI implementation runs existing automated tests and release packaging on a hosted Mac; exact revisions, outcomes and limits are in the verification ledger. No new native macOS interaction or TickTick experiment was performed for this refresh. See the [verification ledger](verification.md), [UI/UX specification](ui-ux.md), and separate [TickTick parity tracker](../parity-implementation-status.md). The [iPhone scope](iphone.md) and [component proposals](../architecture/components.md) distinguish the original proposals from the November 9 partial implementation and remaining gates.
-
-The Calendar display follow-up in [PR #3](https://github.com/Mental-NV/Taskovsky/pull/3), source head `13a3a486153fc1217f6228cb8e6cd8266dffb366`, adds named secondary rulers, Year styles and item-icon visibility to this baseline while retaining main `b4216dec6ee2d95471038cf41ca6f92efcb94039` documentation, CI and the TaskDetail refactor. Prior local results and pending final integration CI are distinguished in the verification ledger. See [Calendar display verification](verification.md#calendar-display-follow-up).
+This document owns durable Taskovsky behavior and stable `BUS-###` IDs. Inspect the [exact source revision](../current-baseline.md) for current implementation. A requested and approved change defines the intended delta; code defects and TickTick observations are not requirements. Acceptance scenarios below are not evidence they passed; use the [verification ledger](verification.md), [Mac UI](ui-ux.md), [iPhone UI](iphone.md), and [feature tracker](../parity-implementation-status.md).
 
 ## Product and record model
 

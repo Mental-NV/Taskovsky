@@ -1,12 +1,14 @@
 # Calendar gap investigation — 8 November 2026
 
+> Historical evidence. Status and results refer to this dated investigation, not the current branch. See the [active specifications](../../README.md).
+
 Baseline: merged PR #2, `cfdec454acff91285ac00beaa20c0cf0f0961ee1`. This follow-up extends the existing Calendar. It does not rebuild scheduling or add external services.
 
 ## Reference and evidence
 
-Installed TickTick 8.2.20 (build 922), `/Applications/TickTick.app`, arm64 executable SHA-256 `e76d6757e4a1e71fd16814443bb3b02d15d0d547ac69abb67306d8dfa3ee35af`. Current executable and relevant nib hashes were rechecked before reusing the earlier REA resource subset. The [resource extract](ticktick-spec/evidence/calendar-resource-summary.json) records source identities, decoded controls and selectors; its full provenance and limits are in the [Calendar specification](ticktick-spec/calendar.md#rea-resource-provenance).
+Installed TickTick 8.2.20 (build 922), `/Applications/TickTick.app`, arm64 executable SHA-256 `e76d6757e4a1e71fd16814443bb3b02d15d0d547ac69abb67306d8dfa3ee35af`. Current executable and relevant nib hashes were rechecked before reusing the earlier REA resource subset. The [resource extract](../../ticktick-spec/evidence/calendar-resource-summary.json) records source identities, decoded controls and selectors; its full provenance and limits are in the [Calendar specification](../../ticktick-spec/calendar.md#rea-resource-provenance).
 
-REA MCP 6.7.0 opened this target, and `inspect_plist` returned bundle identity evidence `ev_1f876482f16ffbbf998ec04890b5d31b274e67a5083bc87790b5e45b7e634822`. Native procedure search failed because an existing Hopper lease owner did not respond. Later `binary_session` reported an idle selected target, zero queued requests, unavailable Hopper bridge, launch-stage health unknown and process lineage `not_observed`; the [diagnostic extract](ticktick-spec/evidence/calendar-gap-session-summary.json) retains these observations. These diagnostics do not establish ownership of the blocking lease. No process was killed, socket removed, other session closed, or Mac restarted. Native decompilation was not used as evidence.
+REA MCP 6.7.0 opened this target, and `inspect_plist` returned bundle identity evidence `ev_1f876482f16ffbbf998ec04890b5d31b274e67a5083bc87790b5e45b7e634822`. Native procedure search failed because an existing Hopper lease owner did not respond. Later `binary_session` reported an idle selected target, zero queued requests, unavailable Hopper bridge, launch-stage health unknown and process lineage `not_observed`; the [diagnostic extract](../../ticktick-spec/evidence/calendar-gap-session-summary.json) retains these observations. These diagnostics do not establish ownership of the blocking lease. No process was killed, socket removed, other session closed, or Mac restarted. Native decompilation was not used as evidence.
 
 ### Findings and decisions
 
@@ -22,7 +24,7 @@ REA MCP 6.7.0 opened this target, and `inspect_plist` returned bundle identity e
 | All-day spanning bars, resize, drag auto-scroll, precise gesture anchoring | Earlier observations and existing implementation limits in Calendar spec; no new controlled reference result. | Existing per-day fragments and precise Schedule editor remain. These are open local parity differences, not newly verified algorithms. |
 | Checklist scheduling, series exceptions, selected-date restoration | No new reference behavior established. | Independent checklist scheduling, occurrence exceptions and launch-time focus persistence remain open. |
 | Habit, focus and countdown overlays | Runtime option surfaces and static controls; underlying modules outside Taskovsky scope. | Deferred modules. |
-| Subscriptions, accounts, feeds, EventKit, import/export, cloud sync and sharing | Reference surfaces exist; user explicitly requested local-only scope. | **Deliberately deferred** in the [integration decision table](ticktick-spec/taskovsky-parity.md#calendar-integrations-deliberately-deferred--8-november-2026). No integration dependencies, permissions or network flows added. |
+| Subscriptions, accounts, feeds, EventKit, import/export, cloud sync and sharing | Reference surfaces exist; user explicitly requested local-only scope. | **Deliberately deferred** in the [integration decision table](../../ticktick-spec/taskovsky-parity.md#calendar-integrations-deliberately-deferred--8-november-2026). No integration dependencies, permissions or network flows added. |
 
 ## Local behavior contract
 
@@ -36,6 +38,6 @@ REA MCP 6.7.0 opened this target, and `inspect_plist` returned bundle identity e
 
 ## Verification
 
-Results and remaining limits are recorded in the final follow-up section of the [Calendar specification](ticktick-spec/calendar.md#display-gap-follow-up--8-november-2026). Automated suite passes **471 tests** (437 XCTest + 34 Swift Testing), including seven new display-preference regressions. Signed release build and final isolated live checks pass. The fixture is `/private/tmp/TaskovskyCalendarDisplayQA-1108`; the real workspace was not used. Live QA found a result-row hit-area problem, then a conflicting double-click gesture; the final picker uses native single-click selection plus Choose/Return.
+Results and remaining limits are recorded in the final follow-up section of the [Calendar specification](../../ticktick-spec/calendar.md#display-gap-follow-up--8-november-2026). Automated suite passes **471 tests** (437 XCTest + 34 Swift Testing), including seven new display-preference regressions. Signed release build and final isolated live checks pass. The fixture is `/private/tmp/TaskovskyCalendarDisplayQA-1108`; the real workspace was not used. Live QA found a result-row hit-area problem, then a conflicting double-click gesture; the final picker uses native single-click selection plus Choose/Return.
 
 TickTick's original Day mode, hidden sidebar and window size were restored through Computer Use. The temporary saved New York/NYC ruler could not be removed through automation: its remove control was not exposed in accessibility, and coordinate/keyboard attempts did not remove it. The user subsequently replied “Restored” to the request to remove that extra row and leave Moscow. Reference cleanup is therefore complete by user confirmation; the final time-zone state was not independently re-inspected. No pre-existing TickTick task was edited.

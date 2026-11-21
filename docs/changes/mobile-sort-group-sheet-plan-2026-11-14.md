@@ -1,5 +1,7 @@
 # iPhone Sort & Group sheet parity plan
 
+**Historical proposal.** Later bounded [List](mobile-group-sort-complete-2026-11-15.md) and [Kanban](mobile-kanban-sheet-2026-11-16.md) receipts supersede its implementation status; any unverified semantics remain open.
+
 ## Identity and decision
 - Change ID: **MOB-SORT-GROUP-002**.
 - Status: **Planned; implementation not started by this documentation change**.

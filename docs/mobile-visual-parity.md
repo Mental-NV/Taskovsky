@@ -11,12 +11,12 @@ This tracks all **46 original observed states**: 15 Calendar, 14 detail/scheduli
 - **Deferred**: outside current core completion gates by user direction.
 - **Screenshot missing** means no inspected publishable asset attached here, not that the feature is absent.
 - These are provisional assessments from merged feature receipts/source and the live reference inventory, not a fresh matched audit of every state.
-- **Wide-first:** prioritize major missing structures across core forms before fine pixel polishing. Preserve existing accessibility support; accessibility-specific layouts, Dark and persistence polishing are deferred.
+- Follow the [current workflow](spec/workflow.md#scope-and-delivery), one iPhone form at a time. The dated assessments below are not current numerical parity scores; integrate new evidence explicitly.
 - For each completed UI PR, update affected row, remaining gap, PR/receipt and actual screenshot. Record the captured build; do not label an old screenshot as current. Only compare matched fixture, viewport, theme and text size before upgrading visual acceptance.
 
 ## Per-form implementation requirement
 
-Follow the [element and behavior contract](changes/mobile-live-parity-plan-2026-11-14.md#per-form-element-and-behavior-contract): inventory every element in each active form, its position/size, exact observed wording, UX and underlying business logic, with evidence and unknowns explicit. Link each bounded element table and verification receipt from its affected state. Broad major similarity across forms comes first, including complete working elements and comparable layout; near-pixel-perfect polishing is the final stage. Existing row assessments are unchanged by this planning update and are not proof that these expanded element checks have been completed. Retain the two explicitly deferred states and all other current scope deferrals.
+Use the [per-form change template](spec/change-template.md) and [verification rules](spec/workflow.md#3-verify-independently). Link the actual reference, element comparison, behavior checks and exact-build receipt. Track local candidates separately from integrated results; an unmatched capture or a historical Similar label does not pass the 90% target.
 
 ## Reading the comparison
 
@@ -28,7 +28,7 @@ Each state has adjacent **TickTick reference** and **Taskovsky screenshot** cell
 
 The TickTick references include one owner-supplied Today screenshot, 36 unmodified iPhone Mirroring captures, and 9 privacy-redacted captures with documented opaque masks. We added solid black rectangles to those nine references to hide personally identifiable information (PII); the manifest records which images were redacted and where. Each saved image was visually reviewed. The captures use the light appearance with unmatched fixtures and viewport conditions. [Reference manifest](assets/mobile-parity/2026-11-17/reference/manifest.json)
 
-The [prioritized implementation plan](changes/mobile-live-parity-plan-2026-11-14.md) remains the work queue. Additional known modes outside the original 46 must be tracked separately rather than silently changing this denominator.
+The [November 14 plan](changes/mobile-live-parity-plan-2026-11-14.md) is historical; the [current workflow](spec/workflow.md#scope-and-delivery) controls delivery. Additional known modes outside the original 46 must be tracked separately rather than silently changing this denominator.
 
 A [live textual audit (local 2026-11-17 / UTC 2026-11-16)](ticktick-spec/mobile-live-audit-2026-11-16.md) records all 46 states with corrected in-repo Taskovsky links and explicit mismatched-state limits (historical Taskovsky images, different fixtures/keyboard/viewport; Add List More unverified).
 
