@@ -41,6 +41,17 @@ Record requirement/case ID, platform, exact source/checkout SHA, test or manual 
 
 Visual records additionally need OS, logical content versus frame size, screenshot scale, appearance, locale/zone, text size, contrast and reduced motion. Use disposable data and cover interruption/repeated actions. The source-derived baseline remains **implemented, with automated verification limited to the recorded CI environment and cases**. Preserve live limitations even when unit/store checks pass.
 
+## iPhone project layout
+
+The [iPhone project layout change](../changes/iphone-project-layout.md) was tested at `ad79c1bc20588427d0cc9d6a3ef6b20055a8381b` on November 21, 2026, using macOS 27.0.1 (26A434), an arm64 Mac, and Xcode 27.0 (27A266a).
+
+- **Mac tests and packaging passed.** `swift test --disable-sandbox` passed 541 XCTest and 49 Swift Testing cases. `./scripts/build-app.sh` produced the app and `codesign --verify --deep --strict build/Taskovsky.app` passed.
+- **iPhone compile passed.** `./scripts/build-ios-simulator-ci.sh` resolved iOS 17 deployment settings and built the Simulator app, both test bundles, and the test manifest. Both bundled QA JSON files matched the repository fixtures byte for byte.
+- **iPhone Simulator tests passed.** On an isolated iPhone 17 Pro running iOS 26.3.1 (23D8133), `xcodebuild test-without-building` passed all 210 `MobileContracts` tests, both `RootLabelRemovalTests`, and `testStyledDescriptionIsProtected`. The 213 cases reported zero failures, skips, and runtime warnings. The navigation tests opened fresh fixture sessions and exercised Tasks, Calendar, Search, and the styled sample task.
+- **Project and script checks passed.** The Xcode project matched the baseline after normalizing relocated paths. The 36 relocated file references resolved to identical bytes, and four compile-driver tests passed. Other native UI tests and physical device runs were outside this check.
+
+Local logs and Simulator result bundles are in `/private/tmp/TaskovskyLayoutEvidence-1121/iphone-mac` and `/private/tmp/TaskovskyLayoutEvidence-1121/iphone-ios`.
+
 <a id="hosted-macos-ci"></a>
 ## Hosted macOS CI — November 8, 2026
 
@@ -177,7 +188,7 @@ This is a partial implementation milestone under the user's autonomous local Tas
 
 **Environment:** macOS 27.0.1 (26A434), arm64; Xcode 27.0 (27A266a), Swift 6.4. iOS SDK 27.0; compiler targets include `arm64-apple-ios17.0-simulator` and `x86_64-apple-ios17.0-simulator`. Native execution used an isolated **Taskovsky QA iPhone 13 Pro**, **iOS 26.3.1 (23D8133), arm64**, standard 390×844 point/1170×2532 pixel portrait capture. The available runtime inventory also includes 26.5 and 27.0. No iOS 17 runtime or physical-device result is claimed. The app's sample clock is November 9, 2026, Europe/Moscow; dynamic system status information is not a visual comparison target.
 
-Private evidence root: `/private/tmp/TaskovskyMobileEvidence-1109`. Temporary derived data/results are not durable hosted CI. See [Mobile build/test instructions](../../Mobile/README.md).
+Private evidence root: `/private/tmp/TaskovskyMobileEvidence-1109`. Temporary derived data/results are not durable hosted CI. See [Mobile build/test instructions](iphone-build-qa.md).
 
 | Gate | Actual result | Scope and limits |
 | --- | --- | --- |

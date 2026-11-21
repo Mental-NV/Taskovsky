@@ -9,12 +9,12 @@ On the recorded Xcode 27 SwiftPM layout, generate after `swift test --disable-sa
 ```sh
 xcrun swiftc -D DEBUG -parse-as-library -I .build/out/Products/Debug \
   -module-cache-path /tmp/taskovsky-mobile-module-cache \
-  Mobile/App/MobilePreviewFixture.swift scripts/mobile-fixture-tool.swift \
+  Sources/TaskovskyMobile/MobilePreviewFixture.swift scripts/mobile-fixture-tool.swift \
   .build/out/Products/Debug/TaskovskyCore.o \
   .build/out/Products/Debug/TaskovskyDomain.o \
   .build/out/Products/Debug/TaskovskyWorkspace.o \
   -o /tmp/taskovsky-mobile-fixture-tool
-/tmp/taskovsky-mobile-fixture-tool generate "$PWD/Mobile/Fixtures"
+/tmp/taskovsky-mobile-fixture-tool generate "$PWD/Tests/Fixtures/Mobile"
 ```
 
 Re-generation replaces these development fixtures; recheck provenance hashes. The helper's `verify`, `verify-capture` and `verify-first-capture` modes load a phone QA folder through Mac TaskStore without saving, expecting 8, 9 or 1 records respectively. It requires a UUID beneath `TaskovskyMobile/QA` and the initial audit file, rejecting ordinary workspace paths. The paths/object layout describe the recorded toolchain, not a portable build-system contract.

@@ -13,7 +13,7 @@ This specification owns Mac UI and interaction requirements, with stable `UX-###
 - **Separate platform and proposals:** the [iPhone specification](iphone.md) includes implemented local workflows and remaining acceptance gates. The [component boundaries](../architecture/components.md) distinguish present code from proposed extraction; neither document is a blanket completion claim.
 - The five [earlier findings](../archive/early-research/code-review-findings-2026-11-08.md) and four [Calendar findings](../archive/early-research/pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026) are fixed in the merged baseline. The [verification ledger](verification.md) distinguishes source/regression evidence, prior live results and remaining unchecked paths.
 
-The current package declares macOS 14 and iOS 17. This specification covers the Mac SwiftUI/AppKit UI; the separate [iPhone target](../../Mobile/TaskovskyMobile.xcodeproj/project.pbxproj) has its own views and specification. Runtime/device verification is limited to the environments recorded in the ledger. See [Package.swift](../../Package.swift).
+The current package declares macOS 14 and iOS 17. This specification covers the Mac SwiftUI/AppKit UI; the separate [iPhone target](../../TaskovskyMobile.xcodeproj/project.pbxproj) has its own views and specification. Runtime/device verification is limited to the environments recorded in the ledger. See [Package.swift](../../Package.swift).
 
 Stable `UX-xxx` IDs identify the sections below for implementation, tests, and design review. Keep IDs stable when wording changes. Tests linked at the end cover domain/presentation helpers; they are not end-to-end screen tests.
 

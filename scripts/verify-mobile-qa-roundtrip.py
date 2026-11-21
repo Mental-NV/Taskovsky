@@ -709,7 +709,7 @@ def main():
     parser.add_argument("--rich-editor", action="store_true", help="audit the saved styled description")
     parser.add_argument("--only-case", help="audit a focused result bundle containing one known case")
     args = parser.parse_args()
-    fixtures = Path(__file__).resolve().parent.parent / "Mobile/Fixtures"
+    fixtures = Path(__file__).resolve().parent.parent / "Tests/Fixtures/Mobile"
     workspace = (fixtures / "MobileQAWorkspace.json").read_bytes()
     settings = (fixtures / "MobileQASettings.json").read_bytes()
     baseline = json.loads(workspace)

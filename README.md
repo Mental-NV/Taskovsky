@@ -14,7 +14,7 @@ The build script assembles and locally signs the app; this is not a notarized di
 ## Specifications and development
 
 - [Desktop and iPhone parity specs](docs/README.md) · [46-state iPhone visual tracker](docs/mobile-visual-parity.md)
-- [iPhone build and Simulator QA](Mobile/README.md) · [macOS CI and verification](docs/spec/ci-cd.md)
+- [iPhone build and Simulator QA](docs/spec/iphone-build-qa.md) · [macOS CI and verification](docs/spec/ci-cd.md)
 
 Use **⌘N** to add a task, **⇧⌘N** for a note, **⇧⌘L** for a list and **⌘,** for Settings. By default, the Mac app stores workspace and settings JSON in `~/Library/Application Support/Taskovsky/`. Cross-device sync and external Calendar integrations are outside the local pre-alpha scope.
 
