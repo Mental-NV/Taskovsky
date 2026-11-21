@@ -501,6 +501,24 @@ struct EntitySheet: View {
         return tags.filter { !forbidden.contains($0.id) }
     }
     var body: some View {
+        Group {
+            if editor.isTag {
+                form
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 0) {
+                        form
+                        ListEditorPreview(name: name, symbol: symbol, tint: Color(hex: color),
+                                          mode: viewMode, kind: kind)
+                            .frame(width: 280)
+                    }
+                    form
+                }
+            }
+        }.tint(accent).onAppear { focused = true }
+    }
+
+    private var form: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text((editor.entityID == nil ? "New " : "Edit ") + (editor.isTag ? "Tag" : "List")).font(.system(size: 20, weight: .semibold))
             TextField(editor.isTag ? "Tag name" : "List name", text: $name).textFieldStyle(.roundedBorder).focused($focused).onSubmit(submit)
@@ -547,7 +565,7 @@ struct EntitySheet: View {
             if editor.entityID != nil && !editor.isTag { Text("List type sets the default for new items.").font(.caption).foregroundStyle(.secondary) }
             if saveFailed { Text("The list was not saved. Your draft is preserved. Check the workspace error, then retry or reopen the list if it changed.").font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).accessibilityLabel("List save failed; draft preserved") }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-        }.padding(28).frame(width: 360).tint(accent).onAppear { focused = true }
+        }.padding(28).frame(width: 360)
     }
     private func submit() {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)

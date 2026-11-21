@@ -524,6 +524,10 @@ Calendar, Tasks Timeline and grouped Board success/Undo feedback, Summary save a
 
 The locally implemented [minimum-height outline correction](../changes/calendar-minimum-outline-2026-11-12.md) makes timed decoration accept the existing slot without changing content metrics or scheduling. Source tests/review and sampled native light interaction passed; final exact-head CI is required. Dark interaction remains unverified and deferred per the user's November 13 light-only direction. Other compact cards are unchanged.
 
+## Mac List editor preview — LIST-VIS-001
+
+Add/Edit List uses the existing editable form with an illustrative trailing List/Board preview when the horizontal proposal fits; otherwise the unchanged form remains available. Draft name, icon, color, kind and view selection update only the preview. Tag and Folder editors are unchanged. The preview is decorative, does not show real tasks and has no focus, gesture or save actions. Timeline remains selectable; the preview explains that it is unavailable both visibly and in its combined accessibility summary. The List illustration has grouped sample rows and a detail area; no live data is shown. The candidate's form/preview widths are Taskovsky design choices, not measured TickTick dimensions. See [change and acceptance record](../changes/mac-list-editor-preview-2026-11-13.md). Normal and observed compact light-theme native preview/footer fit and existing keyboard/save behavior passed on the QA-only guarded variant of `b13b874`; exact TickTick calibration and the form-only fallback remain unverified. Native observations remain separate from hosted rendering/tests.
+
 ### Mac full Search list selector
 
 The [staged list tree](../changes/search-list-tree-2026-11-13.md) replaces the flat
