@@ -85,3 +85,10 @@ Exact sheet dimensions, visual fit/fallback, failed-save interaction and product
 ### Publication and integration update
 
 After explicit user approval, published [PR #73](https://github.com/Mental-NV/Taskovsky/pull/73). Integrated main `442b87b`; conflicts were documentation-only and both List preview and Mac/iPhone feedback receipts were preserved. Source is unchanged from the native-tested candidate. Exact-head hosted checks and integration review are pending. Earlier unpublished/pending statements above describe historical checkpoints, not the current publication state.
+
+
+## November 21 reference follow-up and scoped correction
+
+Integrated current main `390fae67` into the draft without rewriting its history. A fresh TickTick Mac inspection of the normal Edit List dialog confirmed a left form and a large right preview. The view selector used three icon tiles, with blue outline/icon and pale blue fill for selected List and gray idle icons; the third mode was marked Premium. The List preview showed a white rounded panel with grouped checkbox rows and a detail area on a pale-green surround. Switching the existing list to Board was not permitted during inspection; no change was made and no Board or compact reference was verified. No exact geometry or color values were measured.
+
+The Taskovsky candidate keeps its existing selector, the non-interactive preview width and fallback, and all draft and save behavior. Its neutral List illustration now includes grouped sample rows and a detail area within a rounded panel on a subtle green surround. Board remains the existing illustrative local sample, not a newly verified TickTick match. Timeline remains selectable as a real view mode; the preview's visible note and single accessibility summary both state that its preview is unavailable. No premium controls, unrelated fields, or persistent behavior were added. The focused tests cover the single accessibility summary per mode and existing hosted geometry/Save invariants. Hosted sizing and label assertions do not replace native normal/compact layout, accessibility and save checks.

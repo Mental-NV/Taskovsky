@@ -17,6 +17,12 @@ struct ListEditorPreview: View {
     private var modeName: String {
         switch mode { case .list: return "List"; case .board: return "Board"; case .timeline: return "Timeline" }
     }
+    var accessibilitySummary: String {
+        if mode == .timeline {
+            return "Timeline preview is not available."
+        }
+        return "Illustrative \(modeName) preview for \(title). No saved items are displayed."
+    }
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text("Preview").font(.system(size: 12)).foregroundStyle(.secondary)
@@ -26,12 +32,7 @@ struct ListEditorPreview: View {
             }
             switch mode {
             case .list:
-                VStack(spacing: 0) {
-                    ForEach(0..<3) { index in
-                        sampleRow(index).padding(.vertical, 12)
-                        if index < 2 { Divider() }
-                    }
-                }
+                listSample
             case .board:
                 HStack(alignment: .top, spacing: 8) {
                     ForEach(BoardProjection.Column.allCases, id: \.self) { column in
@@ -49,8 +50,10 @@ struct ListEditorPreview: View {
                 Text("Timeline arranges scheduled items horizontally. A preview is not available yet.")
                     .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
-            Text("Illustrative \(modeName.lowercased()) layout. Your items are not shown.")
-                .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if mode != .timeline {
+                Text("Illustrative \(modeName.lowercased()) layout. Your items are not shown.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(20)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -58,7 +61,33 @@ struct ListEditorPreview: View {
         .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1) }
         .allowsHitTesting(false)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Illustrative \(modeName) preview for \(title). No saved items are displayed.")
+        .accessibilityLabel(accessibilitySummary)
+    }
+
+    /// A neutral illustration of grouped rows and a detail pane, not live records.
+    private var listSample: some View {
+        HStack(alignment: .top, spacing: 0) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Today").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                sampleRow(0)
+                sampleRow(1)
+                Text("Later").font(.system(size: 10, weight: .medium)).foregroundStyle(.secondary)
+                sampleRow(2)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(kind == .note ? "Sample note" : "Sample task")
+                    .font(.system(size: 10, weight: .semibold)).lineLimit(1)
+                Text("Details").font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            .padding(8)
+            .frame(width: 74, alignment: .leading)
+            .overlay(alignment: .leading) { Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1) }
+        }
+        .background(Color(nsColor: .textBackgroundColor), in: RoundedRectangle(cornerRadius: 8))
+        .padding(8)
+        .background(Color.green.opacity(0.09), in: RoundedRectangle(cornerRadius: 10))
     }
     private func sampleRow(_ index: Int, status: BoardProjection.Column = .open, compact: Bool = false) -> some View {
         HStack(spacing: 6) {

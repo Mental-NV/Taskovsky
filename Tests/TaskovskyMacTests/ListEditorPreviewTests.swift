@@ -6,6 +6,18 @@ import TaskovskyCore
 
 @MainActor
 final class ListEditorPreviewTests: XCTestCase {
+    func testAccessibilitySummaryDoesNotAdvertiseUnavailableTimelinePreview() {
+        func summary(_ mode: TaskListViewMode, name: String) -> String {
+            ListEditorPreview(name: name, symbol: "book", tint: .blue, mode: mode, kind: .task)
+                .accessibilitySummary
+        }
+
+        XCTAssertEqual(summary(.timeline, name: "  Work  "), "Timeline preview is not available.")
+        XCTAssertEqual(summary(.timeline, name: " "), "Timeline preview is not available.")
+        XCTAssertEqual(summary(.list, name: "Work"), "Illustrative List preview for Work. No saved items are displayed.")
+        XCTAssertEqual(summary(.board, name: "Work"), "Illustrative Board preview for Work. No saved items are displayed.")
+    }
+
     func testPreviewModesFitBoundedPaneAndDoNotNeedStore() {
         _ = NSApplication.shared
         for mode in [TaskListViewMode.list, .board, .timeline] {

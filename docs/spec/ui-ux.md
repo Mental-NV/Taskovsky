@@ -526,7 +526,7 @@ The locally implemented [minimum-height outline correction](../changes/calendar-
 
 ## Mac List editor preview — LIST-VIS-001
 
-Add/Edit List uses the existing editable form with an illustrative trailing List/Board preview when the horizontal proposal fits; otherwise the unchanged form remains available. Draft name, icon, color, kind and view selection update only the preview. Tag and Folder editors are unchanged. The preview is decorative, does not show real tasks and has no focus, gesture or save actions. Timeline remains selectable with an explicit preview-unavailable explanation. The candidate's form/preview widths are Taskovsky design choices, not measured TickTick dimensions. See [change and acceptance record](../changes/mac-list-editor-preview-2026-11-13.md); native sheet checks remain separate from hosted rendering/tests.
+Add/Edit List uses the existing editable form with an illustrative trailing List/Board preview when the horizontal proposal fits; otherwise the unchanged form remains available. Draft name, icon, color, kind and view selection update only the preview. Tag and Folder editors are unchanged. The preview is decorative, does not show real tasks and has no focus, gesture or save actions. Timeline remains selectable; the preview explains that it is unavailable both visibly and in its combined accessibility summary. The List illustration has grouped sample rows and a detail area; no live data is shown. The candidate's form/preview widths are Taskovsky design choices, not measured TickTick dimensions. See [change and acceptance record](../changes/mac-list-editor-preview-2026-11-13.md); native sheet checks remain separate from hosted rendering/tests.
 
 ### Mac full Search list selector
 
