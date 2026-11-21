@@ -1,6 +1,6 @@
 # SEARCH-HEADER-001 — Full Search query heading
 
-Status: implementation candidate. macOS Tasks / full Search only, based on `cef532880b1802aaed9a957e269658620e45825f`. [BUS-023](../spec/business.md#bus-023), [UX-011](../spec/ui-ux.md#ux-011--search-and-saved-filters), [TT-023](../parity-implementation-status.md#tt-023).
+Status: native acceptance for the bounded header change. macOS Tasks / full Search only, based on `cef532880b1802aaed9a957e269658620e45825f`. [BUS-023](../spec/business.md#bus-023), [UX-011](../spec/ui-ux.md#ux-011--search-and-saved-filters), [TT-023](../parity-implementation-status.md#tt-023).
 
 ## Reference and scope
 
@@ -16,4 +16,9 @@ Baseline Taskovsky used one monochrome title and a tooltip-only pencil. Keep the
 | Compact width and a long literal query | Heading truncates without displacing the pencil or Save as Filter. Verify the left-to-right order and absence of overlap. |
 | Edit and dismiss | Enter editing, click the field, edit and Return. Open Save as Filter, confirm it receives the edited query, then Cancel; verify no filter is saved. A cleared query disables Save as Filter. |
 
-Independent source review found no change to query bindings, filter inputs, dismissal actions or result construction. Native acceptance, matched screenshot and exact-head checks are separate. No dimensional or exact color parity is claimed; current reference measurements are unavailable.
+## Results — November 21
+
+- Product revision `08a40739219724b9d15955215af43559ff514005`: Mac Xcode 27.0 full Swift test command, release build and strict signature check passed. Independent source review found no change to query bindings, filter inputs, dismissal actions or result construction.
+- Guarded Taskovsky QA debug build used identical Search source and disposable workspace/settings. Missing and mismatched launch arguments were refused. Return opened full Search; the prefix used primary text and the query was blue at observed normal (1060 × 700) and compact (780 × 580) capture sizes. A narrower window truncated a long title without hiding either action; the accessibility heading retained the full query, and the pencil had its own label. These are capture sizes, not calibrated TickTick geometry.
+- Clicking Edit search opened the field; clicking the field, changing the query and pressing Return updated heading and results. Existing yellow title/snippet highlights remained visible. Save as Filter opened with the synthetic query prefilled; Cancel returned to Search. Empty query displayed “Search” and disabled Save as Filter. Fixture hashes were unchanged and the QA process was quit.
+- No screenshot was exported. Exact TickTick hue, geometry and the fresh matched comparison remain unverified. Dark appearance, full keyboard traversal and VoiceOver were not exercised. [Product CI](https://github.com/Mental-NV/Taskovsky/actions/runs/44920728152) is separate from native interaction. [PR #167](https://github.com/Mental-NV/Taskovsky/pull/167).
