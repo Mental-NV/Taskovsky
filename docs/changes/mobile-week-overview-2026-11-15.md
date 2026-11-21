@@ -1,0 +1,13 @@
+# Mobile Week overview
+
+## Evidence and scope
+
+November 15 live TickTick iPhone Mirroring observation confirmed the Week toolbar toggle between hourly and overview. The overview has a mini-month first and seven dated tiles in two columns. A shaded mini-month band identifies the displayed week. A day header opens Day; Back restores the overview. A mini-month date changes the week in place. One horizontal and one vertical scroll showed no movement: swipe semantics remain unverified. Today/Week dates were restored, but hourly scroll changed from 01:00 to 03:00; no task data changed.
+
+Taskovsky adds a session-only overview toggle using existing filtered Calendar projection. Tile headers open a session-only Day drill-in and Back restores the prior overview focus; Day strip navigation must retain that return route. Mini-month dates change focus only. Tiles open existing task detail, including projected entries through existing routing. No completion, scheduling, recurrence, persistence or drag policy is added. Switching Tasks/Calendar preserves the session state; explicit mode selection exits it. Relaunch starts in saved mode without overview state.
+
+This is a bounded functional/layout approximation, not pixel-perfect parity. Fixed minimum tile heights, scroll behavior, typography, completion controls and exact mini-month styling remain incomplete. Mini-month uses the configured Calendar week start/timezone, not an inferred hardcoded Sunday. Native screenshots use disposable fixture data only.
+
+## Verification
+
+Initial iOS Simulator compile passed. Independent review caught Day-strip selection escaping session navigation; corrected before native QA. Full suite passed 826 XCTest and 38 Swift Testing cases; release and strict signature verification passed. Initial navigation and Day-strip native tests passed. Added detail/filter/relaunch test initially failed: saved-filter diagnostics showed All remained selected after the attempted Only tap, and hourly view also retained the task. This was not evidence of an overview projection defect; a speculative projection rewrite was reverted. The final test asserts Work is actually selected before Save, and still requires the task to disappear. Final owned iPhone Simulator native run passed all three tests: overview navigation/Back/date selection, detail return/filter exclusion and reset/saved Week on relaunch, and prior Day-strip regression. Actual screenshot was inspected: mini-month now top-aligned; crowded fixture tiles remain taller and scrollable, not an exact reference geometry claim. Owned Simulator is shut down. Independent final source/test review passed. Exact final-head hosted CI remains required before merge.

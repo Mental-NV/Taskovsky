@@ -69,6 +69,7 @@ struct MobileCalendarPreview: View {
     let options: TaskCalendarOptions
     let monthInteractionActive: Bool
     let controls: PhoneCalendarControls
+    var weekOverview = false
     let select: (TaskCalendarMode, Date) -> Void
     let open: (UUID) -> Void
     @State private var agendaWindow = CalendarAgendaWindow()
@@ -107,7 +108,7 @@ struct MobileCalendarPreview: View {
                                      focus: $focus, options: options, monthZoom: $monthZoom,
                                      monthWindow: window, monthPosition: window.map(monthPosition),
                                      monthViewportRevision: monthViewportRevision,
-                                     controls: controls, select: select, previewYearDay: { yearDayPreview = CalendarDayPreview($0, calendar: calendar) }, open: open,
+                                     controls: controls, weekOverview: weekOverview, select: select, previewYearDay: { yearDayPreview = CalendarDayPreview($0, calendar: calendar) }, open: open,
                                      canExtendAgenda: agendaWindow.canExtend, showMoreAgenda: { agendaWindow.extend() },
                                      showToday: showToday, holdMonthForCapture: holdMonthPosition)
             .onChange(of: focus) { _, date in
@@ -276,6 +277,7 @@ private struct MobileCalendarContent: View {
     let monthPosition: Binding<Date?>?
     let monthViewportRevision: Int
     let controls: PhoneCalendarControls
+    var weekOverview = false
     let select: (TaskCalendarMode, Date) -> Void
     let previewYearDay: (Date) -> Void
     let open: (UUID) -> Void
@@ -288,6 +290,7 @@ private struct MobileCalendarContent: View {
     private var allDayRowHeight: CGFloat { showsDetails ? detailedRowHeight : compactRowHeight }
     @ScaledMetric(relativeTo: .caption) private var monthDateHeight = 17.0
     @State private var expansion = CalendarHourlyWindow()
+    @State private var showHours = false
     @GestureState private var previewCutoffs: CalendarFoldedHours?
     @State private var monthWeekFrames: [Date: CGRect] = [:]
     @State private var monthWeekAnchors = PhoneMonthWeekAnchors()
@@ -300,17 +303,84 @@ private struct MobileCalendarContent: View {
         let next = calendar.date(byAdding: .day, value: 1, to: day)!
         return entries.filter { $0.start < next && ($0.end > day || calendar.isDate($0.start, inSameDayAs: day)) }
     }
+    private var weekOverviewGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 1, alignment: .top), GridItem(.flexible(), spacing: 1, alignment: .top)], spacing: 1) {
+                overviewMiniMonth
+                ForEach(days, id: \.self) { day in
+                    VStack(alignment: .leading, spacing: 5) {
+                        Button { select(.day, day) } label: {
+                            Text(day.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).day().weekday(.abbreviated)))
+                                .font(.subheadline.weight(.medium)).frame(maxWidth: .infinity, minHeight: 28, alignment: .leading)
+                        }.buttonStyle(.plain).accessibilityIdentifier("calendarOverviewDay-" + overviewDateID(day))
+                        ForEach(entries(on: day)) { entry in
+                            Button { open(entry.taskID) } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: entry.isNote ? "note.text" : (entry.isCompleted ? "checkmark.circle.fill" : "circle"))
+                                    Text(entry.title).lineLimit(2)
+                                }.font(.caption).foregroundStyle(.primary).frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(4).background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 3))
+                            }.buttonStyle(.plain).accessibilityIdentifier("calendarOverviewEntry-" + entry.id)
+                        }
+                        Spacer(minLength: 0)
+                    }.padding(8).frame(maxWidth: .infinity, minHeight: 135, alignment: .topLeading)
+                        .background(Color(uiColor: .systemBackground))
+                }
+            }.background(Color(uiColor: .separator).opacity(0.25)).padding(.horizontal, 8)
+        }.accessibilityIdentifier("calendarWeekOverview")
+    }
+    private func overviewDateID(_ date: Date) -> String {
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return "\(parts.year!)-\(parts.month!)-\(parts.day!)"
+    }
+    private var overviewMiniMonth: some View {
+        let month = CalendarDates.monthStart(focus, calendar: calendar)
+        let start = CalendarDates.weekStart(month, calendar: calendar)
+        let monthDays = CalendarDates.days(from: start, count: 42, calendar: calendar)
+        let selectedWeek = CalendarDates.weekStart(focus, calendar: calendar)
+        return VStack(spacing: 3) {
+            Text(month.formatted(Date.FormatStyle(calendar: calendar, timeZone: calendar.timeZone).month(.wide))).font(.caption.weight(.semibold))
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 2) {
+                ForEach(monthDays, id: \.self) { day in
+                    Button { focus = day } label: {
+                        Text(String(calendar.component(.day, from: day))).font(.system(size: 10))
+                            .foregroundStyle(calendar.isDate(day, equalTo: month, toGranularity: .month) ? Color.primary : Color.secondary)
+                            .frame(maxWidth: .infinity, minHeight: 15)
+                            .background(CalendarDates.weekStart(day, calendar: calendar) == selectedWeek ? Color.accentColor.opacity(0.16) : Color.clear)
+                    }.buttonStyle(.plain)
+                        .accessibilityLabel(day.formatted(Date.FormatStyle(date: .complete, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)))
+                        .accessibilityIdentifier("calendarOverviewMini-" + overviewDateID(day))
+                }
+            }
+        }.padding(8).frame(maxWidth: .infinity, minHeight: 135, alignment: .top)
+            .background(Color(uiColor: .systemBackground))
+    }
     var body: some View {
         VStack(spacing: 8) {
             HStack {
                 Button { focus = CalendarDates.navigate(focus, direction: -1, mode: options.mode, options: options, calendar: calendar, monthZoom: monthZoom) } label: { Image(systemName: "chevron.left").frame(width: 44, height: 44) }.accessibilityLabel("Previous Calendar period")
                 Spacer(); Text(options.mode.title).font(.subheadline)
                 Button("Today", action: showToday).frame(minHeight: 44)
+                if options.mode.isHourly && !weekOverview {
+                    Button { showHours = true } label: {
+                        Image(systemName: "clock").frame(width: 44, height: 44)
+                    }.accessibilityLabel("Calendar hours").accessibilityIdentifier("calendarHours")
+                        .popover(isPresented: $showHours) {
+                            VStack(spacing: 12) {
+                                Text("Visible hours").font(.headline)
+                                hourFoldControls
+                                Button("Done") { showHours = false }
+                                    .frame(minHeight: 44).accessibilityIdentifier("calendarHoursDone")
+                            }.padding(.vertical, 16).frame(width: 300)
+                                .presentationCompactAdaptation(.popover)
+                        }
+                }
                 Spacer()
                 Button { focus = CalendarDates.navigate(focus, direction: 1, mode: options.mode, options: options, calendar: calendar, monthZoom: monthZoom) } label: { Image(systemName: "chevron.right").frame(width: 44, height: 44) }.accessibilityLabel("Next Calendar period")
             }.padding(.horizontal, 16)
-            if options.mode.isHourly {
-                hourFoldControls
+            if weekOverview {
+                weekOverviewGrid
+            } else if options.mode.isHourly {
                 hourly
             }
             else if options.mode == .year { year }
@@ -327,6 +397,7 @@ private struct MobileCalendarContent: View {
             }
         }.buttonStyle(.plain)
             .onChange(of: options.mode) { old, new in
+                showHours = false
                 if old.isHourly && !new.isHourly { expansion = CalendarHourlyWindow() }
             }
     }
@@ -354,9 +425,9 @@ private struct MobileCalendarContent: View {
             if hasCompletionButton, let completion {
                 Button { completion(entry) } label: {
                     Image(systemName: completionSymbol(entry))
-                        .font(.system(size: 15)).foregroundStyle(color)
+                        .font(.system(size: 15)).foregroundStyle(options.itemStyle == .classic ? .primary : color)
                         .frame(width: 44, height: 44)
-                        .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 2).allowsHitTesting(false) }
+                        .overlay(alignment: .leading) { if options.itemStyle.rendering.showsStripe { Rectangle().fill(color).frame(width: 2).allowsHitTesting(false) } }
                         .contentShape(Rectangle())
                 }
                 .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
@@ -382,9 +453,9 @@ private struct MobileCalendarContent: View {
             }
         }
         .frame(minHeight: 17, maxHeight: fillsHeight ? .infinity : nil, alignment: .topLeading)
-        .background(options.itemStyle == .filled ? color.opacity(0.15) : .clear, in: RoundedRectangle(cornerRadius: 3))
+        .background(Self.cardFillOpacity(options.itemStyle, entry: entry) > 0 ? color.opacity(Self.cardFillOpacity(options.itemStyle, entry: entry)) : .clear, in: RoundedRectangle(cornerRadius: 3))
         .overlay {
-            if options.itemStyle == .outline {
+            if options.itemStyle.rendering.showsOutline {
                 RoundedRectangle(cornerRadius: 3).strokeBorder(color.opacity(0.7)).allowsHitTesting(false)
             }
         }
@@ -394,6 +465,10 @@ private struct MobileCalendarContent: View {
             }
         }
         .opacity(entry.isCompleted ? 0.58 : entry.isProjected ? 0.72 : 1)
+    }
+
+    private static func cardFillOpacity(_ style: CalendarItemStyle, entry: CalendarEntry) -> Double {
+        style.phoneFillOpacity(completed: entry.isCompleted)
     }
 
     private func cardColor(_ hex: String) -> Color {
@@ -415,10 +490,12 @@ private struct MobileCalendarContent: View {
         let button = Button { open(entry.taskID) } label: {
             HStack(alignment: detailedMonthCard ? .top : .center, spacing: clipsTitle ? 1 : 3) {
                 if !hasCompletionButton {
-                    Rectangle().fill(color).frame(width: 2)
+                    if options.itemStyle.rendering.showsStripe {
+                        Rectangle().fill(color).frame(width: 2)
+                    }
                     if options.showsIcon(for: entry) {
                         Image(systemName: entry.isProjected ? "repeat" : entry.isNote ? "doc.text" : completionSymbol(entry))
-                            .font(.system(size: 8)).foregroundStyle(color).accessibilityHidden(true)
+                            .font(.system(size: 8)).foregroundStyle(options.itemStyle == .classic ? .primary : color).accessibilityHidden(true)
                     }
                 }
                 if clipsTitle {
@@ -520,15 +597,11 @@ private struct MobileCalendarContent: View {
         }.font(.caption).padding(.horizontal, 16)
     }
 
-    @ViewBuilder private var hourly: some View {
-        if options.mode == .week {
-            GeometryReader { viewport in hourlyGrid(weekViewportWidth: viewport.size.width) }
-        } else {
-            hourlyGrid(weekViewportWidth: nil)
-        }
+    private var hourly: some View {
+        GeometryReader { viewport in hourlyGrid(viewportWidth: viewport.size.width) }
     }
 
-    private func hourlyGrid(weekViewportWidth: CGFloat?) -> some View {
+    private func hourlyGrid(viewportWidth: CGFloat) -> some View {
         let byDay = Dictionary(uniqueKeysWithValues: days.map { ($0, entries(on: $0)) })
         let placements = CalendarAllDayLayout.placements(entries: entries, days: days, calendar: calendar)
         let rowCount = (placements.map(\.lane).max() ?? -1) + 1
@@ -536,10 +609,12 @@ private struct MobileCalendarContent: View {
             ?? max(36, Double(rowCount) * (allDayRowHeight + 2))
         let secondary = options.visibleTimeZones(primary: calendar.timeZone)
         let rulerWidth = primaryRulerWidth + CGFloat(secondary.count) * secondaryRulerWidth
-        let columnWidth: CGFloat = if let weekViewportWidth {
-            min(64, max(46, (weekViewportWidth - rulerWidth) / 7))
+        let columnWidth: CGFloat = if options.mode == .week {
+            min(64, max(46, (viewportWidth - rulerWidth) / 7))
         } else {
-            days.count == 1 ? 300 : 64
+            // Fill the available Day/Multi-Day viewport without shrinking existing minimums.
+            max(days.count == 1 ? 300 : 64,
+                (viewportWidth - rulerWidth) / CGFloat(max(1, days.count)))
         }
         return ScrollView([.horizontal, .vertical]) {
             HStack(alignment: .top, spacing: 0) {
@@ -548,7 +623,7 @@ private struct MobileCalendarContent: View {
                     VStack(spacing: 0) {
                         HStack(spacing: 0) {
                             ForEach(days, id: \.self) { day in
-                                hourlyDayHeader(day).frame(width: columnWidth)
+                                hourlyColumnHeader(day).frame(width: columnWidth)
                                     .overlay(alignment: .leading) { hourlyDayBoundary }
                             }
                         }
@@ -564,7 +639,7 @@ private struct MobileCalendarContent: View {
                 } else {
                     ForEach(Array(days.enumerated()), id: \.element) { index, day in
                         VStack(spacing: 0) {
-                            hourlyDayHeader(day)
+                            hourlyColumnHeader(day)
                             allDayCards((byDay[day] ?? []).filter(\.isAllDay),
                                         index: index, columnWidth: columnWidth)
                                 .frame(height: allDayHeight, alignment: .top)
@@ -582,7 +657,7 @@ private struct MobileCalendarContent: View {
             }
             .padding(.bottom, 100)
             .background {
-                if weekViewportWidth != nil {
+                if options.mode == .week {
                     PhoneWeekSwipe(layoutDirection: layoutDirection, page: pageWeek)
                         .allowsHitTesting(false).accessibilityHidden(true)
                 }
@@ -605,16 +680,41 @@ private struct MobileCalendarContent: View {
         focus = CalendarDates.navigate(focus, direction: direction, mode: .week, options: options, calendar: calendar)
     }
 
+    @ViewBuilder private func hourlyColumnHeader(_ day: Date) -> some View {
+        if options.mode == .day {
+            let start = CalendarDates.weekStart(day, calendar: calendar)
+            HStack(spacing: 0) {
+                ForEach((0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }, id: \.self) { date in
+                    let selected = calendar.isDate(date, inSameDayAs: day)
+                    let parts = calendar.dateComponents([.year, .month, .day], from: date)
+                    Button { select(.day, date) } label: {
+                        VStack(spacing: 4) {
+                            Text(date.formatted(Date.FormatStyle(date: .omitted, time: .omitted, calendar: calendar, timeZone: calendar.timeZone).weekday(.narrow))).foregroundStyle(.secondary)
+                            Text("\(calendar.component(.day, from: date))")
+                                .fontWeight(selected ? .bold : .regular)
+                                .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                        }.font(.caption).frame(maxWidth: .infinity, minHeight: 52)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Show " + date.formatted(Date.FormatStyle(date: .complete, time: .omitted, calendar: calendar, timeZone: calendar.timeZone)) + " in Day view")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier((selected ? "calendarDay-" : "calendarDaySelector-") + "\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)")
+                }
+            }
+        } else {
+            hourlyDayHeader(day)
+        }
+    }
+
     private func hourlyDayHeader(_ day: Date) -> some View {
-        let parts = calendar.dateComponents([.year, .month, .day], from: day)
-        let identifier = "calendarDay-\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
+        let header = CalendarDayHeader(day: day, calendar: calendar)
         return Button { select(.day, day) } label: {
             VStack(spacing: 6) {
-                Text(day.formatted(.dateTime.weekday(.narrow))).foregroundStyle(.secondary)
-                Text("\(calendar.component(.day, from: day))").fontWeight(.semibold)
+                Text(header.weekdayNarrow).foregroundStyle(.secondary)
+                Text("\(header.dayNumber)").fontWeight(.semibold)
             }.font(.caption).frame(height: 52)
-        }.accessibilityLabel("Show " + day.formatted(date: .complete, time: .omitted) + " in Day view")
-            .accessibilityIdentifier(identifier)
+        }.accessibilityLabel(header.accessibleLabel)
+            .accessibilityIdentifier(header.identifier)
     }
 
     private var hourlyDayBoundary: some View {

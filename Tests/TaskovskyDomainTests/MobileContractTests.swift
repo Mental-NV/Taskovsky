@@ -183,6 +183,38 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(movedTimed.scheduledDuration?.start, expectedDue.addingTimeInterval(-3_600))
     }
 
+    func testPriorityBoardPartitionsOnceInExistingRankAndKeepsNotes() {
+        let low = TaskItem(title: "Low", priority: .low)
+        let first = TaskItem(title: "First", priority: .high)
+        let second = TaskItem(title: "Second", priority: .high)
+        let medium = TaskItem(title: "Medium", priority: .medium)
+        var note = TaskItem(title: "Note")
+        note.kind = .note
+        let tasks = [low, first, note, second, medium]
+        let data = WorkspaceData(tasks: tasks)
+        let board = PriorityBoardProjection(destination: .all, in: data, now: now, calendar: calendar)
+        XCTAssertEqual(board.columns.map(\.id), [.high, .medium, .low, .none])
+        XCTAssertEqual(board.columns.map(\.title), ["High Priority", "Medium Priority", "Low Priority", "No Priority"])
+        XCTAssertEqual(board.columns[0].tasks.map(\.id), [first.id, second.id])
+        let projected = board.columns.flatMap(\.tasks).map(\.id)
+        XCTAssertEqual(Set(projected), Set(tasks.map(\.id)))
+        XCTAssertEqual(projected.count, tasks.count)
+    }
+
+    func testPriorityBoardRetainsScopeAndArchiveRulesAndHasNoEmptyLanes() {
+        let tag = TaskTag(name: "Scope", color: "#334455")
+        let archived = TaskList(name: "Archived", color: "#334455", isArchived: true)
+        let included = TaskItem(title: "Included", tagIDs: [tag.id], priority: .medium)
+        let excluded = TaskItem(title: "Other", priority: .high)
+        let old = TaskItem(title: "Archived", listID: archived.id, tagIDs: [tag.id], priority: .high)
+        let data = WorkspaceData(tasks: [included, excluded, old], lists: [archived], tags: [tag])
+        let board = PriorityBoardProjection(destination: .tag(tag.id), in: data, now: now, calendar: calendar)
+        XCTAssertEqual(board.columns.map(\.id), [.medium])
+        XCTAssertEqual(board.columns.flatMap(\.tasks).map(\.id), [included.id])
+        XCTAssertTrue(PriorityBoardProjection(destination: .all, in: WorkspaceData(), now: now, calendar: calendar).columns.isEmpty)
+        XCTAssertTrue(PriorityBoardProjection(destination: .list(archived.id), in: data, now: now, calendar: calendar).columns.isEmpty)
+    }
+
     func testScopedBoardFolderAndTagListMovesStayWithinAvailableColumns() {
         let folder = ListFolder(name: "Projects")
         let tag = TaskTag(name: "Design", color: "#334455")
@@ -964,6 +996,34 @@ final class MobileContractTests: XCTestCase {
         XCTAssertEqual(reopened.headings.map(\.id), headings.map(\.id))
         XCTAssertTrue(RichBody.sameCodeUnits(reopened.preview.text, "Parent\nCafé\nChild\nPeer\nVisible 🧩\nLast"))
         XCTAssertTrue(RichBody.sameCodeUnits(preview.readingView(collapsed: []).preview.text, text))
+    }
+
+    func testPriorityListGroupsRetainSortAndIdentityWithoutEmptyBuckets() {
+        let low = TaskItem(title: "Low", priority: .low)
+        let first = TaskItem(title: "First", priority: .high)
+        let second = TaskItem(title: "Second", priority: .high)
+        let none = TaskItem(title: "None")
+        let groups = TaskPriorityListGroup.group([low, second, none, first])
+        XCTAssertEqual(groups.map(\.id), [.high, .low, .none])
+        XCTAssertEqual(groups.flatMap(\.tasks).map(\.id), [second.id, first.id, low.id, none.id])
+        XCTAssertEqual(groups.map(\.title), ["High Priority", "Low Priority", "No Priority"])
+        XCTAssertTrue(TaskPriorityListGroup.group([]).isEmpty)
+        XCTAssertEqual(Set(groups.flatMap(\.tasks).map(\.id)).count, 4)
+    }
+
+    func testTitleSortUsesNumericCaseInsensitiveStableOrderWithoutMutation() throws {
+        let titles = ["Task 10", "café", "Task 2", "CAFE", "Alpha", ""]
+        let tasks = titles.map { TaskItem(title: $0) }
+        let encoder = JSONEncoder(); encoder.outputFormatting = .sortedKeys
+        let before = try encoder.encode(tasks)
+        XCTAssertEqual(tasks.sorted(by: TaskTitleSort.ascending.precedes).map(\.title), ["", "Alpha", "café", "CAFE", "Task 2", "Task 10"])
+        XCTAssertEqual(tasks.sorted(by: TaskTitleSort.descending.precedes).map(\.title), ["Task 10", "Task 2", "café", "CAFE", "Alpha", ""])
+        XCTAssertFalse(TaskTitleSort.ascending.precedes(tasks[1], tasks[3]))
+        XCTAssertFalse(TaskTitleSort.descending.precedes(tasks[3], tasks[1]))
+        XCTAssertEqual(try encoder.encode(tasks), before)
+        XCTAssertEqual(TaskTitleSort(rawValue: "TitleAscending"), .ascending)
+        XCTAssertEqual(TaskTitleSort(rawValue: "TitleDescending"), .descending)
+        XCTAssertFalse(TaskSortPolicy.canReorder(TaskTitleSort.ascending.rawValue))
     }
 
     func testTimestampSortDistinguishesCreatedModifiedAndRetainsEqualOrder() {
@@ -2367,5 +2427,207 @@ extension MobileContractTests {
         var missing = try XCTUnwrap(projected.entries.first { $0.taskID == allDay.id })
         missing.listID = UUID()
         XCTAssertEqual(CalendarEntryDetails(entry: missing, listNames: names, calendar: display).text, "All day · List unavailable")
+    }
+}
+
+extension MobileContractTests {
+    /// D02 icon strip eligibility: Pin, Won't Do and Delete(Trash) follow the
+    /// shared lifecycle refusals across record states. Share has no command.
+    func testDetailActionStripEligibilityAcrossRecordStates() {
+        let lists: [TaskList] = []
+        let active = TaskItem(title: "Active")
+        XCTAssertNil(TaskLifecycle.refusal(for: .setPinned(true), task: active, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .wontDo, task: active, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .trash, task: active, lists: lists))
+
+        var completed = active
+        completed.completedAt = now
+        XCTAssertEqual(TaskLifecycle.refusal(for: .setPinned(true), task: completed, lists: lists), .wrongStatus)
+        XCTAssertNil(TaskLifecycle.refusal(for: .wontDo, task: completed, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .trash, task: completed, lists: lists))
+
+        let note = TaskItem(title: "Note", kind: .note)
+        // Pinning follows status, not kind: notes can pin, but cannot be
+        // marked Won't Do.
+        XCTAssertNil(TaskLifecycle.refusal(for: .setPinned(true), task: note, lists: lists))
+        XCTAssertEqual(TaskLifecycle.refusal(for: .wontDo, task: note, lists: lists), .wrongStatus)
+        XCTAssertNil(TaskLifecycle.refusal(for: .trash, task: note, lists: lists))
+
+        var trashed = active
+        trashed.deletedAt = now
+        for command in [TaskLifecycleCommand.setPinned(true), .wontDo, .trash] as [TaskLifecycleCommand] {
+            XCTAssertEqual(TaskLifecycle.refusal(for: command, task: trashed, lists: lists), .wrongStatus)
+        }
+        XCTAssertNil(TaskLifecycle.refusal(for: .restore, task: trashed, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .purge, task: trashed, lists: lists))
+
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let archived = TaskItem(title: "Archived", listID: archive.id)
+        for command in [TaskLifecycleCommand.setPinned(true), .wontDo, .trash] as [TaskLifecycleCommand] {
+            XCTAssertEqual(TaskLifecycle.refusal(for: command, task: archived, lists: [archive]), .archived)
+        }
+    }
+
+    /// D02 row eligibility: Add Subtask and Link Parent Task follow the shared
+    /// hierarchy refusals; notes, trashed and archived records are refused.
+    func testDetailHierarchyRowEligibilityAcrossRecordStates() {
+        let lists: [TaskList] = []
+        let active = TaskItem(title: "Active")
+        XCTAssertNil(TaskLifecycle.refusal(for: .addSubtask(id: UUID(), title: "Child"), task: active, lists: lists))
+        XCTAssertNil(TaskLifecycle.refusal(for: .setParent(nil), task: active, lists: lists))
+
+        let note = TaskItem(title: "Note", kind: .note)
+        XCTAssertEqual(TaskLifecycle.refusal(for: .addSubtask(id: UUID(), title: "Child"), task: note, lists: lists), .wrongStatus)
+        XCTAssertEqual(TaskLifecycle.refusal(for: .setParent(nil), task: note, lists: lists), .wrongStatus)
+
+        var trashed = active
+        trashed.deletedAt = now
+        XCTAssertEqual(TaskLifecycle.refusal(for: .addSubtask(id: UUID(), title: "Child"), task: trashed, lists: lists), .wrongStatus)
+
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        let archived = TaskItem(title: "Archived", listID: archive.id)
+        XCTAssertEqual(TaskLifecycle.refusal(for: .setParent(nil), task: archived, lists: [archive]), .archived)
+    }
+
+    /// D02 Tags route: saving keeps every other field, an unchanged resubmit
+    /// is a no-op (Cancel/Done-without-changes writes nothing), unavailable
+    /// tags refuse, and reopening sees the saved selection.
+    func testDetailTagsSaveNoopAndReopen() throws {
+        let keep = TaskTag(name: "Keep", color: "#123456")
+        let added = TaskTag(name: "Added", color: "#123456")
+        let task = TaskItem(title: "Tagged", body: "Body", tagIDs: [keep.id], dueDate: now, priority: .high)
+        let saved = try XCTUnwrap(TaskMetadataChange.tags([keep.id, added.id])
+            .applying(to: task, availableTags: [keep, added]))
+        XCTAssertEqual(saved.tagIDs, [keep.id, added.id])
+        XCTAssertEqual(saved.title, task.title)
+        XCTAssertEqual(saved.body, task.body)
+        XCTAssertEqual(saved.dueDate, task.dueDate)
+        XCTAssertEqual(saved.priority, task.priority)
+        XCTAssertNil(try TaskMetadataChange.tags([keep.id, added.id]).applying(to: saved, availableTags: [keep, added]))
+        let reopened = try XCTUnwrap(TaskMetadataChange.tags([added.id])
+            .applying(to: saved, availableTags: [keep, added]))
+        XCTAssertEqual(reopened.tagIDs, [added.id])
+        XCTAssertEqual(reopened.title, task.title)
+        XCTAssertThrowsError(try TaskMetadataChange.tags([UUID()]).applying(to: saved, availableTags: [keep, added])) {
+            XCTAssertEqual($0 as? TaskMetadataValidation, .unavailableTag)
+        }
+        // Cancelling keeps the original record untouched.
+        XCTAssertEqual(task.tagIDs, [keep.id])
+    }
+
+    /// D02 Add Subtask target and return: the child inherits the parent list
+    /// and points back at it; notes, trashed and archived parents refuse.
+    func testDetailAddSubtaskTargetAndReturn() throws {
+        let work = TaskList(name: "Work", color: "#123456")
+        var data = WorkspaceData(tasks: [TaskItem(title: "Parent", listID: work.id)], lists: [work])
+        let parent = data.tasks[0]
+        let childID = UUID()
+        XCTAssertTrue(TaskHierarchy.addChild(id: childID, to: parent.id, title: " Child ",
+                                             in: &data, position: .top, now: now))
+        let child = try XCTUnwrap(data.tasks.first { $0.id == childID })
+        XCTAssertEqual(child.listID, work.id)
+        XCTAssertEqual(child.parentID, parent.id)
+        XCTAssertEqual(child.title, "Child")
+
+        var noteData = WorkspaceData(tasks: [TaskItem(title: "Note", kind: .note)])
+        XCTAssertFalse(TaskHierarchy.addChild(id: UUID(), to: noteData.tasks[0].id, title: "Child",
+                                              in: &noteData, position: .top, now: now))
+        var trashedData = WorkspaceData(tasks: [TaskItem(title: "Gone", deletedAt: now)])
+        XCTAssertFalse(TaskHierarchy.addChild(id: UUID(), to: trashedData.tasks[0].id, title: "Child",
+                                              in: &trashedData, position: .top, now: now))
+        var archive = TaskList(name: "Archive", color: "#123456")
+        archive.isArchived = true
+        var archivedData = WorkspaceData(tasks: [TaskItem(title: "Old", listID: archive.id)], lists: [archive])
+        XCTAssertFalse(TaskHierarchy.addChild(id: UUID(), to: archivedData.tasks[0].id, title: "Child",
+                                              in: &archivedData, position: .top, now: now))
+        XCTAssertFalse(TaskHierarchy.addChild(id: childID, to: parent.id, title: "Again",
+                                              in: &data, position: .top, now: now))
+    }
+}
+
+extension MobileContractTests {
+    /// D02 shared layout policy: untouched storage shows the strip and keeps
+    /// strip actions out of the default rows so each appears exactly once.
+    func testDetailLayoutUntouchedStorageShowsStripWithoutRowDuplicates() {
+        let layout = DetailActionLayout.decode(Data())
+        XCTAssertEqual(layout, .default)
+        XCTAssertTrue(DetailActionLayout.showsStrip(for: Data()))
+        XCTAssertTrue(layout?.isDefault == true)
+        XCTAssertEqual(DetailActionLayout.stripActions, [.pin, .wontDo, .trash])
+        let rows = layout?.pinnedRows(showingStrip: true) ?? []
+        for strip in DetailActionLayout.stripActions {
+            XCTAssertFalse(rows.contains(strip))
+        }
+        XCTAssertEqual(rows.count, DetailAction.allCases.count - DetailActionLayout.stripActions.count)
+        XCTAssertTrue(rows.contains(.addSubtask) && rows.contains(.linkParent) && rows.contains(.tags))
+    }
+
+    /// D02 customization preservation: a saved layout keeps its stored pinned
+    /// order and existing More prefix with no strip. Absent supported actions
+    /// join the effective More list so older layouts gain new routes, while
+    /// the saved raw bytes stay untouched until an explicit edit.
+    func testDetailLayoutPreservesStoredOrderAndAppendsAbsentToMore() throws {
+        let saved = DetailActionLayout(pinned: [.trash, .complete, .pin], more: [.wontDo, .tags])
+        let data = try JSONEncoder().encode(saved)
+        let decoded = try XCTUnwrap(DetailActionLayout.decode(data))
+        XCTAssertFalse(decoded.isDefault)
+        XCTAssertFalse(DetailActionLayout.showsStrip(for: data))
+        // No strip, so rows render the exact pinned order including moved
+        // strip actions — nothing duplicates and nothing is reordered.
+        XCTAssertEqual(decoded.pinned, [.trash, .complete, .pin])
+        XCTAssertEqual(decoded.pinnedRows(showingStrip: false), [.trash, .complete, .pin])
+        // The stored More prefix is stable; absent actions follow in
+        // supported order without touching storage.
+        XCTAssertEqual(decoded.more, [.wontDo, .tags, .reopen, .move, .duplicate, .convert,
+                                      .saveTemplate, .applyTemplate, .addSubtask, .linkParent])
+        // An older default predating newer actions keeps its exact pinned
+        // rows with no strip while gaining the new routes in More.
+        let legacy = DetailActionLayout(
+            pinned: [.complete, .reopen, .wontDo, .pin, .move, .duplicate, .convert, .trash, .saveTemplate, .applyTemplate],
+            more: [])
+        let legacyData = try JSONEncoder().encode(legacy)
+        let legacyDecoded = try XCTUnwrap(DetailActionLayout.decode(legacyData))
+        XCTAssertEqual(legacyDecoded.pinned, legacy.pinned)
+        XCTAssertEqual(legacyDecoded.more, [.addSubtask, .linkParent, .tags])
+        XCTAssertFalse(DetailActionLayout.showsStrip(for: legacyData))
+        XCTAssertEqual(legacyDecoded.pinnedRows(showingStrip: false), legacy.pinned)
+        // The decode/encode round trip through an explicit edit is stable:
+        // saving the effective layout and decoding it again changes nothing.
+        let rewritten = try XCTUnwrap(DetailActionLayout.decode(legacyDecoded.encoded()))
+        XCTAssertEqual(rewritten, legacyDecoded)
+        XCTAssertEqual(rewritten.pinned, legacy.pinned)
+    }
+
+    /// Schema-unknown payloads fail as a whole so the UI preserves them
+    /// untouched; repeats dedupe to first occurrence without reordering.
+    func testDetailLayoutRefusesUnknownSchemaAndDedupesRepeats() throws {
+        let unknown = try XCTUnwrap("{\"pinned\":[\"complete\",\"futureAction\"],\"more\":[]}".data(using: .utf8))
+        XCTAssertNil(DetailActionLayout.decode(unknown))
+        XCTAssertFalse(DetailActionLayout.showsStrip(for: unknown))
+        let repeated = DetailActionLayout(pinned: [.complete, .complete, .reopen], more: [.reopen, .tags])
+        let data = try JSONEncoder().encode(repeated)
+        XCTAssertEqual(DetailActionLayout.decode(data)?.pinned, [.complete, .reopen])
+        // Repeats collapse to first occurrence; absent actions still append
+        // after the stored More prefix.
+        XCTAssertEqual(DetailActionLayout.decode(data)?.more,
+                       [.tags, .wontDo, .pin, .move, .duplicate, .convert, .trash,
+                        .saveTemplate, .applyTemplate, .addSubtask, .linkParent])
+    }
+
+    /// Restoring defaults clears back to empty storage, which brings the
+    /// strip back; custom layouts encode exactly for byte-stable round trips.
+    func testDetailLayoutRestoreDefaultsClearsToEmptyStorage() throws {
+        XCTAssertEqual(DetailActionLayout.default.encoded(), Data())
+        XCTAssertTrue(DetailActionLayout.showsStrip(for: DetailActionLayout.default.encoded()))
+        let custom = DetailActionLayout(pinned: [.complete], more: [.pin])
+        let data = custom.encoded()
+        XCTAssertFalse(data.isEmpty)
+        let effective = try XCTUnwrap(DetailActionLayout.decode(data))
+        XCTAssertEqual(effective.pinned, [.complete])
+        XCTAssertTrue(effective.more.prefix(1).elementsEqual([.pin]))
+        XCTAssertTrue(effective.more.contains(.tags))
+        XCTAssertEqual(DetailActionLayout.decode(effective.encoded()), effective)
     }
 }

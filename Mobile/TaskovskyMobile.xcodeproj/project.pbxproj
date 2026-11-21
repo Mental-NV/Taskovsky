@@ -77,6 +77,9 @@
         "B8FD48B691B49BCDE6CC3EAB",
         "A00000000000000000000001",
         "A00000000000000000000003",
+        "B1A11CE00000000000000001",
+        "B1A11CE00000000000000003",
+        "C1A11CE00000000000000001",
       );
     };
     "000000000000000000000003" = {
@@ -183,6 +186,7 @@
         "C407BA710000000000000006",
         "A5F903CA0110000000000014",
         "A00000000000000000000002",
+        "B1A11CE00000000000000002",
       );
       "runOnlyForDeploymentPostprocessing" = "0";
     };
@@ -360,6 +364,36 @@
       "isa" = "PBXFileReference";
       "lastKnownFileType" = "sourcecode.swift";
       "sourceTree" = "<group>";
+    };
+    "B1A11CE00000000000000001" = {
+      "path" = "App/PhoneUnifiedManagement.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "B1A11CE00000000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "B1A11CE00000000000000001";
+    };
+    "B1A11CE00000000000000003" = {
+      "path" = "UITests/UnifiedManagementTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "B1A11CE00000000000000004" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "B1A11CE00000000000000003";
+    };
+    "C1A11CE00000000000000001" = {
+      "path" = "UITests/RootLabelRemovalTests.swift";
+      "isa" = "PBXFileReference";
+      "lastKnownFileType" = "sourcecode.swift";
+      "sourceTree" = "<group>";
+    };
+    "C1A11CE00000000000000002" = {
+      "isa" = "PBXBuildFile";
+      "fileRef" = "C1A11CE00000000000000001";
     };
     "000000000000000000000016" = {
       "isa" = "PBXFrameworksBuildPhase";
@@ -782,6 +816,8 @@
       "buildActionMask" = "2147483647";
       "files" = (
         "00000000000000000000002E",
+        "B1A11CE00000000000000004",
+        "C1A11CE00000000000000002",
       );
       "runOnlyForDeploymentPostprocessing" = "0";
     };

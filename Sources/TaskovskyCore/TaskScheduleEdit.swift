@@ -179,6 +179,48 @@ public struct TaskScheduleEdit: Sendable {
                                                 settings: settings, calendar: calendar)
     }
 
+    /// Freeze the staged defaults before adding a custom manual reminder.
+    public mutating func addManualReminder(_ date: Date, settings: AppSettings) {
+        if usesAutomaticReminders { manualReminders = automaticReminders(settings: settings) }
+        usesAutomaticReminders = false
+        if !manualReminders.contains(date) { manualReminders.append(date) }
+        manualReminders.sort()
+    }
+
+    /// Observed all-day single-date preset menu. Manual dates remain absolute;
+    /// selecting a preset does not rewrite unrelated custom reminder timestamps.
+    public var supportsAllDayReminderPresets: Bool {
+        hasDate && schedule.duration == nil && !schedule.effectiveHasTime && hasKnownZone
+    }
+
+    public func reminderPresetDate(_ preset: AllDayReminder) -> Date? {
+        guard supportsAllDayReminderPresets, let days = preset.daysEarly else { return nil }
+        return AllDayReminderOffset.date(due: schedule.effectiveDue, weeks: false,
+                                         offset: days, hour: 9, minute: 0, calendar: calendar)
+    }
+
+    public func isReminderPresetSelected(_ preset: AllDayReminder, settings: AppSettings) -> Bool {
+        guard supportsAllDayReminderPresets else { return false }
+        let dates = usesAutomaticReminders ? automaticReminders(settings: settings) : manualReminders
+        if preset == .none { return dates.isEmpty }
+        return reminderPresetDate(preset).map { dates.contains($0) } ?? false
+    }
+
+    public mutating func toggleReminderPreset(_ preset: AllDayReminder, settings: AppSettings) {
+        guard supportsAllDayReminderPresets else { return }
+        if preset == .none {
+            usesAutomaticReminders = false
+            manualReminders = []
+            remindsAtEnd = false
+            return
+        }
+        guard let date = reminderPresetDate(preset) else { return }
+        var dates = usesAutomaticReminders ? automaticReminders(settings: settings) : manualReminders
+        if dates.contains(date) { dates.removeAll { $0 == date } } else { dates.append(date) }
+        usesAutomaticReminders = false
+        manualReminders = Array(Set(dates)).sorted()
+    }
+
     public func applying(to task: TaskItem, settings: AppSettings) throws -> TaskItem {
         guard task.id == taskID, CalendarScheduleSnapshot(task) == original else { throw TaskScheduleValidation.changedTask }
         if !hasDate {
@@ -253,5 +295,44 @@ public struct TaskScheduleEdit: Sendable {
         parts.second = time.second
         parts.nanosecond = time.nanosecond
         return calendar.date(from: parts) ?? date
+    }
+}
+
+/// Civil-day offset calculation for the all-day single-date Custom reminder UI.
+/// Nonexistent local times are rejected; repeated times use the first occurrence.
+public enum AllDayReminderOffset {
+    public static func date(due: Date, weeks: Bool, offset: Int, hour: Int, minute: Int, calendar: Calendar) -> Date? {
+        guard due.timeIntervalSinceReferenceDate.isFinite, (0...52).contains(offset),
+              (0...23).contains(hour), (0...59).contains(minute),
+              let day = calendar.date(byAdding: .day, value: -offset * (weeks ? 7 : 1), to: calendar.startOfDay(for: due)),
+              let candidate = calendar.nextDate(after: day.addingTimeInterval(-1),
+                  matching: DateComponents(hour: hour, minute: minute, second: 0),
+                  matchingPolicy: .strict, repeatedTimePolicy: .first, direction: .forward),
+              calendar.isDate(candidate, inSameDayAs: day) else { return nil }
+        return candidate
+    }
+}
+
+
+extension AllDayReminder {
+    public var presetTitle: String {
+        switch self {
+        case .none: "None"
+        case .onDay9: "On the day"
+        case .dayBefore9: "1 day early"
+        case .twoDaysBefore9: "2 days early"
+        case .threeDaysBefore9: "3 days early"
+        case .weekBefore9: "1 week early"
+        }
+    }
+    fileprivate var daysEarly: Int? {
+        switch self {
+        case .none: nil
+        case .onDay9: 0
+        case .dayBefore9: 1
+        case .twoDaysBefore9: 2
+        case .threeDaysBefore9: 3
+        case .weekBefore9: 7
+        }
     }
 }

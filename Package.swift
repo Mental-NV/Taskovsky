@@ -14,6 +14,7 @@ let domainSources = [
     "RichDescriptionPreview.swift",
     "RichBodyEdit.swift",
     "CustomRecurrence.swift",
+    "RepeatPreset.swift",
     "TaskCalendar.swift",
     "TaskDueCountdown.swift",
     "TaskCalendarProjection.swift",
@@ -37,7 +38,8 @@ let domainSources = [
     "TaskTemplateChange.swift",
     "TaskLifecycle.swift",
     "TaskBatchEdit.swift",
-    "TaskMetadataChange.swift"
+    "TaskMetadataChange.swift",
+    "DetailActionLayout.swift"
 ]
 let desktopSources = [
     "AppMigration.swift",

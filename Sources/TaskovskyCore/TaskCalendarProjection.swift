@@ -137,14 +137,17 @@ public enum TaskCalendarProjection {
     }
     public static func arrangementTasks(data: WorkspaceData, options: TaskCalendarOptions, overdue: Bool = false,
                                         now: Date = Date(), calendar: Calendar,
-                                        selection: CalendarArrangeSelection = .calendar) -> [TaskItem] {
+                                        selection: CalendarArrangeSelection = .calendar,
+                                        undated: Bool = true, showNotes: Bool = true) -> [TaskItem] {
         var scope = options
         switch selection {
         case .calendar: break
         case .inbox: scope.listIDs = []; scope.includeInbox = true; scope.tagIDs = []
         case .list(let id): scope.listIDs = [id]; scope.includeInbox = false; scope.tagIDs = []
+        case .sources(let ids, let inbox): scope.listIDs = Array(ids); scope.includeInbox = inbox; scope.tagIDs = []
         }
         return data.tasks.filter { task in
+            guard showNotes || task.kind != .note, undated || task.dueDate != nil else { return false }
             guard scope.includes(task, data: data), task.completedAt == nil, task.wontDoAt == nil else { return false }
             if selection != .calendar && !options.tagIDs.isEmpty && !options.matchesSelectedTags(task, data: data) { return false }
             if let due = task.dueDate {
@@ -167,6 +170,39 @@ public enum TaskCalendarProjection {
             }
         }
         return groups.keys.sorted().map { ($0, groups[$0] ?? []) }
+    }
+
+    /// One visible Arrange row. `depth` is the nesting depth inside its own
+    /// group; `hasChildren` marks a disclosure. Rows never carry records that
+    /// were not in the supplied slice: eligibility (undated/overdue/notes,
+    /// sources, recurrence) is settled by `arrangementTasks` before grouping.
+    public struct ArrangementRow: Sendable, Equatable {
+        public let task: TaskItem
+        public let depth: Int
+        public let hasChildren: Bool
+        public init(task: TaskItem, depth: Int, hasChildren: Bool) {
+            self.task = task; self.depth = depth; self.hasChildren = hasChildren
+        }
+    }
+
+    /// Bounded hierarchy rows for one already-grouped slice. Only List
+    /// grouping nests, and only within the slice: a task whose parent is in
+    /// another group — or is not an eligible candidate at all — renders as a
+    /// root, and collapsing never changes the group count. Tag and Priority
+    /// grouping keep the exact incoming flat order. Cycle-safe by
+    /// construction (shared `TaskHierarchy.listRows`); every branch keeps
+    /// stable unique identifiers by rendering the first occurrence of a
+    /// duplicate identifier once, so no eligible row vanishes.
+    public static func arrangementRows(for tasks: [TaskItem], grouping: CalendarColorMode,
+                                       showHierarchy: Bool, collapsed: Set<UUID>) -> [ArrangementRow] {
+        var seen = Set<UUID>()
+        let unique = tasks.filter { seen.insert($0.id).inserted }
+        guard showHierarchy, grouping == .list else {
+            return unique.map { ArrangementRow(task: $0, depth: 0, hasChildren: false) }
+        }
+        return TaskHierarchy.listRows(unique, collapsed: collapsed).map {
+            ArrangementRow(task: $0.task, depth: $0.depth, hasChildren: $0.hasChildren)
+        }
     }
 
 }

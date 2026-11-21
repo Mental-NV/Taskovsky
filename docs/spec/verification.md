@@ -1,6 +1,6 @@
 # Baseline evidence and known deviations
 
-**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](../changes/light-theme-priority-2026-11-13.md).
+See the [active scope and deferrals](workflow.md#scope-and-delivery).
 
 ## Snapshot and evidence levels
 
@@ -9,9 +9,9 @@ Source baseline: [`cfdec454acff91285ac00beaa20c0cf0f0961ee1`](https://github.com
 | Evidence | What it establishes | Limit |
 | --- | --- | --- |
 | Exact merged source and regression files | Implemented Calendar behavior and corrective code paths | Static inspection is not runtime execution |
-| [Final PR #2 correction report](../pr-2-calendar-review-findings-2026-11-08.md#verification-after-fixes) | Prior reported 464 tests passed (430 XCTest + 34 Swift Testing), release build and strict codesign verification | Prior local evidence; those logs are in ignored build directories. Fresh hosted runs are recorded separately below |
+| [Final PR #2 correction report](../archive/early-research/pr-2-calendar-review-findings-2026-11-08.md#verification-after-fixes) | Prior reported 464 tests passed (430 XCTest + 34 Swift Testing), release build and strict codesign verification | Prior local evidence; those logs are in ignored build directories. Fresh hosted runs are recorded separately below |
 | [Calendar verification history](../ticktick-spec/calendar.md#verification-status--8-november-2026) | Earlier 453-test snapshot and bounded isolated live checks, followed by final 464-test correction evidence | Earlier totals are historical stages, not separate current gates; UI checks span release and identified debug fixtures |
-| [Earlier review resolution](../code-review-findings-2026-11-08.md) | Reminder/cadence/editor regressions and selected live nested-Cancel/Quote checks | Native app Undo/Redo, quote/list switching and live paragraph-selection reproduction were not verified |
+| [Earlier review resolution](../archive/early-research/code-review-findings-2026-11-08.md) | Reminder/cadence/editor regressions and selected live nested-Cancel/Quote checks | Native app Undo/Redo, quote/list switching and live paragraph-selection reproduction were not verified |
 | TickTick observations/resource extract | Bounded reference UI/action/structure evidence | Not recovered scheduling algorithms or blanket parity |
 | Proposed architecture and iPhone contracts | Intended future design | No extraction or iOS implementation implied |
 | [Hosted macOS CI](#hosted-macos-ci) | Exact-revision automated test/build/signature/archive evidence | macOS 15 ARM64 only; not native GUI or minimum-OS verification |
@@ -25,13 +25,13 @@ Stable IDs are retained. These original source findings are fixed in the merged 
 
 | ID | Merged resolution | Evidence / remaining validation |
 | --- | --- | --- |
-| DEV-001 | `RepeatDraft` isolates nested Custom state; Cancel/dismiss preserves outer none/simple/custom, Done and Clear are explicit | [RepeatDraftTests](../../Tests/TaskovskyCoreTests/RepeatDraftTests.swift); [original report and live checks](../code-review-findings-2026-11-08.md#live-verification-final-build-2026-11-08) |
+| DEV-001 | `RepeatDraft` isolates nested Custom state; Cancel/dismiss preserves outer none/simple/custom, Done and Clear are explicit | [RepeatDraftTests](../../Tests/TaskovskyCoreTests/RepeatDraftTests.swift); [original report and live checks](../archive/early-research/code-review-findings-2026-11-08.md#live-verification-final-build-2026-11-08) |
 | DEV-002 | All-day descendant reminder shifts retain wall-clock time and relative days in the task zone | [CloneReminderTests](../../Tests/TaskovskyCoreTests/CloneReminderTests.swift), including DST, multiple/previous-day reminders, completion and persistence; no separate live reminder-delivery claim |
 | DEV-003 | Nominal cadence is persisted and stepped independently of displayed weekend rolls; due edits rebase nominal state without resetting count | [NominalCadenceTests](../../Tests/TaskovskyCoreTests/NominalCadenceTests.swift), [NominalSeriesIntegrationTests](../../Tests/TaskovskyCoreTests/NominalSeriesIntegrationTests.swift); actual store successors, count/end bounds, reload and legacy fallback |
 | DEV-004 | Block-range expansion respects the exclusive UTF-16 end | [BlockRangeTests](../../Tests/TaskovskyCoreTests/BlockRangeTests.swift), native text-policy cases; app-controller/live selection scenario and app Undo/Redo remain unverified |
 | DEV-005 | Empty Quote toggles off to plain typing state instead of rearming | [QuoteToggleTests](../../Tests/TaskovskyCoreTests/QuoteToggleTests.swift); prior live on/off/type/reload evidence, with native app Undo/Redo and quote/list switching still unverified |
 
-The four [Calendar review findings](../pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026) are also fixed: unchanged point/precise saves are no-ops; existing short windows retain exact duration on move; future checklist rows reset completion before visibility filtering; and all-day Arrange uses displayed civil dates. [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift) has 11 named review tests; [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift) adds 18 Calendar cases. The final report records 464 total passing tests after final changes.
+The four [Calendar review findings](../archive/early-research/pr-2-calendar-review-findings-2026-11-08.md#resolutions--8-november-2026) are also fixed: unchanged point/precise saves are no-ops; existing short windows retain exact duration on move; future checklist rows reset completion before visibility filtering; and all-day Arrange uses displayed civil dates. [CalendarReviewRegressionTests](../../Tests/TaskovskyCoreTests/CalendarReviewRegressionTests.swift) has 11 named review tests; [TaskCalendarTests](../../Tests/TaskovskyCoreTests/TaskCalendarTests.swift) adds 18 Calendar cases. The final report records 464 total passing tests after final changes.
 
 Prior live checks confirmed byte-identical unchanged point/short/zero saves, explicit Duration conversion with Undo, future checklist visibility under both completed settings, and Tokyo overdue classification on a Europe/Moscow host. Live short-block moves were not confirmed after the resize-handle fix. Arrange-to-hourly and cross-column drops, independent checklist interactions, exact 382-point minimum, exhaustive keyboard/VoiceOver/theme coverage and full gesture parity remain open validation work. Automated store coverage must not be described as live gesture proof.
 
@@ -79,7 +79,7 @@ This section records a later feature integration, not a revision of the historic
 
 | Evidence | Result and scope | Limits |
 | --- | --- | --- |
-| [Original local report](../ticktick-spec/calendar.md#display-gap-follow-up--8-november-2026) and [investigation](../calendar-gap-investigation-2026-11-08.md) | **Reported passed:** 437 XCTest + 34 Swift Testing tests (471 total), including seven new [display-preference regressions](../../Tests/TaskovskyCoreTests/CalendarDisplayOptionsTests.swift); release build and strict codesign verification. Reported release executable SHA-256 `ef3346eb5cccc2a36a55aa4f540569a3b9433cf9d3a88fb0d5135bcee57669c4`. | Prior local evidence, not independently rerun in the cloud. Original logs are ignored build artifacts; exact OS/toolchain and tested checkout SHA were not recorded in that report, so the branch commit identifies the retained report/source rather than proving the checkout of the local execution. |
+| [Original local report](../ticktick-spec/calendar.md#display-gap-follow-up--8-november-2026) and [investigation](../archive/early-research/calendar-gap-investigation-2026-11-08.md) | **Reported passed:** 437 XCTest + 34 Swift Testing tests (471 total), including seven new [display-preference regressions](../../Tests/TaskovskyCoreTests/CalendarDisplayOptionsTests.swift); release build and strict codesign verification. Reported release executable SHA-256 `ef3346eb5cccc2a36a55aa4f540569a3b9433cf9d3a88fb0d5135bcee57669c4`. | Prior local evidence, not independently rerun in the cloud. Original logs are ignored build artifacts; exact OS/toolchain and tested checkout SHA were not recorded in that report, so the branch commit identifies the retained report/source rather than proving the checkout of the local execution. |
 | Original isolated native checks | Reported search/Choose, labels/order/three-row limit, staged Save/Cancel/remove, visibility and process reload, icons/context-menu completion, Year styles/drill-down and unchanged task schedules in the disposable fixture. | No production workspace used. Native checks were not repeated during integration. Compact three-ruler layout, later-column DST offsets and earlier drag/keyboard/VoiceOver limitations remain open. |
 | Cloud documentation integration | Static comparison of exact main and Calendar source refs; current specifications and canonical parity updated while preserving main corrections, moved pointers, historical reports and extended resource evidence. | Documentation/link/allowlist checks do not establish runtime correctness. No Mac operation, new TickTick experiment or local app/test execution performed during this step. |
 | Final integrated-head hosted macOS CI | **Pending at documentation integration.** Require the checks for the final [PR #3](https://github.com/Mental-NV/Taskovsky/pull/3) head, recording actual checkout SHA and run URL in the PR's verification record before merge. | Do not reuse PR #1 success or the original local 471-test report as proof for the integrated head. Build, tests, signature and restored-archive checks remain separate gates; successful CI does not establish native visual parity. |
@@ -101,7 +101,7 @@ This documentation-only change reconciles [the canonical iPhone specification](i
 <a id="calendar-visual-follow-up"></a>
 ## Calendar visual follow-up — local working tree, November 8, 2026
 
-Approved scope: [CAL-VIS-001](../changes/calendar-visual-parity-2026-11-08.md). The [dated audit](../calendar-visual-parity-audit-2026-11-08.md) records reference observations, measurements, cleanup and remaining differences. This work is uncommitted on `codex/calendar-visual-parity`, based on `f85e2f6a9c538f36829961961a0749197f29c4e2`; that base SHA alone does not identify the changed build. No commit, push, PR or deployment was performed for this follow-up.
+Approved scope: [CAL-VIS-001](../changes/calendar-visual-parity-2026-11-08.md). The [dated audit](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md) records reference observations, measurements, cleanup and remaining differences. This work is uncommitted on `codex/calendar-visual-parity`, based on `f85e2f6a9c538f36829961961a0749197f29c4e2`; that base SHA alone does not identify the changed build. No commit, push, PR or deployment was performed for this follow-up.
 
 Environment: **macOS 27.0.1 (26A434), arm64; Xcode 27.0 (27A266a), Swift 6.4 (`swiftlang-6.4.0.34.1 clang-2100.3.34.1`)**. UI records use the MSI MP273A at calibrated 1 capture pixel/point, normal text size, light appearance and Europe/Moscow. Native Fill 1920×1050 and Left 961×1050 are distinct from the existing debug 780×580 sizing check.
 
@@ -124,7 +124,7 @@ The baseline was independently tested/built before source edits, with the same 4
 
 ### Boundary review correction — final local source
 
-Direct screenshot review found alternating missing hourly dividers and offset empty all-day dividers. File measurements confirmed subpixel rasterization of half-point rules plus empty internal scroll-view sizing. [The audit's boundary correction](../calendar-visual-parity-audit-2026-11-08.md#follow-up-boundary-correction) records the cause, implementation and all seven measured positions. No scheduling algorithms changed.
+Direct screenshot review found alternating missing hourly dividers and offset empty all-day dividers. File measurements confirmed subpixel rasterization of half-point rules plus empty internal scroll-view sizing. [The audit's boundary correction](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md#follow-up-boundary-correction) records the cause, implementation and all seven measured positions. No scheduling algorithms changed.
 
 | Gate | Latest result |
 | --- | --- |
@@ -143,7 +143,7 @@ The corrected release checks ran in the same recorded Mac/toolchain/display envi
 <a id="calendar-source-follow-up"></a>
 ## Calendar source and documented display corrections — November 9, 2026
 
-Scope: [CAL-FILTER-001](../changes/calendar-filters-2026-11-09.md), [CAL-DISPLAY-002](../changes/calendar-documented-navigation-zones-2026-11-09.md), [official/live comparison](../tasks-calendar-comparison-2026-11-09.md). Same dirty `codex/calendar-visual-parity` checkout and base `f85e2f6a9c538f36829961961a0749197f29c4e2`; the preceding visual/boundary changes are preserved. This section supersedes earlier source/executable identities for the current tree without claiming their native cases were all rerun. No commit, push, PR, deployment or iOS implementation was made in this checkout.
+Scope: [CAL-FILTER-001](../changes/calendar-filters-2026-11-09.md), [CAL-DISPLAY-002](../changes/calendar-documented-navigation-zones-2026-11-09.md), [official/live comparison](../archive/early-research/tasks-calendar-comparison-2026-11-09.md). Same dirty `codex/calendar-visual-parity` checkout and base `f85e2f6a9c538f36829961961a0749197f29c4e2`; the preceding visual/boundary changes are preserved. This section supersedes earlier source/executable identities for the current tree without claiming their native cases were all rerun. No commit, push, PR, deployment or iOS implementation was made in this checkout.
 
 Environment remains macOS 27.0.1 (26A434), arm64, Xcode 27.0 (27A266a), Swift 6.4 (`swiftlang-6.4.0.34.1 clang-2100.3.34.1`), Europe/Moscow. Native light-appearance checks used disposable fixtures, normal text and MSI MP273A at 1×, with full-window 1920×1050 captures and debug compact sizing. Earlier opening captures used the Retina display and are not matched-scale visual comparisons. The audit crossed midnight from November 8 to 9.
 
@@ -2020,3 +2020,286 @@ Isolated from main `993679c`. [Change contract](../changes/subtask-inline-focus-
 ## Task-row conversion verification
 
 Active task rows expose Convert to Note using the existing detail conversion policy and a live context-target guard. Notes/history/Trash/archive have no new action. No command-specific Undo or new reference conversion semantics are claimed. Implementation verification pending; see [change record](../changes/task-row-conversion-2026-11-13.md).
+
+### Mobile Tasks menu-first candidate
+
+**Pre-native checkpoint, before the follow-up below:**
+Base `ef25cb6`; iPhone Simulator generic build-for-testing passed after final test/accessibility edits. Independent rereview accepted the correction; `swift test --disable-sandbox` passed: 824 XCTest and 38 Swift Testing tests. Native tests compiled, not executed. No native interaction or visual acceptance claimed. See [scope](../changes/mobile-tasks-view-menu-2026-11-14.md).
+
+PR93 follow-up: five scoped native Simulator tests passed on source `056e50a`; native menu/checkmark screenshots inspected, original user QA device unchanged and disposable device shut down. Larger text/VoiceOver/physical-device checks remain open. See the feature receipt for the UIKit nested-menu warning.
+
+### Mobile compact Board cards
+Base b8fa66b, presentation-only candidate. Verification pending; see [contract](../changes/mobile-compact-board-cards-2026-11-14.md).
+
+Compact Board follow-up: six isolated native tests passed on d535fab, including standard/largest-standard/accessibility text, opening, scoped drag, note refusal, completion/Undo, archived state and per-list mode. Three simulator screenshots inspected; full-app accessibility and smaller widths remain open.
+
+## Supported mobile Sort & Group sheet
+Initial checkpoint: cloud implementation and adapted native tests only; source review, exact-head CI and native acceptance remain required. See [scope and gates](../changes/mobile-sort-group-supported-sheet-2026-11-14.md). No screenshot/runtime pass claimed.
+
+Supported sheet update: bounded native behavior/light and largest-text screenshot checks passed for source40759b8; final test/docs-head CI pending. See mobile-sort-group-supported-sheet-2026-11-14.md for exact runs and remaining limitations.
+
+## Mobile Priority board grouping
+Initial checkpoint, in implementation; [contract and required gates](../changes/mobile-priority-board-2026-11-14.md). At that checkpoint: cloud source work only, native/CI evidence pending.
+
+Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
+
+## Mobile Tasks drawer shell
+
+Base `7a05e615`; isolated checkout. Final independent source review found no blocking defect; 826 XCTest +38 Swift Testing, release/signature and three owned native drawer regressions passed. Normal/largest-text screenshots inspected; bounded fit passed. Actual VoiceOver traversal, Reduce Motion setting, landscape and exact pixel parity remain unverified. Hosted exact-head CI pending. [Scope and limits](../changes/mobile-tasks-drawer-shell-2026-11-14.md).
+
+## Mobile contextual progress
+
+Base `9783fa7`; isolated checkout. [Bounded contract](../changes/mobile-contextual-progress-2026-11-14.md). Independent review, 826 XCTest +38 Swift Testing, release/signature and two owned native tests passed: Set Progress/Cancel/save/relaunch/reset/checklist and styled-description protection. Actual zero/nonzero screenshots inspected; exact-head CI pending. VoiceOver invocation and complete visual parity remain unverified.
+
+### iPhone compact Tasks rows
+
+Run `testCompactListDatesRemainAccessibleAndOpenDetail`, `testListDatesReflowAtAccessibilityTextSize`, and `testTaskRowSwipesStageScheduleAndApplyPriorityAndMove` in an owned QA Simulator. Inspect attached normal and accessibility screenshots: trailing date/title fit, no overlap, readable stacked reflow, date accessibility value and >=44-point title target. Preserve Search metadata, countdown target, hierarchy/disclosure and existing gestures; do not infer pixel parity or VoiceOver traversal from automated results.
+
+### iPhone Calendar header
+
+Run `testCalendarHeaderModeAndOverflowPlacement`, `testCalendarFilterReset` and `testCalendarJumpToDistantDateCancelAndKeepMode` in owned Simulator. Verify mode/month/overflow horizontal order, first three overflow items, Tasks drawer restoration, filter Cancel/save/relaunch/reset and date-jump retention. Capture real header/menu screenshots; the reference Week overview remains separate.
+
+### iPhone schedule month grid
+
+Run `testScheduleDateGridSelectsDayAndOuterCancelDiscards`, `testScheduleCalendarDateEditSurvivesRelaunch` and `testScheduleNestedAndOuterCancelLeaveAnUntouchedTask` in owned Simulator. Verify actual grid day selection, outer Cancel and saved/relaunched schedule; inspect screenshots for normal layout and retained reachable Time/Duration controls. Existing domain/timezone tests and exact CI remain gates.
+
+### iPhone Arrange side panel
+
+Run the five `testCalendarArrange...` native tests covering side-panel dismissal, scoped scheduling, hour/all-day drag/Undo, both date grids and recurring scope. Adapt targets to an exposed first-column location, never bypass drag validation. Check nested editor Cancel/return and root recurrence dialog while panel remains open; inspect screenshot. Test original workspace/fixtures are untouched.
+
+### iPhone explicit 3 Day
+
+Run `testCalendarThreeDayModePersistsAndPagesThreeDays` and `testCalendarThreeDaySaveFailureKeepsPriorView`, plus existing preference-save-failure coverage. Confirm three actual headers, three-day page step, relaunch and return to Week; failure keeps prior seven-day view and no saved change. Inspect actual screenshot before merge; no accessibility-layout polishing added.
+
+### iPhone Arrange control placement
+Verify top grouping and footer Filter remain visible/reachable; List/Tag/Priority selection, source filtering and Include overdue still affect existing candidate projection. Check nested schedule Cancel/save and recurring drop scope/Undo; inspect neutral screenshot. This does not verify reference staged Filter dialog parity. See `../changes/mobile-arrange-controls-2026-11-15.md` for evidence and final receipt.
+
+### Hourly viewport width
+Verify three equal columns reach the viewport trailing edge and exceed the prior fixed-width layout, then paging/persistence, Day navigation, Week swipe and Day drag/Undo/resize regressions. Inspect actual screenshot rather than equating AX label widths with column widths. See `../changes/mobile-hourly-viewport-2026-11-15.md`.
+
+### Calendar hours popover
+Check no permanent hour row, accessible clock opening, counts, expansion/collapse, Done and reopened state, relaunch reset, hourly drag, Week swipe and 3Day geometry; inspect actual screenshots. See `../changes/mobile-calendar-hours-popover-2026-11-15.md`.
+
+### Day seven-date navigation
+Check seven dates, current selection, another-day focus without schedule notice/data change, week-boundary navigation and Today, restoration of Week headers, plus Day Arrange drag/Undo and resize. Inspect actual screenshot. See `../changes/mobile-day-week-strip-2026-11-15.md`.
+
+### Mobile Week overview candidate
+
+See [scope and pending gates](../changes/mobile-week-overview-2026-11-15.md). Simulator compilation, 826 XCTest + 38 Swift Testing, release/signature and three final native UI tests passed. Actual screenshot inspected and independent review clean. See receipt for corrected filter-test diagnosis and remaining exact-head CI gate.
+
+### Arrange multi-source filter candidate
+
+[Verified candidate receipt](../changes/mobile-arrange-filter-2026-11-15.md): 827 XCTest + 38 Swift Testing, release/signature, initial three native tests and two final native checks passed. Actual screenshot inspected, review clean; hosted exact-head CI pending.
+
+### Mobile Schedule tabs candidate
+
+[Verified candidate receipt](../changes/mobile-schedule-tabs-2026-11-15.md): 827 XCTest +38 Swift Testing, release/signature, final four native cases and focused range-move regression passed. Screenshots inspected, review clean; hosted exact-head CI pending.
+
+### Mobile Calendar options navigation
+
+Color/Style/Show Item Icons hierarchy: full 827 XCTest + 38 Swift Testing, release/signature, three initial native save/relaunch/Cancel cases plus two final checklist/icons cases and independent review passed. Actual nested-page screenshots inspected; owned Simulator shut down. Exact-head CI remains pending. [Scope](../changes/mobile-calendar-options-navigation-2026-11-15.md).
+
+### Compact capture navigation
+
+Initial native testing exposed competing navigation links in one Form row; explicit route buttons corrected that defect. Corrected compact metadata/More/Cancel/direct save-relaunch and Calendar capture native checks passed, as did full 827 XCTest + 38 Swift Testing and release/signature. Source rereview clean. Range/recovery/template/note/retry native regression checks remain in progress; exact-head CI not yet run. [Scope](../changes/mobile-compact-capture-2026-11-15.md).
+
+### Compact mobile empty description
+
+Candidate native checks cover plain editor Cancel/reopen/save/relaunch and formatted Cancel/discard, plus existing rich/unknown/malformed protections. Full 827 XCTest + 38 Swift Testing, release/signature, independent review and all five native cases passed; actual screenshot inspected and owned Simulator shut down. Exact-head CI pending. [Scope](../changes/mobile-empty-description-2026-11-15.md).
+
+### Schedule Reminder/Repeat pages
+
+Candidate checks in progress for nested/outer Cancel, custom rule creation/removal, manual/end reminders and occurrence skip. Source review, full tests/release, native screenshots and exact-head CI remain gates. [Scope](../changes/mobile-schedule-options-2026-11-15.md).
+
+## Composer recovery success notice removal — 2026-11-15
+
+[Bounded user-requested change](../changes/mobile-capture-notice-2026-11-15.md): remove normal recovery-status area and gap; retain actual warnings and underlying draft recovery. Local full tests/release/review and bounded native checks passed; exact-head CI pending. No full parity claim.
+
+## iPhone Title sorting — 2026-11-15
+
+[Contract and evidence](../changes/mobile-title-sort-2026-11-15.md): new Title criterion and direction, preserving current grouping/pinning/storage semantics. Reference criterion observed, exact collation unverified. Local/native/review checks passed; exact-head CI pending.
+
+## Mobile Priority list grouping — 2026-11-15
+
+[Contract and evidence](../changes/mobile-priority-list-2026-11-15.md): display-only Priority groups preserve pin/history/sort and current preference scope. Local/native/review checks passed; hosted CI pending; no exact reference ordering claim.
+
+## Real mobile organization grouping and sorting — 2026-11-15
+
+[Contract](../changes/mobile-group-sort-complete-2026-11-15.md) defines distinct List/Tag/None, metadata-aware Date/Tag sorting and unchanged compatibility/reset boundaries. Checks pending; exact unobserved reference semantics not claimed.
+
+
+## Mobile Calendar source layout — 2026-11-15
+
+[Live comparison and verification receipt](../changes/mobile-calendar-filter-layout-2026-11-15.md): compact source presentation with unchanged source-selection mutations and revision guards. Full838 XCTest+38 Swift tests, release/signature, five native cases and final inset case passed; independent review clean. Exact-head hosted CI pending. No calibrated pixel-perfect claim.
+
+## D09 Time popup —2026-11-15
+
+[Receipt](../changes/mobile-time-popup-2026-11-15.md):844+38 tests/release passed; actual wheel save/reopen/removal, outerCancel, Duration regression and precise non-device-zone outside-dismiss/relaunch native checks passed. Exact CI/final review pending.
+
+## D05 detail Priority popup —2026-11-15
+
+[Receipt](../changes/mobile-detail-priority-popup-2026-11-15.md):844+38 tests/release/iPhone compile, independent review and native4/4 passed. Native result finalization delayed but exited0. Exact-head CI pending.
+
+## D11 all-day Custom Reminder — 2026-11-15
+
+[Receipt](../changes/mobile-custom-reminder-2026-11-15.md): 851+38 integrated package tests, release and iPhone build-for-testing passed. Final nondefault wheel native2/2 passed. Independent source/test/doc review clean; exact CI pending.
+
+## D13 Custom Repeat Frequency —2026-11-15
+
+[Receipt](../changes/mobile-repeat-frequency-2026-11-15.md):851 XCTest+38 Swift/release, final iPhone compile/native4/4 and independent source/test review passed. Exact-head CI pending. Full interval model preserved by bounded wheel plus validated numeric fallback.
+
+## D12 Repeat preset menu — 2026-11-16
+
+[Receipt](../changes/mobile-repeat-menu-2026-11-16.md): reference-ordered preset menu with live-derived weekday/month/year labels, current-selection check, preset-tap return to the Schedule root and direct Custom route over unchanged recurrence/custom/end/outer-Cancel semantics. Full 929 XCTest + 38 Swift tests, macOS release/signature and iPhone build-for-testing passed. Final Run 3 passed six new native cases plus two existing custom/nested-cancel regressions (8/8, no runtime warnings); final neutral screenshots and failed-run history are recorded in the receipt. Exact-head hosted CI pending. Anchored placement, grid occurrence highlight, Repeat Ends root row and Custom toolbar icons remain open. No pixel-perfect or full-D12 claim.
+
+## D14 Repeat Type —2026-11-15
+
+[Receipt](../changes/mobile-repeat-type-2026-11-15.md):852 XCTest+38 Swift/release/iPhone compile and independent review passed. Four initial native cases passed; specificDates AX-value failure fixed and final focused native passed after supported owned-Simulator boot/nonparallel launch. Exact CI pending. Neutral menu capture linked in tracker.
+
+## PR #139 integration with Normal Filter — 2026-11-15
+
+Merged main `dd406ec53d546554b323d4ff009f4d4730502588` into Repeat Type head `651aa1c95218242b504d30c6d8dc5307128a0d3d` in an isolated Linux checkout. Both additive UI test extensions and the D14/T13 manifest records are preserved; production files retain their respective feature-parent contents. The tracker counts 26/46 screenshot states, with 20 remaining.
+
+Local checks passed: four Python compile-gate command-double tests (`python3 -m unittest discover -s scripts/tests -v`), diff whitespace checks, all 26 manifest SHA-256 hashes/PNG dimensions, receipt paths and supplied source-commit references, and preservation of both parent UI test inventories (228 unique test names). The existing D14/T13 PNGs were inspected again and contain neutral QA settings/content. No new capture or personal TickTick data was added.
+
+Swift tests, macOS release build and iPhone compilation were not run: Swift/Xcode are unavailable in this Linux environment. No Simulator or GUI session was used. Historical feature results above do not validate this integration head; fresh native QA, review and exact-head hosted CI remain required before readiness or merge.
+
+## PR #139 integration with Task Actions — 2026-11-15
+
+Integrated main `e0161a1cbff7dfe2c6af95b37ef325da9fd99269` (PR #141) into `43451e264a937cc69ec8be6785f65485345c5372`. Only the screenshot manifest conflicted: both D14 and D02 records were retained alongside T13. UI tests merged automatically and were checked against the exact combined parent contents: 234 unique test names, with all three feature inventories preserved. Production/build files and domain/workspace tests retain the corresponding feature-parent bytes.
+
+Four Python compile-gate command-double tests passed again. All 27 manifest hashes, PNG dimensions, receipt paths and supplied commit references validate; screenshot coverage is 27/46 states, with 19 remaining. The existing D02 capture was inspected and contains neutral QA content. Diff whitespace checks passed. Swift/Xcode remain unavailable on Linux; native QA, review and exact-head hosted CI remain pending. No Simulator/GUI session, personal data, readiness change or PR merge was performed.
+
+## PR #139 integration with Advanced Filter — 2026-11-15
+
+Integrated main `55c089236af5e3b3202cb2df10915153169f5a4e` (PR #142) into `2db89d4d4456bb3edcf35f8634ee273ed8b064f5`. Resolved additive end-of-file UI-test and screenshot-manifest conflicts by preserving both feature additions. Advanced Filter modifications to existing tests are retained exactly, with Repeat Type extensions appended unchanged. All 235 UI test names are unique. Production files and domain tests match their corresponding feature parents; no integration-specific production changes were made.
+
+Four Python compile-gate command-double tests and diff whitespace checks passed. All 28 manifest hashes, PNG dimensions, receipt paths and supplied source-commit references validate. Tracker coverage is 28/46 screenshot states, with 18 remaining. The existing T14 PNG was inspected and contains neutral QA criteria. No personal data, Simulator/GUI session or fixture changes were introduced.
+
+The parent task reports 7/7 native cases, three domain tests, clean independent review and CI at exact prior head `2db89d4`; those results remain historical after this integration. Swift/Xcode are unavailable in this Linux checkout. Fresh review, native acceptance and exact-head CI remain pending; this integration does not mark the PR ready or merge it.
+
+## C14 Arrange Task Hierarchy — 2026-11-15
+
+[Bounded change](../changes/mobile-arrange-hierarchy-2026-11-15.md): session-only Show Task Hierarchy (default checked) nests eligible List-group candidates via shared `TaskCalendarProjection.arrangementRows`; Tag/Priority stay flat. Review corrections applied on branch `feat/mobile-arrange-hierarchy` after origin/main PR #144 integration (clean merge, both additions retained): off→on clears stored collapse (expanded tree restored), disclosure moved trailing with stable title/grip IDs, duplicates render once in every presentation branch. Local checks: full `swift test --disable-sandbox` passed with 0 failures (10 `CalendarArrangeHierarchyTests` including duplicates-everywhere), `./scripts/build-app.sh` release plus `codesign --verify` passed, iPhone `./scripts/build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED. Native run on the released owned simulator (Taskovsky Menu QA 1114, B263E8E7-F1A5-4407-894D-23FC224B1013, iPhone 13 Pro iOS 26.3, nonparallel, collect-test-diagnostics never): 4/4 passed with exit 0 — the two corrected hierarchy tests plus `testCalendarArrangeScopesAndSchedulesTheFocusedDay` and `testArrangeOptionsFilterUndatedNotesAndOverdueIndependently`. The xcresult independently records 4/4 Success with zero failure/error summaries; one pre-existing-test runtime warning ("Invalid frame dimension") in the scopes test. First native attempt exposed a real defect (Menu hosts do not expose the option value string); the test now proves default-on behaviorally (expanded tree on entry, toggle-off flattens, toggle-on restores). Six hierarchy screenshots plus four regression screenshots exported from the saved xcresult and visually inspected: trailing disclosure, indented children, unchanged Work · 4 on collapse, child editor bound to "Neutral arrange child one"; all neutral QA content. Logs and xcresult: `/private/tmp/TaskovskyArrangeHierarchyNative/` (`native-run.log`, `arrange-hierarchy-native.xcresult`, `screenshots/`, `xcresult-tests.json`); first failed attempt preserved under `attempt1-failed/`. The owned simulator was left booted and untouched otherwise; no reset, no settings changes, no user QA. No push/PR, no live TickTick, no user data mutation. Independent rereview and exact-head CI remain pending.
+
+### C14 drag gate — 2026-11-16
+
+`testCalendarArrangeDragSchedulesAndUndoes` passed on the same owned simulator (B263E8E7-F1A5-4407-894D-23FC224B1013, nonparallel, collect-test-diagnostics never) with exit 0: the trailing-disclosure rows keep working drag grips and the drop schedules/undoes as before. The saved `arrange-hierarchy-drag.xcresult` independently records Success with zero failure, error, or warning summaries. Full `swift test --disable-sandbox` rerun against the final source: 876 XCTest cases plus 38 Swift Testing cases passed (4/4 bundles), 0 failures, 0 warnings; `./scripts/build-app.sh` plus `codesign --verify` passed; iPhone `build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED. Receipt honesty: child scheduling proves the staged editor binds the actual child plus Cancel leaves no schedule notice with the full family intact — no committed child schedule (Done path) was exercised. Expanded/collapsed screenshots above are unmodified exports from the prior saved xcresult, placed in the tracker with manifest hashes; the unrelated C14 options screenshot is untouched. Logs: `/private/tmp/TaskovskyArrangeHierarchyDrag/` (`drag-run.log`, `arrange-hierarchy-drag.xcresult`, `xcresult-tests.json`, `swift-test-full.log`, `build-app.log`, `ci-ios/`).
+
+### C14 child Schedule Done candidate — 2026-11-16
+
+New native regression `testCalendarArrangeChildScheduleDonePersistsOnlyChild` (test-only addition, no production change): pre-state proves the child is unscheduled, Done runs the production schedule action on the actual child (editor title asserted), then the test verifies the save notice, the child's disappearance from undated Arrange with `Work · 3` and the full family intact, the child's detail carrying a real schedule while the parent stays `"Schedule"`, and after relaunch the same Arrange/detail state with the same saved schedule summary persisted (not an assertion of the pre-Done timestamp or every unrelated task field). Undo is intentionally not exercised — it would destroy the persistence subject; the Undo path is covered by the drag test. Status: PASSED on the owned simulator (B263E8E7-F1A5-4407-894D-23FC224B1013, nonparallel, collect-test-diagnostics never) with exit 0 in 58.3s — the saved `arrange-hierarchy-child.xcresult` independently records Success with zero failure, error, or warning summaries. The first attempt failed honestly: launch lands on Today, which hides undated rows, so the pre-state detail read found no row; the test now opens the Work list via the drawer (`goTo`) for every detail read, preserving assertion strength. Visual inspection of the exported post-relaunch screenshot confirms the persisted value (`Nov 9, 2026 at 9:00 – 9:30` on child one; parent/sibling unscheduled) with neutral fixture content only. Gates for the test addition: full `swift test --disable-sandbox` 876 XCTest + 38 Swift Testing passed (one bundle reports 38 across 6 suites; three bundles report 0 — zero-test bundle reports never counted), 0 failures, 0 warnings; release plus `codesign --verify` passed; iPhone compile TEST BUILD SUCCEEDED. Logs: `/private/tmp/TaskovskyArrangeHierarchyDrag/` (`swift-test-full-r2.log`, `build-app-r2.log`, `ci-ios-r2/`); native logs and xcresult: `/private/tmp/TaskovskyArrangeHierarchyChild/` (`child-run.log`, `arrange-hierarchy-child.xcresult`, `xcresult-tests.json`, `screenshots/`); first failed attempt preserved under `attempt1-today-view/`.
+
+<a id="mobile-unified-management"></a>
+## Unified Smart Lists/Tags management on iPhone — 2026-11-16
+
+[Bounded change](../changes/mobile-unified-management-2026-11-16.md): drawer **Manage**
+entry opens one sheet with Smart Lists and Tags tabs sharing a single staged
+visibility/order draft (`UnifiedManagementSession`). Nested Add/Edit Tag and Add Filter
+reuse the standalone editors; a dirty parent gates entry behind Save/Discard/Keep
+Editing, the CAS token stays pinned while dirty, and a clean parent adopts a child's
+successful revision. Existing Smart Lists / Filters / Tags routes remain as shortcuts.
+Unsupported Assigned to Me / Subscribed Calendars rows are absent, not faked. No T02
+display changes. Old checkouts `/private/tmp/TaskovskyUnifiedManagement` and
+`/private/tmp/TaskovskyUnifiedManagementVerify` were never read, listed or modified.
+Fresh checkout `feat/mobile-management-tabs-fresh` at base `b635613`; T13/T14 filter and
+T15/T16 tag behavior retained.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **890 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 150 (14 new `UnifiedManagementTests`: tab/draft preservation, CAS/stale/no-mutation, real tag+filter save/reopen, cycle/duplicate refusal), Mac 55, Domain 154, Core 531. Full log `/tmp/mgmt-swift-test.log`. Zero-test bundle summaries not counted. |
+| Release | **Passed** | `./scripts/build-app.sh` exit 0, release `build/Taskovsky.app`. Log `/tmp/mgmt-release.log`. |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh` (Xcode 27.0 27A266a, Swift 6.4, simulator SDK 27.0, iOS 17.0 target, signing disabled). App, MobileContracts and MobileNavigation bundles plus the xctestrun manifest compiled, including `PhoneUnifiedManagement.swift` and `UnifiedManagementTests.swift` with zero file warnings/errors. One iOS-only closure fix (explicit binding parameter; Mobile sources sit outside the SwiftPM build). Logs `/tmp/mgmt-ios2/`. |
+| Native tests | **Prepared, NOT RUN** | 7 UITests cover tabs, staged visibility, real Add Tag/Add Filter save+relaunch, Keep Editing/Discard/Save gates, child Cancel and save-failure draft retention. Stale-write UI is unverified (`stale-save` injection covers only task/capture saves); CAS staleness is covered at repository level. Screenshots attach in-test for later export. |
+
+### Review blockers fixed — 2026-11-16
+
+Independent review of `e1a2502` raised four data-safety blockers; all fixed with
+no other-tree changes (`main`/`origin/main` still at `b635613`, no integration
+needed). Pending Edit Tag intent now captures only the tag ID and resolves a
+`tagHandoff` from the single live document at handoff — a renamed tag opens
+current, a deleted tag refuses — instead of pairing a stale snapshot with a
+fresh token. Leaving the Smart Lists tab resets reorder mode. Failed
+Save-and-Continue clears the pending intent so a later Done retries the save
+rather than opening the stale child. Baseline adoption is the explicit
+`adoptCleanBaseline(from:)` on one exact document for any provenance while
+clean, refusing while dirty.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **893 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153 (17 `UnifiedManagementTests`: handoff rename/delete under dirty decision, cancel writes nothing, workspace-only child adoption, document-based clean/dirty adoption), Mac 55, Domain 154, Core 531. Full log `/tmp/mgmt2-swift-test.log`. A bare `.delete(tagID)` literal silently took the SavedFilterChange overload (filter delete → `.missing`); now `TagOrganizationCommand.delete(tagID)` per repo convention. |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/tmp/mgmt2-release.log`. |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | Same Xcode 27.0 toolchain. Zero warnings/errors in new/changed files; three pre-existing unused-`menu` warnings in `ReadOnlyNavigationTests.swift` untouched. Logs `/tmp/mgmt2-ios/`. |
+| Native tests | **Prepared (9), NOT RUN** | Adds reorder-reset-across-tabs and failed-save-then-Done-opens-nothing. External tag churn under the dirty gate and transient-failure recovery are UI-unreachable (modal sheet admits no second writer; `save-failure` QA is permanent), so B1/B3-full are repository-level plus boundary tests. Screenshots attach in-test for later export. |
+
+### Upstream PR146 integration and native execution — 2026-11-16
+
+Merged `origin/main` `0dac439` (PR146 task display) as `addebf6`: clean merge, no conflicts, both T02 display and unified-management hunks present, no T02 reversal. Native slot on the owned simulator only (Taskovsky Menu QA 1114, `B263E8E7`, iPhone 13 Pro iOS 26.3.1), nonparallel, collect-test-diagnostics never, unique dir `/private/tmp/TaskovskyManagementTabsNative/`; no user-QA changes, no resets, no desktop input.
+
+Failure-driven corrections, none weakening assertions: (1) a toolbar Manage entry collapsed all drawer utilities into overflow — entry moved to the drawer body, existing tests untouched; (2) the nested-sheet confirmation dialog dropped its cancel button from the AX tree — gate is now an alert; (3) Discard-then-open ran synchronously inside the alert action while the gate was still open and no-opped — deferred to the next MainActor turn. Final run: **11/11 passed, exit 0** (9 unified + 2 existing no-regression witnesses); xcresult independently records 11 passed, 0 failed, 0 skipped on `B263E8E7`. Screenshots exported and visually inspected (Smart Lists tab, Tags tab, drawer Filters after Add Filter, both failed-save states; neutral fixture content).
+
+Final gates on the corrected source: `swift test --disable-sandbox` 895 XCTest (153/55/156/531) + 38 Swift Testing, 0 failures; `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict` exit 0; iPhone `build-ios-simulator-ci.sh` TEST BUILD SUCCEEDED. External tag churn under the dirty gate and transient-failure recovery remain repository-level (UI-unreachable). Exact-head CI remains pending.
+
+Independent rereview and exact-head hosted CI remain pending. No push/PR, no live TickTick, no personal data.
+
+## Mobile root informational-label removal — 2026-11-16
+
+[Bounded change](../changes/mobile-remove-sample-label-2026-11-16.md): the whole
+root header label is gone from `MobileRootView.shell`, both the QA
+(`Sample workspace · Local editing`) and ordinary (`Local workspace · Early
+development`) variants, with its `previewNotice` identifier. The QA-only
+`timePrecisionEvidence` accessibility value moved unchanged onto the genuine
+tab-bar container, which carries `mobileRootReady` with
+`.accessibilityElement(children: .contain)` so child tab IDs are unaffected.
+All ~104 native readiness waits target it with unchanged timeouts; the two
+precision persistence checks keep their original exact assertions through that
+element (epoch-seconds/duration/reminder evidence, non-nil/non-empty fixture
+baseline, equality after relaunch). An interim revision using formatted visible
+schedule times was reverted per review: weaker evidence and popup-only zone
+reads while closed. New `RootLabelRemovalTests` (2 tests) asserts no label
+string in any section and preserved Tasks/Calendar/Search navigation plus
+`Open navigation`, `openCapture`, `calendarJumpToDate`, `workspaceSearch`
+controls. Data, QA isolation, recovery warnings and editing behavior unchanged.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **915 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153, Mac 55, Domain 167, Core 540. Full log `/tmp/label-swift-test.log` (runner-local; not committed). |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/tmp/label-build-app.log` (runner-local). |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh` exit 0; app plus contract/navigation UI-test bundles (incl. new `RootLabelRemovalTests.swift`) compiled. Only pre-existing `menu` unused-variable warnings in `ReadOnlyNavigationTests.swift` plus toolchain AppIntents notes. Logs `/tmp/label-ci-ios/` (runner-local). |
+| Native tests | **6/6 passed, 0 failures** | Owned slot `B263E8E7` (Taskovsky Menu QA 1114, iPhone 13 Pro, iOS 26.3.1), nonparallel, collect-test-diagnostics never. `label-removal.xcresult`: 4/4 (both `RootLabelRemovalTests`, time-precision and duration-precision exact-evidence persistence). `label-removal2.xcresult`: 2/2 strengthened rerun (marker uniqueness `count == 1` per section, label absence everywhere, full navigation/controls). Both inspected screenshots 1170x2532, neutral fixtures, label absent. Only benign AppIntents toolchain note. Logs/xcresults/screenshots: `/private/tmp/TaskovskyRemoveSampleNative/` (runner-local). |
+
+No push/PR/merge, no personal data. The handed-over Simulator was left booted as found; no resets, no settings changes, no other-device contact. Exact-head hosted CI and independent re-review remain pending.
+
+## Phone Calendar mode menu order and day-header timezone — 2026-11-16
+
+[Bounded change](../changes/mobile-week-header-2026-11-16.md), committed as `52cd9af` on branch `feat/mobile-week-header` (base `808ff22`): the phone Calendar mode menu lists the observed C02 primary order List (existing agenda mode), Year, Month, Week, 3 Day, Day, with existing Multi-Day/Multi-Week kept in a separated "More views" extras area and exactly one selected check in every state. Independent review found no source blockers. Visible/accessible menu naming is List; the shared `TaskCalendarMode.title` still returns "Agenda" (Mac unchanged) and the `Agenda` accessibility identifier is preserved. The hourly single-day header now formats weekday and accessible date in the supplied calendar/timezone via a shared `CalendarDayHeader` helper, consistent with the numeric day and identifier.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **934 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153, Mac 55, Domain 185 (incl. 3 new `CalendarDayHeaderTests`: midnight-boundary resolution, cross-zone difference, midday consistency), Core 541. Full log `/private/tmp/TaskovskyWeekHeaderNative/swift-test-full.log`. |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/private/tmp/TaskovskyWeekHeaderNative/build-app.log`. |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh /private/tmp/TaskovskyWeekHeaderNative/ci-ios` exit 0; app plus contract/navigation UI-test bundles (incl. new menu tests) compiled. |
+| Native tests (new) | **3/3 passed, 0 failures** | Owned slot `B263E8E7` (Taskovsky Menu QA 1114, iPhone 13 Pro, iOS 26.3.1), nonparallel, collect-test-diagnostics never. Order/single-check/dismiss (Week), Year select/relaunch-persist/List select, extras Multi-Day (5 headers, check distinct from 3 Day)/Multi-Week. `WeekHeaderRun1.xcresult`, log `run1.log`. |
+| Native tests (adjacent) | **12/14 passed — all adjacent tests are NOT green; the 2 baseline failures remain open** | Same slot/flags. Passing: `testCalendarViews` (all modes incl. `Agenda` identifier lookup and `Agenda` static title), all three 3-Day tests, header placement, day strip, jump-date cancel/keep, agenda Show-more, show-details-across-Agenda-and-Month, week-overview navigation, month scroll. Failing: `testCalendarAgendaCompletesChecklistAndUsesTaskLifecycleUndo` (44 pt hit-target reads 43.99999999999997) and `testCalendarWeekOverviewDetailFilterAndRelaunch` line 481 (entry absent 5 s after All+Done). Both fail identically on unmodified base `808ff22` (verified via stash: `WeekHeaderBase.xcresult`, log `base.log`; line numbers shift only because the new tests were stashed too), so neither is a regression from this change, but both remain open baseline failures. First-failure log `regress.log`/`WeekHeaderRegress.xcresult` and isolated rerun `rerun.log`/`WeekHeaderRerun.xcresult` preserved. |
+| Screenshots | **6 inspected, 2 placed** | Unmodified 1170×2532 exports in `/private/tmp/TaskovskyWeekHeaderNative/screenshots/` (Week, mode menu, Year, List, generic Multi-Day, Multi-Week; neutral fixtures only). Tracker placements `c01-week.png` / `c02-mode-menu.png` with manifest SHA-256 entries. |
+
+Still unverified: matched anchored-menu geometry, Week density/overlap/gesture parity, dark appearance (deferred), physical-device/locale-specific rendering, exact-head hosted CI and independent re-review. No push/PR/merge, no personal data, no live TickTick observation. The owned simulator was left booted and otherwise untouched; no other simulator or parallel test was run.
+
+## Phone Calendar View Options primary structure (C06) — 2026-11-16
+
+[Bounded change](../changes/mobile-calendar-view-options-c06-2026-11-16.md) at source `a638aed` (base `5803158`): the phone Calendar View Options sheet lists the supported primary controls in the observed C06 order Color, Style, Show Details, Show Completed, Show Checklist Item (exact singular wording), Show All Repeat Cycles, Additional Time Zone, followed by the retained Taskovsky extras (Multi-Day/Multi-Week ranges, all-day rows, folded-hours cutoffs) in a separated "Taskovsky Extras" area on the same sheet. The top-right control is a checkmark with the Done accessibility label (identifiers `calendarPreferencesDone` / `calendarPreferencesCancel` retained); Cancel, staged draft semantics, nested Color/Style/Icon pages, the staged zone sheet and expected-revision save/failure behavior are unchanged. Declined/focus/health/external-calendar rows are not added. No Mac change.
+
+| Check | Result | Coverage |
+| --- | --- | --- |
+| Package tests | **934 XCTest + 38 Swift Testing passed, 0 failures** | Workspace 153, Mac 55, Domain 185, Core 541. Full log `/private/tmp/TaskovskyViewOptionsNative/swift-test2.log`. |
+| Release and signature | **Passed** | `./scripts/build-app.sh` exit 0; `codesign --verify --deep --strict build/Taskovsky.app` exit 0. Log `/private/tmp/TaskovskyViewOptionsNative/build-app2.log`. |
+| iPhone compile | **TEST BUILD SUCCEEDED, no tests executed** | `./scripts/build-ios-simulator-ci.sh /private/tmp/TaskovskyViewOptionsNative/ci-ios2` exit 0; app plus contract/navigation UI-test bundles (incl. new C06 test) compiled. Only pre-existing `menu` unused-variable warnings in `ReadOnlyNavigationTests.swift` plus toolchain AppIntents notes. |
+| Native tests (new) | **1/1 passed, 0 failures** | Owned slot `B263E8E7` (Taskovsky Menu QA 1114, iPhone 13 Pro, iOS 26.3.1), nonparallel, collect-test-diagnostics never. `testCalendarViewOptionsPrimaryOrderStagingAndExtras`: strict primary row order, singular Checklist label, checkmark Done label, excluded-row absence, Cancel/Done toggle staging, nested-page Back draft retention, save/reopen, repeated presentation, extras reachability, terminate/relaunch persistence. `C06Run2.xcresult`, log `C06Run2.log`. |
+| Native tests (adjacent) | **13/14 passed — NOT green; the 1 failure is pre-existing on the untouched base** | Same slot/flags. Passing: header/overflow placement, source-color save/reset, color-pick list/tag separation, color-page hierarchy/modes, all-day rows relaunch, checklist menu with hidden icons and completed rows, details across Agenda and Month, render/persist relaunch, style tiles Modern/Classic/legacy relaunch, rulers four-limit staging, save-failure draft retention, zone child/parent Cancel staging, zone-off persistence. Failing: `testCalendarFoldCutoffsDragAndPreferenceSurviveRelaunch` (`calendarHourBand-early` not found on the Day timeline ~8 s in, before View Options opens). Isolated rerun on this branch fails identically (`C06FoldRerun.xcresult`); the same test fails identically on untouched base `5803158` in a separate clean worktree (`C06FoldBase.xcresult`, `DerivedDataBase`), so it is not a regression. It stays open; no broad fix attempted. First-failure, rerun and base logs/xcresults preserved under `/private/tmp/TaskovskyViewOptionsNative/`. |
+| Screenshots | **2 inspected, 2 placed** | Unmodified 1170×2532 exports from `C06Run2.xcresult` in `/private/tmp/TaskovskyViewOptionsNative/C06Run2Screens/` (primary order + Taskovsky extras; neutral `calendar-options` fixture; no personal data), agent pixel-inspected, placed as `c06-view-options-primary.png` / `c06-view-options-extras.png` with manifest SHA-256 entries. Parent inspected both final images. Tracker now 39/46 with screenshots. |
+
+Still unverified: matched reference typography/geometry, dark appearance (deferred), physical-device/locale-specific rendering, exact-head hosted CI and independent re-review. The PR156 baselines (Agenda hit-target float artifact; Week detail-filter task absent) were not rerun here and stay open. No commit/push/PR/merge, no personal data. The owned simulator was left booted and otherwise untouched; no other simulator, device, signing setting or reset was touched.
+
+## Phone Smart-list visibility popup (T10) — 2026-11-16
+
+[Receipt](../changes/mobile-visibility-popup-2026-11-16.md), source `5dff850`: independent review approved. Full934 XCTest+38 Swift Testing, signed release and iPhone compile passed. Owned Simulator native16/16 passed (14 unified management including5 new popup tests +2 adjacent), zero failures. Logs/xcresult retained in `/private/tmp/TaskovskyVisibilityPopupNative/`; final Today/Tags popup pixels independently inspected, neutral fixtures only; one1170×2532 T10 capture placed with verified hash. Tests cover order/check/backdrop, repeat/selected-row dismissal, staged Cancel/Done/relaunch, Tags/Filters, nested dirty guards and reorder. Large-text fit, VoiceOver traversal/focus/Escape and state changes while open remain unverified. Prior baseline failures remain open; no full-parity claim. Exact-head hosted CI pending. PR158 drawer work is separate and unmerged at this checkpoint.

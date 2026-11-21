@@ -1,0 +1,13 @@
+# Real iPhone Group & Sort choices
+
+User requested underlying business behavior, not placeholder controls. Group grid now has exact observed order List / Date / Created Time / Tag / Priority / None. Sort grid: Date / Created Time / Modified Time / Title / Tag / Priority. Selected group and sort are independent. Existing Priority sort remains high-to-low; timestamp/title/metadata criteria expose direction. Major structural similarity is the target; fine pixel polish deferred.
+
+List partitions aggregate scopes by actual list ownership; Inbox explicit. None removes ordinary grouping, including named sections, while pinned/completed/abandoned partitions remain. Legacy Default Groups is not an alias for List; preserved preferences retain their prior behavior, with a separate Restore default grouping action. This intentional extra compatibility action differs from the supplied image.
+
+Tag grouping owns each row once by first known workspace-order tag; multi-tag items are not duplicated. Unknown-only/untagged rows go to No Tags. Date uses existing task civil-day projection, missing dates last in either direction. Tag sort uses the chosen known tag's folded numeric name, missing tags last. These conservative Taskovsky semantics are documented, not claimed as observed TickTick ownership/collation. See [pure domain contract](mobile-group-sort-domain-2026-11-15.md).
+
+All sort call sites receive workspace metadata and calendar. Preference raw values stay compatible. No task data edits, tag/list reorder, drag-to-group semantics or Mac changes. Restore default sorting clears sorting only; it does not pretend to implement unknown reference Restore default tag order semantics.
+
+Validation: 835 XCTest and 38 Swift Testing cases passed, including the group/sort cross-product identity and ordering regression. Signed Mac release and signature verification passed. Three initial isolated iPhone Simulator tests passed for composition, Today preference isolation and Priority pin/relaunch behavior. A strengthened final composition test passed actual Date ascending/descending and Tag ordering, List header presence, None header removal, independent selections, relaunch and reset. Its first attempt incorrectly assumed two equal civil-date tasks would reverse; the test-only fixture now gives those tasks distinct days, preserving the production civil-date rule. Independent source and fixture review passed. Exact-head hosted CI remains required before merge.
+
+Neutral actual Simulator screenshot is recorded in the visual tracker. Original reference images remain private. Existing user simulator, original worktrees and task data were not modified. Exact reference multi-tag ownership/collation/reset behavior and near-pixel layout remain unverified.

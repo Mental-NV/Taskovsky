@@ -31,6 +31,10 @@ struct CalendarEntryView: View {
     var complete: (CalendarEntry) -> Void
     var edit: (CalendarEntry) -> Void
     private var tint: Color { Color(hex: entry.color) }
+    private var rendering: CalendarItemStyle.Rendering { style.rendering }
+    private var fillOpacity: Double { style.macFillOpacity(completed: entry.isCompleted) }
+    /// Classic uses a saturated block with dark icons; other styles keep the source tint for icons.
+    private var iconTint: Color { style == .classic ? .primary : tint }
     private var completionAction: String {
         (entry.isCompleted ? "Reopen " : "Complete ") + (entry.checklistID == nil ? "task" : "checklist item")
     }
@@ -43,14 +47,14 @@ struct CalendarEntryView: View {
         HStack(alignment: .top, spacing: 5) {
             if showItemIcons || temporarilyShowsIcons {
                 if entry.isProjected {
-                    Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(tint)
+                    Image(systemName: "repeat").font(.system(size: 10)).foregroundStyle(iconTint)
                         .accessibilityLabel("Future repeat preview")
                 } else if entry.isNote {
-                    Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(tint)
+                    Image(systemName: "doc.text").font(.system(size: 10)).foregroundStyle(iconTint)
                 } else if entry.canChangeCompletion {
                     Button { complete(entry) } label: {
                         Image(systemName: entry.isCompleted ? "checkmark.square.fill" : "square").font(.system(size: 10))
-                    }.buttonStyle(.plain).foregroundStyle(tint)
+                    }.buttonStyle(.plain).foregroundStyle(iconTint)
                         .accessibilityLabel((entry.isCompleted ? "Reopen " : "Complete ") + entry.title)
                 }
             }
@@ -72,9 +76,9 @@ struct CalendarEntryView: View {
         // Paint the border inside that slot; the caller still clips overflowing content.
         .frame(maxWidth: .infinity, minHeight: fillsAllocatedHeight ? 0 : nil,
                maxHeight: compact && !fillsAllocatedHeight ? nil : .infinity, alignment: .topLeading)
-        .background(style == .filled ? tint.opacity(entry.isCompleted ? 0.06 : 0.15) : Color.clear)
-        .overlay(alignment: .leading) { Rectangle().fill(tint).frame(width: 2) }
-        .overlay { if style == .outline { RoundedRectangle(cornerRadius: 3).stroke(tint.opacity(0.5), lineWidth: 0.7) } }
+        .background(fillOpacity > 0 ? tint.opacity(fillOpacity) : Color.clear)
+        .overlay(alignment: .leading) { if rendering.showsStripe { Rectangle().fill(tint).frame(width: 2) } }
+        .overlay { if rendering.showsOutline { RoundedRectangle(cornerRadius: 3).stroke(tint.opacity(0.5), lineWidth: 0.7) } }
         .clipShape(RoundedRectangle(cornerRadius: 3))
         .opacity(entry.isProjected ? 0.7 : entry.isCompleted ? 0.6 : 1)
         .help((entry.isProjected ? "Future repeat preview. Open the repeating task.\n" : "") + entry.title + "\n" + time)

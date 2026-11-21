@@ -1,28 +1,8 @@
 # Taskovsky iPhone product and implementation specification
 
-**Current milestone scope — November 13, 2026:** The user explicitly deferred Dark mode and prioritized the white/light theme for Tasks and Calendar on Mac and iPhone. Light-theme visual and interaction verification is the active acceptance target; Dark-mode matching and native Dark-mode QA are deferred, not passed. Preserve existing semantic colors and appearance support; this decision does not remove Dark-mode code or force a system appearance. Other affected functional, gesture, keyboard and accessibility checks remain required. Historical dark results and unchecked cases remain evidence with their original limits. See [the appearance-scope decision](../changes/light-theme-priority-2026-11-13.md).
+The native iPhone app exists in [main](../current-baseline.md). This document owns iPhone behavior, UI and capability limits; [business rules](business.md) are shared and [Mac presentation](ui-ux.md) is separate. Start with the [active scope and delivery order](workflow.md#scope-and-delivery), then use the [46-state visual tracker](../mobile-visual-parity.md) for actual observations and gaps. The original 24-photo study in section 9 is older reference evidence, not the current capture set.
 
-**Status:** Early pre-alpha specification, version 0.5, 8 November 2026. User decisions incorporated; partial implementation follow-up recorded below. The separate iPhone target and many local workflows are now merged; full parity and acceptance remain incomplete. See the [current integration baseline](../current-baseline.md).
-
-**Implementation follow-up, November 9:** The user subsequently authorized autonomous local desktop/mobile Tasks and Calendar work. The isolated `codex/mobile-local-prealpha` checkout is based on merged PR #4 at `6ee96eeb8f88e74a105c518de2202233ea528efa`. [Named list sections](../changes/task-list-sections-2026-11-09.md) adds the list organizer, grouped rows, Board sections, scoped capture and drag moves. [MOB-FOUNDATION-001](../changes/mobile-foundation-2026-11-09.md) adds a portable Domain product and characterized destination/recurrence seams; [MOB-PREVIEW-001](../changes/mobile-preview-2026-11-09.md) adds immutable read sessions and an iPhone read-only sample preview. [MOB-PERSIST-001](../changes/mobile-compatible-writes-2026-11-09.md) adds conservative title/plain-body repository patches. [MOB-EDIT-001](../changes/mobile-local-editing-2026-11-09.md) connects them to app-container storage and native field sheets with separate recovery drafts. [MOB-CAPTURE-001](../changes/mobile-capture-2026-11-09.md) adds local task/note creation and saved-template capture. Normal launches start empty and now have Add; explicit UUID-isolated Debug sessions use neutral fixtures. Desktop Calendar corrections are explicitly integrated by file/hash record; the original Desktop tree is preserved. This implements part of S5, alongside the earlier S1–S4 work. MOB-LIFECYCLE-001 adds completion, reopening, Won’t Do, pinning, movement and Trash through the shared domain. [Existing-task scheduling](../changes/mobile-task-scheduling-2026-11-09.md), [Calendar Arrange and direct edits](../changes/mobile-calendar-arrange-2026-11-09.md) and [Calendar preferences](../changes/mobile-calendar-preferences-2026-11-09.md) extend the same isolated checkout. [Rich description rendering](../changes/mobile-rich-description-preview-2026-11-09.md) adds the native read-only preview. The [task metadata editor](../changes/mobile-task-metadata-checklists-2026-11-09.md) covers priority, existing tags and embedded checklist items. [Linked-subtask controls](../changes/mobile-task-hierarchy-2026-11-09.md) add task hierarchy navigation and edits. [List and folder management](../changes/mobile-list-organization-2026-11-09.md) adds a drawer organizer and native editors. [Smart List settings](../changes/mobile-smart-lists-2026-11-09.md) add saved drawer visibility and ordering. [Saved filter authoring](../changes/mobile-saved-filters-2026-11-09.md) adds native Normal and Advanced editors. [Tag management](../changes/mobile-tag-management-2026-11-09.md) adds nested tags, pins, reorder, merge and delete. [Board](../changes/mobile-board-2026-11-09.md) adds per-list modes and status moves. The [filter layout follow-up](../changes/nested-filter-layout-2026-11-09.md) uses separate Mac and iPhone layouts. [Editable Summary](../changes/mobile-summary-2026-11-09.md) adds a native local report editor with exact-text Inbox note creation and capture recovery. [Local Search](../changes/mobile-search-2026-11-09.md) adds staged criteria, saved filters and recent queries. [Local Templates](../changes/mobile-templates-2026-11-09.md) adds management and task Save/Apply actions. [Local Settings](../changes/mobile-local-settings-2026-11-09.md) adds staged Calendar and capture preferences. [Current verification](verification.md#mobile-local-settings). Earlier documentation-only statements and source-freeze tables below describe the specification review, not the later implementation checkout.
-
-**Current local editing contract:** Existing known-format tasks support title edits and plain-description edits when `richBody == nil`. Format description edits eligible task and note bodies using validated text and formatting transactions. The whole-document compatibility gate blocks rewriting unknown, malformed or implicitly sanitized payloads. Dirty Cancel offers Discard/Keep Editing; Done is explicit, duplicate submissions and IME-marked composition are guarded. Unchanged Done does not rewrite task files. A versioned, sequenced scratch file saves after 250 ms and on background opportunities; relaunch offers Resume/Discard without submitting. A force kill before an acknowledged scratch write can lose recent characters. Unknown scratch files are retained and block replacement. Stale revisions keep text and require an explicit discard/reload rather than automatic rebasing.
-
-The normal root is the app's own Application Support `TaskovskyMobile/Local`; there is no path picker or real-data import. Only Debug accepts validated `--qa-session <UUID>` beneath `TaskovskyMobile/QA`. Invalid isolation arguments fail closed. Bootstrap never reseeds an existing pair and preserves partial/staged initialization failures. Files use iOS protection until first unlock; ordinary Application Support backup eligibility is retained under device settings, without a sync service or a tested backup/restore guarantee. Reader details use medium/large sheets; field editors expand. Dirty interactive dismissal is blocked with explicit Cancel available; a swipe-attempt prompt is not implemented. Native undo/selection exist, but physical-device IME, accessibility and keyboard edge cases remain unverified.
-
-**Current capture contract:** Add opens a focused native task/note draft with description, explicit list/Inbox, date/time, priority, existing tags and saved templates. Shared policy shows defaults/context before submission and accepts removable recognition candidates; unknown tag text stays in the title. Templates retain styled bodies, checklist, recurrence and duration without implicit flattening or new tags. Changing the date re-anchors a template window's end; clearing the date clears its window. A kind change retains the displayed date choice. Calendar Add supplies the focused local day. Hourly lanes expose every all-day entry; Month overflow opens the corresponding Day. These are native adaptations, not reference visual sign-off.
-
-Capture recovery is separate from field editing and never submits automatically. The prepared payload is stored before writing; a fixed task UUID identifies retries, with no extra workspace schema. Confirmed no-write failures unlock editing; uncertain outcomes keep the prepared payload and allow Retry to check the same ID. Context changes fail with a retained draft rather than silent rebasing. Successful creation opens the saved detail, including records outside the current filter. Checklist authoring during capture, template management and organization editors remain open.
-
-**Purpose:** Define a native iPhone client that shares Taskovsky's Swift business engine with macOS, follows the supplied TickTick iOS screenshots closely in its visual layout, and can offer less rich-text editing without damaging desktop content. This specification combines pre-alpha delivery slices, concrete interactions, data gates and acceptance cases with a screen-by-screen visual reference. This update changes documentation only; it is not a claim that an iPhone app or notification implementation already exists.
-
-**Current decisions:** Keep local JSON files and defer cross-device sync until later. Build an early pre-alpha for local development and device testing, with no App Store release. Use iOS 17.0 as a provisional conservative deployment target and prioritize the iPhone 13 Pro reference device. Plan basic on-device reminder notifications if the narrow implementation passes an early signing/device check; do not assume paid membership is required or add APNs. Desktop features still define functional scope except for this explicitly requested local-notification extension, and reduced rich-editor functionality remains permitted.
-
-**Source freeze:** Read-only inspection of the current desktop working tree at `/Users/mental/Projects/Taskovsky`, branch `codex/calendar-visual-parity`, HEAD [`f85e2f6a9c538f36829961961a0749197f29c4e2`](https://github.com/Mental-NV/Taskovsky/commit/f85e2f6a9c538f36829961961a0749197f29c4e2), including three modified Calendar Swift files and untracked `CalendarAppearance.swift`. Section 14 records source locations and hashes. Feature scope comes from this implementation, not proposed `IOS`, `ARCH`, `CMP` or `RICH` documents. No builds, tests or native iPhone sessions were run for this revision.
-
-**Visual evidence:** All 24 JPEGs in the user-supplied `MobileScreeshots` folder were visually inspected. They show TickTick iOS, not Taskovsky. Each is 591 × 1280 source pixels in sRGB. The user confirmed iPhone 13 Pro. The About row shows v8.2.41; iOS version, Display Zoom, Dynamic Type and the exact resize/compression pipeline remain unknown. Section 9 calibrates a standard 390 × 844 pt reconstruction baseline without treating it as recovered capture metadata. Section 9 identifies each file and separates observed pixels, proposed Taskovsky behavior and missing evidence. Private task text, names and profile information are not reproduced here.
-
-**What changed in this revision:** Record local-only storage with sync planned later, a provisional iOS 17 floor, early pre-alpha testing and no App Store release. Add the conditional local-notification plan, permission and failure states, official Apple evidence and new acceptance cases. Preserve the desktop scope register, screenshot exclusions, iPhone 13 Pro calibration and no-loss editor requirements. No application code or desktop files are changed.
+Local JSON storage, a reduced but lossless editing surface, a provisional iOS 17 minimum, and no App Store release remain the pre-alpha boundaries. Stable requirements and acceptance cases follow. Dated rollout notes and the source-freeze tables describe their original revisions, not current implementation or runtime passes. See the [historical rollout](../archive/integration-rollout-2026-11-08-to-12.md), [verification ledger](verification.md), and [iPhone build/QA guide](../../Mobile/README.md).
 
 <a id="ios-001"></a>
 
@@ -32,7 +12,7 @@ This specification is for **iPhone**. Android and an iPad-specific interface rem
 
 The current desktop implementation is the source of truth for feature scope, with the user's later conditional request for basic local notifications as an explicit exception. Proposed documentation and third-party screenshots do not add other features. The repository remains the canonical specification system for documenting those contracts. The existing `IOS-001` through `IOS-014` IDs are preserved as explicit anchors in this canonical specification. Section references below describe refinements to those contracts, rather than creating a competing current-behavior document. Business behavior remains in `BUS-*`; desktop appearance remains in `UX-*`; editor representation remains in `RICH-*`.
 
-The original specification assignment updated documentation and published the mobile specification in a separate review PR, as requested. It changes no application code, local desktop worktree or live workspace data. Desktop polishing can continue independently. Before implementation, reconcile its final source revision against the evidence snapshot and record any changed shared contracts.
+Before changing shared behavior, pin the source and reconcile it with the evidence and platform contract.
 
 ### Stable requirement index
 
@@ -56,6 +36,8 @@ The existing requirement IDs remain stable. Numbered Sections 1–14 retain thei
 | [IOS-014](#ios-014) | Acceptance and rollout gates |
 
 ### Existing implementation and proposed changes
+
+Historical planning snapshot, not a status ledger. Consult the current checkout and receipts before treating any item below as absent.
 
 | Area | Verified current state | Proposed mobile delta |
 | --- | --- | --- |
@@ -381,7 +363,7 @@ Refines **IOS-009 through IOS-011**.
 
 Task lists have a Sort tasks menu with Default Order, Priority, and both directions for Created and Modified. Ordinary List views also offer Group by Created Date and Group by Due Date. The active grouping temporarily replaces named section headers and keeps its own device preference. Sort and grouping survive relaunch independently. Pinned and history groups remain visible and subtasks nest within their visible group. [Sort verification](verification.md#task-timestamp-sorting) and [due-date grouping verification](verification.md#task-due-date-grouping). The drawer groups above-folder, member and below-folder lists, with pinned shortcuts and a separate archive section. Manage Lists creates and edits lists and folders, exposes within-group reorder controls and stages placement, archive and smart-list inclusion. It confirms list deletion, duplication and folder ungrouping. The list organizer keeps the saved view mode. A concrete list can change its mode from its own List/Board selector. [List and folder verification](verification.md#mobile-list-organization).
 
-The Smart Lists sheet stages Show, Hidden and Show if not empty for supported destinations and the Tags and Filters sections. The top group and history group reorder independently. Hiding the active destination falls back to the first visible Smart List or Inbox. The settings write preserves other preferences and the workspace. [Smart List verification](verification.md#mobile-smart-lists).
+The Smart Lists sheet stages Show, Hidden and Show if not empty for supported destinations and the Tags and Filters sections. The top group and history group reorder independently. Hiding the active destination falls back to the first visible Smart List or Inbox. The settings write preserves other preferences and the workspace. [Smart List verification](verification.md#mobile-smart-lists). The drawer also offers a unified Manage surface with Smart Lists and Tags tabs sharing one staged draft; nested Add/Edit Tag and Add Filter reuse the standalone editors behind an explicit Save/Discard/Keep Editing gate. [Unified management verification](verification.md#mobile-unified-management).
 
 List/tag create and rename use native sheets with explicit Save/Cancel and shared validation. Keep list kind, symbol, view mode, folder, archive, smart visibility and pins unless the action owns that field. The phone may reorganize these controls, but any implemented desktop operation omitted from a delivery slice remains a tracked mobile gap.
 
@@ -578,7 +560,7 @@ R09 Settings shows Tab Bar; Appearance; Sounds & Notifications; Date & Time; Wid
 
 ### Calendar layout mapping to desktop
 
-Desktop Calendar is in scope because it is already implemented, not because the screenshots contain Calendar. Its seven modes are **Day, Week, Month, Year, Agenda, Multi-Day, Multi-Week**. The reference menu instead lists List, Year, Month, Week, 3 Day, Day and also shows two different Week presentations. These are different product taxonomies. Use desktop mode identity and semantics; adapt labels/controls without adding the extra screenshot mode or losing Multi-Week.
+Desktop Calendar is in scope because it is already implemented, not because the screenshots contain Calendar. Its seven modes are **Day, Week, Month, Year, Agenda, Multi-Day, Multi-Week**. The reference menu instead lists List, Year, Month, Week, 3 Day, Day and also shows two different Week presentations. These are different product taxonomies. Use desktop mode identity and semantics; adapt labels/controls without adding the extra screenshot mode or losing Multi-Week. The phone menu presents the observed order with List naming for the agenda mode and a separated Multi-Day/Multi-Week extras area, per [mobile week header](../changes/mobile-week-header-2026-11-16.md).
 
 | Desktop mode or capability | Matching reference evidence | Mobile requirement and limits |
 | --- | --- | --- |
@@ -634,7 +616,7 @@ Also retain desktop View Options absent from the shown TickTick panel: Year stan
 
 **Local display preferences.** The phone saves the selected Calendar mode. Filter and View Options sheets stage changes until Done. Filters provide All, Inbox, list and tag group controls, show-only-list actions and explicit recovery for unavailable saved sources. Cancel leaves saved scope intact. A failed mode save can still open the view for the current session. Focus date and Arrange visibility remain transient.
 
-The View Options sheet controls list/tag/priority color, filled/outline style, master and independent task/note icon visibility, completed/checklist/repeat visibility, Show Details for Agenda and Month, Year Standard/Heatmap, Multi-Day 2–14 days and Multi-Week 2–6 weeks. Secondary rulers can be searched, named and reordered within their own staged editor. Up to four appear beside the primary ruler in hourly views. Ruler time conversions use the first displayed date, as on Mac. The phone presents source selection in a sheet and preserves the Mac-only sidebar preference. [Calendar preference verification](verification.md#mobile-calendar-preferences). The List and Tag choices open a source-color page. Its picker and Default actions edit the View Options draft, which saves on Done. [Color editor contract](../changes/calendar-source-colors-2026-11-10.md).
+The View Options sheet lists the supported primary controls in the observed reference order Color, Style, Show Details, Show Completed, Show Checklist Item, Show All Repeat Cycles, Additional Time Zone, with a checkmark Done (Done accessibility label) and retained Cancel; staged toggles discard on Cancel and commit on Done, and an unchanged nested-page visit plus Back retains the staged toggles (combined nested-change plus toggle commit is covered by the adjacent render/persist test). It controls list/tag/priority color, filled/outline style, master and independent task/note icon visibility, completed/checklist/repeat visibility, Show Details for Agenda and Month, Year Standard/Heatmap, Multi-Day 2–14 days and Multi-Week 2–6 weeks. The desktop-only ranges, all-day rows and folded-hours controls stay directly reachable in a separated Taskovsky Extras area below the primary rows. [View Options receipt](../changes/mobile-calendar-view-options-c06-2026-11-16.md). Secondary rulers can be searched, named and reordered within their own staged editor. Up to four appear beside the primary ruler in hourly views. Ruler time conversions use the first displayed date, as on Mac. The phone presents source selection in a sheet and preserves the Mac-only sidebar preference. [Calendar preference verification](verification.md#mobile-calendar-preferences). The Color page carries the Color By menu with the Inbox, list/folder, and tag source rows inline; each row's picker and Default action edits the View Options draft, which saves on Done. Priority keeps its fixed colors with no editing. [Color editor contract](../changes/calendar-source-colors-2026-11-10.md). [Color page contract](../changes/mobile-calendar-color-page-2026-11-16.md).
 
 No screenshot demonstrates task creation, dragging, resizing, scrolling, pagination, keyboard shortcuts or undo. Mobile versions of operations already implemented on desktop require their own touch designs and behavior tests. Unsupported gestures are not added from assumption, and desktop-backed operations are not removed because a still image cannot show them.
 
@@ -906,3 +888,107 @@ Capture, batch, lifecycle and schedule successes now have independent five-secon
 ### Date-filter reset follow-up (November 13)
 
 [Mobile date selection correction](../changes/mobile-date-all-selection-2026-11-13.md) makes Any date an explicit reset in Search and Normal filter drafts. Specific date selections remove the unrestricted sentinel, keeping other specific rules. Legacy saved values remain unchanged until a date action. This does not change the shared matcher or Advanced filters.
+
+## Mobile Tasks menu-first follow-up
+Smart-destination view/group controls are relocated by [MOB-VIEW-MENU](../changes/mobile-tasks-view-menu-2026-11-14.md), verification pending. Concrete-list modes and larger Kanban layout remain unchanged.
+
+## Compact Kanban captions
+[Compact Board title/date layout](../changes/mobile-compact-board-cards-2026-11-14.md) preserves existing actions and date labels; accessibility text sizes keep stacked wrapping. Verification pending.
+
+## Supported Sort & Group sheet slice
+[Initial sheet implementation](../changes/mobile-sort-group-supported-sheet-2026-11-14.md) exposes only existing functional List choices, with independent axes and real default-sort reset. Initial checkpoint: initially in implementation/unverified; full six-choice reference grids and Board sheet remain pending.
+
+Supported sheet update: bounded native behavior/light and largest-text screenshot checks passed for source40759b8; final test/docs-head CI pending. See mobile-sort-group-supported-sheet-2026-11-14.md for exact runs and remaining limitations.
+
+## Priority board grouping implementation
+The bounded [Priority board slice](../changes/mobile-priority-board-2026-11-14.md) was initially in implementation, not verified; see the native update below. Mobile-only display grouping; no new priority drag mutation or Mac behavior.
+
+Priority board update: bounded native tests and actual Simulator images passed for production `657c022`; final test/docs-head CI required. See mobile-priority-board-2026-11-14.md receipt for scope and limits.
+
+## November 14 Tasks drawer shell follow-up
+
+The bounded [left-drawer shell](../changes/mobile-tasks-drawer-shell-2026-11-14.md) replaces the phone navigation large sheet with an indigo leading overlay and dimmed dismissible backdrop. Existing destinations and management routes remain; full drawer hierarchy/token matching is not complete. See its record for passed bounded native/visual checks and remaining accessibility/viewport limits; do not treat this structural change as exact parity.
+
+## November 14 contextual task progress
+
+[Bounded iPhone progress presentation](../changes/mobile-contextual-progress-2026-11-14.md): ordinary checklist-free zero-progress tasks omit the idle row; checklist/nonzero summaries remain. The existing checkbox Set Progress route remains and has a named accessibility action. Description/formatting routes and data semantics are unchanged. Bounded native verification passed; this does not establish the complete reference visibility rule.
+
+### Compact Tasks list rows
+
+At standard Dynamic Type sizes, ordinary Tasks rows put their existing date caption trailing the title rather than below it. Titles retain up to two lines, the row keeps a 44-point minimum title target, and hierarchy, disclosure, completion, swipe and reorder controls are unchanged. Nested rows, accessibility text sizes and Search context retain stacked dates; the countdown switch remains a separate existing target. Due-date values are exposed to accessibility for both ordinary and date-grouped rows. This follows the observed compact/trailing-date direction, not calibrated TickTick geometry or complete row parity.
+
+### Calendar header hierarchy
+
+Calendar uses its existing mode chooser at the leading edge, month Jump to Date centrally and overflow at the trailing edge. Overflow begins Filter View Range, View Options, Arrange Tasks; existing Postpone Tasks remains. Tasks/Search still expose their workspace drawer. Reference Week overview and exact pixel matching are not implemented by this header-only change.
+
+### Schedule Date grid
+
+For a schedule without Duration, Date uses a visible graphical month picker over the existing staged date binding and schedule-zone calendar. Outer Cancel discards selection; Done saves through the existing schedule transaction. Duration keeps its existing compact Date/Start/End flow. This is a core presentation slice, not reference Date/Duration tabs or exact popup geometry.
+
+### Calendar Arrange panel
+
+Arrange Tasks is a trailing panel over Calendar rather than a bottom sheet. Exposed grid taps dismiss without opening/editing tasks; existing drag/drop, Undo and recurring-scope rules remain required. Existing grouping/filter controls and nested editors are retained. Panel width is approximate, and reference grouping/Filter placement is not completed by this container slice.
+
+### Calendar 3 Day shortcut
+
+Calendar mode selection includes explicit 3 Day, using existing Multi-Day mode with a saved count of 3. It intentionally replaces the configurable count; other counts remain editable in View Options. Failed count-changing save leaves the prior view/count with an error, while existing general-mode fallback remains unchanged. Grid geometry is not claimed. The phone mode menu now follows the observed reference order List, Year, Month, Week, 3 Day, Day, with existing Multi-Day and Multi-Week kept in a separated extras area; the agenda mode keeps its desktop identity with the `Agenda` identifier while its visible and accessible menu name is List. See [mobile week header](../changes/mobile-week-header-2026-11-16.md).
+
+### Arrange control hierarchy (November 15 candidate)
+Arrange places List/Tag/Priority grouping below the title and the existing single-source Filter menu at the bottom. Overflow retains Include overdue and scheduling guidance; Close remains visible. Projection/scheduling/drag behavior is unchanged. Reference centered Filter dialog and hierarchy remain open, not implied by this placement slice. See `../changes/mobile-arrange-controls-2026-11-15.md`.
+
+### Day/Multi-Day viewport fill
+Day and configurable Multi-Day hourly columns fill available viewport width after existing timezone rulers, retaining prior minimum widths and overflow behavior. Week layout and swipe remain unchanged. This addresses blank side space, not full Calendar chrome/geometry parity. See `../changes/mobile-hourly-viewport-2026-11-15.md`.
+
+### On-demand Calendar hours
+Hourly views expose existing Early/Late hour expansion controls in a Calendar hours popover rather than a permanent grid-header row. Counts/session reset remain unchanged; Done dismisses without changing schedule data. This is Taskovsky's preserved feature access, not exact TickTick control design. See `../changes/mobile-calendar-hours-popover-2026-11-15.md`.
+
+### Day week selector
+Day replaces its single focused-date header with seven dates from the current Calendar week. Tapping selects focus through the existing Day action without rescheduling tasks; current calendar week-start rules apply. Week/other headers unchanged. Reference exact strip geometry/selection semantics remain unverified. See `../changes/mobile-day-week-strip-2026-11-15.md`.
+
+### Week overview candidate (November 15)
+
+The bounded [Week overview](../changes/mobile-week-overview-2026-11-15.md) adds a mini-month and seven day tiles using the existing filtered projection. Day header drill-in and Back are session-only; explicit mode selection exits. Exact reference styling and swipe behavior are not claimed.
+
+### Arrange Filter dialog candidate
+
+See [staged multi-source Arrange Filter](../changes/mobile-arrange-filter-2026-11-15.md). Applies within the existing Arrange session; reference Done persistence is unverified.
+
+### Schedule type presentation
+
+[Date/Duration segmented presentation](../changes/mobile-schedule-tabs-2026-11-15.md) uses existing conversion semantics, explicitly not the unverified reference timed default.
+
+### Calendar appearance navigation
+
+Calendar View Options groups appearance choices on Color and Style pushed pages. Style opens Show Item Icons for the existing global/task/note switches. All pages share the outer staged draft; Back retains it and outer Cancel/Done discard/save respectively. Existing Filled/Outline and Year style semantics remain unchanged, not asserted equivalent to TickTick styles. See [navigation change](../changes/mobile-calendar-options-navigation-2026-11-15.md).
+
+### Compact capture shell
+
+New ordinary capture starts with a title and direct date/priority/tag/list controls; More expands the existing advanced form. Prepared/template/range/nonempty-description drafts open expanded. One stable title input retains editing identity while metadata expands. Existing capture transaction, recovery, recognition and template behavior stays authoritative. This is structural coverage, not measured low-sheet/keyboard parity. [Scope](../changes/mobile-compact-capture-2026-11-15.md).
+
+### Empty description affordance
+
+An ordinary empty plain description uses one Add description menu exposing existing plain and formatted editing routes, without an idle No description row. Existing nonempty and rich-description presentation and write guards remain unchanged. This is compact empty-state presentation, not exact TickTick toolbar matching. [Scope](../changes/mobile-empty-description-2026-11-15.md).
+
+### Schedule option pages
+
+Reminder and Repeat appear as summary rows opening dedicated pages over the same outer draft. Back retains changes, outer Cancel/Done discard/save; custom-repeat and skip behavior retained. Existing supported controls are not claimed equivalent to TickTick presets or popup styling. [Scope](../changes/mobile-schedule-options-2026-11-15.md).
+
+## Composer recovery success notice removal — 2026-11-15
+
+[Bounded user-requested change](../changes/mobile-capture-notice-2026-11-15.md): remove normal recovery-status area and gap; retain actual warnings and underlying draft recovery. Local full tests/release/review and bounded native checks passed; exact-head CI pending. No full parity claim.
+
+## iPhone Title sorting — 2026-11-15
+
+[Contract and evidence](../changes/mobile-title-sort-2026-11-15.md): new Title criterion and direction, preserving current grouping/pinning/storage semantics. Reference criterion observed, exact collation unverified. Local/native/review checks passed; exact-head CI pending.
+
+## Mobile Priority list grouping — 2026-11-15
+
+[Contract and evidence](../changes/mobile-priority-list-2026-11-15.md): display-only Priority groups preserve pin/history/sort and current preference scope. Local/native/review checks passed; hosted CI pending; no exact reference ordering claim.
+
+## Real mobile organization grouping and sorting — 2026-11-15
+
+[Contract](../changes/mobile-group-sort-complete-2026-11-15.md) defines distinct List/Tag/None, metadata-aware Date/Tag sorting and unchanged compatibility/reset boundaries. Checks pending; exact unobserved reference semantics not claimed.
+
+### Smart-list visibility popup (T10)
+
+Unified management uses a row-anchored Show / Show if not empty / Hidden popover with the current staged check. Selection changes only the management draft; backdrop leaves it untouched, Cancel discards and Done saves through the existing revision guard. Smart Lists, Tags and Filters use the same control. Legacy standalone Smart List settings retain their navigation pickers. [Verification and limits](../changes/mobile-visibility-popup-2026-11-16.md).

@@ -1,51 +1,26 @@
-# Spec driven development workflow
+# Parity workflow
 
-Use a small, reviewable specification change before implementation, then keep the accepted behavior, code and verification together. This repository does not require a new framework, generator or copied second specification system to begin.
+Work one bounded change at a time. Taskovsky source at the exact checkout describes what exists; a scoped, approved change defines what should change. Running TickTick on the relevant platform is the authority for its **observed** behavior. Official documentation supplements it; static analysis can suggest experiments but cannot prove runtime behavior. Record a conflict with a Taskovsky product decision instead of silently overriding it.
 
-## 1 Read and freeze the starting point
+## Scope and delivery
 
-Record the base commit, branch and clean/dirty state. Read the relevant business and UI contracts, architecture boundaries, current parity row and known deviations. Reconcile new commits from concurrent work. Do not assume the November 8 baseline remains current after code changes.
+- Local **Tasks and Calendar** on Mac and iPhone. Compare light appearance first; preserve existing Dark and accessibility support. Dark parity and dedicated accessibility-layout polish are deferred, not passed. See the [appearance decision](../changes/light-theme-priority-2026-11-13.md).
+- Mobile **Share / Print (T05)** and **Background (T06)** remain deferred until core forms are done. Sync, external integrations, real notification authorization, storage-recovery polish and App Store release are not reopened by parity work.
+- On iPhone, work one tracked form at a time in the requested order. The current pass is Calendar; use the [46-state tracker](../mobile-visual-parity.md), not an older dated rollout queue. Keep local progress separate from integrated status. On Mac, use the [feature gaps](../parity-implementation-status.md) and affected UI region; the [dated Mac layout map](../changes/ui-macro-parity-plan-2026-11-13.md) is a starting inventory, not current acceptance.
 
-For a documentation alignment task, read code to establish current behavior. For a future feature, keep the current baseline distinct from the requested outcome. A source defect belongs in the deviation ledger, not in an silently rewritten requirement.
+## 1. Observe and record
 
-## Current appearance priority
+Pin the Taskovsky base, platform and affected BUS/UX/IOS and TT or C/D/T IDs. Open the actual TickTick state and exercise the relevant transitions, not just its settled appearance. Record entry path, labels, state, interaction and resulting data or visible effect. Record app/OS, appearance, viewport in points if known, image scale/crop, text size, locale/time zone and fixture differences. Label observed, inferred, unknown and deliberate differences separately. Prefer neutral fixtures and a dedicated reference account; use iPhone Mirroring only when needed. Publish only reviewed, authorized captures; record masks or withhold the image.
 
-For the current Tasks/Calendar milestone, use the [November 13 light-theme scope decision](../changes/light-theme-priority-2026-11-13.md). Dark-mode parity and native Dark-mode QA are deferred. Preserve existing appearance support and historical evidence; do not mark deferred cases passed or use this scope change to waive affected light-theme, behavior, accessibility, review or automated-test gates.
+## 2. Specify and implement
 
-## 2 Define one bounded change
+Use the [change template](change-template.md) for one decision, observation, intended delta and receipt. List each relevant control and conditional state, its geometry, color, wording, transitions and underlying business rule. Keep UI separate per platform and put shared rules in the shared engine. Preserve unrelated behavior and unsupported data. Do not add cosmetic controls that cannot perform the action. Mark the contract approved only when the user has authorized the delta or their request specifies it unambiguously.
 
-Copy the [change template](change-template.md) into `docs/changes/<short-feature-name>.md` when work is requested. Assign a stable change ID and link affected `BUS`, `UX`, component and parity IDs. The proposal must state:
+## 3. Verify independently
 
-- User outcome, scope, non-goals and which platforms change.
-- Current source behavior and the precise intended delta.
-- Business invariants, data/schema/migration implications, command and failure semantics.
-- UI geometry, typography, alignment, colors, icons, motion, focus, keyboard/touch actions and component states, using existing tokens where appropriate.
-- Acceptance cases including interruption, validation, cancellation, undo, reload and platform differences.
-- Verification plan and unresolved product decisions.
-
-An omitted visual detail is not permission to copy a TickTick screenshot or redesign the screen. Resolve meaningful ambiguity before implementation; explicitly preserve existing behavior outside the change. An iPhone-only capability limit can be deliberate, but must not cause shared-data loss.
-
-## 3 Review the intended outcome
-
-Use status `Proposed` until the product owner approves the scope or the implementing user request already specifies it unambiguously. Record the approval source/date without inventing a decision. Then use `Approved`. Architecture documents are proposals, not a blanket assignment to refactor everything.
-
-Agree on meaningful business and UI decisions before implementation. A separate spec-only PR is useful for large changes; a small feature may keep proposal, implementation and evidence in one PR with distinct sections. The user remains able to review the delta.
-
-## 4 Implement the contract
-
-Use status `In implementation`. Inspect existing patterns and tests, add focused regression coverage where requested, and make the smallest coherent vertical slice. Both platforms call the shared engine for domain rules. Keep platform renderers and UI state separate. Extract components in behavior-preserving stages rather than mixing a port, data-format rewrite and redesign.
-
-Implementation must not silently change the approved specification to match what was easiest to code. Record new limitations or decisions and get the required scope approval. Preserve concurrent fixes and do not absorb another workstream's commits merely to make a feature appear complete.
-
-## 5 Verify each layer independently
-
-- Domain: acceptance cases, recurrence/date boundaries, graph lifecycle, migrations, corrupted data, persistence and undo.
-- Components: isolated contract tests and host/harness checks; rich text includes exact UTF-16 identity and cross-capability round trips.
-- macOS: existing tests and build on macOS; isolated app checks for affected flows and layout boundaries.
-- iPhone, when implemented: its own build, simulator/device, keyboard/touch/VoiceOver/Dynamic Type and lifecycle checks.
-- Visual: known fixture, OS, appearance, point dimensions, scale, locale, text size and reduced-motion setting. Record actual screenshots/artifacts and measured results.
-
-Test-file existence, a green historical report and static code inspection are not a current pass. Record passed, failed and not-run separately with exact commit. Tests for proposed modules do not exist merely because a test strategy is written here.
+- **Behavior:** use neutral, isolated fixtures. Verify relevant success, repeated/dismissed interactions, Cancel/Undo, persistence/relaunch and platform regressions. Check domain tests, affected native flows and build/CI separately.
+- **Visual:** freeze the element inventory, each axis denominator and tolerances before tuning. Compare calibrated captures under matched conditions when possible. Score iPhone **size, position and color separately** and report counts, tolerances and significant unmatched conditions. Keep every reference element in the recorded inventory and explain absences, unknowns, masks and approved scope exclusions. Count unverified matches as non-passes in the frozen denominator; report any separately scoped subset as such. Do not infer text or colors from a mask. Use unscaled measurements only where the capture supports them.
+- **Move on:** target at least **90% on each axis** with working behavior. Set a bounded iteration budget before tuning. If it stalls, keep the best behavior-verified result, record the measured scores or why an axis could not be measured and the remaining gaps, then advance. Do not label below-target results as parity passed. A reference, a similar screenshot and a native test prove different things.
 
 ### Reuse the guarded Mac QA app
 
@@ -53,23 +28,10 @@ For Computer Use on the development Mac, keep the existing **Taskovsky QA** bund
 
 When testing a new build, prepare the replacement payload and fixture in staging. Preserve the app name, identifier, stable path, launcher contract and existing ad hoc signing mode. Verify the guard and strict signature before using the staged bundle. Keep the signed prior bundle intact so it can be restored after the run. Launch with the exact fixture paths accepted by the guard. A rebuilt ad hoc bundle can have a different code hash, so approval reuse depends on the actual Computer Use request.
 
-## 6 Review and finish together
+## 4. Review and integrate
 
-Review the diff against acceptance cases, documentation and unintended scope. For UI, compare actual states and transitions rather than only one screenshot. Check data compatibility and unsupported-feature handling before releasing a limited client.
-
-Use `Implemented, verification pending` when code exists but checks remain. Use `Verified` only for the specified acceptance cases/platform/environment with evidence. A merged change may still carry explicit known deviations. After integration, update current baseline contracts, parity and evidence links, then mark the change `Integrated` with the merge commit. Keep completed change records as history rather than competing current specifications.
-
-Open a draft PR unless requested otherwise. PR creation does not authorize merging, deploying or running destructive actions against real data.
-
-## Suggested implementation request
-
-> Implement change `<ID>` from `<path>` at its approved revision. Preserve unrelated behavior and concurrent work. Follow the linked business/UI/component contracts and verification plan. Report unresolved decisions before broadening scope. Update the current specifications and evidence, distinguish not-run checks, and open a draft PR. Do not merge.
-
-For documentation-only requests, replace the implementation/verification instruction with a Markdown-only allowlist and static document checks. Do not create application tests or fix known defects as a side effect of reconciling documentation.
+Record exact head, fixture, commands, environment, passed/failed/not-run checks, reference and resulting Taskovsky captures, and the next gap. Link the receipt from the affected tracker row and record integration separately. Keep durable rules in the canonical specs, not copied into trackers or overwritten to explain a defect. Retain completed change records as evidence. Open a draft PR unless requested otherwise; opening a PR does not authorize a merge.
 
 ## Hosted macOS verification
 
-The [macOS CI workflow](../../.github/workflows/macos-ci.yml) runs tests, release packaging, signature checks and archive integrity checks for PR events, including drafts, and pushes to main. It skips automatic runs when every changed path is under `docs/` or is root `README.md` or `AGENTS.md`. Mixed documentation/code changes still run. A documentation-only commit on a PR that still contains code changes also runs because GitHub evaluates the full PR diff. Manual dispatch remains available without a path filter. The [CI specification](ci-cd.md#ci-002) describes exact triggers, required-check caveats and native filter limits.
-
-For each feature, inspect the latest applicable run for its exact PR head and actual synthetic merge checkout. A filtered documentation-only update has no new build or artifact and is not a runtime pass; perform its static document checks instead, or dispatch manually if a build is needed. Download the diagnostics and app artifacts if needed before their 14-day expiry. A failed, skipped or cancelled required stage is not a pass. CI does not replace affected native UI acceptance, macOS 14 testing or Intel testing. Branch-protection enforcement and deployment are not configured by this work.
-
+Use the [CI specification](ci-cd.md#ci-002) for triggers and limits. Review the exact PR head, relevant build and tests; automation does not replace affected native checks. Paths restricted to `docs/`, root `README.md`, or root `AGENTS.md` skip automatic macOS CI; validate links, anchors, IDs and the Markdown-only diff instead. A filtered run is not a runtime pass.

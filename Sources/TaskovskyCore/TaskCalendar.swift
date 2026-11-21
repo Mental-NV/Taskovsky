@@ -14,6 +14,12 @@ public enum CalendarColorMode: String, Codable, CaseIterable, Sendable { case li
 public enum CalendarColorSource: Hashable, Sendable {
     case inbox, list(UUID), tag(UUID)
 
+    /// Honest Taskovsky palette for the iPhone Calendar Color Pick page.
+    /// These are the existing desktop user colors (see docs/spec/ui-ux.md);
+    /// the reference named families (Recommend/Macaron/Morandi/Rococo/
+    /// Classic/Memphis) are not reproduced and must not be invented here.
+    public static let taskovskyPalette = ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"]
+
     private var storageKey: String {
         switch self {
         case .inbox: "inbox"
@@ -22,7 +28,7 @@ public enum CalendarColorSource: Hashable, Sendable {
         }
     }
 
-    public struct Swatch: Identifiable, Sendable {
+    public struct Swatch: Identifiable, Equatable, Sendable {
         public let id: CalendarColorSource
         public let name: String
         public let defaultColor: String
@@ -39,6 +45,48 @@ public enum CalendarColorSource: Hashable, Sendable {
         case .priority:
             return []
         }
+    }
+
+    /// One Calendar color group for List mode. `placement` reuses the
+    /// organizer's domain ownership: above-folders lists, one group per
+    /// folder, then below-folders lists. Archived lists are excluded; their
+    /// stored overrides are preserved separately and never dropped here.
+    public struct ListColorSection: Equatable, Sendable {
+        public let placement: ListPlacement
+        public let folderName: String?
+        public let rows: [Swatch]
+    }
+
+    /// Inbox plus the active lists grouped by folder ownership. Every group
+    /// keeps workspace stored order and stable source IDs, so the Color page
+    /// can render a genuine hierarchy without guessing labels. Lists whose
+    /// folder is unknown fall to the below-folders group, matching the
+    /// Calendar filter fallback.
+    public static func listSections(in data: WorkspaceData) -> (inbox: Swatch, sections: [ListColorSection]) {
+        let inbox = Swatch(id: .inbox, name: "Inbox", defaultColor: "#7C6CF2")
+        let active = data.lists.filter { !$0.isArchived }
+        let known = Set(data.folders.map(\.id))
+        func swatch(_ list: TaskList) -> Swatch {
+            Swatch(id: .list(list.id), name: list.name, defaultColor: list.color)
+        }
+        var sections: [ListColorSection] = []
+        let above = active.filter { $0.folderID == nil && !$0.belowFolders }
+        if !above.isEmpty {
+            sections.append(ListColorSection(placement: .aboveFolders, folderName: nil, rows: above.map(swatch)))
+        }
+        for folder in data.folders {
+            let members = active.filter { $0.folderID == folder.id }
+            if !members.isEmpty {
+                sections.append(ListColorSection(placement: .folder(folder.id), folderName: folder.name, rows: members.map(swatch)))
+            }
+        }
+        let below = active.filter { list in
+            list.folderID == nil ? list.belowFolders : !known.contains(list.folderID!)
+        }
+        if !below.isEmpty {
+            sections.append(ListColorSection(placement: .belowFolders, folderName: nil, rows: below.map(swatch)))
+        }
+        return (inbox, sections)
     }
 
     public struct Overrides: Codable, Equatable, Sendable {
@@ -66,7 +114,90 @@ public enum CalendarColorSource: Hashable, Sendable {
         }
     }
 }
-public enum CalendarItemStyle: String, Codable, CaseIterable, Sendable { case filled, outline }
+public enum CalendarItemStyle: String, Codable, CaseIterable, Sendable { case modern, classic, filled, outline }
+
+/// Shared production rendering policy for Calendar item styles.
+///
+/// `filled` and `outline` are legacy Taskovsky styles with different
+/// semantics from the reference Modern/Classic pair: they are preserved
+/// verbatim (including their leading-stripe and outline treatments) so
+/// existing saved selections stay honest with no automatic migration.
+/// `modern` is a pale fill with a thin colored leading stripe; `classic`
+/// is a stronger saturated block fill with no distinct stripe. Text stays
+/// dark (primary) in both new styles. Exact reference colors, borders and
+/// any selection-driven saturation shift remain uncertain and are not
+/// claimed here; the opacities below are Taskovsky choices.
+extension CalendarItemStyle {
+    /// Primary reference-parity choices presented first in Style pages.
+    public static var primaryStyles: [Self] { [.modern, .classic] }
+    /// Preserved Taskovsky styles, always labeled as legacy in UI.
+    public static var legacyStyles: [Self] { [.filled, .outline] }
+
+    public var isLegacy: Bool { Self.legacyStyles.contains(self) }
+
+    /// Honest UI title: legacy values are never relabeled as Modern/Classic.
+    public var displayTitle: String {
+        switch self {
+        case .modern: "Modern"
+        case .classic: "Classic"
+        case .filled: "Filled (Legacy)"
+        case .outline: "Outline (Legacy)"
+        }
+    }
+
+    public struct Rendering: Equatable, Sendable {
+        public let fillOpacity: Double
+        public let completedFillOpacity: Double
+        public let showsStripe: Bool
+        public let showsOutline: Bool
+
+        public init(fillOpacity: Double, completedFillOpacity: Double, showsStripe: Bool, showsOutline: Bool) {
+            self.fillOpacity = fillOpacity
+            self.completedFillOpacity = completedFillOpacity
+            self.showsStripe = showsStripe
+            self.showsOutline = showsOutline
+        }
+    }
+
+    /// Single source of truth for both production cards and Style preview
+    /// tiles. Stored values round-trip unchanged; the fill/stripe/outline
+    /// literals below reproduce each platform's prior treatment (see the
+    /// platform mappings for the one completed-state difference).
+    public var rendering: Rendering {
+        switch self {
+        case .filled:
+            return Rendering(fillOpacity: 0.15, completedFillOpacity: 0.06, showsStripe: true, showsOutline: false)
+        case .outline:
+            return Rendering(fillOpacity: 0, completedFillOpacity: 0, showsStripe: true, showsOutline: true)
+        case .modern:
+            return Rendering(fillOpacity: 0.12, completedFillOpacity: 0.05, showsStripe: true, showsOutline: false)
+        case .classic:
+            return Rendering(fillOpacity: 0.55, completedFillOpacity: 0.28, showsStripe: false, showsOutline: false)
+        }
+    }
+
+    /// Mac card fill: completed rows dim the fill itself (prior Mac values).
+    public func macFillOpacity(completed: Bool) -> Double {
+        completed ? rendering.completedFillOpacity : rendering.fillOpacity
+    }
+
+    /// iPhone card fill: legacy styles keep their prior fill with the
+    /// platform overall opacity handling completed dimming (a completed
+    /// Filled card was and stays fill 0.15 under overall 0.58); new styles
+    /// use the shared policy value on both platforms.
+    public func phoneFillOpacity(completed: Bool) -> Double {
+        if isLegacy { return rendering.fillOpacity }
+        return completed ? rendering.completedFillOpacity : rendering.fillOpacity
+    }
+}
+
+extension CalendarYearStyle {
+    /// Reference wording for the Heatmap section tiles. Taskovsky retains
+    /// its own semantics: Hide keeps Standard dots, Show uses Heatmap
+    /// shading. The reference Hide state (fully plain dates) is not claimed.
+    public var heatmapTileTitle: String { self == .heatmap ? "Show" : "Hide" }
+    public var heatmapTileSubtitle: String { self == .heatmap ? "Heatmap shading" : "Standard dots" }
+}
 public enum CalendarYearStyle: String, Codable, CaseIterable, Sendable { case standard, heatmap }
 
 /// Local Calendar scope is independent of smart-list inclusion. Archived
@@ -231,6 +362,27 @@ public struct CalendarAgendaWindow: Sendable {
             return CalendarDates.days(from: start, count: Self.initialDayCount, calendar: calendar)
         }
         return CalendarDates.days(from: start, count: length, calendar: calendar)
+    }
+}
+
+/// Production formatting for the hourly calendar day header, resolved in the
+/// supplied calendar/timezone. The weekday label, accessible date, numeric
+/// day and identifier must agree with each other: formatting any of them in
+/// the device zone instead would show the wrong civil date near a midnight
+/// timezone boundary (C01/C02).
+public struct CalendarDayHeader: Equatable, Sendable {
+    public let weekdayNarrow: String
+    public let dayNumber: Int
+    public let accessibleLabel: String
+    public let identifier: String
+    public init(day: Date, calendar: Calendar) {
+        let parts = calendar.dateComponents([.year, .month, .day], from: day)
+        weekdayNarrow = day.formatted(Date.FormatStyle(date: .omitted, time: .omitted,
+                                                       calendar: calendar, timeZone: calendar.timeZone).weekday(.narrow))
+        dayNumber = calendar.component(.day, from: day)
+        accessibleLabel = "Show " + day.formatted(Date.FormatStyle(date: .complete, time: .omitted,
+                                                                   calendar: calendar, timeZone: calendar.timeZone)) + " in Day view"
+        identifier = "calendarDay-\(parts.year ?? 0)-\(parts.month ?? 0)-\(parts.day ?? 0)"
     }
 }
 
@@ -525,6 +677,26 @@ public struct CalendarEntry: Identifiable, Equatable, Sendable {
     public var hasDuration: Bool = false
     public var color: String
     public var listID: UUID?
+    public init(id: String, taskID: UUID, checklistID: UUID? = nil, title: String,
+                start: Date, end: Date, due: Date, isAllDay: Bool, isProjected: Bool,
+                isCompleted: Bool, isNote: Bool, hasDuration: Bool = false,
+                color: String, listID: UUID? = nil) {
+        self.id = id
+        self.taskID = taskID
+        self.checklistID = checklistID
+        self.title = title
+        self.start = start
+        self.end = end
+        self.due = due
+        self.isAllDay = isAllDay
+        self.isProjected = isProjected
+        self.isCompleted = isCompleted
+        self.isNote = isNote
+        self.hasDuration = hasDuration
+        self.color = color
+        self.listID = listID
+    }
+
     public var canSchedule: Bool { !isProjected && checklistID == nil }
     public var canChangeCompletion: Bool { !isProjected && !isNote }
     public var canResizeAllDayRange: Bool { isAllDay && hasDuration && canSchedule }

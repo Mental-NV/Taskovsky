@@ -1,6 +1,6 @@
 # CAL-FOLD-001 — Local Calendar folded hours
 
-The [TickTick FAQ](https://help.ticktick.com/articles/7055792921664028672) describes independent early and late expansion in Calendar. The earlier [installed Mac audit](../calendar-visual-parity-audit-2026-11-08.md) saw 07 and 21 ruler handles. Taskovsky uses the documented default bands and named controls on Mac and iPhone. The expanded or folded state is temporary. It resets when the hourly view is recreated and does not update either file.
+The [TickTick FAQ](https://help.ticktick.com/articles/7055792921664028672) describes independent early and late expansion in Calendar. The earlier [installed Mac audit](../archive/early-research/calendar-visual-parity-audit-2026-11-08.md) saw 07 and 21 ruler handles. Taskovsky uses the documented default bands and named controls on Mac and iPhone. The expanded or folded state is temporary. It resets when the hourly view is recreated and does not update either file.
 
 With default settings, Day, Week and Multi-Day display 07:00 through the 21:00 boundary. Early hours adds 00:00–07:00, and Late hours adds 21:00–24:00. Each control shows how many visible-source timed items overlap its band, including portions of entries that cross a boundary. All-day rows and non-hourly modes keep their existing behavior.
 

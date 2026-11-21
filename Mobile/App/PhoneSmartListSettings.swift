@@ -2,7 +2,7 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private extension SmartListKey {
+extension SmartListKey {
     var phoneLabel: String {
         switch self {
         case .all: "All"
@@ -20,7 +20,7 @@ private extension SmartListKey {
     }
 }
 
-private extension SmartListVisibility {
+extension SmartListVisibility {
     var phoneLabel: String {
         switch self {
         case .show: "Show"

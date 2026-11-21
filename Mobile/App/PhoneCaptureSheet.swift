@@ -6,6 +6,10 @@ import TaskovskyWorkspace
 struct PhoneCaptureSheet: View {
     @ObservedObject var model: PhoneWorkspaceModel
     @State private var focusRequest: UUID?
+    private enum CaptureRoute: String, Identifiable { case date, priority, tags, list; var id: String { rawValue } }
+    @State private var compactRoute: CaptureRoute?
+    @State private var expanded = false
+    @State private var detent: PresentationDetent = .medium
     private func input<T>(_ key: WritableKeyPath<TaskCaptureInput, T>, fallback: T) -> Binding<T> {
         let id = model.captureDraft?.id
         return Binding(get: { model.captureDraft?.id == id ? model.captureDraft?.input[keyPath: key] ?? fallback : fallback }, set: { next in
@@ -44,6 +48,7 @@ struct PhoneCaptureSheet: View {
                 let preview = model.capturePreview
                 let tagNames = (preview?.tagIDs ?? draft.input.tagIDs).compactMap { id in document.snapshot.workspace.tags.first { $0.id == id }?.name }
                 Form {
+                    if model.captureError != nil || model.staleCapture || frozen || model.captureRecoveryStatus.hasPrefix("Recovery copy could not") {
                     Section {
                         if let error = model.captureError {
                             Text(error).foregroundStyle(.red).accessibilityIdentifier("captureError")
@@ -53,19 +58,21 @@ struct PhoneCaptureSheet: View {
                         }
                         if model.staleCapture { Text("This capture is based on an older workspace. Your text is kept.").foregroundStyle(.orange) }
                         if frozen { Text("Retry checks this same task. Its submitted contents are protected until the outcome is known.").font(.footnote) }
-                        Text(model.captureRecoveryStatus).font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("captureRecoveryStatus")
+                        if model.captureRecoveryStatus.hasPrefix("Recovery copy could not") {
+                            Text(model.captureRecoveryStatus).font(.caption).foregroundStyle(.orange).accessibilityIdentifier("captureRecoveryWarning")
+                        }
                     }
+                    }
+                    Section {
+                        titleField(draft, frozen: frozen)
+                    }
+                    if !expanded {
+                        compactFields(draft, document: document, preview: preview, tagNames: tagNames)
+                    } else {
                     Section {
                         Picker("Kind", selection: input(\.kind, fallback: .task)) {
                             Text("Task").tag(TaskKind.task); Text("Note").tag(TaskKind.note)
                         }.pickerStyle(.segmented)
-                        NativeFieldInput(text: input(\.title, fallback: ""), composing: composing(draft.id),
-                                         editorID: draft.id, title: true, editable: !frozen && !model.isBusy,
-                                         accessibilityID: "captureTitle", focusRequest: focusRequest)
-                            .id(draft.id).frame(minHeight: 60, alignment: .topLeading)
-                            .overlay(alignment: .topLeading) {
-                                if draft.input.title.isEmpty { Text("Title").font(.title2).foregroundStyle(.tertiary).allowsHitTesting(false).accessibilityHidden(true) }
-                            }
                         if draft.input.protectsBody {
                             if let rich = draft.input.template?.richBody,
                                let preview = RichDescriptionPreview(body: draft.input.body, rich: rich), !rich.isEmpty {
@@ -104,7 +111,111 @@ struct PhoneCaptureSheet: View {
                             HStack { Text("Tags"); Spacer(); Text(tagNames.isEmpty ? "None" : tagNames.joined(separator: ", ")).lineLimit(2).foregroundStyle(.secondary) }
                         }.accessibilityIdentifier("captureTagsPicker")
                     }.disabled(frozen || model.isBusy)
-                    Section("Date") {
+                    captureDateFields(draft, preview: preview).disabled(frozen || model.isBusy)
+                    if draft.input.template == nil {
+                        recognition(draft, document: document, preview: preview).disabled(frozen || model.isBusy)
+                    }
+                    if !document.snapshot.workspace.templates.isEmpty {
+                        Section {
+                            NavigationLink("Use template") { CaptureTemplates(model: model) }.accessibilityIdentifier("captureTemplatePicker")
+                        }.disabled(frozen || model.isBusy)
+                    }
+                    }
+                    if preview == nil && !draft.input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Check the destination, tags, schedule and template. Unsupported content is preserved, so this capture cannot be submitted yet.").font(.footnote).foregroundStyle(.secondary)
+                    }
+                }.navigationDestination(item: $compactRoute) { compactDestination($0) }
+                    .environment(\.calendar, draft.calendar).environment(\.timeZone, draft.calendar.timeZone)
+                    .scrollDismissesKeyboard(.immediately).navigationTitle("New \(draft.input.kind.rawValue)").navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { model.requestCloseCapture() }.disabled(model.isBusy).accessibilityIdentifier("captureCancel") }
+                        ToolbarItem(placement: .confirmationAction) { Button(model.isBusy ? "Saving…" : frozen || model.captureError != nil ? "Retry" : "Add") {
+                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+                            Task { await model.createCapturedTask() }
+                        }.disabled(!model.canCreate).accessibilityIdentifier("captureAdd") }
+                    }
+            }
+        }.onAppear {
+            if let draft = model.captureDraft, draft.preparedTask != nil || draft.input.template != nil || draft.input.calendarRange != nil || !draft.input.body.isEmpty {
+                expanded = true
+                detent = .large
+            }
+        }
+            .presentationDetents([.medium, .large], selection: $detent)
+            .interactiveDismissDisabled(model.captureDraft?.hasChanges == true || model.isBusy)
+            .alert("Discard this capture?", isPresented: $model.confirmCaptureDiscard) {
+                Button("Discard", role: .destructive) { Task { await model.discardCapture() } }
+                Button("Keep Editing", role: .cancel) { }
+            }
+    }
+    private func titleField(_ draft: TaskCaptureDraft, frozen: Bool) -> some View {
+        NativeFieldInput(text: input(\.title, fallback: ""), composing: composing(draft.id),
+                         editorID: draft.id, title: true, editable: !frozen && !model.isBusy,
+                         accessibilityID: "captureTitle", focusRequest: focusRequest)
+            .id(draft.id).frame(minHeight: 60, alignment: .topLeading)
+            .overlay(alignment: .topLeading) {
+                if draft.input.title.isEmpty {
+                    Text("What would you like to do?").font(.title2).foregroundStyle(.tertiary)
+                        .allowsHitTesting(false).accessibilityHidden(true)
+                }
+            }
+    }
+
+    private func compactFields(_ draft: TaskCaptureDraft, document: WorkspaceDocument,
+                               preview: TaskItem?, tagNames: [String]) -> some View {
+        let frozen = draft.preparedTask != nil
+        return Section {
+            HStack(spacing: 16) {
+                compactAction(.date, title: "Date", symbol: "calendar", identifier: "captureDatePage")
+                compactAction(.priority, title: "Priority", symbol: "flag", identifier: "capturePriorityPicker")
+                    .accessibilityValue(draft.input.priority.rawValue.capitalized)
+                compactAction(.tags, title: "Tags", symbol: "tag", identifier: "captureTagsPicker")
+                    .accessibilityValue(tagNames.isEmpty ? "None" : tagNames.joined(separator: ", "))
+                compactAction(.list, title: "List", symbol: "tray", identifier: "captureListPicker")
+                    .accessibilityValue(document.snapshot.workspace.lists.first { $0.id == draft.input.listID }?.name ?? "Inbox")
+                Spacer()
+                Button { expanded = true; detent = .large } label: { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("More capture options").accessibilityIdentifier("captureMore")
+            }.buttonStyle(.plain).frame(minHeight: 44)
+            Text(preview?.dueDate.map { $0.formatted(Date.FormatStyle(date: .abbreviated, time: preview?.hasDueTime == true ? .shortened : .omitted, calendar: draft.calendar, timeZone: draft.calendar.timeZone)) } ?? "No date")
+                .font(.caption).foregroundStyle(.secondary).accessibilityIdentifier("captureResolvedDate")
+        }.disabled(frozen || model.isBusy)
+    }
+
+    private func compactAction(_ route: CaptureRoute, title: String, symbol: String, identifier: String) -> some View {
+        Button { compactRoute = route } label: { Image(systemName: symbol).frame(minWidth: 44, minHeight: 44) }
+            .accessibilityLabel(title).accessibilityIdentifier(identifier)
+    }
+
+    @ViewBuilder private func compactDestination(_ route: CaptureRoute) -> some View {
+        if let draft = model.captureDraft, let document = model.document {
+            switch route {
+            case .date:
+                Form { captureDateFields(draft, preview: model.capturePreview) }
+                    .navigationTitle("Date").navigationBarTitleDisplayMode(.inline)
+            case .priority:
+                Form {
+                    Picker("Priority", selection: input(\.priority, fallback: .none)) {
+                        ForEach(TaskPriority.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+                    }.pickerStyle(.inline)
+                }.navigationTitle("Priority").navigationBarTitleDisplayMode(.inline)
+                    .disabled(draft.preparedTask != nil || model.isBusy)
+            case .tags: CaptureTags(model: model).disabled(draft.preparedTask != nil || model.isBusy)
+            case .list:
+                Form {
+                    Picker("List", selection: input(\.listID, fallback: nil)) {
+                        Text("Inbox").tag(UUID?.none)
+                        ForEach(document.snapshot.workspace.lists.filter { !$0.isArchived }) { Text($0.name).tag(Optional($0.id)) }
+                    }.pickerStyle(.inline)
+                }.navigationTitle("List").navigationBarTitleDisplayMode(.inline)
+                    .disabled(draft.preparedTask != nil || model.isBusy)
+            }
+        }
+    }
+
+    private func captureDateFields(_ draft: TaskCaptureDraft, preview: TaskItem?) -> some View {
+        let frozen = draft.preparedTask != nil
+        return Section("Date") {
                         Text(preview?.dueDate.map { $0.formatted(Date.FormatStyle(date: .abbreviated, time: preview?.hasDueTime == true ? .shortened : .omitted, calendar: draft.calendar, timeZone: draft.calendar.timeZone)) } ?? "No date")
                             .accessibilityIdentifier("captureResolvedDate")
                         Toggle("Set a date", isOn: Binding(get: { preview?.dueDate != nil }, set: { enabled in
@@ -124,33 +235,8 @@ struct PhoneCaptureSheet: View {
                             Button("No date") { chooseDate(nil, timed: false) }
                         }
                     }.disabled(frozen || model.isBusy)
-                    if draft.input.template == nil {
-                        recognition(draft, document: document, preview: preview).disabled(frozen || model.isBusy)
-                    }
-                    if !document.snapshot.workspace.templates.isEmpty {
-                        Section {
-                            NavigationLink("Use template") { CaptureTemplates(model: model) }.accessibilityIdentifier("captureTemplatePicker")
-                        }.disabled(frozen || model.isBusy)
-                    }
-                    if preview == nil && !draft.input.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text("Check the destination, tags, schedule and template. Unsupported content is preserved, so this capture cannot be submitted yet.").font(.footnote).foregroundStyle(.secondary)
-                    }
-                }.environment(\.calendar, draft.calendar).environment(\.timeZone, draft.calendar.timeZone)
-                    .scrollDismissesKeyboard(.immediately).navigationTitle("New \(draft.input.kind.rawValue)").navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { model.requestCloseCapture() }.disabled(model.isBusy).accessibilityIdentifier("captureCancel") }
-                        ToolbarItem(placement: .confirmationAction) { Button(model.isBusy ? "Saving…" : frozen || model.captureError != nil ? "Retry" : "Add") {
-                            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-                            Task { await model.createCapturedTask() }
-                        }.disabled(!model.canCreate).accessibilityIdentifier("captureAdd") }
-                    }
-            }
-        }.interactiveDismissDisabled(model.captureDraft?.hasChanges == true || model.isBusy)
-            .alert("Discard this capture?", isPresented: $model.confirmCaptureDiscard) {
-                Button("Discard", role: .destructive) { Task { await model.discardCapture() } }
-                Button("Keep Editing", role: .cancel) { }
-            }
     }
+
     private func recognition(_ draft: TaskCaptureDraft, document: WorkspaceDocument, preview: TaskItem?) -> some View {
         let rawTitle = draft.input.title
         let datePhrase: String? = {

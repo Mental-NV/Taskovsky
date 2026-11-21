@@ -2,7 +2,7 @@ import SwiftUI
 import TaskovskyDomain
 import TaskovskyWorkspace
 
-private struct PhoneTagRequest: Identifiable {
+struct PhoneTagRequest: Identifiable {
     let id = UUID()
     let tag: TaskTag
     let creating: Bool
@@ -19,7 +19,7 @@ struct PhoneTagManagement: View {
     var body: some View {
         NavigationStack {
             List {
-                Button("New Tag", systemImage: "tag") { open(TaskTag(name: "", color: "#4E64D8"), creating: true) }
+                Button("Add Tag", systemImage: "tag") { open(TaskTag(name: "", color: "#4E64D8"), creating: true) }
                     .disabled(reordering || !model.canBeginEditing).accessibilityIdentifier("newTag")
                 if let document = model.document {
                     let tags = document.snapshot.workspace.tags
@@ -105,7 +105,7 @@ struct PhoneTagManagement: View {
     }
 }
 
-private struct PhoneTagEditor: View {
+struct PhoneTagEditor: View {
     private enum Confirmation: String, Identifiable {
         case discard, delete, merge
         var id: Self { self }
@@ -125,6 +125,9 @@ private struct PhoneTagEditor: View {
         self.request = request
         _draft = State(initialValue: request.tag)
     }
+
+    // Existing Taskovsky desktop palette; exact TickTick color values are unverified.
+    private static let tagPalette = ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"]
 
     private var tags: [TaskTag] { model.document?.snapshot.workspace.tags ?? [] }
     private var others: [TaskTag] { tags.filter { $0.id != draft.id } }
@@ -146,16 +149,34 @@ private struct PhoneTagEditor: View {
                             }.buttonStyle(.plain).accessibilityLabel("Clear name").accessibilityIdentifier("tagClearName")
                         }
                     }
-                    ColorPicker("Color", selection: Binding(get: { PhoneEntityColor.read(draft.color) },
-                                                            set: { draft.color = PhoneEntityColor.encode($0) ?? draft.color }),
-                                supportsOpacity: false)
-                    Picker("Parent tag", selection: $draft.parentID) {
-                        Text("Top level").tag(UUID?.none).accessibilityIdentifier("tagParentChoice-root")
-                        ForEach(others.filter { TagOrganization.allowsParent($0.id, for: draft.id, in: tags) }) { tag in
-                            Text(path(tag)).tag(Optional(tag.id))
-                                .accessibilityIdentifier("tagParentChoice-" + tag.id.uuidString)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Color")
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 44), spacing: 8)], spacing: 8) {
+                            ForEach(Self.tagPalette, id: \.self) { color in
+                                let selected = draft.color.caseInsensitiveCompare(color) == .orderedSame
+                                Button { draft.color = color } label: {
+                                    Circle().fill(PhoneEntityColor.read(color)).frame(width: 28, height: 28)
+                                        .overlay {
+                                            if selected { Image(systemName: "checkmark").font(.system(size: 12, weight: .bold)).foregroundStyle(.white) }
+                                        }
+                                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                    .accessibilityLabel("Color " + color)
+                                    .accessibilityAddTraits(selected ? .isSelected : [])
+                                    .accessibilityIdentifier("tagColor-" + color)
+                            }
                         }
-                    }.pickerStyle(.navigationLink).accessibilityIdentifier("tagParent")
+                        ColorPicker("Custom Color", selection: Binding(get: { PhoneEntityColor.read(draft.color) },
+                            set: { draft.color = PhoneEntityColor.encode($0) ?? draft.color }), supportsOpacity: false)
+                            .accessibilityIdentifier("tagCustomColor").accessibilityValue(draft.color)
+                    }
+                    NavigationLink {
+                        PhoneParentTagPicker(selection: $draft.parentID, tags: tags, editingID: draft.id)
+                    } label: {
+                        LabeledContent("Parent Tag", value: draft.parentID.map { id in
+                            tags.first { $0.id == id }.map(path) ?? "Unavailable tag"
+                        } ?? "None")
+                    }.accessibilityIdentifier("tagParent")
                     Toggle("Pin tag", isOn: $draft.isPinned).accessibilityIdentifier("tagPin")
                 }
                 if !request.creating {
@@ -177,7 +198,7 @@ private struct PhoneTagEditor: View {
             }
             .disabled(model.isBusy)
             .scrollDismissesKeyboard(.interactively)
-            .navigationTitle(request.creating ? "New Tag" : "Edit Tag")
+            .navigationTitle(request.creating ? "Add Tag" : "Edit Tag")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -185,7 +206,11 @@ private struct PhoneTagEditor: View {
                         .disabled(model.isBusy).accessibilityIdentifier("tagCancel")
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { submit(.save(draft, creating: request.creating)) }
+                    Button { submit(.save(draft, creating: request.creating)) } label: {
+                        if request.creating {
+                            Image(systemName: "checkmark").frame(width: 44, height: 44).contentShape(Rectangle())
+                        } else { Text("Done") }
+                    }.accessibilityLabel(request.creating ? "Add Tag" : "Done")
                         .disabled(model.isBusy || TagOrganization.normalizedName(draft.name).isEmpty)
                         .accessibilityIdentifier("tagDone")
                 }
@@ -223,5 +248,44 @@ private struct PhoneTagEditor: View {
             error = await model.saveTag(command, expected: request.revision)
             if error == nil { dismiss() }
         }
+    }
+}
+
+
+private struct PhoneParentTagPicker: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var selection: UUID?
+    let tags: [TaskTag]
+    let editingID: UUID
+
+    var body: some View {
+        List {
+            choice("None", id: nil)
+            ForEach(tags.filter { TagOrganization.allowsParent($0.id, for: editingID, in: tags) }) { tag in
+                let title = (TagHierarchy.ancestors(of: tag.id, in: tags).reversed().map(\.name) + [tag.name]).joined(separator: " / ")
+                choice(title, id: tag.id)
+            }
+        }
+        .navigationTitle("Parent Tag")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func choice(_ title: String, id: UUID?) -> some View {
+        Button {
+            selection = id
+            dismiss()
+        } label: {
+            HStack {
+                Text(title).foregroundStyle(.primary)
+                Spacer()
+                Image(systemName: selection == id ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selection == id ? Color.accentColor : Color.secondary)
+                    .accessibilityHidden(true)
+            }.frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("tagParentChoice-" + (id?.uuidString ?? "root"))
+        .accessibilityValue(selection == id ? "Selected" : "Not selected")
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }

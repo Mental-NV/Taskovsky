@@ -100,6 +100,67 @@ final class CalendarDisplayOptionsTests: XCTestCase {
         XCTAssertEqual(changed.entries.first?.due, instant)
     }
 
+    func testCalendarListColorHierarchyPreservesIDsOrderAndFolders() {
+        let folder = ListFolder(name: "Projects")
+        let work = TaskList(name: "Work", color: "#123456", folderID: folder.id)
+        let home = TaskList(name: "Personal", color: "#30A77A")
+        let later = TaskList(name: "Later", color: "#111111", belowFolders: true)
+        let archived = TaskList(name: "Old", color: "#222222", isArchived: true)
+        let orphan = TaskList(name: "Orphan", color: "#333333", folderID: UUID())
+        let data = WorkspaceData(lists: [work, home, later, archived, orphan], folders: [folder])
+        let hierarchy = CalendarColorSource.listSections(in: data)
+        XCTAssertEqual(hierarchy.inbox.id, .inbox)
+        XCTAssertEqual(hierarchy.inbox.name, "Inbox")
+        XCTAssertEqual(hierarchy.inbox.defaultColor, "#7C6CF2")
+        XCTAssertEqual(hierarchy.sections.count, 3)
+        XCTAssertEqual(hierarchy.sections[0].placement, .aboveFolders)
+        XCTAssertNil(hierarchy.sections[0].folderName)
+        XCTAssertEqual(hierarchy.sections[0].rows.map(\.id), [.list(home.id)])
+        XCTAssertEqual(hierarchy.sections[1].placement, .folder(folder.id))
+        XCTAssertEqual(hierarchy.sections[1].folderName, "Projects")
+        XCTAssertEqual(hierarchy.sections[1].rows.map(\.id), [.list(work.id)])
+        XCTAssertEqual(hierarchy.sections[2].placement, .belowFolders)
+        XCTAssertEqual(hierarchy.sections[2].rows.map(\.id), [.list(later.id), .list(orphan.id)])
+        XCTAssertFalse(hierarchy.sections.flatMap(\.rows).contains { $0.id == .list(archived.id) })
+        // The flat swatch order stays the stored workspace order for source identity.
+        XCTAssertEqual(CalendarColorSource.swatches(in: data, by: .list).map(\.id),
+                       [.inbox, .list(work.id), .list(home.id), .list(later.id), .list(orphan.id)])
+    }
+
+    func testTaskovskyPaletteMatchesDocumentedDesktopColorsAndStoresExactly() {
+        // The iPhone Color Pick page offers only these existing desktop user
+        // colors; the reference named families are not reproduced here.
+        XCTAssertEqual(CalendarColorSource.taskovskyPalette,
+                       ["#526BF5", "#EC6574", "#E7A548", "#58A58B", "#9C7BD5", "#5BA7CC", "#8A8F98"])
+        for hex in CalendarColorSource.taskovskyPalette {
+            XCTAssertEqual(CalendarColorSource.Overrides.normalizedHex(hex), hex)
+        }
+        var options = TaskCalendarOptions()
+        options.sourceColors[.inbox] = CalendarColorSource.taskovskyPalette[3]
+        XCTAssertEqual(options.sourceColors[.inbox], "#58A58B")
+    }
+
+    func testCalendarListColorOverridesSurviveArchivedAndMissingSources() throws {
+        let list = TaskList(name: "Work", color: "#123456")
+        let archived = TaskList(name: "Old", color: "#654321", isArchived: true)
+        let data = WorkspaceData(lists: [list, archived])
+        var options = TaskCalendarOptions()
+        options.sourceColors[.list(list.id)] = "#ABCDEF"
+        options.sourceColors[.list(archived.id)] = "#445566"
+        options.sourceColors[.list(UUID())] = "#778899"
+        options.sourceColors[.inbox] = "#112233"
+        // Archived and unknown sources stay out of the hierarchy but keep their overrides.
+        let hierarchy = CalendarColorSource.listSections(in: data)
+        XCTAssertFalse(hierarchy.sections.flatMap(\.rows).contains { $0.id == .list(archived.id) })
+        let restored = try JSONDecoder().decode(TaskCalendarOptions.self, from: JSONEncoder().encode(options))
+        XCTAssertEqual(restored, options)
+        XCTAssertEqual(restored.sourceColors[.list(archived.id)], "#445566")
+        XCTAssertEqual(restored.sourceColors[.inbox], "#112233")
+        options.sourceColors[.list(list.id)] = nil
+        XCTAssertNil(options.sourceColors[.list(list.id)])
+        XCTAssertEqual(options.sourceColors[.list(archived.id)], "#445566")
+    }
+
     func testCalendarSourceColorsRoundTripAndKeepProjectionRules() throws {
         let list = TaskList(name: "Work", color: "#123456")
         let archive = TaskList(name: "Archive", color: "#987654", isArchived: true)

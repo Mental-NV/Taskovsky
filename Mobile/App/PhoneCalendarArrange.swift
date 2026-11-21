@@ -20,14 +20,19 @@ struct PhoneCalendarEditRequest: Identifiable {
 }
 
 struct PhoneCalendarArrangeSheet: View {
-    @Environment(\.dismiss) private var dismiss
+    let close: () -> Void
     @ObservedObject var model: PhoneWorkspaceModel
     let focus: Date
     let options: TaskCalendarOptions
     let drag: ((UUID, WorkspaceRevision) -> PhoneCalendarDrag?)?
     @State private var grouping = CalendarColorMode.list
     @State private var selection = CalendarArrangeSelection.calendar
+    @State private var showFilter = false
     @State private var overdue = false
+    @State private var undated = true
+    @State private var showNotes = true
+    @State private var showHierarchy = true
+    @State private var collapsedHierarchy = Set<UUID>()
     @State private var request: PhoneCalendarEditRequest?
     @State private var taskRoute: PhoneTaskRoute?
 
@@ -38,41 +43,38 @@ struct PhoneCalendarArrangeSheet: View {
         .sheet(item: $request) { PhoneCalendarEditSheet(model: model, request: $0) }
         .sheet(item: $taskRoute) { PhoneTaskSheet(model: model, route: $0, close: { taskRoute = nil }) }
         .interactiveDismissDisabled(model.isBusy)
-        .presentationDetents(drag == nil ? [.large] : [.medium, .large])
-        .presentationContentInteraction(drag == nil ? .automatic : .scrolls)
-        .presentationBackgroundInteraction(drag == nil ? .disabled : .enabled(upThrough: .medium))
+        .fullScreenCover(isPresented: $showFilter) {
+            if let data = model.document?.snapshot.workspace {
+                PhoneArrangeFilter(data: data, selection: selection) { selection = $0 }
+                    .presentationBackground(.clear)
+            }
+        }
+    }
+
+    private func option(_ title: String, selected: Binding<Bool>, id: String) -> some View {
+        Button { selected.wrappedValue.toggle() } label: {
+            Label(title, systemImage: selected.wrappedValue ? "checkmark" : "circle")
+        }.accessibilityIdentifier(id).accessibilityValue(selected.wrappedValue ? "On" : "Off")
     }
 
     private func content(_ document: WorkspaceDocument) -> some View {
         let data = document.snapshot.workspace
         let candidates = TaskCalendarProjection.arrangementTasks(data: data, options: options, overdue: overdue,
-                                                                  now: model.now, calendar: model.calendar, selection: selection)
+                                                                  now: model.now, calendar: model.calendar, selection: selection, undated: undated, showNotes: showNotes)
         let groups = TaskCalendarProjection.arrangementGroups(candidates, data: data, grouping: grouping)
         let date = Date.FormatStyle(date: .complete, time: .omitted, calendar: model.calendar, timeZone: model.calendar.timeZone)
         return List {
-            Section {
-                Picker("Group by", selection: $grouping) {
-                    ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
-                }.accessibilityIdentifier("arrangeGroup")
-                Picker("List", selection: $selection) {
-                    Text("Calendar sources").tag(CalendarArrangeSelection.calendar)
-                    Text("Inbox").tag(CalendarArrangeSelection.inbox)
-                    ForEach(data.lists.filter { !$0.isArchived }) { list in
-                        Text(list.name).tag(CalendarArrangeSelection.list(list.id))
-                    }
-                }.accessibilityIdentifier("arrangeList")
-                Toggle("Include overdue", isOn: $overdue).accessibilityIdentifier("arrangeOverdue")
-            } footer: {
-                Text("Schedule tasks for \(focus.formatted(date)).")
-                if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
-            }
             if model.scheduleNotice(in: .calendar) != nil { Section { PhoneScheduleFeedback(model: model, surface: .calendar) } }
             if groups.isEmpty {
                 Text("No tasks to arrange").foregroundStyle(.secondary).accessibilityIdentifier("arrangeEmpty")
             }
             ForEach(groups, id: \.name) { group in
+                let rows = TaskCalendarProjection.arrangementRows(for: group.tasks, grouping: grouping,
+                                                                  showHierarchy: showHierarchy,
+                                                                  collapsed: collapsedHierarchy)
                 Section("\(group.name) · \(group.tasks.count)") {
-                    ForEach(group.tasks) { task in
+                    ForEach(rows, id: \.task.id) { row in
+                        let task = row.task
                         HStack(spacing: 0) {
                             if let payload = drag?(task.id, document.revision) {
                                 Image(systemName: "line.3.horizontal")
@@ -91,6 +93,20 @@ struct PhoneCalendarArrangeSheet: View {
                                     .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                                     .contentShape(Rectangle())
                             }.buttonStyle(.plain)
+                                .accessibilityIdentifier("arrangeTitle-" + task.id.uuidString)
+                            if row.hasChildren {
+                                let collapsed = collapsedHierarchy.contains(task.id)
+                                Button {
+                                    if collapsed { collapsedHierarchy.remove(task.id) }
+                                    else { collapsedHierarchy.insert(task.id) }
+                                } label: {
+                                    Image(systemName: collapsed ? "chevron.right" : "chevron.down")
+                                        .frame(width: 32, height: 44).contentShape(Rectangle())
+                                }.buttonStyle(.plain)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityLabel((collapsed ? "Expand " : "Collapse ") + task.title)
+                                    .accessibilityIdentifier("arrangeDisclosure-" + task.id.uuidString)
+                            }
                             Button {
                                 request = PhoneCalendarEditRequest(task: task, expected: document.revision,
                                                                    focus: focus, hourly: options.mode.isHourly,
@@ -104,17 +120,122 @@ struct PhoneCalendarArrangeSheet: View {
                                 .accessibilityIdentifier("arrangeSchedule-" + task.id.uuidString)
                                 .disabled(!model.canBeginEditing)
                         }
+                        .padding(.leading, CGFloat(row.depth) * 16)
                     }
                 }
             }
         }
+        .onChange(of: showHierarchy) { _, expanded in
+            if expanded { collapsedHierarchy.removeAll() }
+        }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            Picker("Group by", selection: $grouping) {
+                ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("arrangeGroup")
+            .padding(.horizontal, 12).padding(.vertical, 8)
+            .background(.bar)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Button { showFilter = true } label: {
+                Label("Filter", systemImage: "line.3.horizontal.decrease")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .accessibilityIdentifier("arrangeList")
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .padding(.horizontal, 8).background(.bar)
+        }
         .navigationTitle("Arrange Tasks")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .confirmationAction) {
-                Button("Done") { dismiss() }.disabled(model.isBusy).accessibilityIdentifier("arrangeDone")
+            ToolbarItem(placement: .cancellationAction) {
+                Button(action: close) { Image(systemName: "xmark") }
+                    .accessibilityLabel("Close Arrange Tasks")
+                    .disabled(model.isBusy).accessibilityIdentifier("arrangeDone")
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    option("Undated Task", selected: $undated, id: "arrangeUndated")
+                    option("Overdue Task", selected: $overdue, id: "arrangeOverdue")
+                    option("Show Notes", selected: $showNotes, id: "arrangeNotes")
+                    option("Show Task Hierarchy", selected: $showHierarchy, id: "arrangeHierarchy")
+                    Text("Schedule tasks for \(focus.formatted(date)).")
+                    if drag != nil { Text("Hold a grip and drag to a visible Calendar date or time.") }
+                } label: { Image(systemName: "ellipsis") }
+                    .accessibilityLabel("Arrange options")
+                    .accessibilityIdentifier("arrangeOptions")
             }
         }
+    }
+}
+
+private struct PhoneArrangeFilter: View {
+    @Environment(\.dismiss) private var dismiss
+    let data: WorkspaceData
+    let apply: (CalendarArrangeSelection) -> Void
+    @State private var all: Bool
+    @State private var inbox: Bool
+    @State private var listIDs: Set<UUID>
+    @State private var collapsed = Set<UUID>()
+
+    init(data: WorkspaceData, selection: CalendarArrangeSelection, apply: @escaping (CalendarArrangeSelection) -> Void) {
+        self.data = data; self.apply = apply
+        switch selection {
+        case .calendar: _all = State(initialValue: true); _inbox = State(initialValue: false); _listIDs = State(initialValue: [])
+        case .inbox: _all = State(initialValue: false); _inbox = State(initialValue: true); _listIDs = State(initialValue: [])
+        case .list(let id): _all = State(initialValue: false); _inbox = State(initialValue: false); _listIDs = State(initialValue: [id])
+        case .sources(let ids, let inbox): _all = State(initialValue: false); _inbox = State(initialValue: inbox); _listIDs = State(initialValue: ids)
+        }
+    }
+    private var lists: [TaskList] { data.lists.filter { !$0.isArchived } }
+    private func choice(_ title: String, checked: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack { Text(title); Spacer(); Image(systemName: checked ? "checkmark.circle.fill" : "circle").foregroundStyle(checked ? Color.accentColor : Color.secondary) }
+                .frame(minHeight: 40).contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityIdentifier(id).accessibilityValue(checked ? "Selected" : "Not selected")
+    }
+    private func list(_ value: TaskList) -> some View {
+        choice(value.name, checked: !all && listIDs.contains(value.id), id: "arrangeFilterList-" + value.id.uuidString) {
+            all = false
+            if !listIDs.insert(value.id).inserted { listIDs.remove(value.id) }
+        }
+    }
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                Color.black.opacity(0.25).ignoresSafeArea()
+                VStack(spacing: 0) {
+                    Text("Filter").font(.headline).padding(16)
+                    ScrollView {
+                        VStack(spacing: 4) {
+                            choice("All", checked: all, id: "arrangeFilterAll") { all = true; inbox = false; listIDs.removeAll() }
+                            choice("Inbox", checked: !all && inbox, id: "arrangeFilterInbox") { all = false; inbox.toggle() }
+                            ForEach(lists.filter { value in value.folderID == nil || !data.folders.contains(where: { $0.id == value.folderID }) }) { value in list(value) }
+                            ForEach(data.folders) { folder in
+                                Button {
+                                    if !collapsed.insert(folder.id).inserted { collapsed.remove(folder.id) }
+                                } label: {
+                                    HStack { Image(systemName: "folder"); Text(folder.name); Spacer(); Image(systemName: collapsed.contains(folder.id) ? "chevron.right" : "chevron.down") }
+                                        .frame(minHeight: 40).contentShape(Rectangle())
+                                }.buttonStyle(.plain).accessibilityIdentifier("arrangeFilterFolder-" + folder.id.uuidString)
+                                if !collapsed.contains(folder.id) {
+                                    ForEach(lists.filter { $0.folderID == folder.id }) { value in list(value).padding(.leading, 20) }
+                                }
+                            }
+                        }.padding(.horizontal, 16)
+                    }
+                    Divider()
+                    HStack {
+                        Button("Cancel") { dismiss() }.accessibilityIdentifier("arrangeFilterCancel")
+                        Spacer()
+                        Button("Done") { apply(all ? .calendar : .sources(listIDs: listIDs, inbox: inbox)); dismiss() }
+                            .accessibilityIdentifier("arrangeFilterDone")
+                    }.padding(16)
+                }.frame(width: min(340, geometry.size.width - 32), height: min(520, geometry.size.height - 64))
+                    .background(Color(uiColor: .systemBackground), in: RoundedRectangle(cornerRadius: 16))
+            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+        }.interactiveDismissDisabled()
     }
 }
 
