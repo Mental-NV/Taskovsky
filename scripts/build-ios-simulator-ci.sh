@@ -16,7 +16,7 @@ test "$(uname -m)" = arm64
   xcrun --sdk iphonesimulator --show-sdk-version
   printf 'destination=generic/platform=iOS Simulator\narchitecture=arm64\naction=build-for-testing (not test execution)\n'
 } | tee "$output/provenance.log"
-args=(-project Mobile/TaskovskyMobile.xcodeproj -scheme TaskovskyMobile
+args=(-project TaskovskyMobile.xcodeproj -scheme TaskovskyMobile
   -configuration Debug -sdk iphonesimulator -destination 'generic/platform=iOS Simulator'
   -derivedDataPath "$output/DerivedData" ARCHS=arm64
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO)

@@ -344,7 +344,7 @@ Named Summary presets save the full report configuration as local device prefere
 
 **Acceptance.** Include a completed undated task by completion date, exclude a note, adjust fields and observe regeneration. Edit the report, save as a note and inspect the saved text and cleared defaults. Explicitly select an archived list and compare the result with All Lists.
 
-**Evidence.** [Shared Summary generator](../../Sources/TaskovskyCore/SummaryReport.swift), [Mac editor](../../Sources/Taskovsky/SummaryView.swift), [iPhone editor](../../Mobile/App/PhoneSummaryView.swift) and [verification record](verification.md#mobile-summary).
+**Evidence.** [Shared Summary generator](../../Sources/TaskovskyCore/SummaryReport.swift), [Mac editor](../../Sources/Taskovsky/SummaryView.swift), [iPhone editor](../../Sources/TaskovskyMobile/PhoneSummaryView.swift) and [verification record](verification.md#mobile-summary).
 
 ## Settings, persistence and evolution
 

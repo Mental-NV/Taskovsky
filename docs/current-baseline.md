@@ -5,7 +5,7 @@ The source in the checkout being changed determines current implementation. Reco
 ## Confirmed platform boundaries
 
 - [Package.swift](../Package.swift) declares macOS 14 and iOS 17, a macOS executable and shared Domain/Workspace targets. Mac-specific services and rendering remain separate.
-- The [iPhone target](../Mobile/TaskovskyMobile.xcodeproj/project.pbxproj) has its own [screens](../Mobile/App) and [build/QA guide](../Mobile/README.md). iOS 17 is a deployment target, not a runtime qualification.
+- Open the [iPhone Xcode project](../TaskovskyMobile.xcodeproj) from the repository root. Its [screens](../Sources/TaskovskyMobile) sit alongside the [Mac app](../Sources/Taskovsky). See the [build/QA guide](spec/iphone-build-qa.md) and [layout change](changes/iphone-project-layout.md). iOS 17 is a deployment target, not a runtime qualification.
 - Both apps use local files. Separate presentations and a smaller mobile editing surface are intentional; a mobile edit must not lose unsupported desktop data.
 - Check the [feature tracker](parity-implementation-status.md) and [mobile visual tracker](mobile-visual-parity.md) for scoped status, and the [verification ledger](spec/verification.md) for evidence tied to exact builds. A dated absence claim or test run is not current evidence.
 

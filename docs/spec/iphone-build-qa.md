@@ -1,5 +1,7 @@
 # Taskovsky iPhone development preview
 
+Open [TaskovskyMobile.xcodeproj](../../TaskovskyMobile.xcodeproj) from the repository root. App code is in [Sources/TaskovskyMobile](../../Sources/TaskovskyMobile). The scheme uses [MobileContracts](../../Tests/MobileContracts) and [MobileNavigation](../../Tests/MobileNavigation) alongside the shared contract tests.
+
 This partial local implementation stores JSON in its own Application Support container. Normal Debug/Release launches start empty. Existing known-format tasks support title and description edits. Styled descriptions have a selectable preview and a separate Format description editor with Inline and Paragraph controls. Unknown/unsupported workspace data blocks rewriting. Add creates tasks/notes with list/Inbox, date/time, priority, existing tags and saved templates. Task rows and detail support completion, reopening, Won’t Do, pinning, list moves, Trash and restoration. Delete Forever requires a named confirmation for one trashed task. Existing-task detail edits priority, existing tags and embedded checklist items. Linked subtasks have their own details and completion. Lists and folders can be managed from the drawer. Smart List visibility and ordering are editable in the drawer. Manage Filters supports Normal and Advanced saved filters. Manage Tags supports nesting, pinning, reorder, merge and deletion.
 
 The target consumes `TaskovskyDomain` and `TaskovskyWorkspace`, not the macOS `TaskovskyCore` facade. Explicit Done saves one owned field after revision/compatibility checks. Dirty Cancel offers Discard/Keep Editing; unchanged Done preserves workspace bytes. A separate exact-text scratch draft saves after 250 ms and on background opportunities. Relaunch offers Resume/Discard without submitting. A force kill before an acknowledged scratch write can lose the newest characters. Unknown scratch data is kept and blocks replacement; stale edits retain their text without rebasing.
@@ -45,18 +47,18 @@ Files request iOS protection until first unlock and retain ordinary Application 
 Build with installed Xcode:
 
 ```sh
-xcodebuild -project Mobile/TaskovskyMobile.xcodeproj \
+xcodebuild -project TaskovskyMobile.xcodeproj \
   -scheme TaskovskyMobile -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
   -derivedDataPath /tmp/TaskovskyMobileBuild CODE_SIGNING_ALLOWED=NO build
 ```
 
-For samples, add **Debug-only** launch arguments `--qa-session <fresh UUID>`. This selects `TaskovskyMobile/QA/<UUID>` inside the app container and loads bundled [Mac-written neutral fixtures](Fixtures/README.md), never desktop data. Relaunching with the same UUID preserves that QA session. Invalid QA/path arguments fail closed; Release refuses QA arguments. Fault cases `--qa-case summary|summary-save-failure|save-failure|stale-save|unknown-workspace|unknown-draft|capture-empty|capture-template|capture-after-write|lifecycle|arrange|calendar-options|rich-preview|malformed-rich|task-metadata|organization|saved-filter` also require a valid QA UUID. They are test fixtures, not user-facing settings.
+For samples, add **Debug-only** launch arguments `--qa-session <fresh UUID>`. This selects `TaskovskyMobile/QA/<UUID>` inside the app container and loads bundled [Mac-written neutral fixtures](../../Tests/Fixtures/Mobile/README.md), never desktop data. Relaunching with the same UUID preserves that QA session. Invalid QA/path arguments fail closed; Release refuses QA arguments. Fault cases `--qa-case summary|summary-save-failure|save-failure|stale-save|unknown-workspace|unknown-draft|capture-empty|capture-template|capture-after-write|lifecycle|arrange|calendar-options|rich-preview|malformed-rich|task-metadata|organization|saved-filter` also require a valid QA UUID. They are test fixtures, not user-facing settings.
 
 Choose an installed iPhone simulator for tests. The evidence run uses a separately created **Taskovsky QA iPhone 13 Pro**, iOS 26.3.1 (23D8133). Replace the destination if unavailable:
 
 ```sh
-xcodebuild -project Mobile/TaskovskyMobile.xcodeproj \
+xcodebuild -project TaskovskyMobile.xcodeproj \
   -scheme TaskovskyMobile \
   -destination 'platform=iOS Simulator,name=Taskovsky QA iPhone 13 Pro' \
   -derivedDataPath /tmp/TaskovskyMobileBuild \
@@ -65,8 +67,8 @@ xcodebuild -project Mobile/TaskovskyMobile.xcodeproj \
   CODE_SIGNING_ALLOWED=NO test
 ```
 
-The scheme currently runs 38 shared-domain tests, 81 workspace tests, one hosted UIKit test and 94 native UI tests. Each UI case owns a fresh QA UUID, retained as a result attachment; relaunch tests reuse it. The read-only audit in `scripts/verify-mobile-qa-roundtrip.py --capture --lifecycle --schedule --arrange --preferences --rich-preview --metadata --hierarchy --organization --smart-lists --saved-filters --tags --boards --summary --search --templates --local-settings --rich-editor` checks the saved files against their Mac-written baseline, then invokes the explicit-path Mac fixture helper to reload known data without writes. See [exact evidence and limits](../docs/spec/verification.md#calendar-all-day-rows). Full Mac tests/build are separate checks.
+The scheme currently runs 38 shared-domain tests, 81 workspace tests, one hosted UIKit test and 94 native UI tests. Each UI case owns a fresh QA UUID, retained as a result attachment; relaunch tests reuse it. The read-only audit in `scripts/verify-mobile-qa-roundtrip.py --capture --lifecycle --schedule --arrange --preferences --rich-preview --metadata --hierarchy --organization --smart-lists --saved-filters --tags --boards --summary --search --templates --local-settings --rich-editor` checks the saved files against their Mac-written baseline, then invokes the explicit-path Mac fixture helper to reload known data without writes. See [exact evidence and limits](verification.md#calendar-all-day-rows). Full Mac tests/build are separate checks.
 
-Regular lists with named sections group rows and Board cards by section. Use Manage Sections to edit the order and Add task in a section to open capture with that destination. [Section verification](../docs/spec/verification.md#task-list-sections).
+Regular lists with named sections group rows and Board cards by section. Use Manage Sections to edit the order and Add task in a section to open capture with that destination. [Section verification](verification.md#task-list-sections).
 
 The target compiles for iOS 17; only the installed iOS 26.3.1 runtime was exercised. iOS 17 runtime, physical-device/signing/notification checks, IME, VoiceOver, Dynamic Type, rotation, broad appearance and performance coverage remain open. Rich editor hardware Undo/Redo, system IME candidate selection and gestures require separate verification. All seven Calendar modes, Work/All source reset, Calendar Add visibility and Month overflow have native coverage; remaining gesture combinations and reference visual matching are still open. Dirty swipe dismissal is blocked with explicit Cancel available; no swipe-attempt confirmation callback is implemented. No inert controls for missing workflows are included.

@@ -41,6 +41,10 @@ Record requirement/case ID, platform, exact source/checkout SHA, test or manual 
 
 Visual records additionally need OS, logical content versus frame size, screenshot scale, appearance, locale/zone, text size, contrast and reduced motion. Use disposable data and cover interruption/repeated actions. The source-derived baseline remains **implemented, with automated verification limited to the recorded CI environment and cases**. Preserve live limitations even when unit/store checks pass.
 
+## iPhone project layout
+
+The [iPhone project layout change](../changes/iphone-project-layout.md) moves the existing targets' files and updates the build and QA entry points. Execution evidence is pending.
+
 <a id="hosted-macos-ci"></a>
 ## Hosted macOS CI — November 8, 2026
 
@@ -177,7 +181,7 @@ This is a partial implementation milestone under the user's autonomous local Tas
 
 **Environment:** macOS 27.0.1 (26A434), arm64; Xcode 27.0 (27A266a), Swift 6.4. iOS SDK 27.0; compiler targets include `arm64-apple-ios17.0-simulator` and `x86_64-apple-ios17.0-simulator`. Native execution used an isolated **Taskovsky QA iPhone 13 Pro**, **iOS 26.3.1 (23D8133), arm64**, standard 390×844 point/1170×2532 pixel portrait capture. The available runtime inventory also includes 26.5 and 27.0. No iOS 17 runtime or physical-device result is claimed. The app's sample clock is November 9, 2026, Europe/Moscow; dynamic system status information is not a visual comparison target.
 
-Private evidence root: `/private/tmp/TaskovskyMobileEvidence-1109`. Temporary derived data/results are not durable hosted CI. See [Mobile build/test instructions](../../Mobile/README.md).
+Private evidence root: `/private/tmp/TaskovskyMobileEvidence-1109`. Temporary derived data/results are not durable hosted CI. See [Mobile build/test instructions](iphone-build-qa.md).
 
 | Gate | Actual result | Scope and limits |
 | --- | --- | --- |
