@@ -551,7 +551,7 @@ private struct CalendarTimedBlock: View {
         let resizeWidth = min(22, width - gripWidth)
         let resizeHeight = min(9, canResizeStart && placement.endIsVisible ? height / 2 : height)
         CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showsIcon(for: entry), compact: height < 40,
-            trailingInset: gripWidth, fillsAllocatedHeight: true, open: open, complete: complete, edit: edit)
+            trailingInset: gripWidth, availableWidth: width, fillsAllocatedHeight: true, open: open, complete: complete, edit: edit)
             .frame(height: height, alignment: .top).clipped()
             .calendarDraggable(entry)
             .overlay(alignment: .bottom) {
@@ -570,9 +570,14 @@ private struct CalendarTimedBlock: View {
                         .padding(.trailing, gripWidth)
                 }
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .topLeading) {
                 if canResizeStart {
-                    startGrip(width: resizeWidth, height: resizeHeight).padding(.trailing, gripWidth)
+                    let grip = CalendarCardLayout.startResizeGrip(
+                        cardWidth: Double(width), trailingInset: Double(gripWidth), height: Double(resizeHeight),
+                        protectsCompletion: entry.canChangeCompletion
+                    )
+                    startGrip(width: CGFloat(grip.width), height: CGFloat(grip.height))
+                        .padding(.leading, CGFloat(grip.leading))
                 }
             }
             .overlay(alignment: .topTrailing) {

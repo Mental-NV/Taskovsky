@@ -50,6 +50,7 @@ let desktopSources = [
     "ListDecorations.swift",
     "ListLayoutManager.swift",
     "ResponsiveLayout.swift",
+    "CalendarCardLayout.swift",
     "RichEditorSizing.swift",
     "RichTextRender.swift",
     "TaskStore.swift",
