@@ -24,6 +24,7 @@ struct ScheduleEditor: View {
     private var zoneID: String { zoneSelection.identifier }
     @State private var automaticReminder = true
     @State private var expanded: Row?
+    @FocusState private var timeEditorFocused: Bool
     private enum Row { case time, reminder, duration, repeatRule, end }
     private var calendar: Calendar { var cal = settings.calendar; cal.timeZone = TimeZone(identifier: zoneID) ?? .current; return cal }
 
@@ -124,7 +125,14 @@ struct ScheduleEditor: View {
                 HStack {
                     Button(effectiveHasTime ? "Remove time" : "Add time", action: toggleTime).buttonStyle(.borderless)
                     Spacer()
-                    if effectiveHasTime { DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute).labelsHidden().fixedSize() }
+                    if effectiveHasTime {
+                        DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                            .fixedSize()
+                            .focused($timeEditorFocused)
+                            .accessibilityIdentifier("schedule-time-input")
+                            .onAppear { timeEditorFocused = true }
+                    }
                 }.font(.system(size: 11)).padding(.horizontal, 8)
                 if settings.enableTimeZone && effectiveHasTime {
                     Picker("Time Zone", selection: $zoneSelection.identifier) { ForEach(TimeZone.knownTimeZoneIdentifiers, id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ")).tag($0) } }.font(.system(size: 11))
