@@ -975,7 +975,13 @@ struct CalendarAgendaView: View {
                                 Button { create(day) } label: { Image(systemName: "plus") }
                                     .buttonStyle(.plain).accessibilityLabel("Add task " + CalendarText.date(day, "MMM d", calendar: calendar))
                             }
-                            if items.isEmpty { Text("No scheduled tasks").font(.system(size: 12)).foregroundStyle(.secondary) }
+                            if items.isEmpty {
+                                if calendar.isDateInToday(day) {
+                                    emptyToday
+                                } else {
+                                    Text("No scheduled tasks").font(.system(size: 12)).foregroundStyle(.secondary)
+                                }
+                            }
                             ForEach(items) { entry in
                                 CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showsIcon(for: entry),
                                     open: open, complete: complete, edit: edit).fixedSize(horizontal: false, vertical: true).calendarDraggable(entry)
@@ -993,5 +999,21 @@ struct CalendarAgendaView: View {
                 }
             }.padding(22)
         }
+    }
+
+    private var emptyToday: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "calendar")
+                .font(.system(size: 26, weight: .light))
+                .foregroundStyle(CalendarAppearance.accent)
+                .frame(width: 56, height: 56)
+                .background(CalendarAppearance.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 14))
+                .accessibilityHidden(true)
+            Text("No tasks today")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
     }
 }
