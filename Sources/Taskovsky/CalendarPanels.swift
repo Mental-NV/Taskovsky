@@ -143,9 +143,9 @@ struct CalendarNavigationSidebar: View {
     @ObservedObject var store: TaskStore
     @Binding var focus: Date
     var range: DateInterval
-    @State private var month = Date()
-    @State private var listsExpanded = false
-    @State private var tagsExpanded = false
+    @Binding var month: Date
+    @Binding var listsExpanded: Bool
+    @Binding var tagsExpanded: Bool
     private var calendar: Calendar { store.settings.calendar }
     private var activeLists: [TaskList] { store.data.lists.filter { !$0.isArchived } }
     private var highlightRange: DateInterval? {
@@ -227,8 +227,6 @@ struct CalendarNavigationSidebar: View {
                 }.font(.system(size: 13)).padding(.horizontal, 16).padding(.top, 18)
             }
         }.background(Color(nsColor: .textBackgroundColor))
-            .onAppear { month = CalendarDates.monthStart(focus, calendar: calendar) }
-            .onChange(of: focus) { _, value in month = CalendarDates.monthStart(value, calendar: calendar) }
     }
     private func shiftMonth(_ amount: Int) {
         month = calendar.date(byAdding: .month, value: amount, to: CalendarDates.monthStart(month, calendar: calendar)) ?? month

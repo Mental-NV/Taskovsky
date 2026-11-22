@@ -50,6 +50,10 @@ struct TaskCalendarWorkspace: View {
     @State private var focus = Date()
     @State private var showArrange = false
     @State private var sidebarOverlay = false
+    // Dock and overlay share navigation state for this workspace session.
+    @State private var sidebarMonthOverride: Date?
+    @State private var sidebarListsExpanded = false
+    @State private var sidebarTagsExpanded = false
     @State private var viewOptions = false
     @State private var jumpDate = false
     @State private var editor: CalendarEditorDraft?
@@ -63,6 +67,10 @@ struct TaskCalendarWorkspace: View {
     private var calendar: Calendar { store.settings.calendar }
     private var options: Binding<TaskCalendarOptions> {
         Binding(get: { store.settings.calendarOptions }, set: { store.settings.calendarOptions = $0 })
+    }
+    private var sidebarMonth: Binding<Date> {
+        Binding(get: { sidebarMonthOverride ?? CalendarDates.monthStart(focus, calendar: calendar) },
+                set: { sidebarMonthOverride = $0 })
     }
     private var mode: TaskCalendarMode { store.settings.calendarOptions.mode }
     private var dateJumpAction: (() -> Void)? {
@@ -79,7 +87,8 @@ struct TaskCalendarWorkspace: View {
             let compact = geometry.size.width < 760
             HStack(spacing: 0) {
                 if !compact && options.wrappedValue.showSidebar {
-                    CalendarNavigationSidebar(store: store, focus: $focus, range: range)
+                    CalendarNavigationSidebar(store: store, focus: $focus, range: range, month: sidebarMonth,
+                                              listsExpanded: $sidebarListsExpanded, tagsExpanded: $sidebarTagsExpanded)
                         .frame(width: 222)
                     Divider()
                 }
@@ -106,7 +115,8 @@ struct TaskCalendarWorkspace: View {
                 if compact && sidebarOverlay {
                     ZStack(alignment: .topLeading) {
                         Color.black.opacity(0.08).onTapGesture { sidebarOverlay = false }
-                        CalendarNavigationSidebar(store: store, focus: $focus, range: range)
+                        CalendarNavigationSidebar(store: store, focus: $focus, range: range, month: sidebarMonth,
+                                                  listsExpanded: $sidebarListsExpanded, tagsExpanded: $sidebarTagsExpanded)
                             .frame(width: 222).background(Color(nsColor: .textBackgroundColor))
                             .clipShape(RoundedRectangle(cornerRadius: 10)).shadow(radius: 12)
                             .padding(.top, 83).padding(.leading, 10)
@@ -143,7 +153,10 @@ struct TaskCalendarWorkspace: View {
             .frame(width: 0, height: 0).accessibilityHidden(true)
         }
         .tint(CalendarAppearance.accent)
-        .onChange(of: focus) { _, _ in agendaWindow = CalendarAgendaWindow() }
+        .onChange(of: focus) { _, _ in
+            sidebarMonthOverride = nil
+            agendaWindow = CalendarAgendaWindow()
+        }
         .onChange(of: mode) { _, _ in agendaWindow = CalendarAgendaWindow() }
         .sheet(item: $yearDayPreview) { preview in
             let listNames = Dictionary(store.data.lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
