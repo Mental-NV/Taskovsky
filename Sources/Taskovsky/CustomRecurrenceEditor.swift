@@ -16,7 +16,7 @@ struct CustomRecurrenceEditor: View {
     @State private var interval: Int
     @State private var weekdays: Set<Int>
     @State private var monthMode: MonthMode
-    @State private var monthDaysText: String
+    @State private var monthDays: Set<Int>
     @State private var includesLastDay: Bool
     @State private var ordinalSlot: Int // 0 = none, 1...5 = nth, 6 = last
     @State private var ordinalWeekday: Int
@@ -40,7 +40,7 @@ struct CustomRecurrenceEditor: View {
         _weekdays = State(initialValue: Set((rule.weekdays ?? []).filter { (1...7).contains($0) }))
         let hasOrdinal = rule.ordinalWeekday?.isValid == true
         _monthMode = State(initialValue: rule.workday != nil ? .workday : hasOrdinal ? .onThe : .each)
-        _monthDaysText = State(initialValue: (rule.monthDays ?? []).filter { (1...31).contains($0) }.sorted().map(String.init).joined(separator: ", "))
+        _monthDays = State(initialValue: Set((rule.monthDays ?? []).filter { (1...31).contains($0) }))
         _includesLastDay = State(initialValue: rule.includesLastDayOfMonth)
         _ordinalSlot = State(initialValue: rule.ordinalWeekday.map { $0.ordinal == -1 ? 6 : $0.ordinal } ?? 0)
         _ordinalWeekday = State(initialValue: rule.ordinalWeekday?.weekday ?? calendar.component(.weekday, from: scheduledDate))
@@ -57,16 +57,13 @@ struct CustomRecurrenceEditor: View {
 
     /// The draft as a rule, or nil while it is malformed (Done stays disabled).
     private var draft: CustomRecurrence? {
-        // Strict parse lives in TaskovskyCore (tested): bogus tokens
-        // invalidate the draft instead of being silently dropped.
-        guard let monthDays = parseMonthDayList(monthDaysText) else { return nil }
         let yearDay = yearMonthDayText.trimmingCharacters(in: .whitespaces)
         let yearMonthDay: Int? = yearDay.isEmpty ? nil : Int(yearDay)
         if !yearDay.isEmpty, yearMonthDay.map({ (1...31).contains($0) }) != true { return nil }
-        var rule = CustomRecurrence(
+        let rule = CustomRecurrence(
             anchor: anchor, interval: min(max(interval, 1), CustomRecurrence.maximumInterval), unit: unit,
             weekdays: unit == .weeks ? weekdays.sorted() : nil,
-            monthDays: unit == .months && monthMode == .each && !monthDays.isEmpty ? monthDays : nil,
+            monthDays: unit == .months && monthMode == .each && !monthDays.isEmpty ? monthDays.sorted() : nil,
             includesLastDayOfMonth: unit == .months && monthMode == .each && includesLastDay,
             ordinalWeekday: (unit == .months && monthMode == .onThe) || unit == .years ? ordinalValue : nil,
             workday: unit == .months && monthMode == .workday ? (workday ?? .first) : nil,
@@ -76,11 +73,6 @@ struct CustomRecurrenceEditor: View {
             specificDates: specificDates.isEmpty ? nil : specificDates,
             endDate: hasEndDate ? calendar.startOfDay(for: endDate) : nil,
             maxOccurrences: hasMaxCount ? min(max(maxCount, 2), 999_999) : nil)
-        // Bare monthly falls back to the scheduled day, so an empty "Each"
-        // list is still a valid rule.
-        if rule.unit == .months, rule.monthDays == nil, !rule.includesLastDayOfMonth, rule.ordinalWeekday == nil, rule.workday == nil {
-            rule.monthDays = nil
-        }
         return rule.isValid ? rule : nil
     }
 
@@ -99,59 +91,70 @@ struct CustomRecurrenceEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Custom Repeat").font(.headline)
-            Picker("Anchor", selection: $anchor) {
-                Text("By due dates").tag(RecurrenceAnchor.dueDate)
-                Text("By completion date").tag(RecurrenceAnchor.completionDate)
-            }.pickerStyle(.segmented)
-            .accessibilityLabel("Repeat anchor")
-            HStack {
-                Picker("Unit", selection: $unit) {
-                    Text("Day").tag(RecurrenceUnit.days); Text("Week").tag(RecurrenceUnit.weeks)
-                    Text("Month").tag(RecurrenceUnit.months); Text("Year").tag(RecurrenceUnit.years)
-                }.pickerStyle(.segmented).labelsHidden()
-                Stepper("Every \(interval)", value: $interval, in: 1...999)
-                    .font(.system(size: 11)).frame(width: 120)
-            }.accessibilityElement(children: .contain)
-            if unit == .weeks {
-                weekdayChips
-            }
-            if unit == .months {
-                Picker("Month pattern", selection: $monthMode) {
-                    Text("Each").tag(MonthMode.each); Text("On the").tag(MonthMode.onThe); Text("Workday").tag(MonthMode.workday)
-                }.pickerStyle(.segmented)
-                .accessibilityLabel("Month pattern")
-                if monthMode == .each {
-                    TextField("Days, e.g. 1, 15 (blank = scheduled day)", text: $monthDaysText)
-                        .textFieldStyle(.roundedBorder).font(.system(size: 11))
-                    Toggle("Include last day of month", isOn: $includesLastDay).font(.system(size: 11))
-                } else if monthMode == .onThe {
-                    ordinalPickers
-                    Text("A 5th weekday that does not exist is skipped that month.").font(.system(size: 10)).foregroundStyle(.secondary)
-                } else {
-                    Picker("Workday", selection: Binding(get: { workday ?? .first }, set: { workday = $0 })) {
-                        Text("First").tag(WorkdayPosition.first); Text("Last").tag(WorkdayPosition.last)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Anchor", selection: $anchor) {
+                        Text("By due dates").tag(RecurrenceAnchor.dueDate)
+                        Text("By completion date").tag(RecurrenceAnchor.completionDate)
                     }.pickerStyle(.segmented)
-                    .accessibilityLabel("Workday position")
+                    .accessibilityLabel("Repeat anchor")
+                    HStack {
+                        Picker("Unit", selection: $unit) {
+                            Text("Day").tag(RecurrenceUnit.days); Text("Week").tag(RecurrenceUnit.weeks)
+                            Text("Month").tag(RecurrenceUnit.months); Text("Year").tag(RecurrenceUnit.years)
+                        }.pickerStyle(.segmented).labelsHidden()
+                        Stepper("Every \(interval)", value: $interval, in: 1...999)
+                            .font(.system(size: 11)).frame(width: 120)
+                    }.accessibilityElement(children: .contain)
+                    if unit == .weeks {
+                        weekdayChips
+                    }
+                    if unit == .months {
+                        Picker("Month pattern", selection: $monthMode) {
+                            Text("Each").tag(MonthMode.each); Text("On the").tag(MonthMode.onThe); Text("Workday").tag(MonthMode.workday)
+                        }.pickerStyle(.segmented)
+                        .accessibilityLabel("Month pattern")
+                        if monthMode == .each {
+                            monthDayGrid
+                            Toggle("Last Day", isOn: $includesLastDay).font(.system(size: 11))
+                            if monthDays.isEmpty && !includesLastDay {
+                                Text("No days selected: repeat on the scheduled day.")
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                            }
+                        } else if monthMode == .onThe {
+                            ordinalPickers
+                            Text("A 5th weekday that does not exist is skipped that month.").font(.system(size: 10)).foregroundStyle(.secondary)
+                        } else {
+                            Picker("Workday", selection: Binding(get: { workday ?? .first }, set: { workday = $0 })) {
+                                Text("First").tag(WorkdayPosition.first); Text("Last").tag(WorkdayPosition.last)
+                            }.pickerStyle(.segmented)
+                            .accessibilityLabel("Workday position")
+                        }
+                    }
+                    if unit == .years {
+                        HStack {
+                            Picker("Month", selection: $yearMonth) {
+                                Text("Scheduled month").tag(nil as Int?)
+                                ForEach(1...12, id: \.self) { month in Text(calendar.shortMonthSymbols[month - 1]).tag(month as Int?) }
+                            }.frame(width: 150)
+                            TextField("Day (blank = scheduled)", text: $yearMonthDayText).textFieldStyle(.roundedBorder).font(.system(size: 11)).frame(width: 150)
+                        }.font(.system(size: 11))
+                        ordinalPickers
+                        Text("“On the” beats the day above when both are set.").font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                    Toggle("Skip weekends (roll to Monday)", isOn: $skipWeekends).font(.system(size: 11))
+                    Divider()
+                    specificDatesSection
+                    Divider()
+                    endingSection
+                    Divider()
+                    previewSection
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            if unit == .years {
-                HStack {
-                    Picker("Month", selection: $yearMonth) {
-                        Text("Scheduled month").tag(nil as Int?)
-                        ForEach(1...12, id: \.self) { month in Text(calendar.shortMonthSymbols[month - 1]).tag(month as Int?) }
-                    }.frame(width: 150)
-                    TextField("Day (blank = scheduled)", text: $yearMonthDayText).textFieldStyle(.roundedBorder).font(.system(size: 11)).frame(width: 150)
-                }.font(.system(size: 11))
-                ordinalPickers
-                Text("“On the” beats the day above when both are set.").font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            Toggle("Skip weekends (roll to Monday)", isOn: $skipWeekends).font(.system(size: 11))
-            Divider()
-            specificDatesSection
-            Divider()
-            endingSection
-            Divider()
-            previewSection
+            .frame(height: 420)
+            .accessibilityIdentifier("custom-repeat-options")
             HStack {
                 Button("Clear Rule", role: .destructive) { save(nil); dismiss() }
                 Spacer()
@@ -160,6 +163,30 @@ struct CustomRecurrenceEditor: View {
                     .keyboardShortcut(.defaultAction).buttonStyle(.borderedProminent).disabled(draft == nil)
             }.font(.system(size: 12))
         }.padding(16).frame(width: 380)
+    }
+
+    private var monthDayGrid: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
+            ForEach(1...31, id: \.self) { day in
+                let selected = monthDays.contains(day)
+                Button(day.formatted()) {
+                    if selected { monthDays.remove(day) } else { monthDays.insert(day) }
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11, weight: selected ? .semibold : .regular))
+                .monospacedDigit()
+                .foregroundStyle(selected ? Color.accentColor : Color.primary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 20)
+                .background(selected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.035),
+                            in: RoundedRectangle(cornerRadius: 4))
+                .contentShape(Rectangle())
+                .accessibilityLabel("Day \(day)")
+                .accessibilityValue(selected ? "Selected" : "Not selected")
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Days of the month")
     }
 
     private var weekdayChips: some View {
