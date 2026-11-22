@@ -391,7 +391,7 @@ struct WorkspaceView: View {
         workspaceContent.onChange(of: activeTimelineScope) { _, _ in timelineViewport = TaskTimelineViewport() }
     }
 
-    private var workspaceContent: some View {
+    private var workspaceLayout: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             GeometryReader { geometry in
                 // Responsive policy (see ResponsiveLayout): responsive pressure
@@ -575,6 +575,10 @@ struct WorkspaceView: View {
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: actions.feedback?.id)
         }
+    }
+
+    private var workspaceWithSheets: some View {
+        workspaceLayout
         .alert("Recover workspace?", isPresented: $recoveryAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Back up and recover") { store.recoverUnreadableWorkspace() }
@@ -637,6 +641,10 @@ struct WorkspaceView: View {
                 templatePicker = false
             }
         }
+    }
+
+    private var workspaceContent: some View {
+        workspaceWithSheets
         .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in guard !calendarActive else { return }; quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary || isFolderDestination { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in calendarActive = false; if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
