@@ -524,13 +524,13 @@ struct EntitySheet: View {
                     .frame(width: Self.previewWidth)
             }
         }.tint(accent).onAppear { focused = true }
-            .onExitCommand { dismiss() }
     }
 
     private var form: some View {
         VStack(alignment: .leading, spacing: 22) {
             Text((editor.entityID == nil ? "New " : "Edit ") + (editor.isTag ? "Tag" : "List")).font(.system(size: 20, weight: .semibold))
             TextField(editor.isTag ? "Tag name" : "List name", text: $name).textFieldStyle(.roundedBorder).focused($focused).onSubmit(submit)
+                .onKeyPress(.escape) { dismiss(); return .handled }
             HStack(spacing: 12) { ForEach(palette, id: \.self) { value in Button { color = value } label: { Circle().fill(Color(hex: value)).frame(width: 24, height: 24).overlay { if color == value { Image(systemName: "checkmark").font(.system(size: 11, weight: .bold)).foregroundStyle(.white) } } }.buttonStyle(.plain).accessibilityLabel("Color \(value)") } }
             if editor.isTag {
                 Picker("Parent Tag", selection: $parentTagID) {

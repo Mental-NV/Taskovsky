@@ -6,7 +6,7 @@ The [dated installed TickTick observation](../ticktick-spec/lists-and-tags.md#li
 
 Guarded Taskovsky `1bb68b4d29a6fd0ce60a18a6b4c1319ef5698fe8` matched folder preselection and the empty-name gate at normal and minimum window sizes. Folder A disclosure hid its children without selecting the folder. Actual right-click Add List preselected A (rather than B or No folder). Explicit Cancel left list/workspace data unchanged. At 382×584, Escape with the blank name field focused did not dismiss the form.
 
-Handle the macOS exit command on the List/Tag sheet, without intercepting window events. The explicit Cancel and save paths remain unchanged. A native open menu should consume its own first Escape. This fixes a local keyboard interaction, not verified reference Escape behavior.
+A sheet-level exit command in `a88de8c` still did not dismiss with the name field focused; after Tab moved to Custom emoji, Escape dismissed. Handle Escape on the name field, without intercepting window events. The explicit Cancel and save paths remain unchanged. A native open menu should consume its own first Escape. This fixes a local keyboard interaction, not verified reference Escape behavior.
 
 ## Acceptance
 
