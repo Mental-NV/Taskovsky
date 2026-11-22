@@ -654,16 +654,26 @@ private struct CalendarSourceColorSettings: View {
                 }.padding(.vertical, 2)
             }.frame(maxHeight: 280)
             if let error { Text(error).font(.caption).foregroundStyle(.red) }
-            HStack {
-                Spacer()
-                Button(mode == .list ? "Cancel Calendar Changes" : "Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                Button(mode == .list ? "Save Calendar Changes" : "Done") {
-                    if store.saveCalendarSourceColors(draft, expected: original) { dismiss() }
-                    else { error = store.storageError ?? "Calendar colors changed. Open the editor again to review them." }
-                }.keyboardShortcut(.defaultAction)
+            if mode == .list {
+                VStack(alignment: .trailing, spacing: 8) { footerActions }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            } else {
+                HStack {
+                    Spacer()
+                    footerActions
+                }
             }
         }.padding(18).frame(width: 340)
+    }
+
+    @ViewBuilder
+    private var footerActions: some View {
+        Button(mode == .list ? "Cancel Calendar Changes" : "Cancel") { dismiss() }
+            .keyboardShortcut(.cancelAction)
+        Button(mode == .list ? "Save Calendar Changes" : "Done") {
+            if store.saveCalendarSourceColors(draft, expected: original) { dismiss() }
+            else { error = store.storageError ?? "Calendar colors changed. Open the editor again to review them." }
+        }.keyboardShortcut(.defaultAction)
     }
 
     @ViewBuilder
