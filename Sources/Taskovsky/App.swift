@@ -445,6 +445,9 @@ struct WorkspaceView: View {
                         .accessibilityHidden(!showSidebar)
                         if destination == .summary {
                             SummaryView(store: store).frame(maxWidth: .infinity, maxHeight: .infinity)
+                        } else if destination == .search {
+                            searchLayout(docked: dockDetail, listWidth: listWidth,
+                                         storedListWidth: storedListWidth, available: available)
                         } else if splitCalendar {
                             HSplitView {
                                 GeometryReader { taskGeometry in
@@ -456,14 +459,8 @@ struct WorkspaceView: View {
                             }
                             .accessibilityIdentifier("tasksCalendarSplit")
                         } else if dockDetail {
-                            // Full search keeps its query/filter/results here; selecting a
-                            // result docks its detail beside them. Closing the detail
-                            // leaves the results untouched.
-                            Group {
-                                if destination == .search {
-                                    SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                                } else { taskPane(now: timeline.date, overlay: false, paneWidth: CGFloat(listWidth)) }
-                            }.frame(width: listWidth)
+                            taskPane(now: timeline.date, overlay: false, paneWidth: CGFloat(listWidth))
+                                .frame(width: listWidth)
                             PanelDivider { x, ended in onPaneDrag(x: x, ended: ended, listWidth: storedListWidth, available: available) }
                             detailDock.frame(maxWidth: .infinity, maxHeight: .infinity)
                         } else {
@@ -749,13 +746,43 @@ struct WorkspaceView: View {
     private func removeEscapeMonitor() {
         if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor); escapeMonitor = nil }
     }
+    private func searchLayout(docked: Bool, listWidth: Double, storedListWidth: Double, available: Double) -> some View {
+        ZStack(alignment: .trailing) {
+            HStack(spacing: 0) {
+                // Keep the same pane mounted when only detail presentation
+                // changes. Query edits and applied criteria belong to Search,
+                // not to the dock or drawer that sits beside it.
+                SearchPane(
+                    store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask,
+                    onSelectList: { destination = .list($0) },
+                    onSelectFilter: { destination = .filter($0) },
+                    onSelectTag: { destination = .tag($0) },
+                    onComplete: complete, onClose: { destination = .inbox }
+                )
+                .id(searchQuery)
+                .frame(width: docked ? listWidth : nil)
+
+                if docked {
+                    PanelDivider { x, ended in
+                        onPaneDrag(x: x, ended: ended, listWidth: storedListWidth, available: available)
+                    }
+                    detailDock.frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if !docked, let task = selectedTask, detailState.drawerOpen {
+                drawer(task: task)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .animation(docked || panelDragging || reduceMotion ? nil : .timingCurve(0.4, 0, 0.2, 1, duration: 0.22), value: detailState.drawerOpen)
+    }
+
     private func tasksWithDetailOverlay(now: Date, width: CGFloat) -> some View {
         ZStack(alignment: .trailing) {
-            Group {
-                if destination == .search {
-                    SearchPane(store: store, initialQuery: searchQuery, onSelectTask: selectSearchTask, onSelectList: { destination = .list($0) }, onSelectFilter: { destination = .filter($0) }, onSelectTag: { destination = .tag($0) }, onComplete: complete, onClose: { destination = .inbox }).id(searchQuery)
-                } else { taskPane(now: now, overlay: true, paneWidth: width) }
-            }.frame(maxWidth: .infinity, maxHeight: .infinity)
+            taskPane(now: now, overlay: true, paneWidth: width)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             // The drawer stays inside the Tasks pane and never reflows it.
             if let task = selectedTask, detailState.drawerOpen { drawer(task: task) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity)
