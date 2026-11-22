@@ -13,7 +13,7 @@ Work one bounded state family and one reproducible difference at a time. Record 
 
 ## Active queue
 
-- **Next, MAC-07:** reproduce the [dated parent completion](ticktick-spec/tasks.md#child-task-creation-and-completion) on a disposable Taskovsky parent with two unchecked linked children. Verify immediate grouping/status changes, then test local Undo and unrelated records separately; do not infer the reference’s Undo or blank-child persistence.
+- **Next, MAC-07:** reproduce the [dated parent completion](ticktick-spec/tasks.md#child-task-creation-and-completion) on a disposable Taskovsky parent with two unchecked linked children. Taskovsky native cascade and local Undo passed; [the remaining pinned projection gap](changes/mac-inbox-pinned-children-2026-11-22.md) has a separate scope. Do not infer the reference’s Undo or blank-child persistence.
 - **After that:** take one remaining family at a time. Revisit reference-only visual or behavior questions when a neutral TickTick workspace is available; do not treat them as failures or silently close them.
 
 ## Acceptance matrix

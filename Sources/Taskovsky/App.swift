@@ -1837,7 +1837,9 @@ struct WorkspaceView: View {
         // Pinned active rows lift out of their computed groups into one Pinned
         // group above everything else (Trash, Completed, and Won't Do never
         // contain pinned rows by construction).
-        let (pinned, unpinned) = PinnedGrouping.partition(tasks)
+        let (pinned, unpinned) = destination == .inbox && TaskSortPolicy.normalized(sort) == "Date"
+            ? InboxPinnedHierarchy.partition(tasks)
+            : PinnedGrouping.partition(tasks)
         for task in unpinned {
             let title: String
             if destination == .trash { title = "Deleted" }
