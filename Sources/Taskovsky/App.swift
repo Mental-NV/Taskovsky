@@ -292,6 +292,11 @@ struct WorkspaceView: View {
     private var timelineScope: TaskTimelineScope? {
         TaskTimelineScope(destination: destination, data: store.data)
     }
+    @State private var timelineViewport = TaskTimelineViewport()
+    private var activeTimelineScope: TaskTimelineScope? {
+        guard !calendarActive, listViewBinding.wrappedValue == .timeline else { return nil }
+        return timelineScope
+    }
     private var supportsScopedBoard: Bool { ScopedBoardProjection.supports(destination, in: store.data) }
 
     private var listViewBinding: Binding<TaskListViewMode> {
@@ -643,6 +648,8 @@ struct WorkspaceView: View {
                 detailState.navigate()
             }
         }
+        // Docked and drawer layouts can remount Tasks without leaving its Timeline scope.
+        .onChange(of: activeTimelineScope) { _, _ in timelineViewport = TaskTimelineViewport() }
         .onChange(of: destination) { _, _ in
             rowScheduleID = nil
             requestedTaskRename = nil
@@ -1536,7 +1543,8 @@ struct WorkspaceView: View {
             if destination == .trash { Text("Deleted items stay here until you restore them.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if isArchivedView { Text("Archived lists are read-only. Unarchive the list from the sidebar to edit, or use a row's Move to for a deliberate move.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if let scope = timelineScope, mode == .timeline {
-                DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask).id(scope)
+                DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask,
+                                    viewport: $timelineViewport).id(scope)
             } else if let list = activeList, !list.sections.isEmpty && taskGrouping == .standard {
                 if mode == .board {
                     sectionBoard(list, overlay: overlay, now: now)
