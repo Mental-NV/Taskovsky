@@ -886,6 +886,7 @@ private struct CalendarYearMonth: View {
                 ForEach(days, id: \.self) { day in
                     let today = calendar.isDateInToday(day)
                     let count = counts[day, default: 0]
+                    let itemCountLabel = count == 1 ? "1 item" : "\(count) items"
                     Button { select(day) } label: {
                         ZStack(alignment: .bottom) {
                             Text("\(calendar.component(.day, from: day))").font(.system(size: dateFont))
@@ -900,7 +901,7 @@ private struct CalendarYearMonth: View {
                                 else if style == .heatmap && count > 0 { CalendarAppearance.accent.opacity(min(0.7, 0.1 + Double(count) * 0.1)) }
                             }.contentShape(Rectangle())
                     }.buttonStyle(.plain)
-                        .accessibilityLabel(CalendarText.date(day, "EEEE d MMMM y", calendar: calendar) + ", \(count) items")
+                        .accessibilityLabel(CalendarText.date(day, "EEEE d MMMM y", calendar: calendar) + ", " + itemCountLabel)
                         .accessibilityAction(named: Text("Preview Scheduled Items")) { preview(day) }
                         .contextMenu { Button("Preview Scheduled Items") { preview(day) } }
                 }
