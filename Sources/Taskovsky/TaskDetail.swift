@@ -478,7 +478,10 @@ struct EntitySheet: View {
     let editor: EntityEditor
     let folders: [ListFolder]
     let tags: [TaskTag]
+    let workspaceWidth: CGFloat
     let save: (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Bool
+    static let formWidth: CGFloat = 360
+    static let previewWidth: CGFloat = 280
     @State private var saveFailed = false
     @State private var name: String
     @State private var color: String
@@ -490,8 +493,8 @@ struct EntitySheet: View {
     @State private var parentTagID: UUID?
     private let symbols = ["line.3.horizontal", "house", "briefcase", "book", "star", "cart", "heart", "folder", "list.bullet"]
     @FocusState private var focused: Bool
-    init(editor: EntityEditor, folders: [ListFolder] = [], tags: [TaskTag] = [], save: @escaping (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Bool) {
-        self.editor = editor; self.folders = folders; self.tags = tags; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind); _symbol = State(initialValue: editor.symbol); _folderID = State(initialValue: editor.folderID); _showsInSmartLists = State(initialValue: editor.showsInSmartLists); _viewMode = State(initialValue: editor.viewMode); _parentTagID = State(initialValue: editor.parentTagID)
+    init(editor: EntityEditor, folders: [ListFolder] = [], tags: [TaskTag] = [], workspaceWidth: CGFloat, save: @escaping (String, String, TaskKind, String?, UUID?, Bool, UUID?, Bool, TaskListViewMode) -> Bool) {
+        self.editor = editor; self.folders = folders; self.tags = tags; self.workspaceWidth = workspaceWidth; self.save = save; _name = State(initialValue: editor.name); _color = State(initialValue: editor.color); _kind = State(initialValue: editor.kind); _symbol = State(initialValue: editor.symbol); _folderID = State(initialValue: editor.folderID); _showsInSmartLists = State(initialValue: editor.showsInSmartLists); _viewMode = State(initialValue: editor.viewMode); _parentTagID = State(initialValue: editor.parentTagID)
     }
     /// Cycle-safe parent options: the tag itself and its descendants can
     /// never be its parent.
@@ -501,19 +504,14 @@ struct EntitySheet: View {
         return tags.filter { !forbidden.contains($0.id) }
     }
     var body: some View {
-        Group {
-            if editor.isTag {
-                form
-            } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: 0) {
-                        form
-                        ListEditorPreview(name: name, symbol: symbol, tint: Color(hex: color),
-                                          mode: viewMode, kind: kind)
-                            .frame(width: 280)
-                    }
-                    form
-                }
+        HStack(alignment: .top, spacing: 0) {
+            form
+            // A sheet can propose its own 360-point intrinsic width even on
+            // a wide parent. Decide using the measured workspace instead.
+            if !editor.isTag && workspaceWidth >= Self.formWidth + Self.previewWidth {
+                ListEditorPreview(name: name, symbol: symbol, tint: Color(hex: color),
+                                  mode: viewMode, kind: kind)
+                    .frame(width: Self.previewWidth)
             }
         }.tint(accent).onAppear { focused = true }
     }
@@ -559,13 +557,13 @@ struct EntitySheet: View {
                     Text("Timeline").tag(TaskListViewMode.timeline)
                 }
                 .pickerStyle(.segmented)
-                .help("This list's center view: rows or a status-column Kanban board")
-                .accessibilityLabel("List or board view")
+                .help("Choose List, Board, or Timeline for this list")
+                .accessibilityLabel("List display mode")
             }
             if editor.entityID != nil && !editor.isTag { Text("List type sets the default for new items.").font(.caption).foregroundStyle(.secondary) }
             if saveFailed { Text("The list was not saved. Your draft is preserved. Check the workspace error, then retry or reopen the list if it changed.").font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).accessibilityLabel("List save failed; draft preserved") }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
-        }.padding(28).frame(width: 360)
+        }.padding(28).frame(width: Self.formWidth)
     }
     private func submit() {
         let cleaned = name.trimmingCharacters(in: .whitespacesAndNewlines)

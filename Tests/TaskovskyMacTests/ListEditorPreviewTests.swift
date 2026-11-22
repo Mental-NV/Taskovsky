@@ -35,20 +35,22 @@ final class ListEditorPreviewTests: XCTestCase {
         }
     }
 
-    func testEntitySheetRenderingNeverInvokesSaveAndTagsKeepOriginalWidth() {
+    func testEntitySheetUsesWorkspaceWidthWithoutInvokingSave() {
         _ = NSApplication.shared
         var saveCalls = 0
-        let tag = NSHostingView(rootView: EntitySheet(editor: EntityEditor(isTag: true)) { _, _, _, _, _, _, _, _, _ in
-            saveCalls += 1; return true
-        })
-        XCTAssertEqual(tag.fittingSize.width, 360, accuracy: 1)
-        let list = NSHostingView(rootView: EntitySheet(editor: EntityEditor(isTag: false)) { _, _, _, _, _, _, _, _, _ in
-            saveCalls += 1; return true
-        })
-        let size = list.fittingSize
-        XCTAssertTrue(size.width.isFinite && size.height.isFinite)
-        XCTAssertLessThanOrEqual(size.width, 640 + 1)
-        XCTAssertGreaterThanOrEqual(size.width, 360 - 1)
+        func fittingWidth(isTag: Bool, workspaceWidth: CGFloat) -> CGFloat {
+            let view = NSHostingView(rootView: EntitySheet(
+                editor: EntityEditor(isTag: isTag), workspaceWidth: workspaceWidth
+            ) { _, _, _, _, _, _, _, _, _ in
+                saveCalls += 1; return true
+            })
+            return view.fittingSize.width
+        }
+        XCTAssertEqual(fittingWidth(isTag: true, workspaceWidth: 1060), 360, accuracy: 1)
+        XCTAssertEqual(fittingWidth(isTag: false, workspaceWidth: 382), 360, accuracy: 1)
+        XCTAssertEqual(fittingWidth(isTag: false, workspaceWidth: 639), 360, accuracy: 1)
+        XCTAssertEqual(fittingWidth(isTag: false, workspaceWidth: 640), 640, accuracy: 1)
+        XCTAssertEqual(fittingWidth(isTag: false, workspaceWidth: 1060), 640, accuracy: 1)
         XCTAssertEqual(saveCalls, 0)
     }
 }
