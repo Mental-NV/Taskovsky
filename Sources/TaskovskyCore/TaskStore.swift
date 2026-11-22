@@ -180,6 +180,13 @@ public final class TaskStore: ObservableObject {
         return backup
     }
 
+    /// Append to the current record, and acknowledge only a persisted item.
+    public func addChecklistItem(taskID: UUID, title: String) -> Bool {
+        let cleaned = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, let original = data.tasks.first(where: { $0.id == taskID }) else { return false }
+        return saveTaskMetadata(.checklist(original.checklist + [ChecklistItem(title: cleaned)]), taskID: taskID)
+    }
+
     public func setChecklistItemCompleted(taskID: UUID, itemID: UUID, completed: Bool) {
         _ = saveTaskMetadata(.setChecklistCompleted(id: itemID, completed: completed), taskID: taskID)
     }
