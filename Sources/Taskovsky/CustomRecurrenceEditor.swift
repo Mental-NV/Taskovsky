@@ -91,62 +91,70 @@ struct CustomRecurrenceEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Custom Repeat").font(.headline)
-            Picker("Anchor", selection: $anchor) {
-                Text("By due dates").tag(RecurrenceAnchor.dueDate)
-                Text("By completion date").tag(RecurrenceAnchor.completionDate)
-            }.pickerStyle(.segmented)
-            .accessibilityLabel("Repeat anchor")
-            HStack {
-                Picker("Unit", selection: $unit) {
-                    Text("Day").tag(RecurrenceUnit.days); Text("Week").tag(RecurrenceUnit.weeks)
-                    Text("Month").tag(RecurrenceUnit.months); Text("Year").tag(RecurrenceUnit.years)
-                }.pickerStyle(.segmented).labelsHidden()
-                Stepper("Every \(interval)", value: $interval, in: 1...999)
-                    .font(.system(size: 11)).frame(width: 120)
-            }.accessibilityElement(children: .contain)
-            if unit == .weeks {
-                weekdayChips
-            }
-            if unit == .months {
-                Picker("Month pattern", selection: $monthMode) {
-                    Text("Each").tag(MonthMode.each); Text("On the").tag(MonthMode.onThe); Text("Workday").tag(MonthMode.workday)
-                }.pickerStyle(.segmented)
-                .accessibilityLabel("Month pattern")
-                if monthMode == .each {
-                    monthDayGrid
-                    Toggle("Last Day", isOn: $includesLastDay).font(.system(size: 11))
-                    if monthDays.isEmpty && !includesLastDay {
-                        Text("No days selected: repeat on the scheduled day.")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
-                    }
-                } else if monthMode == .onThe {
-                    ordinalPickers
-                    Text("A 5th weekday that does not exist is skipped that month.").font(.system(size: 10)).foregroundStyle(.secondary)
-                } else {
-                    Picker("Workday", selection: Binding(get: { workday ?? .first }, set: { workday = $0 })) {
-                        Text("First").tag(WorkdayPosition.first); Text("Last").tag(WorkdayPosition.last)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("Anchor", selection: $anchor) {
+                        Text("By due dates").tag(RecurrenceAnchor.dueDate)
+                        Text("By completion date").tag(RecurrenceAnchor.completionDate)
                     }.pickerStyle(.segmented)
-                    .accessibilityLabel("Workday position")
+                    .accessibilityLabel("Repeat anchor")
+                    HStack {
+                        Picker("Unit", selection: $unit) {
+                            Text("Day").tag(RecurrenceUnit.days); Text("Week").tag(RecurrenceUnit.weeks)
+                            Text("Month").tag(RecurrenceUnit.months); Text("Year").tag(RecurrenceUnit.years)
+                        }.pickerStyle(.segmented).labelsHidden()
+                        Stepper("Every \(interval)", value: $interval, in: 1...999)
+                            .font(.system(size: 11)).frame(width: 120)
+                    }.accessibilityElement(children: .contain)
+                    if unit == .weeks {
+                        weekdayChips
+                    }
+                    if unit == .months {
+                        Picker("Month pattern", selection: $monthMode) {
+                            Text("Each").tag(MonthMode.each); Text("On the").tag(MonthMode.onThe); Text("Workday").tag(MonthMode.workday)
+                        }.pickerStyle(.segmented)
+                        .accessibilityLabel("Month pattern")
+                        if monthMode == .each {
+                            monthDayGrid
+                            Toggle("Last Day", isOn: $includesLastDay).font(.system(size: 11))
+                            if monthDays.isEmpty && !includesLastDay {
+                                Text("No days selected: repeat on the scheduled day.")
+                                    .font(.system(size: 10)).foregroundStyle(.secondary)
+                            }
+                        } else if monthMode == .onThe {
+                            ordinalPickers
+                            Text("A 5th weekday that does not exist is skipped that month.").font(.system(size: 10)).foregroundStyle(.secondary)
+                        } else {
+                            Picker("Workday", selection: Binding(get: { workday ?? .first }, set: { workday = $0 })) {
+                                Text("First").tag(WorkdayPosition.first); Text("Last").tag(WorkdayPosition.last)
+                            }.pickerStyle(.segmented)
+                            .accessibilityLabel("Workday position")
+                        }
+                    }
+                    if unit == .years {
+                        HStack {
+                            Picker("Month", selection: $yearMonth) {
+                                Text("Scheduled month").tag(nil as Int?)
+                                ForEach(1...12, id: \.self) { month in Text(calendar.shortMonthSymbols[month - 1]).tag(month as Int?) }
+                            }.frame(width: 150)
+                            TextField("Day (blank = scheduled)", text: $yearMonthDayText).textFieldStyle(.roundedBorder).font(.system(size: 11)).frame(width: 150)
+                        }.font(.system(size: 11))
+                        ordinalPickers
+                        Text("“On the” beats the day above when both are set.").font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
+                    Toggle("Skip weekends (roll to Monday)", isOn: $skipWeekends).font(.system(size: 11))
+                    Divider()
+                    specificDatesSection
+                    Divider()
+                    endingSection
+                    Divider()
+                    previewSection
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
             }
-            if unit == .years {
-                HStack {
-                    Picker("Month", selection: $yearMonth) {
-                        Text("Scheduled month").tag(nil as Int?)
-                        ForEach(1...12, id: \.self) { month in Text(calendar.shortMonthSymbols[month - 1]).tag(month as Int?) }
-                    }.frame(width: 150)
-                    TextField("Day (blank = scheduled)", text: $yearMonthDayText).textFieldStyle(.roundedBorder).font(.system(size: 11)).frame(width: 150)
-                }.font(.system(size: 11))
-                ordinalPickers
-                Text("“On the” beats the day above when both are set.").font(.system(size: 10)).foregroundStyle(.secondary)
-            }
-            Toggle("Skip weekends (roll to Monday)", isOn: $skipWeekends).font(.system(size: 11))
-            Divider()
-            specificDatesSection
-            Divider()
-            endingSection
-            Divider()
-            previewSection
+            .frame(height: 420)
+            .accessibilityIdentifier("custom-repeat-options")
             HStack {
                 Button("Clear Rule", role: .destructive) { save(nil); dismiss() }
                 Spacer()
