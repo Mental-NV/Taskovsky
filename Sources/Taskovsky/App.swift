@@ -292,6 +292,11 @@ struct WorkspaceView: View {
     private var timelineScope: TaskTimelineScope? {
         TaskTimelineScope(destination: destination, data: store.data)
     }
+    @State private var timelineViewport = TaskTimelineViewport()
+    private var activeTimelineScope: TaskTimelineScope? {
+        guard !calendarActive, listViewBinding.wrappedValue == .timeline else { return nil }
+        return timelineScope
+    }
     private var supportsScopedBoard: Bool { ScopedBoardProjection.supports(destination, in: store.data) }
 
     private var listViewBinding: Binding<TaskListViewMode> {
@@ -382,6 +387,11 @@ struct WorkspaceView: View {
         if case .list(let id) = destination { return store.data.lists.first { $0.id == id } }; return nil
     }
     var body: some View {
+        // Dock and drawer can remount Tasks without leaving its Timeline scope.
+        workspaceContent.onChange(of: activeTimelineScope) { _, _ in timelineViewport = TaskTimelineViewport() }
+    }
+
+    private var workspaceLayout: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             GeometryReader { geometry in
                 // Responsive policy (see ResponsiveLayout): responsive pressure
@@ -565,6 +575,10 @@ struct WorkspaceView: View {
             }
             .animation(reduceMotion ? nil : .easeOut(duration: 0.15), value: actions.feedback?.id)
         }
+    }
+
+    private var workspaceWithSheets: some View {
+        workspaceLayout
         .alert("Recover workspace?", isPresented: $recoveryAlert) {
             Button("Cancel", role: .cancel) { }
             Button("Back up and recover") { store.recoverUnreadableWorkspace() }
@@ -627,12 +641,40 @@ struct WorkspaceView: View {
                 templatePicker = false
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in guard !calendarActive else { return }; quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary || isFolderDestination { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
-        .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in calendarActive = false; if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
+    }
+
+    private func handleNewTaskCommand() {
+        guard !calendarActive else { return }
+        quickKind = .task
+        if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary || isFolderDestination {
+            nextCreationKind = .task
+            destination = .inbox
+        }
+        quickFocused = true
+    }
+
+    private func handleNewNoteCommand() {
+        calendarActive = false
+        if destination != .inbox && activeList == nil {
+            nextCreationKind = .note
+            destination = .inbox
+        }
+        quickKind = .note
+        quickFocused = true
+    }
+
+    private var workspaceWithInputCommands: some View {
+        workspaceWithSheets
+        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in handleNewTaskCommand() }
+        .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in handleNewNoteCommand() }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
         .onReceive(NotificationCenter.default.publisher(for: .newFolder)) { _ in folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
         .onReceive(NotificationCenter.default.publisher(for: .openSearch)) { _ in calendarActive = false; searchDialog = true }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in if !calendarActive { toggleSidebar() } }
+    }
+
+    private var workspaceContent: some View {
+        workspaceWithInputCommands
         .onReceive(NotificationCenter.default.publisher(for: .trashTask)) { note in if let id = note.object as? UUID { trash(id) } }
         .onReceive(NotificationCenter.default.publisher(for: .popupClosed)) { note in if let id = note.object as? UUID { openPopups.remove(id) } }
         .onReceive(NotificationCenter.default.publisher(for: .requestPurge)) { note in if let id = note.object as? UUID { purgeCandidate = id } }
@@ -1536,7 +1578,8 @@ struct WorkspaceView: View {
             if destination == .trash { Text("Deleted items stay here until you restore them.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if isArchivedView { Text("Archived lists are read-only. Unarchive the list from the sidebar to edit, or use a row's Move to for a deliberate move.").font(.caption).foregroundStyle(Palette.explanatory(colorScheme)).padding(.horizontal, 24).padding(.bottom, 16) }
             if let scope = timelineScope, mode == .timeline {
-                DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask).id(scope)
+                DesktopTaskTimeline(store: store, scope: scope, now: now, open: selectTask,
+                                    viewport: $timelineViewport).id(scope)
             } else if let list = activeList, !list.sections.isEmpty && taskGrouping == .standard {
                 if mode == .board {
                     sectionBoard(list, overlay: overlay, now: now)

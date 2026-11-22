@@ -6,6 +6,7 @@ struct DesktopTaskTimeline: View {
     let scope: TaskTimelineScope
     let now: Date
     let open: (UUID) -> Void
+    @Binding var viewport: TaskTimelineViewport
     @State private var request: ScheduleRequest?
     @State private var captureRequest: CaptureRequest?
     @State private var gesture: GestureRequest?
@@ -46,7 +47,8 @@ struct DesktopTaskTimeline: View {
                              color: Color.init(hex:), open: open, arrange: edit,
                              capture: store.needsRecovery ? nil : beginCapture,
                              beginAdjustment: store.needsRecovery ? nil : beginAdjustment,
-                             arrangement: store.needsRecovery ? nil : TaskTimelineArrangeControls(drop: arrangeByDrop))
+                             arrangement: store.needsRecovery ? nil : TaskTimelineArrangeControls(drop: arrangeByDrop),
+                             viewport: $viewport)
         }
         .onDisappear { feedback.dismiss() }
         .sheet(item: $request) { request in

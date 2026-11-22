@@ -25,6 +25,12 @@ struct TaskTimelineArrangeControls {
     let drop: (TaskTimelineArrangeDrag, CalendarScheduleOperation) -> Bool
 }
 
+struct TaskTimelineViewport {
+    var scale = TaskTimelineScale.week
+    var zoom = TaskTimelineZoom.standard
+    var selectedFocus: Date?
+}
+
 struct TaskTimelineView: View {
     let scope: TaskTimelineScope
     let data: WorkspaceData
@@ -36,6 +42,8 @@ struct TaskTimelineView: View {
     var capture: ((TaskDestination, Date) -> Void)?
     var beginAdjustment: ((UUID) -> ((CalendarScheduleOperation) -> Void)?)?
     var arrangement: TaskTimelineArrangeControls?
+    var viewport: Binding<TaskTimelineViewport>? = nil
+    @State private var localViewport = TaskTimelineViewport()
     @State private var arrangeSession = UUID()
     #if os(macOS)
     @Namespace private var arrangeSpace
@@ -50,13 +58,20 @@ struct TaskTimelineView: View {
     @State private var captureDay: Date?
     @State private var dateChoice: Date?
     @State private var showDateChoice = false
-    @State private var scale = TaskTimelineScale.week
-    @State private var zoom = TaskTimelineZoom.standard
+    private var viewportBinding: Binding<TaskTimelineViewport> { viewport ?? $localViewport }
+    private var scale: TaskTimelineScale { viewportBinding.wrappedValue.scale }
+    private var zoom: TaskTimelineZoom {
+        get { viewportBinding.wrappedValue.zoom }
+        nonmutating set { viewportBinding.wrappedValue.zoom = newValue }
+    }
+    private var selectedFocus: Date? {
+        get { viewportBinding.wrappedValue.selectedFocus }
+        nonmutating set { viewportBinding.wrappedValue.selectedFocus = newValue }
+    }
     @State private var colorBy = CalendarColorMode.list
     #if os(iOS)
     @State private var showColorOptions = false
     #endif
-    @State private var selectedFocus: Date?
 
     private var focus: Date { selectedFocus ?? now }
     private var axis: Date.FormatStyle {
@@ -78,7 +93,7 @@ struct TaskTimelineView: View {
         let projection = TaskTimelineProjection(scope: scope, data: data, window: window, now: now, colorBy: colorBy)
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Picker("Timeline scale", selection: $scale) {
+                Picker("Timeline scale", selection: viewportBinding.scale) {
                     ForEach(TaskTimelineScale.allCases, id: \.self) { Text($0.label).tag($0) }
                 }
                 .pickerStyle(.segmented)
