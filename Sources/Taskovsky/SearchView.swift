@@ -312,7 +312,14 @@ struct SearchDialog: View {
                   }
                 }
             }
-            if !trimmed.isEmpty { Divider(); HStack { Text("Press Return to see all results").font(.system(size: 12)).foregroundStyle(.secondary); Spacer() }.padding(12) }
+            if !trimmed.isEmpty {
+                Divider()
+                HStack {
+                    Text(selectedResult == nil ? "Press Return to see all results" : "Press Return to open the selected result")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                    Spacer()
+                }.padding(12)
+            }
         }.frame(width: 550, height: 420).onAppear { focused = true }
             .onMoveCommand { direction in
                 guard !trimmed.isEmpty, !results.isEmpty else { return }
@@ -343,7 +350,12 @@ struct SearchDialog: View {
         else { selected = max((selected ?? results.count) - 1, 0) }
     }
     private func group<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View { VStack(alignment: .leading, spacing: 4) { Text(title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary); content() } }
-    private func selectionColor(_ id: ResultID) -> Color { selected.flatMap { results.indices.contains($0) ? results[$0] : nil } == id ? Color.primary.opacity(0.08) : .clear }
+    private var selectedResult: ResultID? {
+        guard let selected else { return nil }
+        let candidates = results
+        return candidates.indices.contains(selected) ? candidates[selected] : nil
+    }
+    private func selectionColor(_ id: ResultID) -> Color { selectedResult == id ? Color.primary.opacity(0.08) : .clear }
     private func result(_ title: String, symbol: String, id: ResultID) -> some View {
         Button { open(id) } label: { HStack(spacing: 10) {
             if case .list(let listID) = id { ListSymbol(symbol: store.data.lists.first(where: { $0.id == listID })?.symbol, size: 16).frame(width: 18) }
@@ -351,7 +363,7 @@ struct SearchDialog: View {
             highlightedMatch(title, query: trimmed)
         }.font(.system(size: 14)).frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5).contentShape(Rectangle()) }.buttonStyle(.plain).background(selectionColor(id), in: RoundedRectangle(cornerRadius: 5)).id(id)
     }
-    private func submit() { guard !trimmed.isEmpty else { return }; if let selected, results.indices.contains(selected) { open(results[selected]) } else { remember(); onSearch(trimmed) } }
+    private func submit() { guard !trimmed.isEmpty else { return }; if let selectedResult { open(selectedResult) } else { remember(); onSearch(trimmed) } }
     private func open(_ id: ResultID) { remember(); switch id { case .task(let id): onSelectTask(id); case .list(let id): onSelectList(id); case .tag(let id): onSelectTag(id); case .filter(let id): onSelectFilter(id) } }
     private func remember() { guard !trimmed.isEmpty else { return }; recent.removeAll { $0.localizedCaseInsensitiveCompare(trimmed) == .orderedSame }; recent.insert(trimmed, at: 0); recent = Array(recent.prefix(10)); UserDefaults.standard.set(recent, forKey: "Taskovsky.recentSearches") }
 }
