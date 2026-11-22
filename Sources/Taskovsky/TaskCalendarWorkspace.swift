@@ -618,38 +618,38 @@ private struct CalendarSourceColorSettings: View {
     }
 
     var body: some View {
-        let rows = CalendarColorSource.swatches(in: store.data, by: mode)
         VStack(alignment: .leading, spacing: 14) {
             Text(mode == .list ? "Calendar List Colors" : "Calendar Tag Colors").font(.headline)
             Text(mode == .list ? "Named list colors apply in Tasks and Calendar. Inbox and existing overrides apply in Calendar." :
                 "These colors apply only in Calendar.")
                 .font(.caption).foregroundStyle(.secondary)
             ScrollView {
-                VStack(spacing: 8) {
-                    if rows.isEmpty { Text("No tags to customize.").foregroundStyle(.secondary) }
-                    ForEach(rows) { row in
-                        if case .list(let id) = row.id {
-                            if let legacy = original[row.id] {
-                                HStack(spacing: 12) {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(row.name)
-                                        Text(draft[row.id] == nil ? "Uses list color after save" : "Calendar override")
-                                            .font(.caption).foregroundStyle(.secondary)
-                                    }.frame(maxWidth: .infinity, alignment: .leading)
-                                    CalendarSourceSwatch(color: draft[row.id] == nil ? row.defaultColor : legacy)
-                                        .accessibilityHidden(true)
-                                    Button("Use List Color") { draft[row.id] = nil }
-                                        .disabled(draft[row.id] == nil)
-                                        .accessibilityLabel("Use List Color for " + row.name)
+                VStack(alignment: .leading, spacing: 8) {
+                    if mode == .list {
+                        let hierarchy = CalendarColorSource.listSections(in: store.data)
+                        sourceRow(hierarchy.inbox)
+                        ForEach(hierarchy.sections, id: \.placement) { section in
+                            VStack(alignment: .leading, spacing: 8) {
+                                if let folderName = section.folderName {
+                                    Label(folderName, systemImage: "folder")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                        .accessibilityAddTraits(.isHeader)
                                 }
-                            } else {
-                                CalendarSourceColorRow(row: row, override: .constant(nil), saveListColor: { expected, value in
-                                    store.saveCalendarListColor(id: id, expected: expected, color: value)
-                                })
+                                ForEach(section.rows) { row in
+                                    sourceRow(row)
+                                        .padding(.leading, section.folderName == nil ? 0 : 18)
+                                }
                             }
-                        } else {
-                            CalendarSourceColorRow(row: row, override: Binding(get: { draft[row.id] }, set: { draft[row.id] = $0 }))
                         }
+                    } else {
+                        let rows = CalendarColorSource.swatches(in: store.data, by: mode)
+                        if rows.isEmpty {
+                            Text("No tags to customize.")
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity)
+                        }
+                        ForEach(rows) { row in sourceRow(row) }
                     }
                 }.padding(.vertical, 2)
             }.frame(maxHeight: 280)
@@ -664,6 +664,32 @@ private struct CalendarSourceColorSettings: View {
                 }.keyboardShortcut(.defaultAction)
             }
         }.padding(18).frame(width: 340)
+    }
+
+    @ViewBuilder
+    private func sourceRow(_ row: CalendarColorSource.Swatch) -> some View {
+        if case .list(let id) = row.id {
+            if let legacy = original[row.id] {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(row.name)
+                        Text(draft[row.id] == nil ? "Uses list color after save" : "Calendar override")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, alignment: .leading)
+                    CalendarSourceSwatch(color: draft[row.id] == nil ? row.defaultColor : legacy)
+                        .accessibilityHidden(true)
+                    Button("Use List Color") { draft[row.id] = nil }
+                        .disabled(draft[row.id] == nil)
+                        .accessibilityLabel("Use List Color for " + row.name)
+                }
+            } else {
+                CalendarSourceColorRow(row: row, override: .constant(nil), saveListColor: { expected, value in
+                    store.saveCalendarListColor(id: id, expected: expected, color: value)
+                })
+            }
+        } else {
+            CalendarSourceColorRow(row: row, override: Binding(get: { draft[row.id] }, set: { draft[row.id] = $0 }))
+        }
     }
 }
 
