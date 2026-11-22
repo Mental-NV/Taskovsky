@@ -262,22 +262,28 @@ struct TaskDetail: View {
         HStack { Text("Subtasks").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).help("Linked child tasks — each keeps its own dates, list, and completion"); Spacer(); if let progress = TaskHierarchy.progress(of: task.id, in: store.data.tasks) { Text("\(progress.done) of \(progress.total)").font(.system(size: 10)).foregroundStyle(.tertiary) } }
         VStack(spacing: 8) {
             if let parent = store.data.tasks.first(where: { $0.id == task.parentID }) {
+                let parentTitle = parent.title.isEmpty ? "Untitled" : parent.title
                 HStack(spacing: 10) {
-                    Image(systemName: "arrow.turn.up.right").foregroundStyle(.tertiary)
+                    Image(systemName: "arrow.turn.up.right").foregroundStyle(.tertiary).fixedSize()
                     Text("Subtask of").font(.system(size: 13)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                    // The task title absorbs width pressure; never wrap the
+                    // breadcrumb's prefix or action labels into fragments.
                     if let navigate = onNavigateToTask {
-                        Button(parent.title.isEmpty ? "Untitled" : parent.title) { navigate(parent.id) }
-                            .buttonStyle(.plain).font(.system(size: 13)).lineLimit(1)
+                        Button(parentTitle) { navigate(parent.id) }
+                            .buttonStyle(.plain).font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
                             .foregroundStyle(accent).help("Open parent task")
-                            .accessibilityLabel("Open parent task \(parent.title)")
+                            .accessibilityLabel("Open parent task \(parentTitle)")
                     } else {
-                        Text(parent.title.isEmpty ? "Untitled" : parent.title).font(.system(size: 13)).lineLimit(1)
+                        Text(parentTitle).font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
                     }
-                    Spacer()
+                    Spacer(minLength: 0)
                     if !locked, !subtaskParentOptions.isEmpty {
                         Menu("Change") { ForEach(subtaskParentOptions) { option in Button(option.title.isEmpty ? "Untitled" : option.title) { _ = store.setTaskParent(id: task.id, parentID: option.id) } } }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().font(.system(size: 12))
-                        Button("Remove") { _ = store.setTaskParent(id: task.id, parentID: nil) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary).help("Move to top level")
+                        Button("Remove") { _ = store.setTaskParent(id: task.id, parentID: nil) }
+                            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: true, vertical: false).help("Move to top level")
                     }
                 }
             }
