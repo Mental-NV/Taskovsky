@@ -176,7 +176,7 @@ struct SearchPane: View {
         }.padding(28).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .sheet(isPresented: $saveFilter) {
                 FilterEditorView(
-                    store: store, filter: nil, initialKeyword: trimmed,
+                    store: store, filter: nil, entryPoint: .fullSearch, initialKeyword: trimmed,
                     initialDateRules: Array(dateRules), initialStatus: status,
                     initialListIDs: Array(listIDs), initialTagIDs: Array(tagIDs),
                     initialTagMode: tagMode, initialKinds: Array(kinds),

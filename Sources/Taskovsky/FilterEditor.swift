@@ -2,8 +2,11 @@ import SwiftUI
 import TaskovskyCore
 
 struct FilterEditorView: View {
+    enum EntryPoint { case workspace, fullSearch }
+
     @ObservedObject var store: TaskStore
     let filter: TaskFilter?
+    private let entryPoint: EntryPoint
     @Environment(\.dismiss) private var dismiss
     @State private var draftID: UUID
     @State private var saveError: String?
@@ -23,10 +26,10 @@ struct FilterEditorView: View {
     @State private var advanced: Bool
     @State private var ruleRoot: FilterRule?
 
-    init(store: TaskStore, filter: TaskFilter? = nil, initialKeyword: String = "", initialDateRules: [FilterDateRule] = [], initialStatus: FilterStatus = .active, initialListIDs: [UUID]? = nil, initialTagIDs: [UUID]? = nil, initialTagMode: FilterTagMode = .any, initialPriorities: [TaskPriority] = [], initialKinds: [TaskKind] = [], initialCustomFrom: Date? = nil, initialCustomTo: Date? = nil) {
-        self.store = store; self.filter = filter
+    init(store: TaskStore, filter: TaskFilter? = nil, entryPoint: EntryPoint = .workspace, initialKeyword: String = "", initialDateRules: [FilterDateRule] = [], initialStatus: FilterStatus = .active, initialListIDs: [UUID]? = nil, initialTagIDs: [UUID]? = nil, initialTagMode: FilterTagMode = .any, initialPriorities: [TaskPriority] = [], initialKinds: [TaskKind] = [], initialCustomFrom: Date? = nil, initialCustomTo: Date? = nil) {
+        self.store = store; self.filter = filter; self.entryPoint = entryPoint
         _draftID = State(initialValue: filter?.id ?? UUID())
-        _name = State(initialValue: filter?.name ?? initialKeyword)
+        _name = State(initialValue: filter?.name ?? (entryPoint == .fullSearch ? "" : initialKeyword))
         _keyword = State(initialValue: filter?.keyword ?? initialKeyword)
         _listIDs = State(initialValue: Set(filter?.listIDs ?? initialListIDs ?? []))
         _tagIDs = State(initialValue: Set(filter?.tagIDs ?? initialTagIDs ?? []))
@@ -45,8 +48,9 @@ struct FilterEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(filter == nil ? "New Filter" : "Edit Filter").font(.system(size: 18, weight: .bold))
-            TextField("Filter name", text: $name)
+            Text(filter != nil ? "Edit Filter" : entryPoint == .fullSearch ? "Add Filter" : "New Filter")
+                .font(.system(size: 18, weight: .bold))
+            TextField(entryPoint == .fullSearch ? "Filter Name" : "Filter name", text: $name)
             Picker("Mode", selection: $advanced) {
                 Text("Normal").tag(false)
                 Text("Advanced").tag(true)
@@ -62,7 +66,7 @@ struct FilterEditorView: View {
                 }.frame(height: 340)
             } else {
                 Form {
-                    TextField("Keyword", text: $keyword)
+                    TextField(entryPoint == .fullSearch ? "Include" : "Keyword", text: $keyword)
                     Menu {
                         Toggle("Inbox", isOn: membership(TaskFilter.inboxListID, in: $listIDs))
                         ForEach(store.data.lists) { list in Toggle(list.name, isOn: membership(list.id, in: $listIDs)) }
