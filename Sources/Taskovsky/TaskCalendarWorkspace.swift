@@ -49,6 +49,7 @@ struct TaskCalendarWorkspace: View {
     var embeddedInTasks = false
     @State private var focus = Date()
     @State private var showArrange = false
+    @State private var arrangeControls = CalendarArrangeControls()
     @State private var sidebarOverlay = false
     // Dock and overlay share navigation state for this workspace session.
     @State private var sidebarMonthOverride: Date?
@@ -78,6 +79,16 @@ struct TaskCalendarWorkspace: View {
         return { jumpDate = true }
     }
 
+    private var arrangePanel: some View {
+        CalendarArrangePanel(store: store, calendar: calendar, close: closeArrange,
+                             open: onOpenTask, schedule: edit, controls: $arrangeControls)
+    }
+
+    private func closeArrange() {
+        showArrange = false
+        arrangeControls = CalendarArrangeControls()
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let days = CalendarDates.visibleDays(focus: focus, mode: mode, options: options.wrappedValue,
@@ -100,8 +111,7 @@ struct TaskCalendarWorkspace: View {
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
                         if showArrange && !compact {
                             Divider()
-                            CalendarArrangePanel(store: store, focus: focus, calendar: calendar,
-                                close: { showArrange = false }, open: onOpenTask, schedule: edit)
+                            arrangePanel
                                 .frame(width: 234)
                         }
                     }
@@ -125,8 +135,7 @@ struct TaskCalendarWorkspace: View {
             }
             .overlay(alignment: .topTrailing) {
                 if compact && showArrange {
-                    CalendarArrangePanel(store: store, focus: focus, calendar: calendar,
-                        close: { showArrange = false }, open: onOpenTask, schedule: edit)
+                    arrangePanel
                         .frame(width: 234).background(Color(nsColor: .windowBackgroundColor))
                         .clipShape(RoundedRectangle(cornerRadius: 10)).shadow(radius: 12)
                         .padding(.top, 83).padding(.trailing, 8)
@@ -272,7 +281,10 @@ struct TaskCalendarWorkspace: View {
             }.fixedSize().background { RoundedRectangle(cornerRadius: 7).stroke(Color.primary.opacity(0.18), lineWidth: 0.7) }
             Menu {
                 Button("View Options…") { viewOptions = true }
-                Button(showArrange ? "Hide Arrange tasks" : "Arrange tasks") { showArrange.toggle(); sidebarOverlay = false }
+                Button(showArrange ? "Hide Arrange tasks" : "Arrange tasks") {
+                    if showArrange { closeArrange() } else { showArrange = true }
+                    sidebarOverlay = false
+                }
                 let candidates = TaskBatchEdit.calendarPostponeCandidates(in: store.data, options: options.wrappedValue)
                 Button("Postpone Tasks…") {
                     postponeRequest = PostponeRequest(tasks: candidates, data: store.data, settings: store.settings)

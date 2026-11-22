@@ -299,26 +299,29 @@ enum CalendarDayCounts {
     }
 }
 
+struct CalendarArrangeControls {
+    var grouping = CalendarColorMode.list
+    var list = "all"
+    var overdue = false
+}
+
 struct CalendarArrangePanel: View {
     @ObservedObject var store: TaskStore
-    var focus: Date
     var calendar: Calendar
     var close: () -> Void
     var open: (UUID) -> Void
     var schedule: (TaskItem) -> Void
-    @State private var grouping = CalendarColorMode.list
-    @State private var list = "all"
-    @State private var overdue = false
+    @Binding var controls: CalendarArrangeControls
     private var tasks: [TaskItem] {
         let selection: CalendarArrangeSelection
-        if list == "inbox" { selection = .inbox }
-        else if let id = UUID(uuidString: list) { selection = .list(id) }
+        if controls.list == "inbox" { selection = .inbox }
+        else if let id = UUID(uuidString: controls.list) { selection = .list(id) }
         else { selection = .calendar }
         return TaskCalendarProjection.arrangementTasks(data: store.data, options: store.settings.calendarOptions,
-            overdue: overdue, calendar: calendar, selection: selection)
+            overdue: controls.overdue, calendar: calendar, selection: selection)
     }
     private var groups: [(String, [TaskItem])] {
-        TaskCalendarProjection.arrangementGroups(tasks, data: store.data, grouping: grouping)
+        TaskCalendarProjection.arrangementGroups(tasks, data: store.data, grouping: controls.grouping)
     }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -326,14 +329,14 @@ struct CalendarArrangePanel: View {
                 Text("Arrange tasks").font(.system(size: 13, weight: .semibold)); Spacer()
                 Button(action: close) { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close Arrange tasks")
             }
-            Picker("Group tasks", selection: $grouping) {
+            Picker("Group tasks", selection: $controls.grouping) {
                 ForEach(CalendarColorMode.allCases, id: \.self) { Text($0.rawValue.capitalized).tag($0) }
             }.pickerStyle(.segmented)
-            Picker("Lists", selection: $list) {
+            Picker("Lists", selection: $controls.list) {
                 Text("All Lists").tag("all"); Text("Inbox").tag("inbox")
                 ForEach(store.data.lists.filter { !$0.isArchived }) { Text($0.name).tag($0.id.uuidString) }
             }.labelsHidden()
-            Toggle("Include overdue", isOn: $overdue).toggleStyle(.checkbox)
+            Toggle("Include overdue", isOn: $controls.overdue).toggleStyle(.checkbox)
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     if tasks.isEmpty { Text("No unscheduled tasks").foregroundStyle(.secondary).padding(.vertical, 20) }
@@ -354,7 +357,7 @@ struct CalendarArrangePanel: View {
                                     Button { schedule(task) } label: { Image(systemName: "calendar.badge.plus") }
                                         .buttonStyle(.plain).accessibilityLabel("Schedule " + task.title)
                                 }.padding(6)
-                                    .background(Color(hex: TaskCalendarProjection.color(for: task, data: store.data, by: grouping)).opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
+                                    .background(Color(hex: TaskCalendarProjection.color(for: task, data: store.data, by: controls.grouping)).opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
                                     .contentShape(Rectangle())
                                     .contextMenu { Button("Schedule…") { schedule(task) }; Button("Open task") { open(task.id) } }
                                     .draggable(TaskDragPayload(ids: [task.id]))
