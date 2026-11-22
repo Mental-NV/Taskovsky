@@ -413,7 +413,8 @@ struct TaskDetail: View {
     }
     private func addStep() {
         let title = newStep.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
-        var updated = task; updated.checklist.append(ChecklistItem(title: title)); store.updateTask(updated); newStep.wrappedValue = ""; stepFocused = true
+        if store.addChecklistItem(taskID: task.id, title: title) { newStep.wrappedValue = "" }
+        stepFocused = true
     }
     private func addSubtask() {
         let title = newSubtask.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines); guard !title.isEmpty else { return }
