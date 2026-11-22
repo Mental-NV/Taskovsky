@@ -387,6 +387,11 @@ struct WorkspaceView: View {
         if case .list(let id) = destination { return store.data.lists.first { $0.id == id } }; return nil
     }
     var body: some View {
+        // Dock and drawer can remount Tasks without leaving its Timeline scope.
+        workspaceContent.onChange(of: activeTimelineScope) { _, _ in timelineViewport = TaskTimelineViewport() }
+    }
+
+    private var workspaceContent: some View {
         TimelineView(.periodic(from: .now, by: 30)) { timeline in
             GeometryReader { geometry in
                 // Responsive policy (see ResponsiveLayout): responsive pressure
@@ -648,8 +653,6 @@ struct WorkspaceView: View {
                 detailState.navigate()
             }
         }
-        // Docked and drawer layouts can remount Tasks without leaving its Timeline scope.
-        .onChange(of: activeTimelineScope) { _, _ in timelineViewport = TaskTimelineViewport() }
         .onChange(of: destination) { _, _ in
             rowScheduleID = nil
             requestedTaskRename = nil
