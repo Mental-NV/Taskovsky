@@ -570,7 +570,7 @@ struct WorkspaceView: View {
             Button("Back up and recover") { store.recoverUnreadableWorkspace() }
         } message: { Text("The unreadable file will be copied to a backup beside workspace.json. Your current in-memory items will then be saved as the new workspace.") }
         .sheet(item: $editor) { item in
-            EntitySheet(editor: item, folders: store.data.folders, tags: store.data.tags) { name, color, kind, symbol, folderID, belowFolders, parentTagID, showsInSmartLists, viewMode in
+            EntitySheet(editor: item, folders: store.data.folders, tags: store.data.tags, workspaceWidth: lastTotalWidth) { name, color, kind, symbol, folderID, belowFolders, parentTagID, showsInSmartLists, viewMode in
                 if item.isTag {
                     if let id = item.entityID {
                         let stored = store.data.tags.first { $0.id == id }
