@@ -1692,6 +1692,19 @@ struct WorkspaceView: View {
             }
         }
     }
+    private func taskPriorityPalette(_ task: TaskItem) -> some View {
+        ControlGroup {
+            ForEach([TaskPriority.high, .medium, .low, .none], id: \.self) { value in
+                Button {
+                    var updated = task
+                    updated.priority = value
+                    store.updateTask(updated)
+                } label: {
+                    Label(value.label, systemImage: value == .none ? "flag" : "flag.fill")
+                }.tint(value.color)
+            }
+        }.controlGroupStyle(.palette)
+    }
     @ViewBuilder private func taskMenu(_ task: TaskItem) -> some View {
         if task.deletedAt != nil {
             Button("Restore") { restoreExplicit(task.id) }
@@ -1704,9 +1717,16 @@ struct WorkspaceView: View {
             Text("Archived — read-only")
         }
         else {
+            let showsPriorityPalette = task.kind == .task && task.completedAt == nil && task.wontDoAt == nil
+            if showsPriorityPalette {
+                taskPriorityPalette(task)
+                Divider()
+            }
             if task.kind == .task { Button(task.completedAt == nil && task.wontDoAt == nil ? "Complete" : "Mark incomplete") { complete(task.id) }; if task.wontDoAt == nil { Button("Won't Do") { abandon(task.id) } } }
             if task.completedAt == nil && task.wontDoAt == nil { Button(task.isPinned ? "Unpin" : "Pin") { _ = store.setPinned(id: task.id, pinned: !task.isPinned) } }
-            Menu("Priority") { ForEach(TaskPriority.allCases, id: \.self) { value in Button(value.label) { var t = task; t.priority = value; store.updateTask(t) } } }
+            if !showsPriorityPalette {
+                Menu("Priority") { ForEach(TaskPriority.allCases, id: \.self) { value in Button(value.label) { var t = task; t.priority = value; store.updateTask(t) } } }
+            }
             Menu("Move to") { Button("Inbox") { var t = task; t.listID = nil; store.updateTask(t) }; ForEach(store.data.lists.filter { !$0.isArchived }) { list in Button(list.name) { var t = task; t.listID = list.id; store.updateTask(t) } } }
             taskSectionMoveMenu(task)
             TaskRowTagMenu(store: store, taskID: task.id)
