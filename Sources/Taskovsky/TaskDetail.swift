@@ -270,14 +270,17 @@ struct TaskDetail: View {
                     // The task title absorbs width pressure; never wrap the
                     // breadcrumb's prefix or action labels into fragments.
                     if let navigate = onNavigateToTask {
-                        Button(parentTitle) { navigate(parent.id) }
-                            .buttonStyle(.plain).font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
-                            .foregroundStyle(accent).help("Open parent task")
-                            .accessibilityLabel("Open parent task \(parentTitle)")
+                        Button { navigate(parent.id) } label: {
+                            Text(parentTitle).lineLimit(1).truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain).font(.system(size: 13))
+                        .foregroundStyle(accent).help("Open parent task: \(parentTitle)")
+                        .accessibilityLabel("Open parent task \(parentTitle)")
                     } else {
                         Text(parentTitle).font(.system(size: 13)).lineLimit(1).truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    Spacer(minLength: 0)
                     if !locked, !subtaskParentOptions.isEmpty {
                         Menu("Change") { ForEach(subtaskParentOptions) { option in Button(option.title.isEmpty ? "Untitled" : option.title) { _ = store.setTaskParent(id: task.id, parentID: option.id) } } }
                             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().font(.system(size: 12))
