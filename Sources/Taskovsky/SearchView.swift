@@ -281,30 +281,36 @@ struct SearchDialog: View {
                 Button { dismiss() } label: { Image(systemName: "xmark") }.buttonStyle(.plain).accessibilityLabel("Close Search").help("Close Search").keyboardShortcut(.cancelAction)
             }.padding(18)
             Divider()
-            ScrollViewReader { proxy in
-              ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    if trimmed.isEmpty {
-                        HStack { Text("Recent Searches").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !recent.isEmpty { Button("Clear") { recent = []; UserDefaults.standard.removeObject(forKey: "Taskovsky.recentSearches") }.buttonStyle(.plain).foregroundStyle(accent) } }
-                        ForEach(recent, id: \.self) { term in Button { query = term } label: { Label(term, systemImage: "clock.arrow.circlepath").frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.plain) }
-                    } else {
-                        if !tasks.isEmpty { group("Tasks") {
-                            ForEach(tasks.prefix(5)) { task in
-                                SearchTaskResult(task: task, query: trimmed, listName: store.data.lists.first(where: { $0.id == task.listID })?.name ?? "Inbox", listSymbol: store.data.lists.first(where: { $0.id == task.listID })?.symbol, onOpen: { open(.task(task.id)) }, onComplete: { onComplete(task.id) })
-                                    .background(selectionColor(.task(task.id)), in: RoundedRectangle(cornerRadius: 5)).id(ResultID.task(task.id))
-                            }
-                            Button("View more") { remember(); onSearch(trimmed) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(accent).padding(.vertical, 5)
-                        } }
-                        if !lists.isEmpty { group("Lists") { ForEach(lists.prefix(8)) { list in result(list.name, symbol: list.symbol ?? "line.3.horizontal", id: .list(list.id)) } } }
-                        if !tags.isEmpty { group("Tags") { ForEach(tags.prefix(8)) { tag in result(tag.name, symbol: "tag", id: .tag(tag.id)) } } }
-                        if !filters.isEmpty { group("Filters") { ForEach(filters.prefix(8)) { filter in result(filter.name, symbol: "line.3.horizontal.decrease.circle", id: .filter(filter.id)) } } }
-                        if results.isEmpty { Text("No results found").foregroundStyle(.secondary) }
-                    }
-                }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-              }
-              .onChange(of: selected) { _, index in
-                  if let index, results.indices.contains(index) { proxy.scrollTo(results[index], anchor: .center) }
-              }
+                .overlay { if focused { Rectangle().fill(accent) } }
+                .accessibilityHidden(true)
+            if trimmed.isEmpty && recent.isEmpty {
+                welcome
+            } else {
+                ScrollViewReader { proxy in
+                  ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if trimmed.isEmpty {
+                            HStack { Text("Recent Searches").font(.system(size: 13, weight: .semibold)).foregroundStyle(.secondary); Spacer(); if !recent.isEmpty { Button("Clear") { recent = []; UserDefaults.standard.removeObject(forKey: "Taskovsky.recentSearches") }.buttonStyle(.plain).foregroundStyle(accent) } }
+                            ForEach(recent, id: \.self) { term in Button { query = term } label: { Label(term, systemImage: "clock.arrow.circlepath").frame(maxWidth: .infinity, alignment: .leading) }.buttonStyle(.plain) }
+                        } else {
+                            if !tasks.isEmpty { group("Tasks") {
+                                ForEach(tasks.prefix(5)) { task in
+                                    SearchTaskResult(task: task, query: trimmed, listName: store.data.lists.first(where: { $0.id == task.listID })?.name ?? "Inbox", listSymbol: store.data.lists.first(where: { $0.id == task.listID })?.symbol, onOpen: { open(.task(task.id)) }, onComplete: { onComplete(task.id) })
+                                        .background(selectionColor(.task(task.id)), in: RoundedRectangle(cornerRadius: 5)).id(ResultID.task(task.id))
+                                }
+                                Button("View more") { remember(); onSearch(trimmed) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(accent).padding(.vertical, 5)
+                            } }
+                            if !lists.isEmpty { group("Lists") { ForEach(lists.prefix(8)) { list in result(list.name, symbol: list.symbol ?? "line.3.horizontal", id: .list(list.id)) } } }
+                            if !tags.isEmpty { group("Tags") { ForEach(tags.prefix(8)) { tag in result(tag.name, symbol: "tag", id: .tag(tag.id)) } } }
+                            if !filters.isEmpty { group("Filters") { ForEach(filters.prefix(8)) { filter in result(filter.name, symbol: "line.3.horizontal.decrease.circle", id: .filter(filter.id)) } } }
+                            if results.isEmpty { Text("No results found").foregroundStyle(.secondary) }
+                        }
+                    }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                  }
+                  .onChange(of: selected) { _, index in
+                      if let index, results.indices.contains(index) { proxy.scrollTo(results[index], anchor: .center) }
+                  }
+                }
             }
             if !trimmed.isEmpty { Divider(); HStack { Text("Press Return to see all results").font(.system(size: 12)).foregroundStyle(.secondary); Spacer() }.padding(12) }
         }.frame(width: 550, height: 420).onAppear { focused = true }
@@ -314,6 +320,23 @@ struct SearchDialog: View {
                 if direction == .up { moveSelection(-1) }
             }
     }
+    private var welcome: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 28, weight: .medium))
+                .foregroundStyle(accent)
+                .frame(width: 68, height: 68)
+                .background(accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 18))
+                .accessibilityHidden(true)
+            Text("Search tasks, tags, lists and filters")
+                .font(.system(size: 14))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private func moveSelection(_ step: Int) {
         guard !trimmed.isEmpty, !results.isEmpty else { return }
         if step > 0 { selected = min((selected ?? -1) + 1, results.count - 1) }
