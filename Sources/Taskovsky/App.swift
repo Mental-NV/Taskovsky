@@ -643,14 +643,38 @@ struct WorkspaceView: View {
         }
     }
 
-    private var workspaceContent: some View {
+    private func handleNewTaskCommand() {
+        guard !calendarActive else { return }
+        quickKind = .task
+        if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary || isFolderDestination {
+            nextCreationKind = .task
+            destination = .inbox
+        }
+        quickFocused = true
+    }
+
+    private func handleNewNoteCommand() {
+        calendarActive = false
+        if destination != .inbox && activeList == nil {
+            nextCreationKind = .note
+            destination = .inbox
+        }
+        quickKind = .note
+        quickFocused = true
+    }
+
+    private var workspaceWithInputCommands: some View {
         workspaceWithSheets
-        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in guard !calendarActive else { return }; quickKind = .task; if destination == .trash || destination == .completed || destination == .wontDo || destination == .search || destination == .summary || isFolderDestination { nextCreationKind = .task; destination = .inbox }; quickFocused = true }
-        .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in calendarActive = false; if destination != .inbox && activeList == nil { nextCreationKind = .note; destination = .inbox }; quickKind = .note; quickFocused = true }
+        .onReceive(NotificationCenter.default.publisher(for: .newTask)) { _ in handleNewTaskCommand() }
+        .onReceive(NotificationCenter.default.publisher(for: .newNote)) { _ in handleNewNoteCommand() }
         .onReceive(NotificationCenter.default.publisher(for: .newList)) { _ in editor = EntityEditor(isTag: false) }
         .onReceive(NotificationCenter.default.publisher(for: .newFolder)) { _ in folderDraft = FolderSheetDraft(folderID: nil, initialName: "") }
         .onReceive(NotificationCenter.default.publisher(for: .openSearch)) { _ in calendarActive = false; searchDialog = true }
         .onReceive(NotificationCenter.default.publisher(for: .toggleSidebar)) { _ in if !calendarActive { toggleSidebar() } }
+    }
+
+    private var workspaceContent: some View {
+        workspaceWithInputCommands
         .onReceive(NotificationCenter.default.publisher(for: .trashTask)) { note in if let id = note.object as? UUID { trash(id) } }
         .onReceive(NotificationCenter.default.publisher(for: .popupClosed)) { note in if let id = note.object as? UUID { openPopups.remove(id) } }
         .onReceive(NotificationCenter.default.publisher(for: .requestPurge)) { note in if let id = note.object as? UUID { purgeCandidate = id } }
