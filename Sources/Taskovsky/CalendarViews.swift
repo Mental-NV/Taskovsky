@@ -983,8 +983,7 @@ struct CalendarAgendaView: View {
                                 }
                             }
                             ForEach(items) { entry in
-                                CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar, showItemIcons: options.showsIcon(for: entry),
-                                    open: open, complete: complete, edit: edit).fixedSize(horizontal: false, vertical: true).calendarDraggable(entry)
+                                agendaRow(entry)
                             }
                         }
                     }
@@ -998,6 +997,23 @@ struct CalendarAgendaView: View {
                     }
                 }
             }.padding(22)
+        }
+    }
+
+    private func agendaRow(_ entry: CalendarEntry) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(CalendarEntryView.timeLabel(for: entry, calendar: calendar))
+                .font(.system(size: 10)).monospacedDigit().foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 88, alignment: .trailing)
+                .padding(.top, 4)
+                .accessibilityHidden(true) // The card already announces title and full time.
+            CalendarEntryView(entry: entry, style: options.itemStyle, calendar: calendar,
+                showItemIcons: options.showsIcon(for: entry), showsInlineTime: false,
+                open: open, complete: complete, edit: edit)
+                .fixedSize(horizontal: false, vertical: true)
+                .calendarDraggable(entry)
         }
     }
 

@@ -24,6 +24,7 @@ struct CalendarEntryView: View {
     var calendar: Calendar
     var showItemIcons = true
     var compact = false
+    var showsInlineTime = true
     var trailingInset: CGFloat = 0
     // Only timed cards opt into width adaptation; other card surfaces
     // retain their existing icon presentation until separately observed.
@@ -41,11 +42,12 @@ struct CalendarEntryView: View {
     private var completionAction: String {
         (entry.isCompleted ? "Reopen " : "Complete ") + (entry.checklistID == nil ? "task" : "checklist item")
     }
-    private var time: String {
+    static func timeLabel(for entry: CalendarEntry, calendar: Calendar) -> String {
         if entry.isAllDay { return "All day" }
         if entry.hasDuration { return CalendarText.time(entry.start, calendar: calendar) + " – " + CalendarText.time(entry.due, calendar: calendar) }
         return CalendarText.time(entry.due, calendar: calendar)
     }
+    private var time: String { Self.timeLabel(for: entry, calendar: calendar) }
     var body: some View {
         HStack(alignment: .top, spacing: 5) {
             if showItemIcons || temporarilyShowsIcons {
@@ -68,7 +70,7 @@ struct CalendarEntryView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(entry.title).lineLimit(1)
                         .strikethrough(entry.isCompleted).frame(maxWidth: .infinity, alignment: .leading)
-                    if !compact { Text(time).font(.system(size: 10)).lineLimit(1).foregroundStyle(.secondary) }
+                    if !compact && showsInlineTime { Text(time).font(.system(size: 10)).lineLimit(1).foregroundStyle(.secondary) }
                 }.contentShape(Rectangle())
             }.buttonStyle(.plain).accessibilityLabel((entry.isProjected ? "Preview: " : "") + entry.title + ", " + time)
                 .accessibilityActions {
