@@ -22,7 +22,7 @@ struct CustomRecurrenceEditor: View {
     @State private var ordinalWeekday: Int
     @State private var workday: WorkdayPosition?
     @State private var yearMonth: Int? // nil = scheduled month
-    @State private var yearMonthDayText: String
+    @State private var yearMonthDay: Int?
     @State private var skipWeekends: Bool
     @State private var specificDates: [Date]
     @State private var hasEndDate: Bool
@@ -46,7 +46,7 @@ struct CustomRecurrenceEditor: View {
         _ordinalWeekday = State(initialValue: rule.ordinalWeekday?.weekday ?? calendar.component(.weekday, from: scheduledDate))
         _workday = State(initialValue: rule.workday)
         _yearMonth = State(initialValue: rule.yearMonth)
-        _yearMonthDayText = State(initialValue: rule.yearMonthDay.map(String.init) ?? "")
+        _yearMonthDay = State(initialValue: rule.yearMonthDay)
         _skipWeekends = State(initialValue: rule.skipWeekends)
         _specificDates = State(initialValue: (rule.specificDates ?? []).sorted())
         _hasEndDate = State(initialValue: rule.endDate != nil)
@@ -57,9 +57,6 @@ struct CustomRecurrenceEditor: View {
 
     /// The draft as a rule, or nil while it is malformed (Done stays disabled).
     private var draft: CustomRecurrence? {
-        let yearDay = yearMonthDayText.trimmingCharacters(in: .whitespaces)
-        let yearMonthDay: Int? = yearDay.isEmpty ? nil : Int(yearDay)
-        if !yearDay.isEmpty, yearMonthDay.map({ (1...31).contains($0) }) != true { return nil }
         let rule = CustomRecurrence(
             anchor: anchor, interval: min(max(interval, 1), CustomRecurrence.maximumInterval), unit: unit,
             weekdays: unit == .weeks ? weekdays.sorted() : nil,
@@ -137,8 +134,13 @@ struct CustomRecurrenceEditor: View {
                                 Text("Scheduled month").tag(nil as Int?)
                                 ForEach(1...12, id: \.self) { month in Text(calendar.shortMonthSymbols[month - 1]).tag(month as Int?) }
                             }.frame(width: 150)
-                            TextField("Day (blank = scheduled)", text: $yearMonthDayText).textFieldStyle(.roundedBorder).font(.system(size: 11)).frame(width: 150)
+                            Spacer()
+                            Button("Use Scheduled Day") { yearMonthDay = nil }
+                                .disabled(yearMonthDay == nil)
                         }.font(.system(size: 11))
+                        numberedDays(label: "Yearly day of the month", selected: { yearMonthDay == $0 }) { day in
+                            yearMonthDay = yearMonthDay == day ? nil : day
+                        }
                         ordinalPickers
                         Text("“On the” beats the day above when both are set.").font(.system(size: 10)).foregroundStyle(.secondary)
                     }
@@ -166,12 +168,17 @@ struct CustomRecurrenceEditor: View {
     }
 
     private var monthDayGrid: some View {
+        numberedDays(label: "Days of the month", selected: { monthDays.contains($0) }) { day in
+            if monthDays.contains(day) { monthDays.remove(day) } else { monthDays.insert(day) }
+        }
+    }
+
+    private func numberedDays(label: String, selected isSelected: @escaping (Int) -> Bool,
+                              toggle: @escaping (Int) -> Void) -> some View {
         LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 4) {
             ForEach(1...31, id: \.self) { day in
-                let selected = monthDays.contains(day)
-                Button(day.formatted()) {
-                    if selected { monthDays.remove(day) } else { monthDays.insert(day) }
-                }
+                let selected = isSelected(day)
+                Button(day.formatted()) { toggle(day) }
                 .buttonStyle(.plain)
                 .font(.system(size: 11, weight: selected ? .semibold : .regular))
                 .monospacedDigit()
@@ -186,7 +193,7 @@ struct CustomRecurrenceEditor: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Days of the month")
+        .accessibilityLabel(label)
     }
 
     private var weekdayChips: some View {
