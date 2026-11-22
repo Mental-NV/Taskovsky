@@ -51,3 +51,47 @@ struct WindowFloorBridge: NSViewRepresentable {
         }
     }
 }
+
+/** Routes Escape only while the compact sidebar is mounted in its owning window. */
+struct CompactSidebarEscapeInput: NSViewRepresentable {
+    let dismiss: () -> Void
+
+    func makeNSView(context: Context) -> InputView {
+        let view = InputView(frame: .zero)
+        view.dismiss = dismiss
+        return view
+    }
+
+    func updateNSView(_ view: InputView, context: Context) { view.dismiss = dismiss }
+
+    static func dismantleNSView(_ view: InputView, coordinator: ()) {
+        view.stopMonitoring()
+        view.dismiss = nil
+    }
+
+    final class InputView: NSView {
+        var dismiss: (() -> Void)?
+        private var monitor: Any?
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stopMonitoring()
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self, let window = self.window, event.keyCode == 53,
+                      event.window === window, window.isKeyWindow,
+                      window.attachedSheet == nil, NSApp.modalWindow == nil,
+                      let dismiss = self.dismiss else { return event }
+                dismiss()
+                return nil
+            }
+        }
+
+        func stopMonitoring() {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+            monitor = nil
+        }
+    }
+}

@@ -353,7 +353,6 @@ struct WorkspaceView: View {
     // Scoped Escape dismissal for the nav overlay (native popover behavior
     // had to be reimplemented with the in-window overlay). Installed only
     // while the overlay is open, removed on dismiss.
-    @State private var escapeMonitor: Any?
     // Last measured content width, so the toggle behaves correctly even
     // before any resize (e.g. a window restored narrow). Refreshed on appear
     // and on every width change.
@@ -516,8 +515,11 @@ struct WorkspaceView: View {
                                 .offset(x: 77, y: 56)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .onAppear { installEscapeMonitor() }
-                        .onDisappear { removeEscapeMonitor() }
+                        .background {
+                            CompactSidebarEscapeInput { sidebarPopoverOpen = false }
+                                .frame(width: 0, height: 0)
+                                .accessibilityHidden(true)
+                        }
                     }
                 }
                 // Shared in-app sidebar drag scope, placed AFTER the compact
@@ -771,22 +773,6 @@ struct WorkspaceView: View {
             .clipShape(RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.primary.opacity(0.12), lineWidth: 1))
             .shadow(color: .black.opacity(0.2), radius: 14, y: 4)
-    }
-    private func installEscapeMonitor() {
-        guard escapeMonitor == nil else { return }
-        // Captured binding (reference-like) rather than struct self, which
-        // an escaping monitor closure cannot mutate.
-        let popover = $sidebarPopoverOpen
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            if event.keyCode == 53 {
-                popover.wrappedValue = false
-                return nil
-            }
-            return event
-        }
-    }
-    private func removeEscapeMonitor() {
-        if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor); escapeMonitor = nil }
     }
     private func searchLayout(docked: Bool, listWidth: Double, storedListWidth: Double, available: Double) -> some View {
         ZStack(alignment: .trailing) {
