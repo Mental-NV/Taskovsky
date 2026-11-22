@@ -1430,11 +1430,14 @@ struct RichBodyToolbar: View {
         ViewThatFits(in: .horizontal) {
             toolStrip(linkPresented: $showWideLink)
                 .fixedSize(horizontal: true, vertical: false)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Text formatting")
                 .onDisappear { showWideLink = false }
             HStack(spacing: 4) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     toolStrip(linkPresented: $showCompactLink).fixedSize(horizontal: true, vertical: false)
                 }
+                .accessibilityLabel("Text formatting")
                 Button { showAllTools.toggle() } label: {
                     Image(systemName: "ellipsis.circle")
                         .font(.system(size: 13))
@@ -1443,18 +1446,20 @@ struct RichBodyToolbar: View {
                 .buttonStyle(.plain)
                 .help("Show all formatting tools")
                 .accessibilityLabel("Show all formatting tools")
-                .popover(isPresented: $showAllTools, arrowEdge: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Text Formatting").font(.headline)
-                        HStack(spacing: 2) { leadingTools(linkPresented: $showExpandedLink) }
-                        HStack(spacing: 2) { trailingTools }
-                    }
-                    .padding(12)
-                    .fixedSize(horizontal: true, vertical: false)
+                .accessibilityIdentifier("detail-formatting-overflow")
+            }
+            // Center the palette over the toolbar instead of its trailing button.
+            .popover(isPresented: $showAllTools, arrowEdge: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Text Formatting").font(.headline)
+                    HStack(spacing: 2) { leadingTools(linkPresented: $showExpandedLink) }
+                    HStack(spacing: 2) { trailingTools }
                 }
-                .onChange(of: showAllTools) { _, isPresented in
-                    if !isPresented { showExpandedLink = false }
-                }
+                .padding(12)
+                .fixedSize(horizontal: true, vertical: false)
+            }
+            .onChange(of: showAllTools) { _, isPresented in
+                if !isPresented { showExpandedLink = false }
             }
             .onDisappear {
                 showCompactLink = false
@@ -1466,7 +1471,6 @@ struct RichBodyToolbar: View {
         .disabled(disabled)
         .opacity(disabled ? 0.5 : 1)
         .padding(.vertical, 2)
-        .accessibilityLabel("Text formatting")
     }
 
     private func toolStrip(linkPresented: Binding<Bool>) -> some View {
