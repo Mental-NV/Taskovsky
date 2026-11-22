@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import TaskovskyCore
 
@@ -24,7 +25,6 @@ struct ScheduleEditor: View {
     private var zoneID: String { zoneSelection.identifier }
     @State private var automaticReminder = true
     @State private var expanded: Row?
-    @FocusState private var timeEditorFocused: Bool
     private enum Row { case time, reminder, duration, repeatRule, end }
     private var calendar: Calendar { var cal = settings.calendar; cal.timeZone = TimeZone(identifier: zoneID) ?? .current; return cal }
 
@@ -56,6 +56,7 @@ struct ScheduleEditor: View {
         guard hasDuration else { return nil }
         return TaskDurationRange(start: durationStart, end: durationEnd, isAllDay: durationAllDay).validated(in: calendar)
     }
+    private var canApply: Bool { !hasDate || !hasDuration || draftDuration != nil }
     /// The staged range end, which IS the due date while duration is on.
     private var effectiveDate: Date { hasDuration ? durationEnd : date }
     private var effectiveHasTime: Bool { hasDate && staged().effectiveHasTime }
@@ -126,12 +127,8 @@ struct ScheduleEditor: View {
                     Button(effectiveHasTime ? "Remove time" : "Add time", action: toggleTime).buttonStyle(.borderless)
                     Spacer()
                     if effectiveHasTime {
-                        DatePicker("Time", selection: dueBinding, displayedComponents: .hourAndMinute)
-                            .labelsHidden()
+                        ScheduleTimeField(date: dueBinding, calendar: calendar, onConfirm: apply, onCancel: { dismiss() })
                             .fixedSize()
-                            .focused($timeEditorFocused)
-                            .accessibilityIdentifier("schedule-time-input")
-                            .onAppear { timeEditorFocused = true }
                     }
                 }.font(.system(size: 11)).padding(.horizontal, 8)
                 if settings.enableTimeZone && effectiveHasTime {
@@ -226,7 +223,7 @@ struct ScheduleEditor: View {
                 Button("Clear") { clear() }.buttonStyle(.plain)
                 Spacer()
                 Button("OK") { apply() }.buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
-                    .disabled(hasDate && hasDuration && draftDuration == nil)
+                    .disabled(!canApply)
             }.font(.system(size: 12))
         }.padding(14).frame(width: 300).background(Color(nsColor: .textBackgroundColor))
             .sheet(isPresented: $showCustomEditor, onDismiss: {
@@ -377,6 +374,7 @@ struct ScheduleEditor: View {
         var updated = task; updated.dueDate = nil; updated.hasDueTime = false; updated.reminderDates = []; updated.reminderFollowsSchedule = nil; updated.endReminderEnabled = false; updated.recurrence = .none; updated.recurrenceEndDate = nil; updated.recurrenceAnchorDay = nil; updated.recurrenceAnchorMonth = nil; updated.customRecurrence = nil; updated.occurrenceIndex = 1; updated.restartCustomSeries(ruleChangedFrom: task.customRecurrence); updated.scheduledDuration = nil; updated.timeZoneID = nil; submit(updated)
     }
     private func apply() {
+        guard canApply else { return }
         // Custom and legacy repeats stay mutually exclusive: a valid custom
         // rule clears the enum, a legacy pick clears the rule.
         let custom = hasDate ? repeatDraft.customRule.flatMap({ $0.isValid ? $0 : nil }) : nil
@@ -417,5 +415,75 @@ struct ScheduleEditor: View {
         guard hasDate, automaticReminder else { return }
         let timed = hasDuration ? !durationAllDay : hasTime
         reminders = TaskStore.defaultReminderDates(due: effectiveDate, hasTime: timed, settings: settings, calendar: calendar)
+    }
+}
+
+/// Use the same native segmented time control, but request its AppKit
+/// responder after attachment. The SwiftUI DatePicker focus wrapper does
+/// not select the editable time segment on this macOS popover.
+private struct ScheduleTimeField: NSViewRepresentable {
+    @Binding var date: Date
+    let calendar: Calendar
+    let onConfirm: () -> Void
+    let onCancel: () -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(date: $date) }
+
+    func makeNSView(context: Context) -> ScheduleTimeDatePicker {
+        let picker = ScheduleTimeDatePicker()
+        picker.datePickerStyle = .textFieldAndStepper
+        picker.datePickerElements = .hourMinute
+        picker.font = .systemFont(ofSize: 11)
+        picker.target = context.coordinator
+        picker.action = #selector(Coordinator.change(_:))
+        picker.setAccessibilityLabel("Time")
+        picker.setAccessibilityIdentifier("schedule-time-input")
+        return picker
+    }
+
+    func updateNSView(_ picker: ScheduleTimeDatePicker, context: Context) {
+        context.coordinator.date = $date
+        picker.calendar = calendar
+        picker.timeZone = calendar.timeZone
+        if picker.dateValue != date { picker.dateValue = date }
+        picker.onCancel = onCancel
+        picker.onConfirm = { [weak picker] in
+            if let picker, picker.dateValue != date { date = picker.dateValue }
+            onConfirm()
+        }
+    }
+
+    final class Coordinator: NSObject {
+        var date: Binding<Date>
+        init(date: Binding<Date>) { self.date = date }
+        @objc func change(_ picker: NSDatePicker) { date.wrappedValue = picker.dateValue }
+    }
+}
+
+private final class ScheduleTimeDatePicker: NSDatePicker {
+    var onConfirm: (() -> Void)?
+    var onCancel: (() -> Void)?
+    private var requestedInitialFocus = false
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, !requestedInitialFocus else { return }
+        requestedInitialFocus = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.window?.makeFirstResponder(self)
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 36, 76:
+            validateEditing()
+            onConfirm?()
+        case 53:
+            onCancel?()
+        default:
+            super.keyDown(with: event)
+        }
     }
 }
