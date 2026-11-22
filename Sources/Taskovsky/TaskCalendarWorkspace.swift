@@ -158,6 +158,14 @@ struct TaskCalendarWorkspace: View {
             agendaWindow = CalendarAgendaWindow()
         }
         .onChange(of: mode) { _, _ in agendaWindow = CalendarAgendaWindow() }
+        // Header controls move between rows when the window resizes. Keep
+        // the sheet with the workspace so its scroll and nested drafts survive.
+        .sheet(isPresented: $viewOptions) {
+            VStack(alignment: .leading, spacing: 18) {
+                ScrollView { CalendarViewOptions(options: options, calendar: calendar, store: store) }
+                HStack { Spacer(); Button("Done") { viewOptions = false }.keyboardShortcut(.cancelAction) }
+            }.padding(18).frame(width: 360, height: 560)
+        }
         .sheet(item: $yearDayPreview) { preview in
             let listNames = Dictionary(store.data.lists.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
             CalendarYearDayPreviewSheet(day: preview.day,
@@ -272,12 +280,6 @@ struct TaskCalendarWorkspace: View {
             } label: { Image(systemName: "ellipsis").font(.system(size: 16)).frame(width: 24, height: 28) }
                 .menuStyle(.button).buttonStyle(.plain).menuIndicator(.hidden)
                 .accessibilityLabel("Calendar actions")
-                .sheet(isPresented: $viewOptions) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        ScrollView { CalendarViewOptions(options: options, calendar: calendar, store: store) }
-                        HStack { Spacer(); Button("Done") { viewOptions = false }.keyboardShortcut(.cancelAction) }
-                    }.padding(18).frame(width: 360, height: 560)
-                }
         }.font(.system(size: 13)).foregroundStyle(.primary)
     }
     private func modeMenuTitle(_ value: TaskCalendarMode) -> String {
