@@ -524,6 +524,7 @@ struct EntitySheet: View {
                     .frame(width: Self.previewWidth)
             }
         }.tint(accent).onAppear { focused = true }
+            .onExitCommand { dismiss() }
     }
 
     private var form: some View {
