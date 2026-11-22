@@ -760,6 +760,19 @@ private struct CalendarMonthCell: View {
         }.frame(height: height)
             .overlay { Rectangle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5).allowsHitTesting(false) }
             .onHover { hovered = $0 }
+            // The overflow count can reach zero while the sheet is open.
+            .sheet(isPresented: $more) { overflowSheet }
+    }
+
+    private var overflowSheet: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text(CalendarText.date(day, "EEEE MMM d", calendar: calendar)).font(.headline)
+                Spacer()
+                Button("Done") { more = false }.keyboardShortcut(.cancelAction)
+            }
+            ScrollView { VStack(spacing: 5) { ForEach(layout.entries) { card($0) } } }
+        }.padding(16).frame(width: 300, height: min(420, CGFloat(layout.entries.count) * 30 + 80))
     }
 
     private var contents: some View {
@@ -799,16 +812,6 @@ private struct CalendarMonthCell: View {
             if layout.hiddenCount > 0 {
                 Button("+\(layout.hiddenCount) more") { more = true }.buttonStyle(.plain)
                     .font(.system(size: 10)).foregroundStyle(.secondary)
-                    .sheet(isPresented: $more) {
-                        VStack(spacing: 12) {
-                            HStack {
-                                Text(CalendarText.date(day, "EEEE MMM d", calendar: calendar)).font(.headline)
-                                Spacer()
-                                Button("Done") { more = false }.keyboardShortcut(.cancelAction)
-                            }
-                            ScrollView { VStack(spacing: 5) { ForEach(layout.entries) { card($0) } } }
-                        }.padding(16).frame(width: 300, height: min(420, CGFloat(layout.entries.count) * 30 + 80))
-                    }
             }
             Spacer(minLength: 0)
         }.padding(Self.spacing).frame(maxWidth: .infinity)
