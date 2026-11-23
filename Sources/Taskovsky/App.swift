@@ -248,6 +248,7 @@ struct WorkspaceView: View {
     @State private var showTextBatch = false
     @State private var batchRequest: BatchRequest?
     @State private var quickTitle = ""
+    @State private var quickEntryDraft = QuickEntryDraft()
     @State private var quickKind: TaskKind = .task
     // Persisted: a Manual order would otherwise appear lost whenever the app
     // relaunched onto the default Date sort. Legacy "Manual" reads as "None";
@@ -1554,7 +1555,7 @@ struct WorkspaceView: View {
                         Button("Clear Section") { self.sectionCaptureID = nil }
                     }.padding(.horizontal, 20).padding(.bottom, 4)
                 }
-                QuickEntry(store: store, title: $quickTitle, kind: $quickKind, focused: $quickFocused,
+                QuickEntry(store: store, title: $quickTitle, kind: $quickKind, focused: $quickFocused, draft: $quickEntryDraft,
                            showsWhenIdle: mode != .board || showBoardTaskInput || sectionCaptureID != nil,
                            onTemplate: { templatePicker = true }) { body, recognizeDates in
                     addTask(body: body, recognizeDates: recognizeDates)

@@ -2,25 +2,30 @@ import SwiftUI
 import AppKit
 import TaskovskyCore
 
+// The workspace owns this draft across Tasks layout changes.
+struct QuickEntryDraft {
+    var description = ""
+    var showDescription = false
+    var ignoreDate = false
+}
+
 struct QuickEntry: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var store: TaskStore
     @Binding var title: String
     @Binding var kind: TaskKind
     @Binding var focused: Bool
+    @Binding var draft: QuickEntryDraft
     var showsWhenIdle = true
     var onTemplate: () -> Void
     var onSubmit: (String, Bool) -> Bool
-    @State private var description = ""
-    @State private var showDescription = false
-    @State private var ignoreDate = false
     @State private var suggestionsDismissed = false
     @FocusState private var descriptionFocused: Bool
 
-    private var isVisible: Bool { showsWhenIdle || focused || showDescription || !title.isEmpty }
+    private var isVisible: Bool { showsWhenIdle || focused || draft.showDescription || !title.isEmpty }
 
     private var recognized: (date: Date, hasTime: Bool, range: Range<String.Index>)? {
-        guard store.settings.dateRecognition, !ignoreDate else { return nil }
+        guard store.settings.dateRecognition, !draft.ignoreDate else { return nil }
         return TaskStore.recognizeDate(in: title, calendar: store.settings.calendar)
     }
     private var tagQuery: String? {
@@ -37,12 +42,12 @@ struct QuickEntry: View {
                     Divider(); Button("Add from Template…", action: onTemplate)
                 } label: { HoverIcon { Image(systemName: kind == .task ? "plus" : "doc.text").font(.system(size: 16)).foregroundStyle(.secondary).padding(4) } }
                     .menuStyle(.borderlessButton).menuIndicator(.hidden).tint(Color(nsColor: .secondaryLabelColor)).fixedSize().help("Choose task, note, or template")
-                RecognizingField(text: $title, isFocused: Binding(get: { focused }, set: { focused = $0 }), placeholder: kind == .task ? "Add task" : "Add note", dateRange: recognized.map { NSRange($0.range, in: title) }, onSubmit: submit, onDescription: { showDescription = true; focused = false; descriptionFocused = true })
+                RecognizingField(text: $title, isFocused: Binding(get: { focused }, set: { focused = $0 }), placeholder: kind == .task ? "Add task" : "Add note", dateRange: recognized.map { NSRange($0.range, in: title) }, onSubmit: submit, onDescription: { draft.showDescription = true; focused = false; descriptionFocused = true })
                     .frame(minWidth: 60, minHeight: 22)
                 if let recognized {
                     Menu {
                         Text(recognized.date.formatted(date: .complete, time: recognized.hasTime ? .shortened : .omitted))
-                        Button("Ignore recognized date") { ignoreDate = true }
+                        Button("Ignore recognized date") { draft.ignoreDate = true }
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "calendar")
@@ -53,8 +58,8 @@ struct QuickEntry: View {
             }.padding(.horizontal, 12).frame(height: 38)
                 .background(Palette.card(colorScheme), in: RoundedRectangle(cornerRadius: 9))
                 .overlay { RoundedRectangle(cornerRadius: 9).stroke(focused ? accent : .clear, lineWidth: 1) }
-            if showDescription {
-                TextField("Description", text: $description, axis: .vertical).textFieldStyle(.plain).font(.system(size: 14)).lineLimit(2...5).focused($descriptionFocused).padding(10).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 6))
+            if draft.showDescription {
+                TextField("Description", text: $draft.description, axis: .vertical).textFieldStyle(.plain).font(.system(size: 14)).lineLimit(2...5).focused($descriptionFocused).padding(10).background(Color.primary.opacity(0.025), in: RoundedRectangle(cornerRadius: 6))
                 HStack { Spacer(); Button("Add", action: submit).disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }.font(.system(size: 12))
             } else if focused && !title.isEmpty {
                 Text("⇧↩ Add description").font(.system(size: 10)).foregroundStyle(.tertiary).frame(maxWidth: .infinity, alignment: .trailing)
@@ -78,7 +83,7 @@ struct QuickEntry: View {
         .allowsHitTesting(isVisible)
         .accessibilityHidden(!isVisible)
         .zIndex(10)
-        .onChange(of: title) { _, value in suggestionsDismissed = false; if value.isEmpty { ignoreDate = false; description = ""; showDescription = false } }
+        .onChange(of: title) { _, value in suggestionsDismissed = false; if value.isEmpty { draft = QuickEntryDraft() } }
     }
     private func chooseTag(_ name: String) {
         guard let start = title.range(of: "#", options: .backwards)?.lowerBound else { return }
@@ -87,8 +92,8 @@ struct QuickEntry: View {
     }
     private func submit() {
         guard !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        guard onSubmit(description, !ignoreDate) else { return }
-        description = ""; showDescription = false; ignoreDate = false
+        guard onSubmit(draft.description, !draft.ignoreDate) else { return }
+        draft = QuickEntryDraft()
     }
 }
 
