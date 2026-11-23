@@ -2,6 +2,45 @@ import XCTest
 @testable import TaskovskyCore
 
 final class CalendarSchedulePersistenceTests: XCTestCase {
+    @MainActor func testStagedScheduleDistinguishesRejectedWriteFromUnchangedAndReturnsUndoOnRetry() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let url = root.appendingPathComponent("workspace.json")
+        let backup = root.appendingPathComponent("original.json")
+        let task = TaskItem(title: "Arrange target")
+        let control = TaskItem(title: "Other task")
+        let workspace = WorkspaceData(tasks: [task, control])
+        let bytes = try JSONEncoder().encode(workspace)
+        try bytes.write(to: url)
+        let store = TaskStore(fileURL: url, seed: false)
+        let operation = CalendarScheduleOperation.move(start: Date(timeIntervalSince1970: 2_000_000_000), allDay: true)
+
+        try FileManager.default.moveItem(at: url, to: backup)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+        guard case .rejected = store.saveCalendarSchedule(id: task.id, operation: operation) else {
+            return XCTFail("The failed write should not be acknowledged")
+        }
+        XCTAssertEqual(store.data, workspace)
+        XCTAssertEqual(try Data(contentsOf: backup), bytes)
+
+        try FileManager.default.removeItem(at: url)
+        try FileManager.default.moveItem(at: backup, to: url)
+        guard case let .saved(token) = store.saveCalendarSchedule(id: task.id, operation: operation) else {
+            return XCTFail("Retry should save and offer Undo")
+        }
+        let scheduled = try Data(contentsOf: url)
+        guard case .unchanged = store.saveCalendarSchedule(id: task.id, operation: operation) else {
+            return XCTFail("A committed schedule saved unchanged is a no-op")
+        }
+        XCTAssertEqual(try Data(contentsOf: url), scheduled)
+        XCTAssertEqual(store.data.tasks.last, control)
+        XCTAssertTrue(store.undoCalendarSchedule(token))
+        XCTAssertNil(store.data.tasks.first?.dueDate)
+        XCTAssertEqual(store.data.tasks.last, control)
+        XCTAssertEqual(TaskStore(fileURL: url, seed: false).data, store.data)
+    }
+
     @MainActor func testCalendarMoveMustNotOverwriteOtherStoreTitle() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

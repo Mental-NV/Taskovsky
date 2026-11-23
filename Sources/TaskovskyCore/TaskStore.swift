@@ -1028,18 +1028,34 @@ public final class TaskStore: ObservableObject {
     /// controls all use this one store mutation path.
     @discardableResult public func scheduleOnCalendar(id: UUID, operation: CalendarScheduleOperation, calendar: Calendar? = nil,
                                                       scope: CalendarScheduleScope = .series) -> CalendarScheduleUndo? {
-        guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { return nil }
+        if case let .saved(token) = saveCalendarSchedule(id: id, operation: operation, calendar: calendar, scope: scope) {
+            return token
+        }
+        return nil
+    }
+
+    public enum CalendarScheduleSaveResult {
+        case saved(CalendarScheduleUndo)
+        case unchanged
+        case rejected
+    }
+
+    /// Acknowledgement for staged editors: a no-op can close, a rejected write cannot.
+    public func saveCalendarSchedule(id: UUID, operation: CalendarScheduleOperation, calendar: Calendar? = nil,
+                                     scope: CalendarScheduleScope = .series) -> CalendarScheduleSaveResult {
+        guard let index = data.tasks.firstIndex(where: { $0.id == id }) else { return .rejected }
         let original = data.tasks[index]
         guard original.deletedAt == nil,
               !SmartListEligibility.isArchived(original, lists: data.lists),
               let changed = CalendarScheduling.prepared(operation, to: original,
                   displayCalendar: calendar ?? settings.calendar, settings: settings, policyCalendar: settings.calendar,
                   scope: scope, in: data.tasks)
-        else { return nil }
+        else { return .rejected }
         let before = CalendarScheduleSnapshot(original), after = CalendarScheduleSnapshot(changed)
-        guard before != after, commitCalendarSchedule(changed, at: index) else { return nil }
-        return CalendarScheduleUndo(taskID: id, before: before, after: after,
-                                    completedAt: changed.completedAt, wontDoAt: changed.wontDoAt, operation: operation)
+        guard before != after else { return .unchanged }
+        guard commitCalendarSchedule(changed, at: index) else { return .rejected }
+        return .saved(CalendarScheduleUndo(taskID: id, before: before, after: after,
+                                           completedAt: changed.completedAt, wontDoAt: changed.wontDoAt, operation: operation))
     }
 
     @discardableResult public func undoCalendarSchedule(_ token: CalendarScheduleUndo) -> Bool {
