@@ -379,8 +379,16 @@ struct TaskCalendarWorkspace: View {
                     commitSchedule(id, .skipOccurrence, scope: .series)
                 } else { feedback.show("Schedule changed. Open the current task and try again.", persistent: true) }
             } else if draft.restoreOccurrence { commitSchedule(id, .restoreOccurrence, scope: .series) }
-            else if let operation = draft.schedule.operation { commitSchedule(id, operation, scope: draft.scope) }
-            else { feedback.show("Schedule unchanged") }
+            else if let operation = draft.schedule.operation {
+                switch store.saveCalendarSchedule(id: id, operation: operation, calendar: calendar, scope: draft.scope) {
+                case let .saved(token):
+                    showScheduleSuccess(token, operation: operation, scope: draft.scope)
+                case .unchanged:
+                    feedback.show("Schedule unchanged")
+                case .rejected:
+                    return false
+                }
+            } else { feedback.show("Schedule unchanged") }
         } else {
             let window = TaskDurationRange(start: draft.schedule.start, end: draft.schedule.end, isAllDay: draft.schedule.allDay)
             guard let id = store.createCalendarTask(title: draft.title, listID: draft.listID, duration: window) else {
@@ -413,13 +421,16 @@ struct TaskCalendarWorkspace: View {
     }
     private func commitSchedule(_ id: UUID, _ operation: CalendarScheduleOperation, scope: CalendarScheduleScope) {
         if let token = store.scheduleOnCalendar(id: id, operation: operation, calendar: calendar, scope: scope) {
-            if case .skipOccurrence = operation { feedback.show("Occurrence skipped", undo: token) }
-            else { feedback.show(scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated", undo: token) }
+            showScheduleSuccess(token, operation: operation, scope: scope)
         } else if case .skipOccurrence = operation {
             feedback.show(store.storageError ?? "Could not skip this occurrence.", persistent: true)
         } else {
             feedback.show(store.storageError ?? "Schedule unchanged", persistent: store.storageError != nil)
         }
+    }
+    private func showScheduleSuccess(_ token: CalendarScheduleUndo, operation: CalendarScheduleOperation, scope: CalendarScheduleScope) {
+        if case .skipOccurrence = operation { feedback.show("Occurrence skipped", undo: token) }
+        else { feedback.show(scope == .currentOccurrence ? "This occurrence updated" : "Schedule updated", undo: token) }
     }
     private func moveToDay(_ id: UUID, _ day: Date, _ forceAllDay: Bool) {
         guard let task = store.data.tasks.first(where: { $0.id == id }) else { return }
@@ -540,10 +551,12 @@ struct CalendarTaskEditor: View {
                 Button("Keep editing") { draft.skipOccurrence = false }
             } else { scheduleFields }
             if saveFailed {
-                Text("Could not add the task. Your draft is kept. Review it and try again, or Cancel.")
+                Text(draft.taskID == nil
+                     ? "Could not add the task. Your draft is kept. Review it and try again, or Cancel."
+                     : "Could not save the schedule. Your draft is kept. Try again or Cancel.")
                     .font(.system(size: 12)).foregroundStyle(.red)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("calendarCreationSaveError")
+                    .accessibilityIdentifier(draft.taskID == nil ? "calendarCreationSaveError" : "calendarScheduleSaveError")
             }
             HStack {
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
