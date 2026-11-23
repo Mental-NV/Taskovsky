@@ -594,9 +594,9 @@ struct WorkspaceView: View {
                         store.updateTag(TaskTag(id: id, name: name, color: color, parentID: stored?.parentID, isCollapsed: stored?.isCollapsed ?? false, isPinned: stored?.isPinned ?? false))
                         // Parent changes route through cycle-safe validation.
                         _ = store.setTagParent(id: id, parentID: parentTagID)
+                        return true // Editing existing tags retains its legacy behavior.
                     }
-                    else { _ = store.createTag(name: name, color: color, parentID: parentTagID) }
-                    return true // Tag persistence remains outside this List editor correction.
+                    return store.saveNewTagEditor(name: name, color: color, parentID: parentTagID)
                 } else {
                     var list = item.originalList ?? TaskList(id: item.id, name: name, color: color)
                     list.name = name; list.color = color; list.kind = kind; list.symbol = symbol

@@ -571,7 +571,13 @@ struct EntitySheet: View {
                 .accessibilityLabel("List display mode")
             }
             if editor.entityID != nil && !editor.isTag { Text("List type sets the default for new items.").font(.caption).foregroundStyle(.secondary) }
-            if saveFailed { Text("The list was not saved. Your draft is preserved. Check the workspace error, then retry or reopen the list if it changed.").font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true).accessibilityLabel("List save failed; draft preserved") }
+            if saveFailed {
+                Text(editor.isTag
+                     ? "The tag was not saved. Your draft is preserved. Check the workspace error, then retry."
+                     : "The list was not saved. Your draft is preserved. Check the workspace error, then retry or reopen the list if it changed.")
+                    .font(.caption).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+                    .accessibilityLabel(editor.isTag ? "Tag save failed; draft preserved" : "List save failed; draft preserved")
+            }
             HStack { Spacer(); Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction); Button(editor.entityID == nil ? "Create" : "Save", action: submit).buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) }
         }.padding(28).frame(width: Self.formWidth)
     }

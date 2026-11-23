@@ -741,6 +741,53 @@ public final class TaskStore: ObservableObject {
         let parent = parentID.flatMap { id in data.tags.contains(where: { $0.id == id }) ? id : nil }
         let tag = TaskTag(name: normalized, color: color, parentID: parent); data.tags.append(tag); save(); return tag.id
     }
+    /// Explicit New Tag sheet only. Keep the draft and publish no tag if the write is rejected.
+    @discardableResult public func saveNewTagEditor(name: String, color: String, parentID: UUID?) -> Bool {
+        guard !blockedByLoadFailure else { return false }
+        let normalized = TagOrganization.normalizedName(name)
+        guard !normalized.isEmpty else { storageError = "Enter a tag name before saving."; return false }
+        do {
+            let original: Data?
+            do { original = try Data(contentsOf: fileURL) }
+            catch let error as CocoaError where error.code == .fileReadNoSuchFile && data == WorkspaceData() { original = nil }
+            let bytes = try original ?? JSONEncoder().encode(data)
+            guard try Self.decodeWorkspace(bytes) == data else {
+                storageError = "The saved workspace changed. Keep your draft and reload before saving this tag."
+                return false
+            }
+            if data.tags.contains(where: { TagOrganization.normalizedName($0.name).localizedCaseInsensitiveCompare(normalized) == .orderedSame }) {
+                if !settingsLoadFailed { storageError = settingsSaveError }
+                return true
+            }
+            let parent = parentID.flatMap { id in data.tags.contains(where: { $0.id == id }) ? id : nil }
+            let tag = TaskTag(name: normalized, color: color, parentID: parent)
+            guard var object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] else {
+                throw CocoaError(.fileReadCorruptFile)
+            }
+            var tags = object["tags"] as? [Any] ?? []
+            tags.append(try JSONSerialization.jsonObject(with: JSONEncoder().encode(tag)))
+            object["tags"] = tags
+            let patched = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+            var staged = data
+            staged.tags.append(tag)
+            guard try Self.decodeWorkspace(patched) == staged else { throw CocoaError(.fileReadCorruptFile) }
+            let written = writeWorkspaceBytes {
+                let current: Data?
+                do { current = try Data(contentsOf: self.fileURL) }
+                catch let error as CocoaError where error.code == .fileReadNoSuchFile { current = nil }
+                guard current == original else { throw CocoaError(.fileWriteUnknown) }
+                return patched
+            }
+            guard written || (try? Data(contentsOf: fileURL)) == patched else { return false }
+            data = staged
+            if !settingsLoadFailed { storageError = settingsSaveError }
+            return true
+        } catch {
+            storageError = "Could not save tag: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     public func updateTag(_ tag: TaskTag) {
         guard let index = data.tags.firstIndex(where: { $0.id == tag.id }) else { return }
         data.tags[index] = tag; save()
