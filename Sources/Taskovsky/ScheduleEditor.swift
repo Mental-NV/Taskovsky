@@ -232,7 +232,7 @@ struct ScheduleEditor: View {
                 // the staged value is already nil, so this is a safe no-op.
                 repeatDraft.cancelCustom()
             }) {
-                CustomRecurrenceEditor(rule: repeatDraft.stagedCustom ?? CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days), scheduledDate: date, calendar: calendar) { rule in
+                CustomRecurrenceEditor(rule: repeatDraft.stagedCustom ?? CustomRecurrence(anchor: .dueDate, interval: 1, unit: .days), scheduledDate: date, calendar: calendar, showsTime: effectiveHasTime) { rule in
                     repeatDraft.commitCustom(rule)
                 }
             }

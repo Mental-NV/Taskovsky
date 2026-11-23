@@ -10,6 +10,7 @@ struct CustomRecurrenceEditor: View {
     @Environment(\.dismiss) private var dismiss
     let scheduledDate: Date
     let calendar: Calendar
+    let showsTime: Bool
     let save: (CustomRecurrence?) -> Void
     @State private var anchor: RecurrenceAnchor
     @State private var unit: RecurrenceUnit
@@ -32,8 +33,8 @@ struct CustomRecurrenceEditor: View {
     @State private var newSpecificDate = Date()
     private enum MonthMode { case each, onThe, workday }
 
-    init(rule: CustomRecurrence, scheduledDate: Date, calendar: Calendar, save: @escaping (CustomRecurrence?) -> Void) {
-        self.scheduledDate = scheduledDate; self.calendar = calendar; self.save = save
+    init(rule: CustomRecurrence, scheduledDate: Date, calendar: Calendar, showsTime: Bool, save: @escaping (CustomRecurrence?) -> Void) {
+        self.scheduledDate = scheduledDate; self.calendar = calendar; self.showsTime = showsTime; self.save = save
         _anchor = State(initialValue: rule.anchor)
         _unit = State(initialValue: rule.unit)
         _interval = State(initialValue: min(max(rule.interval, 1), 999))
@@ -266,6 +267,15 @@ struct CustomRecurrenceEditor: View {
         }
     }
 
+    private func previewFormatter() -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateStyle = .medium
+        formatter.timeStyle = showsTime ? .short : .none
+        return formatter
+    }
+
     private var previewSection: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("Preview").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
@@ -274,8 +284,9 @@ struct CustomRecurrenceEditor: View {
                 if dates.isEmpty {
                     Text("No upcoming occurrences.").font(.system(size: 11)).foregroundStyle(.orange)
                 } else {
+                    let formatter = previewFormatter()
                     ForEach(Array(dates.enumerated()), id: \.offset) { index, date in
-                        Text("\(index + 1). " + date.formatted(date: .abbreviated, time: .shortened)).font(.system(size: 11))
+                        Text("\(index + 1). " + formatter.string(from: date)).font(.system(size: 11))
                     }
                 }
             } else {
